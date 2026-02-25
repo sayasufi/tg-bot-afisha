@@ -1,4 +1,4 @@
-# tg-bot-afisha MVP
+п»ї# tg-bot-afisha MVP
 
 MVP Telegram bot + Telegram Mini App for discovering nearby events from multiple sources.
 
@@ -15,7 +15,7 @@ MVP Telegram bot + Telegram Mini App for discovering nearby events from multiple
 - `apps/api`: public REST API for bot and miniapp
 - `apps/worker`: ingestion and enrichment pipelines (`fetch -> normalize -> enrich -> dedup`)
 - `apps/bot`: Telegram bot, city selection, search, Mini App launch, forwarded ingest inbox
-- `connectors`: source plugins (Timepad + Telegram)
+- `connectors`: source plugins (KudaGo API + Telegram)
 - `pipeline`: normalizer, deduper, geocoding, LLM classification
 - `core`: shared settings/db/models/repositories/logging
 
@@ -47,18 +47,29 @@ alembic upgrade head
 - `GET /v1/events/map?limit=50&categories=concert`
 - `GET /v1/events/nearby?lat=55.75&lon=37.61&radius_m=3000`
 - `GET /v1/events/{event_id}`
-- `POST /v1/search` with JSON: `{"q":"стендап пятница","city":"Moscow","limit":20}`
+- `POST /v1/search` with JSON: `{"q":"standup friday","city":"Moscow","limit":20}`
 - `GET /v1/categories`
 - `POST /v1/telegram/validate`
 
 ## Worker tasks
 
-- `fetch_timepad`
+- `fetch_kudago`
 - `fetch_telegram_public`
 - `fetch_forward_inbox`
 - `normalize_raw_events`
 - `enrich_candidates`
 - `dedup_candidates`
+
+## KudaGo source first run
+
+Manual run inside worker container:
+
+```bash
+celery -A apps.worker.worker.celery_app.celery_app call apps.worker.worker.tasks.fetch.fetch_kudago
+celery -A apps.worker.worker.celery_app.celery_app call apps.worker.worker.tasks.normalize.normalize_raw_events
+celery -A apps.worker.worker.celery_app.celery_app call apps.worker.worker.tasks.enrich.enrich_candidates
+celery -A apps.worker.worker.celery_app.celery_app call apps.worker.worker.tasks.dedup.dedup_candidates
+```
 
 ## Tests
 

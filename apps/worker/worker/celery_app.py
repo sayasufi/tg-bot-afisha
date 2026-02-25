@@ -24,8 +24,8 @@ celery_app.conf.task_routes = {
 }
 
 celery_app.conf.beat_schedule = {
-    "fetch-timepad": {
-        "task": "apps.worker.worker.tasks.fetch.fetch_timepad",
+    "fetch-kudago": {
+        "task": "apps.worker.worker.tasks.fetch.fetch_kudago",
         "schedule": 300.0,
     },
     "fetch-telegram-public": {

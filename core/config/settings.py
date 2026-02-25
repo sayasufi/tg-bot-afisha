@@ -11,12 +11,18 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     api_port: int = Field(default=8000, alias="API_PORT")
-    database_url: str = Field(alias="DATABASE_URL")
-    sync_database_url: str = Field(alias="SYNC_DATABASE_URL")
-    redis_url: str = Field(alias="REDIS_URL")
+    database_url: str = Field(
+        default="postgresql+psycopg://afisha:afisha@postgres:5432/afisha",
+        alias="DATABASE_URL",
+    )
+    sync_database_url: str = Field(
+        default="postgresql+psycopg://afisha:afisha@postgres:5432/afisha",
+        alias="SYNC_DATABASE_URL",
+    )
+    redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
 
-    celery_broker_url: str = Field(alias="CELERY_BROKER_URL")
-    celery_result_backend: str = Field(alias="CELERY_RESULT_BACKEND")
+    celery_broker_url: str = Field(default="redis://redis:6379/1", alias="CELERY_BROKER_URL")
+    celery_result_backend: str = Field(default="redis://redis:6379/2", alias="CELERY_RESULT_BACKEND")
 
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
 
@@ -27,13 +33,13 @@ class Settings(BaseSettings):
     nominatim_base_url: str = Field(default="https://nominatim.openstreetmap.org", alias="NOMINATIM_BASE_URL")
 
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
-    telegram_webapp_url: str = Field(default="", alias="TELEGRAM_WEBAPP_URL")
+    telegram_webapp_url: str = Field(default="http://localhost:5173", alias="TELEGRAM_WEBAPP_URL")
 
     telethon_api_id: int | None = Field(default=None, alias="TELETHON_API_ID")
     telethon_api_hash: str = Field(default="", alias="TELETHON_API_HASH")
     telethon_session: str = Field(default="afisha_session", alias="TELETHON_SESSION")
 
-    timepad_base_url: str = Field(default="https://api.timepad.ru/v1", alias="TIMEPAD_BASE_URL")
+    kudago_base_url: str = "https://kudago.com/public-api/v1.4"
 
     default_city: str = Field(default="Moscow", alias="DEFAULT_CITY")
     default_country: str = Field(default="RU", alias="DEFAULT_COUNTRY")

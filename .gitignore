@@ -9,3 +9,4 @@ node_modules/
 miniapp/node_modules/
 .env
 .env.local
+.tmp_*

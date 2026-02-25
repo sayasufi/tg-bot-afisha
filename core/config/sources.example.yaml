@@ -1,12 +1,14 @@
-sources:
-  - name: timepad
+﻿sources:
+  - name: kudago
     kind: web
-    base_url: https://api.timepad.ru/v1
+    base_url: https://kudago.com/public-api/v1.4
     is_active: true
     crawl_interval_sec: 300
-    robots_policy: "API access only"
+    robots_policy: "Public API"
     config:
-      cursor: null
+      cursor: "1"
+      location: "msk"
+      page_size: 100
 
   - name: telegram_public
     kind: telegram
@@ -15,7 +17,7 @@ sources:
     crawl_interval_sec: 180
     robots_policy: "public channel only"
     config:
-      channel: events
+      channel: kuda_v_moskva
       cursor: null
 
   - name: telegram_forward_inbox
