@@ -1,17 +1,15 @@
 from core.config.settings import get_settings
 from pipeline.llm.adapters.base import CategoryResult
-from pipeline.llm.adapters.openai_adapter import OpenAIAdapter
-from pipeline.llm.adapters.yandex_adapter import YandexAdapter
+from pipeline.llm.adapters.http_chat_adapter import HTTPChatAdapter
 
 
 class LLMService:
     def __init__(self) -> None:
         settings = get_settings()
-        self.provider = settings.llm_provider.lower()
-        if self.provider == "yandex":
-            self.adapter = YandexAdapter(settings.yandexgpt_api_key)
-        else:
-            self.adapter = OpenAIAdapter(settings.openai_api_key) if settings.openai_api_key else YandexAdapter("")
+        self.adapter = HTTPChatAdapter(
+            base_url=settings.llm_api_base_url,
+            timeout_seconds=settings.llm_timeout_seconds,
+        )
 
     async def classify(self, title: str, description: str) -> CategoryResult:
         try:

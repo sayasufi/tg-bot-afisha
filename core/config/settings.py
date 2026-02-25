@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,9 +20,8 @@ class Settings(BaseSettings):
 
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
 
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
-    yandexgpt_api_key: str = Field(default="", alias="YANDEXGPT_API_KEY")
-    llm_provider: str = Field(default="openai", alias="LLM_PROVIDER")
+    llm_api_base_url: str = Field(default="http://176.109.82.96:5000", alias="LLM_API_BASE_URL")
+    llm_timeout_seconds: float = Field(default=20.0, alias="LLM_TIMEOUT_SECONDS")
 
     yandex_geocoder_key: str = Field(default="", alias="YANDEX_GEOCODER_KEY")
     nominatim_base_url: str = Field(default="https://nominatim.openstreetmap.org", alias="NOMINATIM_BASE_URL")
