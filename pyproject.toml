@@ -1,0 +1,43 @@
+[project]
+name = "tg-bot-afisha"
+version = "0.1.0"
+description = "MVP Telegram bot + mini app for events aggregation"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.116.1",
+  "uvicorn[standard]==0.35.0",
+  "sqlalchemy==2.0.43",
+  "psycopg[binary]==3.2.9",
+  "alembic==1.16.5",
+  "geoalchemy2==0.17.1",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "celery[redis]==5.5.3",
+  "redis==6.4.0",
+  "httpx==0.28.1",
+  "python-dateutil==2.9.0.post0",
+  "dateparser==1.2.2",
+  "rapidfuzz==3.14.1",
+  "aiogram==3.22.0",
+  "telethon==1.41.2",
+  "openai==1.102.0",
+  "sentry-sdk==2.35.0",
+  "prometheus-client==0.22.1",
+  "python-json-logger==3.3.0",
+  "orjson==3.11.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.1",
+  "pytest-asyncio==1.1.0",
+  "ruff==0.12.10",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

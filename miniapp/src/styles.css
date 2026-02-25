@@ -1,0 +1,50 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #111827;
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: #ffffffcc;
+  backdrop-filter: blur(4px);
+}
+
+.toolbar input,
+.toolbar select {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.map-wrap {
+  height: 100%;
+}
+
+.card {
+  position: absolute;
+  z-index: 1000;
+  left: 10px;
+  bottom: 10px;
+  max-width: 300px;
+  background: white;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}

@@ -1,0 +1,13 @@
+import pytest
+from fastapi.testclient import TestClient
+
+pytest.importorskip("geoalchemy2")
+
+from apps.api.app.main import app
+
+
+def test_health() -> None:
+    client = TestClient(app)
+    resp = client.get("/v1/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"

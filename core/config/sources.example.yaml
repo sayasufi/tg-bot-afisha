@@ -1,0 +1,27 @@
+sources:
+  - name: timepad
+    kind: web
+    base_url: https://api.timepad.ru/v1
+    is_active: true
+    crawl_interval_sec: 300
+    robots_policy: "API access only"
+    config:
+      cursor: null
+
+  - name: telegram_public
+    kind: telegram
+    base_url: https://t.me
+    is_active: true
+    crawl_interval_sec: 180
+    robots_policy: "public channel only"
+    config:
+      channel: events
+      cursor: null
+
+  - name: telegram_forward_inbox
+    kind: telegram
+    base_url: telegram://forwarded
+    is_active: true
+    crawl_interval_sec: 60
+    robots_policy: "messages forwarded by users/admins"
+    config: {}
