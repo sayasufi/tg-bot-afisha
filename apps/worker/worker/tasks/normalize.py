@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 from core.db.repositories.ingestion import get_raw, save_candidate, unprocessed_raw_ids
 from core.db.session import SessionLocal
@@ -34,6 +35,14 @@ def _candidate_incomplete_reason(candidate) -> str:
     if not ((candidate.address or "").strip() or (candidate.venue or "").strip()):
         return "candidate_missing_venue_address"
     return "candidate_incomplete"
+
+
+def _is_kudago_candidate_in_window(candidate) -> bool:
+    if candidate.date_start is None:
+        return False
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(days=30)
+    return now <= candidate.date_start <= until
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -82,6 +91,10 @@ def normalize_raw_events(self):
 
             candidates = normalizer.normalize(payload, raw.raw_text)
             for c in candidates:
+                if source_name == "kudago" and not _is_kudago_candidate_in_window(c):
+                    skipped += 1
+                    skipped_reasons["kudago_out_of_window"] += 1
+                    continue
                 if _is_telegram_source_name(source_name) and not _is_candidate_complete(c):
                     skipped += 1
                     reason = _candidate_incomplete_reason(c)

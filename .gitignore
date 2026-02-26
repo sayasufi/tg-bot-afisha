@@ -10,3 +10,5 @@ miniapp/node_modules/
 .env
 .env.local
 .tmp_*
+*.session
+celerybeat-schedule

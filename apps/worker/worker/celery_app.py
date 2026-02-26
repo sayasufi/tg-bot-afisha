@@ -32,10 +32,6 @@ celery_app.conf.beat_schedule = {
         "task": "apps.worker.worker.tasks.fetch.fetch_telegram_public",
         "schedule": 180.0,
     },
-    "fetch-forward-inbox": {
-        "task": "apps.worker.worker.tasks.fetch.fetch_forward_inbox",
-        "schedule": 60.0,
-    },
     "normalize-raw": {
         "task": "apps.worker.worker.tasks.normalize.normalize_raw_events",
         "schedule": 60.0,
@@ -47,6 +43,10 @@ celery_app.conf.beat_schedule = {
     "dedup-candidates": {
         "task": "apps.worker.worker.tasks.dedup.dedup_candidates",
         "schedule": 60.0,
+    },
+    "backfill-venues-osm": {
+        "task": "apps.worker.worker.tasks.enrich.backfill_venues_osm",
+        "schedule": 86400.0,
     },
 }
 

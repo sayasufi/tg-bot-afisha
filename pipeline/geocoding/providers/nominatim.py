@@ -23,4 +23,10 @@ class NominatimGeocoder:
         if not rows:
             return None
         first = rows[0]
-        return GeoResult(lat=float(first["lat"]), lon=float(first["lon"]), provider="nominatim", confidence=0.65)
+        return GeoResult(
+            lat=float(first["lat"]),
+            lon=float(first["lon"]),
+            provider="nominatim",
+            confidence=0.65,
+            normalized_address=str(first.get("display_name") or ""),
+        )

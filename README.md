@@ -14,7 +14,7 @@ MVP Telegram bot + Telegram Mini App for discovering nearby events from multiple
 
 - `apps/api`: public REST API for bot and miniapp
 - `apps/worker`: ingestion and enrichment pipelines (`fetch -> normalize -> enrich -> dedup`)
-- `apps/bot`: Telegram bot, city selection, search, Mini App launch, forwarded ingest inbox
+- `apps/bot`: Telegram bot, city selection, search, Mini App launch
 - `connectors`: source plugins (KudaGo API + Telegram)
 - `pipeline`: normalizer, deduper, geocoding, LLM classification
 - `core`: shared settings/db/models/repositories/logging
@@ -55,7 +55,6 @@ alembic upgrade head
 
 - `fetch_kudago`
 - `fetch_telegram_public`
-- `fetch_forward_inbox`
 - `normalize_raw_events`
 - `enrich_candidates`
 - `dedup_candidates`

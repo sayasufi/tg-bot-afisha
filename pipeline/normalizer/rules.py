@@ -1,18 +1,41 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 
 from pipeline.normalizer.extractors import NormalizedCandidate, parse_age, parse_dates, parse_price
+
+
+def _safe_ts_to_dt(value: object) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        ts = int(value)
+    except (TypeError, ValueError):
+        return None
+    # KudaGo may return sentinel negative timestamps (year 0001).
+    if ts <= 0:
+        return None
+    return datetime.fromtimestamp(ts, tz=timezone.utc)
 
 
 def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None]:
     dates = payload.get("dates")
     if not isinstance(dates, list) or not dates:
         return None, None
-    first = dates[0] if isinstance(dates[0], dict) else {}
-    start = first.get("start")
-    end = first.get("end")
-    start_dt = datetime.fromtimestamp(int(start), tz=timezone.utc) if start else None
-    end_dt = datetime.fromtimestamp(int(end), tz=timezone.utc) if end else None
-    return start_dt, end_dt
+
+    fallback_end: datetime | None = None
+    for row in dates:
+        if not isinstance(row, dict):
+            continue
+        start_dt = _safe_ts_to_dt(row.get("start"))
+        end_dt = _safe_ts_to_dt(row.get("end"))
+        if end_dt and not fallback_end:
+            fallback_end = end_dt
+        if start_dt:
+            return start_dt, end_dt
+
+    # If start is missing/invalid but end is valid, keep record scheduled by end date.
+    if fallback_end:
+        return fallback_end, fallback_end
+    return None, None
 
 
 def _parse_ldjson_dates(payload: dict) -> tuple[datetime | None, datetime | None]:

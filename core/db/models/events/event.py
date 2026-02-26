@@ -18,6 +18,7 @@ class Event(Base, TimestampMixin):
             postgresql_using="gin",
             postgresql_ops={"canonical_description": "gin_trgm_ops"},
         ),
+        {"schema": "events"},
     )
 
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -11,11 +11,12 @@ class EventOccurrence(Base):
     __table_args__ = (
         Index("ix_occurrences_date_start", "date_start"),
         Index("ix_occurrences_event", "event_id"),
+        {"schema": "events"},
     )
 
     occurrence_id: Mapped[int] = mapped_column(primary_key=True)
-    event_id: Mapped[str] = mapped_column(ForeignKey("events.event_id", ondelete="CASCADE"), nullable=False)
-    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.venue_id", ondelete="SET NULL"), nullable=True)
+    event_id: Mapped[str] = mapped_column(ForeignKey("events.events.event_id", ondelete="CASCADE"), nullable=False)
+    venue_id: Mapped[int | None] = mapped_column(ForeignKey("events.venues.venue_id", ondelete="SET NULL"), nullable=True)
     date_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     date_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     price_min: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)

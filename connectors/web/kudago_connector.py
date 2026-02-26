@@ -1,4 +1,5 @@
-﻿import hashlib
+import hashlib
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -16,6 +17,7 @@ class KudaGoConnector:
         "dates,place,location,site_url,images,price,age_restriction,categories,tags"
     )
     _BODY_TEXT_LIMIT = 12000
+    _LOOKAHEAD_DAYS = 30
 
     def __init__(self, location: str = "msk", page_size: int = 100) -> None:
         self.settings = get_settings()
@@ -90,14 +92,52 @@ class KudaGoConnector:
             payload["site_url"] = f"https://kudago.com/{self.location}/event/{row.get('slug')}/"
         return payload
 
+    @staticmethod
+    def _safe_ts_to_dt(value: object) -> datetime | None:
+        if value in (None, ""):
+            return None
+        try:
+            ts = int(value)
+        except (TypeError, ValueError):
+            return None
+        if ts <= 0:
+            return None
+        return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+    def _is_in_window(self, row: dict, now: datetime, until: datetime) -> bool:
+        dates = row.get("dates")
+        if not isinstance(dates, list) or not dates:
+            return False
+
+        for item in dates:
+            if not isinstance(item, dict):
+                continue
+            start_dt = self._safe_ts_to_dt(item.get("start"))
+            end_dt = self._safe_ts_to_dt(item.get("end"))
+            # Keep events relevant for the next 30 days:
+            # - normal case: known start within [now; now+30d]
+            # - ongoing case: started earlier but still active now/soon (end in window)
+            # - sentinel case: invalid start but valid end in window
+            if start_dt and now <= start_dt <= until:
+                return True
+            if end_dt and now <= end_dt <= until:
+                return True
+            if start_dt and end_dt and start_dt < now and end_dt >= now:
+                return True
+        return False
+
     async def fetch(self, cursor: str | None = None) -> tuple[list[RawRecord], str | None]:
         page = int(cursor) if cursor else 1
+        now = datetime.now(timezone.utc)
+        until = now + timedelta(days=self._LOOKAHEAD_DAYS)
         url = f"{self.settings.kudago_base_url}/events/"
         params = {
             "lang": "ru",
             "location": self.location,
             "page": page,
             "page_size": self.page_size,
+            "actual_since": int(now.timestamp()),
+            "actual_until": int(until.timestamp()),
             "expand": "place,location,dates",
             "fields": f"{self._EVENT_FIELDS},is_free",
         }
@@ -107,7 +147,8 @@ class KudaGoConnector:
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "ru,en;q=0.8",
         }
-        async with httpx.AsyncClient(timeout=20, headers=headers, follow_redirects=True) as client:
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=20.0, pool=20.0)
+        async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
@@ -115,6 +156,8 @@ class KudaGoConnector:
         results = data.get("results", [])
         records: list[RawRecord] = []
         for row in results:
+            if not self._is_in_window(row, now, until):
+                continue
             payload = self._trim_payload(row)
             ext_id = str(payload.get("id") or hashlib.sha256(str(payload).encode()).hexdigest())
             title = payload.get("title", "") or payload.get("short_title", "")

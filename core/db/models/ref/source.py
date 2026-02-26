@@ -7,6 +7,7 @@ from core.db.models.mixins import TimestampMixin
 
 class Source(Base, TimestampMixin):
     __tablename__ = "sources"
+    __table_args__ = {"schema": "ref"}
 
     source_id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)

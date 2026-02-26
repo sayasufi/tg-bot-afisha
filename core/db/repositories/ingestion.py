@@ -9,10 +9,10 @@ from core.db.models import (
     EventCandidate,
     EventOccurrence,
     EventSource,
-    IngestInbox,
     RawEvent,
     Source,
     SourceRun,
+    TelegramChannel,
     Venue,
 )
 from pipeline.dedup.scorer import MatchDecision, score_candidate
@@ -25,6 +25,11 @@ def get_active_sources(db: Session) -> list[Source]:
 
 def get_source_by_name(db: Session, name: str) -> Source | None:
     return db.execute(select(Source).where(Source.name == name)).scalar_one_or_none()
+
+
+def get_active_telegram_channels(db: Session) -> list[TelegramChannel]:
+    stmt = select(TelegramChannel).where(TelegramChannel.is_active.is_(True)).order_by(TelegramChannel.channel_id.asc())
+    return db.execute(stmt).scalars().all()
 
 
 def ensure_source(db: Session, name: str, kind: str, base_url: str, config_json: dict | None = None) -> Source:
@@ -154,6 +159,42 @@ def get_or_create_venue(db: Session, name: str, address: str, city: str, country
     return venue
 
 
+def find_cached_venue(db: Session, name: str, city: str, country: str) -> Venue | None:
+    normalized_name = (name or "").strip()
+    normalized_city = (city or "").strip()
+    normalized_country = (country or "").strip()
+    if not normalized_name:
+        return None
+    stmt = select(Venue).where(
+        and_(
+            func.lower(Venue.name) == normalized_name.lower(),
+            func.lower(Venue.city) == normalized_city.lower(),
+            func.lower(Venue.country) == normalized_country.lower(),
+            Venue.address != "",
+            Venue.geom.is_not(None),
+        )
+    )
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def unresolved_venue_ids(db: Session, limit: int = 200) -> list[int]:
+    stmt = (
+        select(Venue.venue_id)
+        .where(
+            and_(
+                Venue.name != "",
+                or_(Venue.address == "", Venue.geom.is_(None)),
+            )
+        )
+        .limit(limit)
+    )
+    return db.execute(stmt).scalars().all()
+
+
+def get_venue(db: Session, venue_id: int) -> Venue | None:
+    return db.get(Venue, venue_id)
+
+
 def dedup_and_upsert_event(
     db: Session,
     candidate: EventCandidate,
@@ -164,6 +205,15 @@ def dedup_and_upsert_event(
     tags: list[str],
     venue: Venue | None,
 ) -> MatchDecision:
+    existing_source_link = db.execute(select(EventSource).where(EventSource.raw_id == raw_id)).scalar_one_or_none()
+    if existing_source_link:
+        existing_event = db.get(Event, existing_source_link.event_id)
+        return MatchDecision(
+            decision="auto-merge",
+            score=1.0,
+            matched_event_id=str(existing_event.event_id) if existing_event else "",
+        )
+
     stmt = select(Event, EventOccurrence).join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
     if candidate.date_start:
         stmt = stmt.where(
@@ -233,16 +283,3 @@ def dedup_and_upsert_event(
     db.commit()
 
     return decision
-
-
-def get_unprocessed_inbox_rows(db: Session, limit: int = 100) -> list[IngestInbox]:
-    return db.execute(select(IngestInbox).where(IngestInbox.processed.is_(False)).limit(limit)).scalars().all()
-
-
-def mark_inbox_processed(db: Session, inbox_id: int) -> None:
-    row = db.get(IngestInbox, inbox_id)
-    if not row:
-        return
-    row.processed = True
-    db.add(row)
-    db.commit()

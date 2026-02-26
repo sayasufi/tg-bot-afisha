@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from telethon import TelegramClient
 
@@ -12,6 +12,7 @@ class TelethonConnector:
     _URL_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
     _HASHTAG_RE = re.compile(r"#([\w\d_]+)", re.IGNORECASE)
     _TEXT_LIMIT = 12000
+    _LOOKBACK_DAYS = 7
 
     def __init__(self, channel_username: str) -> None:
         self.settings = get_settings()
@@ -53,12 +54,16 @@ class TelethonConnector:
             return [], cursor
 
         min_id = int(cursor) if cursor else 0
+        min_date = datetime.now(timezone.utc) - timedelta(days=self._LOOKBACK_DAYS)
         records: list[RawRecord] = []
         newest = min_id
         async with TelegramClient(self.settings.telethon_session, self.settings.telethon_api_id, self.settings.telethon_api_hash) as client:
             async for msg in client.iter_messages(self.channel_username, min_id=min_id, limit=100):
                 if not msg.message:
                     continue
+                if msg.date and msg.date < min_date:
+                    # iter_messages returns messages from newest to oldest, so we can stop here.
+                    break
                 payload = self._build_payload(msg)
                 records.append(
                     RawRecord(

@@ -8,9 +8,10 @@ from core.db.base import Base
 
 class EventCandidate(Base):
     __tablename__ = "event_candidates"
+    __table_args__ = {"schema": "events"}
 
     candidate_id: Mapped[int] = mapped_column(primary_key=True)
-    raw_id: Mapped[int] = mapped_column(ForeignKey("raw_events.raw_id", ondelete="CASCADE"), nullable=False)
+    raw_id: Mapped[int] = mapped_column(ForeignKey("events.raw_events.raw_id", ondelete="CASCADE"), nullable=False)
 
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)

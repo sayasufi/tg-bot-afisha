@@ -1,4 +1,4 @@
-﻿sources:
+sources:
   - name: kudago
     kind: web
     base_url: https://kudago.com/public-api/v1.4
@@ -20,10 +20,3 @@
       channel: kuda_v_moskva
       cursor: null
 
-  - name: telegram_forward_inbox
-    kind: telegram
-    base_url: telegram://forwarded
-    is_active: true
-    crawl_interval_sec: 60
-    robots_policy: "messages forwarded by users/admins"
-    config: {}

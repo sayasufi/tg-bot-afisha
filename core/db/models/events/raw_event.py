@@ -12,10 +12,11 @@ class RawEvent(Base):
         UniqueConstraint("source_id", "external_id", name="uq_raw_source_external"),
         Index("ix_raw_content_hash", "content_hash"),
         Index("ix_raw_fetched_at", "fetched_at"),
+        {"schema": "events"},
     )
 
     raw_id: Mapped[int] = mapped_column(primary_key=True)
-    source_id: Mapped[int] = mapped_column(ForeignKey("sources.source_id", ondelete="CASCADE"), nullable=False)
+    source_id: Mapped[int] = mapped_column(ForeignKey("ref.sources.source_id", ondelete="CASCADE"), nullable=False)
     external_id: Mapped[str] = mapped_column(String(255), nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     raw_payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)

@@ -1,6 +1,6 @@
-from sqlalchemy import Index, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geography
+from sqlalchemy import Index, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db.base import Base
 from core.db.models.mixins import TimestampMixin
@@ -11,6 +11,7 @@ class Venue(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("name", "address", name="uq_venue_name_address"),
         Index("ix_venues_geom", "geom", postgresql_using="gist"),
+        {"schema": "events"},
     )
 
     venue_id: Mapped[int] = mapped_column(primary_key=True)

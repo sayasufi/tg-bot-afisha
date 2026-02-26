@@ -9,6 +9,7 @@ class GeoResult:
     lon: float
     provider: str
     confidence: float
+    normalized_address: str = ""
 
 
 class YandexGeocoder:
@@ -33,6 +34,12 @@ class YandexGeocoder:
         )
         if not members:
             return None
-        pos = members[0]["GeoObject"]["Point"]["pos"]
+        first = members[0]["GeoObject"]
+        pos = first["Point"]["pos"]
         lon, lat = [float(x) for x in pos.split(" ")]
-        return GeoResult(lat=lat, lon=lon, provider="yandex", confidence=0.9)
+        normalized_address = (
+            first.get("metaDataProperty", {})
+            .get("GeocoderMetaData", {})
+            .get("text", "")
+        )
+        return GeoResult(lat=lat, lon=lon, provider="yandex", confidence=0.9, normalized_address=normalized_address)

@@ -1,4 +1,4 @@
-﻿services:
+services:
   postgres:
     image: postgis/postgis:16-3.4
     environment:
@@ -9,11 +9,23 @@
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afisha -d afisha"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7.4-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   api:
     build:
@@ -26,8 +38,16 @@
     volumes:
       - .:/app
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/openapi.json >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
 
   worker:
     build:
@@ -38,8 +58,12 @@
     volumes:
       - .:/app
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
 
   beat:
     build:
@@ -50,8 +74,12 @@
     volumes:
       - .:/app
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
 
   bot:
     build:
@@ -62,7 +90,8 @@
     volumes:
       - .:/app
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   miniapp:
     build:
@@ -73,6 +102,9 @@
       - "5173:5173"
     volumes:
       - ./miniapp:/miniapp
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pg_data:
