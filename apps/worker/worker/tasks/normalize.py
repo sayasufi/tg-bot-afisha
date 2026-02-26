@@ -80,6 +80,7 @@ def normalize_raw_events(self):
                     "endDate": extracted.date_end or None,
                     "venue": extracted.venue,
                     "address": extracted.address,
+                    "address_candidates": extracted.address_candidates,
                     "price": extracted.price_text,
                     "age_restriction": extracted.age_limit,
                     "tags": list(

@@ -1,4 +1,5 @@
-﻿import json
+import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -7,6 +8,7 @@ import dateparser
 import httpx
 
 from core.config.settings import get_settings
+from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 
 
 @dataclass
@@ -17,6 +19,7 @@ class ExtractedEvent:
     date_end: str
     venue: str
     address: str
+    address_candidates: list[str]
     price_text: str
     age_limit: str
     tags: list[str]
@@ -28,6 +31,7 @@ class LLMExtractionService:
         settings = get_settings()
         self.base_url = settings.llm_api_base_url.rstrip("/")
         self.timeout_seconds = settings.llm_timeout_seconds
+        self.yandex_maps = YandexMapsScraper()
 
     @staticmethod
     def _parse_dt(value: str) -> datetime | None:
@@ -84,6 +88,13 @@ class LLMExtractionService:
         date_end = str(parsed.get("date_end") or "").strip()
         venue = str(parsed.get("venue") or "").strip()
         address = str(parsed.get("address") or "").strip()
+        address_candidates: list[str] = []
+        if not address and venue:
+            address, address_candidates = await self._resolve_address_from_yandex_maps(
+                venue=venue,
+                city_hint=city_hint,
+                source_text=text,
+            )
         price_text = str(parsed.get("price_text") or "").strip()
         age_limit = str(parsed.get("age_limit") or "").strip()
         tags = [str(tag).strip().lower() for tag in (parsed.get("tags") or []) if str(tag).strip()]
@@ -106,6 +117,7 @@ class LLMExtractionService:
                 date_end=date_end,
                 venue=venue,
                 address=address,
+                address_candidates=address_candidates,
                 price_text=price_text,
                 age_limit=age_limit,
                 tags=list(dict.fromkeys(tags)),
@@ -113,6 +125,36 @@ class LLMExtractionService:
             ),
             "ok",
         )
+
+    async def _resolve_address_from_yandex_maps(
+        self,
+        venue: str,
+        city_hint: str,
+        source_text: str,
+    ) -> tuple[str, list[str]]:
+        try:
+            candidates = await self.yandex_maps.find_addresses_by_place(venue, city_hint=city_hint, limit=5)
+        except Exception:
+            return "", []
+        if not candidates:
+            return "", []
+        best = self._pick_best_address(candidates, source_text=source_text)
+        return best, candidates
+
+    @staticmethod
+    def _pick_best_address(candidates: list[str], source_text: str) -> str:
+        if not candidates:
+            return ""
+        lowered_text = (source_text or "").casefold()
+        if not lowered_text:
+            return candidates[0]
+
+        def score(addr: str) -> int:
+            words = [word for word in re.split(r"[^\w]+", addr.casefold()) if len(word) >= 4]
+            return sum(1 for word in words if word in lowered_text)
+
+        ranked = sorted(candidates, key=lambda addr: score(addr), reverse=True)
+        return ranked[0]
 
     async def extract_event(self, text: str, city_hint: str = "Moscow") -> ExtractedEvent | None:
         event, _ = await self.extract_event_with_reason(text, city_hint=city_hint)
