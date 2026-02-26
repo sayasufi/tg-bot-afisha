@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from pipeline.normalizer.extractors import NormalizedCandidate, parse_age, parse_dates, parse_price
 
@@ -21,20 +21,22 @@ def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None
     if not isinstance(dates, list) or not dates:
         return None, None
 
-    fallback_end: datetime | None = None
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(days=30)
+    in_window_end_only: datetime | None = None
     for row in dates:
         if not isinstance(row, dict):
             continue
         start_dt = _safe_ts_to_dt(row.get("start"))
         end_dt = _safe_ts_to_dt(row.get("end"))
-        if end_dt and not fallback_end:
-            fallback_end = end_dt
-        if start_dt:
+        if start_dt and now <= start_dt <= until:
             return start_dt, end_dt
+        if end_dt and now <= end_dt <= until and in_window_end_only is None:
+            in_window_end_only = end_dt
 
-    # If start is missing/invalid but end is valid, keep record scheduled by end date.
-    if fallback_end:
-        return fallback_end, fallback_end
+    # If start is outside window but event ends in window, keep it by window end date.
+    if in_window_end_only:
+        return in_window_end_only, in_window_end_only
     return None, None
 
 

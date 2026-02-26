@@ -1,4 +1,6 @@
-﻿from pipeline.normalizer.rules import RuleBasedNormalizer
+from datetime import datetime, timedelta, timezone
+
+from pipeline.normalizer.rules import RuleBasedNormalizer
 
 
 def test_kudago_payload_normalization() -> None:
@@ -28,3 +30,48 @@ def test_kudago_payload_normalization() -> None:
     assert item.price_min == 1500
     assert "concert" in item.tags
     assert item.date_start is not None
+
+
+def test_kudago_prefers_date_in_next_30_days() -> None:
+    now = datetime.now(timezone.utc)
+    old_start = int((now - timedelta(days=400)).timestamp())
+    old_end = int((now - timedelta(days=399)).timestamp())
+    in_window_start = int((now + timedelta(days=5)).timestamp())
+    in_window_end = int((now + timedelta(days=5, hours=2)).timestamp())
+    payload = {
+        "title": "Late Date Selection",
+        "description": "Should pick in-window date",
+        "dates": [
+            {"start": old_start, "end": old_end},
+            {"start": in_window_start, "end": in_window_end},
+        ],
+        "place": {"title": "Venue X", "address": "Address X"},
+    }
+    normalizer = RuleBasedNormalizer()
+
+    results = normalizer.normalize(payload, "")
+
+    assert len(results) == 1
+    item = results[0]
+    assert item.date_start is not None
+    assert int(item.date_start.timestamp()) == in_window_start
+
+
+def test_kudago_uses_end_date_when_only_end_is_in_window() -> None:
+    now = datetime.now(timezone.utc)
+    old_start = int((now - timedelta(days=3)).timestamp())
+    in_window_end = int((now + timedelta(days=2)).timestamp())
+    payload = {
+        "title": "Ongoing Event",
+        "description": "Start is old, end is in window",
+        "dates": [{"start": old_start, "end": in_window_end}],
+        "place": {"title": "Venue Y", "address": "Address Y"},
+    }
+    normalizer = RuleBasedNormalizer()
+
+    results = normalizer.normalize(payload, "")
+
+    assert len(results) == 1
+    item = results[0]
+    assert item.date_start is not None
+    assert int(item.date_start.timestamp()) == in_window_end

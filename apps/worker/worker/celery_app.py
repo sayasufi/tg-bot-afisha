@@ -28,6 +28,10 @@ celery_app.conf.beat_schedule = {
         "task": "apps.worker.worker.tasks.fetch.fetch_kudago",
         "schedule": 300.0,
     },
+    "fetch-kudago-full-scan-daily": {
+        "task": "apps.worker.worker.tasks.fetch.fetch_kudago_full_scan",
+        "schedule": 86400.0,
+    },
     "fetch-telegram-public": {
         "task": "apps.worker.worker.tasks.fetch.fetch_telegram_public",
         "schedule": 180.0,

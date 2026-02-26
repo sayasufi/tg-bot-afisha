@@ -136,6 +136,7 @@ class KudaGoConnector:
             "location": self.location,
             "page": page,
             "page_size": self.page_size,
+            "order_by": "-publication_date,-id",
             "actual_since": int(now.timestamp()),
             "actual_until": int(until.timestamp()),
             "expand": "place,location,dates",
