@@ -4,6 +4,7 @@ import re
 from core.config.settings import get_settings
 from pipeline.geocoding.providers.nominatim import NominatimGeocoder
 from pipeline.geocoding.providers.yandex import GeoResult, YandexGeocoder
+from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 
 
 class GeocodingService:
@@ -12,6 +13,7 @@ class GeocodingService:
         self.default_city = settings.default_city
         self.yandex = YandexGeocoder(settings.yandex_geocoder_key)
         self.nominatim = NominatimGeocoder(settings.nominatim_base_url)
+        self.yandex_maps_scraper = YandexMapsScraper()
         self._cache: dict[str, GeoResult] = {}
 
     async def geocode(self, address: str, city_hint: str | None = None) -> GeoResult | None:
@@ -33,7 +35,22 @@ class GeocodingService:
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        # For venue names OSM is more stable than strict address geocoders.
+        # 1) Yandex Maps scraper: venue -> address, then geocode.
+        scraped_address = await self.yandex_maps_scraper.find_address_by_place(venue_name, effective_city_hint)
+        if scraped_address:
+            geo = await self.geocode(scraped_address, effective_city_hint)
+            if geo:
+                result = GeoResult(
+                    lat=geo.lat,
+                    lon=geo.lon,
+                    provider="yandex_maps",
+                    confidence=geo.confidence,
+                    normalized_address=scraped_address,
+                )
+                self._cache[cache_key] = result
+                return result
+
+        # 2) OSM/Nominatim fallback by venue name.
         for query in self._build_venue_queries(venue_name):
             result = await self.nominatim.geocode(query, effective_city_hint)
             if result:
