@@ -52,6 +52,7 @@ function VectorBasemap() {
     const tune = () => {
       const repaint = (id: string, prop: string, val: any) => {
         try {
+          if (!mlMap.getLayer(id)) return; // layer absent in this style — skip quietly
           mlMap.setPaintProperty(id, prop, val);
         } catch {
           /* layer id may shift if OFM updates the style */
