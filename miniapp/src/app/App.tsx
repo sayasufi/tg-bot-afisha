@@ -197,7 +197,15 @@ export function App() {
         onChange={setFilters}
         onMenu={() => setDrawerOpen(true)}
       />
-      {view === "map" && !selected && !filtersOpen && <Ticker text={tickerText} />}
+      {view === "map" && !selected && !filtersOpen && (
+        <Ticker
+          text={tickerText}
+          onClick={() => {
+            haptic("light");
+            setView("recs");
+          }}
+        />
+      )}
 
       <EventsMap
         items={items}

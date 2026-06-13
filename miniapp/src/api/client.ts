@@ -3,6 +3,7 @@ export type EventItem = {
   title: string;
   category: string;
   date_start: string;
+  date_end: string | null;
   price_min: number | null;
   venue: string | null;
   lat: number | null;

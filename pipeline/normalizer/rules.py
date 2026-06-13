@@ -25,7 +25,7 @@ def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None
 
     now = datetime.now(timezone.utc)
     until = now + timedelta(days=30)
-    in_window_end_only: datetime | None = None
+    ongoing: tuple[datetime, datetime] | None = None
     for row in dates:
         if not isinstance(row, dict):
             continue
@@ -35,12 +35,13 @@ def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None
         # so scanning all rows avoids picking a long-past start).
         if start_dt and now <= start_dt <= until:
             return start_dt, end_dt
-        if end_dt and now <= end_dt <= until and in_window_end_only is None:
-            in_window_end_only = end_dt
+        # Started before the window but still running (e.g. an exhibition): keep the REAL
+        # start + end so the UI can show it as a run ("по 1 января"), not start==end.
+        if start_dt and end_dt and start_dt < now <= end_dt and ongoing is None:
+            ongoing = (start_dt, end_dt)
 
-    # Start is outside the window but the event ends within it — schedule by end date.
-    if in_window_end_only:
-        return in_window_end_only, in_window_end_only
+    if ongoing:
+        return ongoing
     return None, None
 
 

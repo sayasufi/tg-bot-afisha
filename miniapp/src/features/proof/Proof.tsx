@@ -18,14 +18,15 @@ export function ProofFrame() {
 }
 
 // A continuous mono ticker. Two identical tracks scroll -50% for a seamless
-// loop. `text` is the already-joined status line.
-export function Ticker({ text }: { text: string }) {
+// loop. `text` is the already-joined status line. Tapping it opens the listing.
+export function Ticker({ text, onClick }: { text: string; onClick?: () => void }) {
   return (
-    <div className="ticker" aria-hidden="true">
+    <button type="button" className="ticker" aria-label="Все события" onClick={onClick}>
+      <span className="ticker__cue">▸</span>
       <div className="ticker__track">
         <span>{text}</span>
         <span>{text}</span>
       </div>
-    </div>
+    </button>
   );
 }

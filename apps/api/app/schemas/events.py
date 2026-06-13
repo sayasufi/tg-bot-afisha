@@ -12,6 +12,7 @@ class EventMapItem(BaseModel):
     title: str
     category: str
     date_start: datetime
+    date_end: datetime | None = None
     price_min: Decimal | None
     venue: str | None
     lat: float | None

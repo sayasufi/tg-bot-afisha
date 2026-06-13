@@ -2,15 +2,13 @@ import { useEffect, useState } from "react";
 
 import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
+import { formatWhen } from "../../lib/datetime";
 import { CategoryIcon } from "../../lib/icons";
 
 type Props = {
   selected: EventItem | null;
   onClose: () => void;
 };
-
-const dateOnly = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
-const timeOnly = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
 // Short museum "accession" codes per category, for the catalogue affect.
 const CAT_CODE: Record<string, string> = {
@@ -23,16 +21,6 @@ const CAT_CODE: Record<string, string> = {
   kids: "ДЕТИ",
   other: "ПРОЧ",
 };
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const date = dateOnly.format(d);
-  // Hide the time for all-day events (no point showing 00:00).
-  if (d.getHours() === 0 && d.getMinutes() === 0) return date;
-  return `${date}, ${timeOnly.format(d)}`;
-}
 
 // source_best_url comes from ingested/scraped data — only allow http(s) so a
 // `javascript:` scheme cannot turn the link into an XSS sink.
@@ -95,8 +83,7 @@ export function EventSheet({ selected, onClose }: Props) {
   const lon = selected.lon ?? occ?.lon ?? null;
   const routeUrl = lat != null && lon != null ? `https://yandex.ru/maps/?ll=${lon}%2C${lat}&z=16&pt=${lon},${lat}` : null;
   const accession = `АФ · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
-  const dates =
-    formatDate(occ?.date_start || selected.date_start) + (occ?.date_end ? ` — ${formatDate(occ.date_end)}` : "");
+  const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
 
   return (
     <div className="sheet" role="dialog" aria-label={selected.title}>

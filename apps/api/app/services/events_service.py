@@ -104,6 +104,7 @@ class EventQueryService:
                     "title": event.canonical_title,
                     "category": event.category,
                     "date_start": occ.date_start,
+                    "date_end": occ.date_end,
                     "price_min": occ.price_min,
                     "venue": venue.name if venue else None,
                     "lat": lat,

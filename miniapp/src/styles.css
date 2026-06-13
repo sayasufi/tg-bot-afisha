@@ -1566,20 +1566,43 @@ body {
   right: 4px;
 }
 
-/* Running gallery ticker, under the command pill (map view only). */
+/* Running gallery ticker, under the command pill (map view only). Tap → list. */
 .ticker {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 66px);
   left: 14px;
   right: 14px;
   height: 22px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
   background: var(--ink);
   overflow: hidden;
   z-index: 1190;
+  cursor: pointer;
+}
+
+.ticker:active {
+  opacity: 0.82;
+}
+
+.ticker__cue {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0 8px 0 10px;
+  background: var(--ink);
+  color: var(--acid);
+  font-size: 11px;
 }
 
 .ticker__track {
   display: flex;
+  flex: 0 0 auto;
   width: max-content;
   height: 100%;
   align-items: center;
@@ -1700,5 +1723,28 @@ body {
   }
   40% {
     opacity: 1;
+  }
+}
+
+/* Kinetic: an acid accent draws in under the panel heading on enter. */
+.panelview__head {
+  position: relative;
+}
+
+.panelview__head::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  bottom: -1px;
+  width: 54px;
+  height: 2px;
+  background: var(--acid);
+  transform-origin: left center;
+  animation: drawX 0.5s var(--ease-cut) both 0.1s;
+}
+
+@keyframes drawX {
+  from {
+    transform: scaleX(0);
   }
 }

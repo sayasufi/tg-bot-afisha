@@ -1,19 +1,11 @@
 import type { CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
+import { formatWhenShort } from "../../lib/datetime";
 import { CategoryIcon } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 
 export type View = "map" | "recs" | "profile";
-
-const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-
-function shortDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const date = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(d);
-  return d.getHours() === 0 && d.getMinutes() === 0 ? date : dateFmt.format(d);
-}
 
 const NAV: { key: View; label: string; glyph: string }[] = [
   { key: "map", label: "Карта", glyph: "▦" },
@@ -59,7 +51,7 @@ function EventRow({ item, index, onSelect }: { item: EventItem; index: number; o
       <span className="erow__body">
         <span className="erow__title">{item.title}</span>
         <span className="erow__meta">
-          {shortDate(item.date_start)}
+          {formatWhenShort(item.date_start, item.date_end)}
           {item.venue ? ` · ${item.venue}` : ""}
         </span>
       </span>
