@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
 import { eventBucket, formatWhenShort } from "../../lib/datetime";
+import { Highlight } from "../../lib/highlight";
 import { CategoryIcon } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 
@@ -37,11 +38,23 @@ export function Sidebar({ open, view, onSelect, onClose }: { open: boolean; view
   );
 }
 
-function EventRow({ item, index, onSelect }: { item: EventItem; index: number; onSelect: (i: EventItem) => void }) {
+function EventRow({
+  item,
+  index,
+  query,
+  featured = false,
+  onSelect,
+}: {
+  item: EventItem;
+  index: number;
+  query?: string;
+  featured?: boolean;
+  onSelect: (i: EventItem) => void;
+}) {
   return (
     <button
       type="button"
-      className={`erow${index === 0 ? " erow--featured" : ""}`}
+      className={`erow${featured ? " erow--featured" : ""}`}
       style={{ "--i": index } as CSSProperties}
       onClick={() => onSelect(item)}
     >
@@ -49,7 +62,9 @@ function EventRow({ item, index, onSelect }: { item: EventItem; index: number; o
         <CategoryIcon cat={item.category} size={22} />
       </span>
       <span className="erow__body">
-        <span className="erow__title">{item.title}</span>
+        <span className="erow__title">
+          <Highlight text={item.title} query={query} />
+        </span>
         <span className="erow__meta">
           {formatWhenShort(item.date_start, item.date_end)}
           {item.venue ? ` · ${item.venue}` : ""}
@@ -59,7 +74,17 @@ function EventRow({ item, index, onSelect }: { item: EventItem; index: number; o
   );
 }
 
-export function RecommendationsPanel({ items, onSelect, onClose }: { items: EventItem[]; onSelect: (i: EventItem) => void; onClose: () => void }) {
+export function RecommendationsPanel({
+  items,
+  query,
+  onSelect,
+  onClose,
+}: {
+  items: EventItem[];
+  query?: string;
+  onSelect: (i: EventItem) => void;
+  onClose: () => void;
+}) {
   const sorted = [...items].sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""));
   // Group into time buckets (Сегодня / На этой неделе / Позже / Идут сейчас / Постоянно).
   const groups = new Map<number, { label: string; items: EventItem[] }>();
@@ -91,9 +116,10 @@ export function RecommendationsPanel({ items, onSelect, onClose }: { items: Even
               {g.label}
               <span className="recs__n">{g.items.length}</span>
             </div>
-            {g.items.map((it) => (
-              <EventRow key={it.event_id} item={it} index={idx++} onSelect={onSelect} />
-            ))}
+            {g.items.map((it) => {
+              const i = idx++;
+              return <EventRow key={it.event_id} item={it} index={i} query={query} featured={i === 0} onSelect={onSelect} />;
+            })}
           </section>
         ))}
       </div>
@@ -101,9 +127,26 @@ export function RecommendationsPanel({ items, onSelect, onClose }: { items: Even
   );
 }
 
-export function ProfilePanel({ user, total, city, onClose }: { user: TgUser | null; total: number; city: string; onClose: () => void }) {
+export function ProfilePanel({
+  user,
+  total,
+  city,
+  items,
+  favIds,
+  onSelect,
+  onClose,
+}: {
+  user: TgUser | null;
+  total: number;
+  city: string;
+  items: EventItem[];
+  favIds: Set<string>;
+  onSelect: (i: EventItem) => void;
+  onClose: () => void;
+}) {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
+  const favs = items.filter((it) => favIds.has(it.event_id));
   return (
     <div className="panelview">
       <header className="panelview__head">
@@ -131,8 +174,25 @@ export function ProfilePanel({ user, total, city, onClose }: { user: TgUser | nu
             <span>Событий на карте</span>
             <b>{total}</b>
           </div>
+          <div className="profile__row">
+            <span>Избранное</span>
+            <b>{favIds.size}</b>
+          </div>
         </div>
-        <p className="panelview__hint">Город меняется в боте командой /city. Скоро здесь появятся избранное и персональные подборки.</p>
+
+        {favs.length > 0 ? (
+          <>
+            <div className="recs__section">
+              Избранное
+              <span className="recs__n">{favs.length}</span>
+            </div>
+            {favs.map((it, i) => (
+              <EventRow key={it.event_id} item={it} index={i} onSelect={onSelect} />
+            ))}
+          </>
+        ) : (
+          <p className="panelview__hint">Отмечай события сердечком ♥ в карточке — они появятся здесь. Город меняется в боте командой /city.</p>
+        )}
       </div>
     </div>
   );

@@ -1,12 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import { formatWhen } from "../../lib/datetime";
+import { Highlight } from "../../lib/highlight";
 import { CategoryIcon } from "../../lib/icons";
+import { haptic, shareEvent } from "../../lib/telegram";
 
 type Props = {
   selected: EventItem | null;
+  query?: string;
+  isFav: boolean;
+  onToggleFav: () => void;
   onClose: () => void;
 };
 
@@ -57,8 +62,10 @@ function accessionNo(id: string | number): string {
   return String(h % 10000).padStart(4, "0");
 }
 
-export function EventSheet({ selected, onClose }: Props) {
+export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     setDetail(null);
@@ -68,6 +75,26 @@ export function EventSheet({ selected, onClose }: Props) {
       .then(setDetail)
       .catch(() => undefined);
     return () => ctrl.abort();
+  }, [selected]);
+
+  // Parallax: the cover drifts up slower than the content as the sheet scrolls.
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = sheet.scrollTop;
+        if (imgRef.current) imgRef.current.style.transform = `translateY(${Math.min(y * 0.25, 24)}px)`;
+      });
+    };
+    sheet.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      sheet.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [selected]);
 
   if (!selected) return null;
@@ -85,10 +112,30 @@ export function EventSheet({ selected, onClose }: Props) {
   const accession = `АФ · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
 
+  const onShare = () => {
+    haptic("light");
+    shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: sourceUrl });
+  };
+
   return (
-    <div className="sheet" role="dialog" aria-label={selected.title}>
+    <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
       <div className="sheet__sticky">
         <span className="sheet__grip" />
+        <button
+          type="button"
+          className={`sheet__icon sheet__icon--fav${isFav ? " sheet__icon--on" : ""}`}
+          aria-label="В избранное"
+          aria-pressed={isFav}
+          onClick={() => {
+            haptic("light");
+            onToggleFav();
+          }}
+        >
+          {isFav ? "♥" : "♡"}
+        </button>
+        <button type="button" className="sheet__icon sheet__icon--share" aria-label="Поделиться" onClick={onShare}>
+          ↗
+        </button>
         <button type="button" className="sheet__close" aria-label="Закрыть" onClick={onClose}>
           ✕
         </button>
@@ -97,7 +144,7 @@ export function EventSheet({ selected, onClose }: Props) {
       {/* mounted print */}
       <div className="sheet__frame">
         {image ? (
-          <img src={image} alt="" loading="lazy" />
+          <img ref={imgRef} src={image} alt="" loading="lazy" />
         ) : detail ? (
           <CategoryIcon cat={selected.category} size={64} className="sheet__plate-glyph" />
         ) : (
@@ -117,7 +164,9 @@ export function EventSheet({ selected, onClose }: Props) {
 
       <div className="sheet__body">
         <span className="kicker">{accession}</span>
-        <h2 className="sheet__title">{selected.title}</h2>
+        <h2 className="sheet__title">
+          <Highlight text={selected.title} query={query} />
+        </h2>
 
         <div className="sheet__meta">
           <div className="wall-label">

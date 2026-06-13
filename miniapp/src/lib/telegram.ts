@@ -17,7 +17,29 @@ type TelegramWebApp = {
     onClick: (cb: () => void) => void;
     offClick: (cb: () => void) => void;
   };
+  openTelegramLink?: (url: string) => void;
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
 };
+
+const BOT_LINK = "https://t.me/tg_afisha_bot";
+
+// Share an event via Telegram's native share sheet (falls back to the Web
+// Share API, then a plain share link).
+export function shareEvent(opts: { title: string; text?: string; url?: string | null }): void {
+  const url = opts.url || BOT_LINK;
+  const text = [opts.title, opts.text].filter(Boolean).join("\n");
+  const share = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  const wa = getWebApp();
+  if (wa?.openTelegramLink) {
+    wa.openTelegramLink(share);
+    return;
+  }
+  if (typeof navigator !== "undefined" && (navigator as any).share) {
+    (navigator as any).share({ title: opts.title, text, url }).catch(() => undefined);
+    return;
+  }
+  window.open(share, "_blank");
+}
 
 export function getWebApp(): TelegramWebApp | undefined {
   return (window as any).Telegram?.WebApp;

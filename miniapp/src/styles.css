@@ -664,6 +664,40 @@ body {
   background: var(--acid);
 }
 
+/* Favourite + share icon buttons (in the sticky header). */
+.sheet__icon {
+  position: absolute;
+  top: 12px;
+  pointer-events: auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-size: 15px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.sheet__icon:active {
+  background: var(--acid);
+}
+
+.sheet__icon--fav {
+  left: 14px;
+}
+
+.sheet__icon--share {
+  right: 54px;
+}
+
+.sheet__icon--on {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
 /* mounted print */
 .sheet__frame {
   position: relative;
@@ -676,10 +710,15 @@ body {
   overflow: hidden;
 }
 
+/* Oversized so the parallax drift never reveals the frame edge. */
 .sheet__frame img {
+  position: absolute;
+  top: -15%;
+  left: 0;
   width: 100%;
-  height: 100%;
+  height: 130%;
   object-fit: cover;
+  will-change: transform;
 }
 
 .sheet__plate-glyph {
@@ -937,7 +976,15 @@ body {
 @keyframes panelIn {
   from {
     opacity: 0;
+    transform: translateX(22px);
   }
+}
+
+/* Search-match highlight (acid-as-highlighter). */
+mark.hl {
+  background: var(--acid);
+  color: var(--on-acid);
+  padding: 0 1px;
 }
 
 .panelview__head {

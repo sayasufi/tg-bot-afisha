@@ -7,6 +7,7 @@ import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../featu
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
+import { useFavorites } from "../lib/favorites";
 import { getUser, getWebApp, haptic, initTelegram } from "../lib/telegram";
 import { openLocationSettings, watchLocation } from "../lib/telegramLocation";
 
@@ -16,6 +17,7 @@ const CITY = "Москва";
 export function App() {
   useState(() => initTelegram()); // dark-only theme bootstrap (runs once)
   const [tgUser] = useState(() => getUser());
+  const fav = useFavorites();
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -232,13 +234,19 @@ export function App() {
         </svg>
       </button>
 
-      <EventSheet selected={selected} onClose={() => setSelected(null)} />
+      <EventSheet
+        selected={selected}
+        query={filters.q}
+        isFav={!!selected && fav.has(selected.event_id)}
+        onToggleFav={() => selected && fav.toggle(selected.event_id)}
+        onClose={() => setSelected(null)}
+      />
 
       {view === "recs" && (
-        <RecommendationsPanel items={items} onSelect={openEvent} onClose={() => setView("map")} />
+        <RecommendationsPanel items={items} query={filters.q} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "profile" && (
-        <ProfilePanel user={tgUser} total={total} city={CITY} onClose={() => setView("map")} />
+        <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} onSelect={openEvent} onClose={() => setView("map")} />
       )}
 
       <Sidebar
