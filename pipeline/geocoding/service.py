@@ -12,9 +12,16 @@ class GeocodingService:
         settings = get_settings()
         self.default_city = settings.default_city
         self.yandex = YandexGeocoder(settings.yandex_geocoder_key)
+        self.yandex_maps = YandexMapsScraper()
         self.nominatim = NominatimGeocoder(settings.nominatim_base_url)
-        self.yandex_maps_scraper = YandexMapsScraper()
         self._cache: dict[str, GeoResult] = {}
+
+    async def _yandex_maps_result(self, query: str, city_hint: str | None) -> GeoResult | None:
+        coords = await self.yandex_maps.geocode(query, city_hint)
+        if not coords:
+            return None
+        lat, lon, address = coords
+        return GeoResult(lat=lat, lon=lon, provider="yandex_maps", confidence=0.85, normalized_address=address)
 
     async def geocode(self, address: str, city_hint: str | None = None) -> GeoResult | None:
         effective_city_hint = city_hint or self.default_city or None
@@ -22,7 +29,11 @@ class GeocodingService:
         if cache_key in self._cache:
             return self._cache[cache_key]
 
+        # Accuracy order for RU: Yandex Geocoder API (needs key) → Yandex Maps
+        # (keyless) → Nominatim (last resort; weak/erratic for RU addresses).
         result = await self.yandex.geocode(address, effective_city_hint)
+        if not result:
+            result = await self._yandex_maps_result(address, effective_city_hint)
         if not result:
             result = await self.nominatim.geocode(address, effective_city_hint)
         if result:
@@ -35,28 +46,18 @@ class GeocodingService:
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        # 1) Yandex Maps scraper: venue -> address, then geocode.
-        scraped_address = await self.yandex_maps_scraper.find_address_by_place(venue_name, effective_city_hint)
-        if scraped_address:
-            geo = await self.geocode(scraped_address, effective_city_hint)
-            if geo:
-                result = GeoResult(
-                    lat=geo.lat,
-                    lon=geo.lon,
-                    provider="yandex_maps",
-                    confidence=geo.confidence,
-                    normalized_address=scraped_address,
-                )
-                self._cache[cache_key] = result
-                return result
-
-        # 2) OSM/Nominatim fallback by venue name.
-        for query in self._build_venue_queries(venue_name):
-            result = await self.nominatim.geocode(query, effective_city_hint)
-            if result:
-                self._cache[cache_key] = result
-                return result
-        return None
+        # Venue-name search: Yandex (API → Maps) understands place names best; OSM last.
+        result = await self.yandex.geocode(venue_name, effective_city_hint)
+        if not result:
+            result = await self._yandex_maps_result(venue_name, effective_city_hint)
+        if not result:
+            for query in self._build_venue_queries(venue_name):
+                result = await self.nominatim.geocode(query, effective_city_hint)
+                if result:
+                    break
+        if result:
+            self._cache[cache_key] = result
+        return result
 
     @staticmethod
     def _build_venue_queries(venue_name: str) -> list[str]:

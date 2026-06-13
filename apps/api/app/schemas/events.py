@@ -59,8 +59,13 @@ class EventDetailResponse(BaseModel):
 class NearbyItem(BaseModel):
     event_id: UUID
     title: str
+    category: str
     distance_m: float
     date_start: datetime
+    price_min: Decimal | None
+    venue: str | None
+    lat: float | None
+    lon: float | None
 
 
 class NearbyResponse(BaseModel):

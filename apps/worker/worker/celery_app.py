@@ -13,6 +13,7 @@ celery_app = Celery(
         "apps.worker.worker.tasks.normalize",
         "apps.worker.worker.tasks.enrich",
         "apps.worker.worker.tasks.dedup",
+        "apps.worker.worker.tasks.seed",
     ],
 )
 
@@ -21,6 +22,7 @@ celery_app.conf.task_routes = {
     "apps.worker.worker.tasks.normalize.*": {"queue": "normalize"},
     "apps.worker.worker.tasks.enrich.*": {"queue": "enrich"},
     "apps.worker.worker.tasks.dedup.*": {"queue": "dedup"},
+    "apps.worker.worker.tasks.seed.*": {"queue": "enrich"},
 }
 
 celery_app.conf.beat_schedule = {

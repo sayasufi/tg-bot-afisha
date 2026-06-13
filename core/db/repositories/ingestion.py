@@ -66,6 +66,9 @@ def upsert_raw_event(db: Session, source_id: int, external_id: str, payload: dic
     ).scalar_one_or_none()
     content_hash = hashlib.sha256(raw_text.encode("utf-8", errors="ignore")).hexdigest()
     if existing:
+        if existing.content_hash != content_hash:
+            # Content changed since the raw was skipped — let normalize retry it.
+            existing.skip_reason = ""
         existing.raw_payload_json = payload
         existing.raw_text = raw_text
         existing.content_hash = content_hash
@@ -116,9 +119,17 @@ def unprocessed_raw_ids(db: Session, limit: int = 100) -> list[int]:
         select(RawEvent.raw_id)
         .outerjoin(EventCandidate, EventCandidate.raw_id == RawEvent.raw_id)
         .where(EventCandidate.candidate_id.is_(None))
+        .where(RawEvent.skip_reason == "")
+        .order_by(RawEvent.raw_id.asc())
         .limit(limit)
     )
     return db.execute(stmt).scalars().all()
+
+
+def mark_raw_skipped(db: Session, raw: RawEvent, reason: str) -> None:
+    raw.skip_reason = (reason or "skipped")[:64]
+    db.add(raw)
+    db.commit()
 
 
 def unresolved_candidate_ids(db: Session, limit: int = 100) -> list[int]:
@@ -126,6 +137,8 @@ def unresolved_candidate_ids(db: Session, limit: int = 100) -> list[int]:
         select(EventCandidate.candidate_id)
         .outerjoin(EventSource, EventSource.raw_id == EventCandidate.raw_id)
         .where(EventSource.id.is_(None))
+        .where(EventCandidate.venue_id.is_(None))
+        .order_by(EventCandidate.candidate_id.asc())
         .limit(limit)
     )
     return db.execute(stmt).scalars().all()

@@ -12,6 +12,9 @@ class EventCandidate(Base):
 
     candidate_id: Mapped[int] = mapped_column(primary_key=True)
     raw_id: Mapped[int] = mapped_column(ForeignKey("events.raw_events.raw_id", ondelete="CASCADE"), nullable=False)
+    venue_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.venues.venue_id", ondelete="SET NULL"), nullable=True
+    )
 
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)

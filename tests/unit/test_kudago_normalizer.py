@@ -4,11 +4,14 @@ from pipeline.normalizer.rules import RuleBasedNormalizer
 
 
 def test_kudago_payload_normalization() -> None:
+    now = datetime.now(timezone.utc)
+    start_ts = int((now + timedelta(days=3)).timestamp())
+    end_ts = int((now + timedelta(days=3, hours=2)).timestamp())
     payload = {
         "id": 123,
         "title": "Jazz Night",
         "description": "Live jazz evening",
-        "dates": [{"start": 1773075600, "end": 1773082800}],
+        "dates": [{"start": start_ts, "end": end_ts}],
         "place": {"title": "Club A", "address": "Tverskaya 1"},
         "site_url": "https://kudago.com/event/123",
         "price": "1500 RUB",

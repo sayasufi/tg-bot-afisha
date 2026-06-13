@@ -3,6 +3,7 @@ import json
 import httpx
 
 from pipeline.llm.adapters.base import CategoryResult, LLMAdapter
+from pipeline.llm.json_utils import parse_llm_json
 
 
 class HTTPChatAdapter(LLMAdapter):
@@ -32,8 +33,10 @@ class HTTPChatAdapter(LLMAdapter):
 
         raw_content = data.get("response") or "{}"
         try:
-            parsed = json.loads(raw_content)
+            parsed = parse_llm_json(raw_content)
         except (json.JSONDecodeError, TypeError):
+            parsed = {}
+        if not isinstance(parsed, dict):
             parsed = {}
 
         return CategoryResult(

@@ -22,6 +22,9 @@ class RawEvent(Base):
     raw_payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     raw_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Non-empty when normalize gave up on this raw event; keeps it out of the
+    # unprocessed queue so it is not re-sent to the LLM every beat tick.
+    skip_reason: Mapped[str] = mapped_column(String(64), default="", server_default="", nullable=False)
 
     source = relationship("Source", back_populates="raw_events")
     candidates = relationship("EventCandidate", back_populates="raw_event")

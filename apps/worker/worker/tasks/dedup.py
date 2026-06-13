@@ -2,8 +2,8 @@ import asyncio
 
 from sqlalchemy import select
 
-from core.db.models import EventCandidate, RawEvent, Source
-from core.db.repositories.ingestion import dedup_and_upsert_event
+from core.db.models import EventCandidate, EventSource, RawEvent, Source
+from core.db.repositories.ingestion import dedup_and_upsert_event, get_venue
 from core.db.session import SessionLocal
 from pipeline.llm.service import LLMService
 
@@ -15,10 +15,16 @@ def dedup_candidates(self):
     db = SessionLocal()
     llm = LLMService()
     try:
+        # Only candidates that enrich has finished (venue_id set) and that are
+        # not yet linked to an event; ordered so old rows cannot starve new ones.
         stmt = (
             select(EventCandidate, RawEvent, Source)
             .join(RawEvent, RawEvent.raw_id == EventCandidate.raw_id)
             .join(Source, Source.source_id == RawEvent.source_id)
+            .outerjoin(EventSource, EventSource.raw_id == EventCandidate.raw_id)
+            .where(EventSource.id.is_(None))
+            .where(EventCandidate.venue_id.is_not(None))
+            .order_by(EventCandidate.candidate_id.asc())
             .limit(200)
         )
         rows = db.execute(stmt).all()
@@ -36,6 +42,7 @@ def dedup_candidates(self):
                 for tag in candidate.tags_json:
                     if tag.startswith("category:"):
                         category = tag.split(":", 1)[1]
+            venue = get_venue(db, candidate.venue_id) if candidate.venue_id else None
             decision = dedup_and_upsert_event(
                 db,
                 candidate=candidate,
@@ -44,7 +51,7 @@ def dedup_candidates(self):
                 category=category,
                 subcategory=subcategory,
                 tags=tags,
-                venue=None,
+                venue=venue,
             )
             decisions[decision.decision] += 1
         return decisions

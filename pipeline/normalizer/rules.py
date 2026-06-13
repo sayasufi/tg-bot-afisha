@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import dateparser
+
 from pipeline.normalizer.extractors import NormalizedCandidate, parse_age, parse_dates, parse_price
 
 
@@ -29,23 +31,39 @@ def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None
             continue
         start_dt = _safe_ts_to_dt(row.get("start"))
         end_dt = _safe_ts_to_dt(row.get("end"))
+        # First upcoming occurrence within the window wins (events list rows oldest-first,
+        # so scanning all rows avoids picking a long-past start).
         if start_dt and now <= start_dt <= until:
             return start_dt, end_dt
         if end_dt and now <= end_dt <= until and in_window_end_only is None:
             in_window_end_only = end_dt
 
-    # If start is outside window but event ends in window, keep it by window end date.
+    # Start is outside the window but the event ends within it — schedule by end date.
     if in_window_end_only:
         return in_window_end_only, in_window_end_only
     return None, None
 
 
+def _parse_flexible_dt(value: object) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        # LLM extraction occasionally returns natural-language dates ("15 июня 2026")
+        # despite being asked for ISO-8601; a parse failure must not kill the batch.
+        return dateparser.parse(
+            text,
+            languages=["ru", "en"],
+            settings={"TIMEZONE": "Europe/Moscow", "RETURN_AS_TIMEZONE_AWARE": True},
+        )
+
+
 def _parse_ldjson_dates(payload: dict) -> tuple[datetime | None, datetime | None]:
-    start_raw = payload.get("startDate")
-    end_raw = payload.get("endDate")
-    start_dt = datetime.fromisoformat(str(start_raw).replace("Z", "+00:00")) if start_raw else None
-    end_dt = datetime.fromisoformat(str(end_raw).replace("Z", "+00:00")) if end_raw else None
-    return start_dt, end_dt
+    return _parse_flexible_dt(payload.get("startDate")), _parse_flexible_dt(payload.get("endDate"))
 
 
 def _extract_images(payload: dict) -> list[str]:

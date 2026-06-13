@@ -9,6 +9,7 @@ import httpx
 
 from core.config.settings import get_settings
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
+from pipeline.llm.json_utils import parse_llm_json
 
 
 @dataclass
@@ -75,8 +76,10 @@ class LLMExtractionService:
 
         raw = data.get("response") or "{}"
         try:
-            parsed: dict[str, Any] = json.loads(raw)
+            parsed: dict[str, Any] = parse_llm_json(raw)
         except (json.JSONDecodeError, TypeError):
+            return None, "invalid_json"
+        if not isinstance(parsed, dict):
             return None, "invalid_json"
 
         if not parsed.get("is_event"):

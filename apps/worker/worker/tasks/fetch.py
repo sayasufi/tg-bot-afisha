@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import httpx
 
 from connectors.telegram.telethon_connector import TelethonConnector
+from connectors.telegram.web_preview_connector import TelegramWebPreviewConnector
 from connectors.web.kudago_connector import KudaGoConnector
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
@@ -121,10 +122,13 @@ def fetch_kudago_full_scan(self):
 
 @celery_app.task(bind=True, max_retries=3)
 def fetch_telegram_public(self):
+    settings = get_settings()
     db = SessionLocal()
     channels = get_active_telegram_channels(db)
     if not channels:
         return {"channels": 0, "fetched": 0}
+
+    use_telethon = bool(settings.telethon_api_id and settings.telethon_api_hash)
 
     total_fetched = 0
     runs_summary: list[dict] = []
@@ -146,7 +150,11 @@ def fetch_telegram_public(self):
             run = create_source_run(db, source.source_id)
             try:
                 cursor = source.config_json.get("cursor")
-                connector = TelethonConnector(channel)
+                if use_telethon:
+                    connector = TelethonConnector(channel)
+                else:
+                    # No MTProto credentials: scrape the public t.me/s/ preview instead.
+                    connector = TelegramWebPreviewConnector(channel)
                 records, next_cursor = asyncio.run(connector.fetch(cursor=cursor))
                 for rec in records:
                     upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)

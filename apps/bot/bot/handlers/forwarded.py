@@ -15,4 +15,4 @@ async def forwarded_handler(message: Message):
         save_forward_message(db, message.message_id, message.chat.id, payload)
     finally:
         db.close()
-    await message.answer("Announcement accepted to ingestion inbox")
+    await message.answer("Announcement accepted for processing")

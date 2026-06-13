@@ -6,12 +6,65 @@ import httpx
 
 
 class YandexMapsScraper:
-    SEARCH_URLS: Final[tuple[str, ...]] = ("https://yandex.com/maps/", "https://yandex.ru/maps/")
+    SEARCH_URLS: Final[tuple[str, ...]] = ("https://yandex.ru/maps/", "https://yandex.com/maps/")
     USER_AGENT: Final[str] = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     )
+    # Coordinates of the FIRST business result. In Yandex's embedded JSON the item's
+    # "coordinates":[lon,lat] precedes its "type":"business", so we match the coords
+    # block immediately followed (no other coords between) by a business marker.
+    _BIZ_COORDS_RE: Final[re.Pattern] = re.compile(
+        r'"coordinates":\[(?P<lon>-?\d+\.\d+),(?P<lat>-?\d+\.\d+)\]'
+        r'(?:(?!"coordinates":\[).)*?"type":"business"',
+        re.DOTALL,
+    )
+    # Sanity bounds (Russia) to reject a stray/viewport coordinate.
+    _LAT_RANGE: Final[tuple[float, float]] = (41.0, 82.0)
+    _LON_RANGE: Final[tuple[float, float]] = (19.0, 190.0)
+
+    @staticmethod
+    def extract_first_business_coords(html: str) -> tuple[float, float] | None:
+        if not html:
+            return None
+        match = YandexMapsScraper._BIZ_COORDS_RE.search(html)
+        if not match:
+            return None
+        lat = float(match.group("lat"))
+        lon = float(match.group("lon"))
+        lat_lo, lat_hi = YandexMapsScraper._LAT_RANGE
+        lon_lo, lon_hi = YandexMapsScraper._LON_RANGE
+        if not (lat_lo <= lat <= lat_hi and lon_lo <= lon <= lon_hi):
+            return None
+        return lat, lon
+
+    async def geocode(self, query: str, city_hint: str | None = None) -> tuple[float, float, str] | None:
+        """Keyless geocode via Yandex Maps search → (lat, lon, address) of the first business.
+
+        Accurate for RU addresses/venue names. Returns None on captcha/miss so the
+        caller can fall back. NOTE: scrapes Yandex Maps — for production volume prefer
+        the official Yandex Geocoder API (set YANDEX_GEOCODER_KEY).
+        """
+        text = (query or "").strip()
+        if not text:
+            return None
+        search_text = f"{text} {city_hint}".strip() if city_hint else text
+        params = {"text": search_text}
+        headers = {"User-Agent": self.USER_AGENT, "Accept-Language": "ru,en;q=0.9"}
+        try:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+                for url in self.SEARCH_URLS:
+                    response = await client.get(url, params=params, headers=headers)
+                    if response.status_code >= 400 or not response.text or self._is_captcha_page(response.text):
+                        continue
+                    coords = self.extract_first_business_coords(response.text)
+                    if coords:
+                        address = self.extract_first_business_address(response.text) or ""
+                        return coords[0], coords[1], address
+        except httpx.HTTPError:
+            return None
+        return None
 
     async def find_address_by_place(self, venue_name: str, city_hint: str | None = None) -> str | None:
         addresses = await self.find_addresses_by_place(venue_name=venue_name, city_hint=city_hint, limit=1)

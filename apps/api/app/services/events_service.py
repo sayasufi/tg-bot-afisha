@@ -2,7 +2,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, and_, bindparam, func, literal_column, or_, select, text
+from geoalchemy2 import Geography
+from sqlalchemy import Select, and_, bindparam, cast, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from core.db.models import Event, EventOccurrence, Venue
@@ -90,7 +91,7 @@ class EventQueryService:
             if venue and venue.geom is not None:
                 row = self.db.execute(
                     text(
-                        "SELECT ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon FROM venues WHERE venue_id = :vid"
+                        "SELECT ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon FROM events.venues WHERE venue_id = :vid"
                     ),
                     {"vid": venue.venue_id},
                 ).mappings().first()
@@ -117,7 +118,7 @@ class EventQueryService:
                   ROUND(CAST(ST_Y(geom::geometry) AS numeric), 2) AS lat,
                   ROUND(CAST(ST_X(geom::geometry) AS numeric), 2) AS lon,
                   COUNT(*) AS count
-                FROM venues
+                FROM events.venues
                 WHERE geom IS NOT NULL
                 GROUP BY 1,2
                 LIMIT 100
@@ -154,7 +155,7 @@ class EventQueryService:
             if venue and venue.geom is not None:
                 row = self.db.execute(
                     text(
-                        "SELECT ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon FROM venues WHERE venue_id = :vid"
+                        "SELECT ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon FROM events.venues WHERE venue_id = :vid"
                     ),
                     {"vid": venue.venue_id},
                 ).mappings().first()
@@ -198,7 +199,8 @@ class EventQueryService:
         q: str | None,
         limit: int,
     ):
-        point = func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326)
+        # Cast to geography so ST_DWithin/ST_Distance use meters, not degrees.
+        point = cast(func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326), Geography(geometry_type="POINT", srid=4326))
         stmt = self._apply_filters(self._base_stmt(), date_from, date_to, categories, None, None, q)
         stmt = stmt.where(Venue.geom.is_not(None)).where(func.ST_DWithin(Venue.geom, point, radius_m)).limit(limit)
         rows = self.db.execute(stmt).all()
@@ -206,12 +208,28 @@ class EventQueryService:
         result = []
         for event, occ, venue in rows:
             distance = self.db.scalar(select(func.ST_Distance(venue.geom, point))) if venue and venue.geom is not None else 0.0
+            v_lat = v_lon = None
+            if venue and venue.geom is not None:
+                row = self.db.execute(
+                    text(
+                        "SELECT ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon FROM events.venues WHERE venue_id = :vid"
+                    ),
+                    {"vid": venue.venue_id},
+                ).mappings().first()
+                if row:
+                    v_lat = float(row["lat"])
+                    v_lon = float(row["lon"])
             result.append(
                 {
                     "event_id": event.event_id,
                     "title": event.canonical_title,
+                    "category": event.category,
                     "distance_m": float(distance or 0.0),
                     "date_start": occ.date_start,
+                    "price_min": occ.price_min,
+                    "venue": venue.name if venue else None,
+                    "lat": v_lat,
+                    "lon": v_lon,
                 }
             )
         result.sort(key=lambda x: x["distance_m"])
@@ -222,13 +240,13 @@ class EventQueryService:
         return {"categories": rows}
 
     def search(self, q: str, city: str | None, limit: int):
-        score = literal_column("similarity(canonical_title, :q)")
+        score = func.similarity(Event.canonical_title, bindparam("q", q))
         stmt = (
             select(Event.event_id, Event.canonical_title, score.label("score"))
+            .where(Event.status == "active")
             .where(or_(Event.canonical_title.ilike(f"%{q}%"), Event.canonical_description.ilike(f"%{q}%")))
             .order_by(text("score DESC"))
             .limit(limit)
-            .params(q=q)
         )
 
         if city:
@@ -236,11 +254,12 @@ class EventQueryService:
                 select(Event.event_id, Event.canonical_title, score.label("score"))
                 .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
                 .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
+                .where(Event.status == "active")
                 .where(Venue.city.ilike(city))
                 .where(or_(Event.canonical_title.ilike(f"%{q}%"), Event.canonical_description.ilike(f"%{q}%")))
+                .distinct()
                 .order_by(text("score DESC"))
                 .limit(limit)
-                .params(q=q)
             )
 
         rows = self.db.execute(stmt).all()

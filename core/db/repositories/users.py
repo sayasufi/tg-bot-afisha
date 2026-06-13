@@ -1,7 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from core.db.models import City, IngestInbox, User
+from core.db.models import City, RawEvent, User
+from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
 
 def get_or_create_city(db: Session, name: str, country: str = "RU") -> City:
@@ -27,9 +28,15 @@ def upsert_user_city(db: Session, telegram_user_id: int, city: City) -> User:
     return user
 
 
-def save_forward_message(db: Session, message_id: int, chat_id: int, payload: dict) -> IngestInbox:
-    row = IngestInbox(telegram_message_id=message_id, chat_id=chat_id, payload_json=payload, processed=False)
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
+def save_forward_message(db: Session, message_id: int, chat_id: int, payload: dict) -> RawEvent:
+    # Forwarded posts enter the regular ingestion pipeline: the source name starts
+    # with "telegram", so normalize_raw_events routes the text through LLM extraction.
+    source = ensure_source(db, name="telegram_forward", kind="telegram", base_url="https://t.me")
+    raw_text = str(payload.get("text") or payload.get("caption") or "")
+    return upsert_raw_event(
+        db,
+        source_id=source.source_id,
+        external_id=f"{chat_id}:{message_id}",
+        payload=payload,
+        raw_text=raw_text,
+    )
