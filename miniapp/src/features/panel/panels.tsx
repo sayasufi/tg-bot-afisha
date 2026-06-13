@@ -5,6 +5,7 @@ import { eventBucket, formatWhenShort } from "../../lib/datetime";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
+import { safeHttpUrl } from "../../lib/url";
 
 export type View = "map" | "recs" | "profile";
 
@@ -133,6 +134,7 @@ export function ProfilePanel({
   city,
   items,
   favIds,
+  query,
   onSelect,
   onClose,
 }: {
@@ -141,11 +143,13 @@ export function ProfilePanel({
   city: string;
   items: EventItem[];
   favIds: Set<string>;
+  query?: string;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
+  const avatarUrl = safeHttpUrl(user?.photo_url);
   const favs = items.filter((it) => favIds.has(it.event_id));
   return (
     <div className="panelview">
@@ -157,8 +161,8 @@ export function ProfilePanel({
       </header>
       <div className="panelview__scroll">
         <div className="profile">
-          <div className="profile__avatar" style={user?.photo_url ? { backgroundImage: `url(${user.photo_url})` } : undefined}>
-            {user?.photo_url ? "" : initial}
+          <div className="profile__avatar" style={avatarUrl ? { backgroundImage: `url("${avatarUrl}")` } : undefined}>
+            {avatarUrl ? "" : initial}
           </div>
           <div className="profile__id">
             <div className="profile__name">{name}</div>
@@ -187,7 +191,7 @@ export function ProfilePanel({
               <span className="recs__n">{favs.length}</span>
             </div>
             {favs.map((it, i) => (
-              <EventRow key={it.event_id} item={it} index={i} onSelect={onSelect} />
+              <EventRow key={it.event_id} item={it} index={i} query={query} onSelect={onSelect} />
             ))}
           </>
         ) : (

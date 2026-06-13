@@ -6,6 +6,7 @@ import { formatWhen } from "../../lib/datetime";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon } from "../../lib/icons";
 import { haptic, shareEvent } from "../../lib/telegram";
+import { safeHttpUrl } from "../../lib/url";
 
 type Props = {
   selected: EventItem | null;
@@ -26,18 +27,6 @@ const CAT_CODE: Record<string, string> = {
   kids: "ДЕТИ",
   other: "ПРОЧ",
 };
-
-// source_best_url comes from ingested/scraped data — only allow http(s) so a
-// `javascript:` scheme cannot turn the link into an XSS sink.
-function safeHttpUrl(u: string | null | undefined): string | null {
-  if (!u) return null;
-  try {
-    const parsed = new URL(u);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-}
 
 function stripHtml(text: string): string {
   return text
@@ -103,7 +92,7 @@ export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Pro
   const occ = detail?.occurrences?.[0];
   const address = occ?.address || null;
   const venue = selected.venue || occ?.venue || null;
-  const image = detail?.primary_image_url || "";
+  const image = safeHttpUrl(detail?.primary_image_url) || "";
   const description = stripHtml(detail?.canonical_description || "");
   const sourceUrl = safeHttpUrl(occ?.source_best_url);
   const lat = selected.lat ?? occ?.lat ?? null;

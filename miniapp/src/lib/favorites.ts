@@ -20,18 +20,22 @@ function emit() {
 }
 
 export function toggleFavorite(id: string): void {
-  favs = new Set(favs);
-  if (favs.has(id)) favs.delete(id);
-  else favs.add(id);
+  const next = new Set(favs);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  // Persist first so a (very unlikely) storage failure doesn't leave the
+  // in-memory state diverged from what reloads — only commit on success.
   try {
-    localStorage.setItem(KEY, JSON.stringify([...favs]));
+    localStorage.setItem(KEY, JSON.stringify([...next]));
   } catch {
-    /* storage unavailable — keep in-memory */
+    return; // keep the previous state; the toggle is a no-op
   }
+  favs = next;
   emit();
 }
 
-// Reactive hook: re-renders subscribers whenever favorites change.
+// Reactive hook: re-renders subscribers whenever favorites change. `ids` is a
+// fresh copy so callers can't mutate the store directly (only toggle() can).
 export function useFavorites() {
   const [, force] = useState(0);
   useEffect(() => {
@@ -42,7 +46,7 @@ export function useFavorites() {
     };
   }, []);
   return {
-    ids: favs,
+    ids: new Set(favs),
     has: (id: string) => favs.has(id),
     toggle: toggleFavorite,
   };

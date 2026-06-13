@@ -246,7 +246,7 @@ export function App() {
         <RecommendationsPanel items={items} query={filters.q} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "profile" && (
-        <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} onSelect={openEvent} onClose={() => setView("map")} />
+        <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} query={filters.q} onSelect={openEvent} onClose={() => setView("map")} />
       )}
 
       <Sidebar
