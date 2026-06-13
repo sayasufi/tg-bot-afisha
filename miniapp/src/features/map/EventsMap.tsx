@@ -7,7 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "@maplibre/maplibre-gl-leaflet";
 
 import type { EventItem } from "../../api/client";
-import { categoryMeta } from "../../lib/categories";
+import { categorySvg } from "../../lib/icons";
 
 // maplibre-gl-leaflet 0.1.x looks up maplibre-gl on the global scope.
 (window as any).maplibregl = maplibregl;
@@ -23,22 +23,23 @@ type Props = {
 
 const MOSCOW: [number, number] = [55.751244, 37.618423];
 
-// User location marker — a blue dot, plus a fanned "beam" pointing where the
-// phone is facing when a compass heading is available.
+// User location — a surveyor's crosshair (the map-maker's instrument), with a
+// single black needle for the compass heading when available.
 function userIcon(heading: number | null): L.DivIcon {
-  const beam = heading == null ? "" : `<span class="user-loc__beam" style="--h:${heading}deg"></span>`;
+  const needle = heading == null ? "" : `<span class="vyou__needle" style="--h:${heading}deg"></span>`;
   return L.divIcon({
-    className: "user-loc-wrap",
-    html: `<div class="user-loc">${beam}<span class="user-loc__core"></span></div>`,
-    iconSize: [56, 56],
-    iconAnchor: [28, 28],
+    className: "vyou-wrap",
+    html: `<div class="vyou"><span class="vyou__ch"></span><span class="vyou__cv"></span>${needle}<span class="vyou__ring"></span><span class="vyou__core"></span></div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
   });
 }
 
-// OpenFreeMap "Fiord" — a keyless vector (MapLibre GL) slate-blue style. Crisp
-// labels at every zoom; we deepen the palette and green the parks so coloured
-// category pins and metro pop. Dark-only (the light theme was removed).
-const OFM_FIORD = "https://tiles.openfreemap.org/styles/fiord";
+// OpenFreeMap "Positron" — a keyless light vector (MapLibre GL) style: pale
+// grey land, white road channels, minimal labels. We push it to a stark
+// white-plaster "architectural plan" so the black nameplate pins (and the one
+// acid pin) are the only objects on a clean gallery wall.
+const OFM_FIORD = "https://tiles.openfreemap.org/styles/positron";
 // Only the legally-required data credit (OpenStreetMap / ODbL). The non-required
 // "Leaflet" prefix, "OpenFreeMap" and "OpenMapTiles" credits are dropped.
 function VectorBasemap() {
@@ -56,23 +57,34 @@ function VectorBasemap() {
           /* layer id may shift if OFM updates the style */
         }
       };
-      repaint("background", "background-color", "#222a3d");
-      repaint("water", "fill-color", "#1d3c6b"); // clearer blue lakes/rivers
-      repaint("waterway", "line-color", "#3f72ad"); // river lines read as blue
-      repaint("park", "fill-color", "#22472f"); // parks → green
-      repaint("park_outline", "line-color", "#3c7e54");
-      repaint("landcover_wood", "fill-color", "rgba(30,64,43,0.6)"); // forests → green
+      // White-cube plaster: pale land, recessive water, near-black ink labels.
+      repaint("background", "background-color", "#f4f4ef");
+      repaint("water", "fill-color", "#e2e2da");
+      repaint("waterway", "line-color", "#c9c9bf");
+      repaint("park", "fill-color", "#e9ece0");
+      repaint("park_outline", "line-color", "#d6d8c8");
+      repaint("landcover_wood", "fill-color", "rgba(220,224,206,0.6)");
       const layers = mlMap.getStyle()?.layers || [];
       const font = layers.map((l: any) => l.layout && l.layout["text-font"]).find(Boolean) || ["Noto Sans Regular"];
+      // Roads → white channels on plaster, with a pale grey casing.
+      for (const layer of layers) {
+        if (layer.type === "line" && (layer["source-layer"] === "transportation" || /road|highway|street|bridge|tunnel/i.test(layer.id))) {
+          repaint(layer.id, "line-color", "#ffffff");
+        }
+        if (layer.type === "fill" && (layer["source-layer"] === "building" || /building/i.test(layer.id))) {
+          repaint(layer.id, "fill-color", "#eaeae2");
+          repaint(layer.id, "fill-outline-color", "#d8d8ce");
+        }
+      }
       for (const layer of layers) {
         if (layer.type !== "symbol" || !layer.layout || layer.layout["text-field"] == null) continue;
         if (layer.id === "ofm-housenumbers" || layer["source-layer"] === "housenumber") continue;
         try {
           mlMap.setLayoutProperty(layer.id, "text-field", cyrillic);
-          // Brighter text + denser halo so street/place names read clearly on the dark canvas.
-          mlMap.setPaintProperty(layer.id, "text-color", "#eaf0fb");
-          mlMap.setPaintProperty(layer.id, "text-halo-color", "#121826");
-          mlMap.setPaintProperty(layer.id, "text-halo-width", 1.5);
+          // Near-black "vinyl" labels with a paper halo — gallery wall-text on plaster.
+          mlMap.setPaintProperty(layer.id, "text-color", "#0b0b0b");
+          mlMap.setPaintProperty(layer.id, "text-halo-color", "#f4f4ef");
+          mlMap.setPaintProperty(layer.id, "text-halo-width", 1.4);
         } catch {
           /* skip layers that reject the override */
         }
@@ -97,7 +109,7 @@ function VectorBasemap() {
           source: "openmaptiles",
           "source-layer": "landcover",
           filter: ["in", ["get", "class"], ["literal", ["grass", "wetland", "scrub"]]],
-          paint: { "fill-color": "#1e3f2b", "fill-opacity": 0.45 },
+          paint: { "fill-color": "#e7ead9", "fill-opacity": 0.6 },
         },
         beforeId,
       );
@@ -128,7 +140,7 @@ function VectorBasemap() {
           "text-padding": 4,
           "symbol-sort-key": ["coalesce", ["get", "minzoom"], 13],
         },
-        paint: { "text-color": "#8fd3a8", "text-halo-color": "#0e1a14", "text-halo-width": 1.6 },
+        paint: { "text-color": "#6e6e66", "text-halo-color": "#f4f4ef", "text-halo-width": 1.6 },
       });
 
       addLayer({
@@ -138,7 +150,7 @@ function VectorBasemap() {
         "source-layer": "housenumber",
         minzoom: 16,
         layout: { "text-field": ["get", "housenumber"], "text-font": font, "text-size": 10, "text-padding": 2 },
-        paint: { "text-color": "#9aa6bd", "text-halo-color": "#141a28", "text-halo-width": 1 },
+        paint: { "text-color": "#a8a89e", "text-halo-color": "#f4f4ef", "text-halo-width": 1 },
       });
 
       // Named POIs (parks, shops, venues…) — deliberately subordinate to streets:
@@ -158,7 +170,7 @@ function VectorBasemap() {
           "text-padding": 3,
           "text-max-width": 7,
         },
-        paint: { "text-color": "#767f95", "text-halo-color": "#0f1320", "text-halo-width": 1.1 },
+        paint: { "text-color": "#a8a89e", "text-halo-color": "#f4f4ef", "text-halo-width": 1.1 },
       });
 
       // Metro stations coloured by their official line (ветка) colour — data baked
@@ -178,7 +190,7 @@ function VectorBasemap() {
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 14, 5, 16, 7],
           "circle-color": ["get", "color"],
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": "#f4f4ef",
           "circle-stroke-width": 1.4,
         },
       });
@@ -195,7 +207,7 @@ function VectorBasemap() {
           "text-offset": [0, 0.85],
           "text-optional": true,
         },
-        paint: { "text-color": ["get", "color"], "text-halo-color": "#0b0e16", "text-halo-width": 1.9 },
+        paint: { "text-color": ["get", "color"], "text-halo-color": "#f4f4ef", "text-halo-width": 1.9 },
       });
 
       // The tile source injects its own "OpenFreeMap …" credit into Leaflet's
@@ -233,23 +245,26 @@ function Basemap() {
   return <VectorBasemap />;
 }
 
+// Pin = a gallery nameplate: a white plate with a 1px frame and the category's
+// vinyl-cut icon; a nail + dot drops to the geo point. Active flips to acid.
 function pinIcon(item: EventItem, active: boolean): L.DivIcon {
-  const meta = categoryMeta(item.category);
   return L.divIcon({
-    className: "pin-wrap",
-    html: `<div class="pin${active ? " pin--active" : ""}" style="--c:${meta.color}"><span class="pin__glyph">${meta.glyph}</span></div>`,
-    iconSize: [40, 48],
-    iconAnchor: [20, 46],
-    popupAnchor: [0, -44],
+    className: "vpin-wrap",
+    html: `<div class="vpin${active ? " vpin--active" : ""}"><div class="vpin__plate">${categorySvg(item.category, 17)}</div><div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
+    iconSize: [30, 40],
+    iconAnchor: [15, 40],
+    popupAnchor: [0, -40],
   });
 }
 
+// Cluster = stacked frames with a mono count; inverts to black past 40.
 function clusterIcon(cluster: any): L.DivIcon {
   const count = cluster.getChildCount();
-  const size = count < 10 ? 42 : count < 40 ? 50 : 60;
+  const size = count < 10 ? 34 : count < 40 ? 40 : 46;
+  const big = count >= 40 ? " vcluster--big" : "";
   return L.divIcon({
-    className: "cluster-wrap",
-    html: `<div class="cluster" style="--s:${size}px"><span>${count}</span></div>`,
+    className: "vcluster-wrap",
+    html: `<div class="vcluster${big}" style="--s:${size}px"><span class="vcluster__face">${count}</span></div>`,
     iconSize: [size, size],
   });
 }

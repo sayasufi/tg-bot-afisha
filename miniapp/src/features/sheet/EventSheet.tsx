@@ -1,7 +1,8 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 
 import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
+import { CategoryIcon } from "../../lib/icons";
 
 type Props = {
   selected: EventItem | null;
@@ -10,6 +11,18 @@ type Props = {
 
 const dateOnly = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const timeOnly = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+// Short museum "accession" codes per category, for the catalogue affect.
+const CAT_CODE: Record<string, string> = {
+  concert: "КОНЦ",
+  theatre: "ТЕАТР",
+  exhibition: "ВЫСТ",
+  standup: "СТЕНД",
+  festival: "ФЕСТ",
+  lecture: "ЛЕКЦ",
+  kids: "ДЕТИ",
+  other: "ПРОЧ",
+};
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -48,6 +61,14 @@ function formatPrice(price: number | null | undefined): string {
   return `от ${Math.round(price)} ₽`;
 }
 
+// Stable 4-digit "accession" sequence from the event id.
+function accessionNo(id: string | number): string {
+  const s = String(id);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return String(h % 10000).padStart(4, "0");
+}
+
 export function EventSheet({ selected, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
 
@@ -65,20 +86,17 @@ export function EventSheet({ selected, onClose }: Props) {
 
   const meta = categoryMeta(selected.category);
   const occ = detail?.occurrences?.[0];
-  const kickerDate = (() => {
-    const iso = occ?.date_start || selected.date_start;
-    if (!iso) return "";
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "" : dateOnly.format(d);
-  })();
-  const lat = selected.lat ?? occ?.lat ?? null;
-  const lon = selected.lon ?? occ?.lon ?? null;
   const address = occ?.address || null;
   const venue = selected.venue || occ?.venue || null;
   const image = detail?.primary_image_url || "";
   const description = stripHtml(detail?.canonical_description || "");
   const sourceUrl = safeHttpUrl(occ?.source_best_url);
+  const lat = selected.lat ?? occ?.lat ?? null;
+  const lon = selected.lon ?? occ?.lon ?? null;
   const routeUrl = lat != null && lon != null ? `https://yandex.ru/maps/?ll=${lon}%2C${lat}&z=16&pt=${lon},${lat}` : null;
+  const accession = `АФ · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
+  const dates =
+    formatDate(occ?.date_start || selected.date_start) + (occ?.date_end ? ` — ${formatDate(occ.date_end)}` : "");
 
   return (
     <div className="sheet" role="dialog" aria-label={selected.title}>
@@ -89,42 +107,39 @@ export function EventSheet({ selected, onClose }: Props) {
         </button>
       </div>
 
-      <div className={`sheet__hero${image ? "" : " sheet__hero--plain"}`} style={{ "--c": meta.color } as CSSProperties}>
-        {image ? <img src={image} alt="" loading="lazy" /> : <span className="sheet__hero-glyph">{meta.glyph}</span>}
-        <span className="sheet__kicker kicker">
-          {meta.label}
-          {kickerDate ? ` · ${kickerDate}` : ""}
-        </span>
-        <span className="sheet__chip" style={{ "--c": meta.color } as CSSProperties}>
-          <span>{meta.glyph}</span>
+      {/* mounted print */}
+      <div className="sheet__frame">
+        {image ? <img src={image} alt="" loading="lazy" /> : <CategoryIcon cat={selected.category} size={64} className="sheet__plate-glyph" />}
+        <span className="sheet__tag">
+          <CategoryIcon cat={selected.category} size={13} />
           {meta.label}
         </span>
       </div>
 
       <div className="sheet__body">
+        <span className="kicker">{accession}</span>
         <h2 className="sheet__title">{selected.title}</h2>
 
         <div className="sheet__meta">
-          <div className="meta-row">
-            <span className="meta-row__glyph">📅</span>
-            <span>
-              {formatDate(occ?.date_start || selected.date_start)}
-              {occ?.date_end ? ` — ${formatDate(occ.date_end)}` : ""}
-            </span>
+          <div className="wall-label">
+            <span className="wall-label__cap">Когда</span>
+            <span className="wall-label__val">{dates || "—"}</span>
           </div>
           {venue && (
-            <div className="meta-row">
-              <span className="meta-row__glyph">📍</span>
-              <span>
+            <div className="wall-label">
+              <span className="wall-label__cap">Где</span>
+              <span className="wall-label__val">
                 {venue}
-                {address ? <span className="meta-row__dim"> · {address}</span> : null}
+                {address ? <span className="dim"> · {address}</span> : null}
               </span>
             </div>
           )}
-          <div className="meta-row">
-            <span className="meta-row__glyph">💰</span>
-            <span>{formatPrice(occ?.price_min ?? selected.price_min)}</span>
-            {detail?.age_limit ? <span className="badge">{detail.age_limit}</span> : null}
+          <div className="wall-label">
+            <span className="wall-label__cap">Цена</span>
+            <span className="wall-label__val">
+              {formatPrice(occ?.price_min ?? selected.price_min)}
+              {detail?.age_limit ? <span className="badge">{detail.age_limit}</span> : null}
+            </span>
           </div>
         </div>
 

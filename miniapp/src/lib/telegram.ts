@@ -30,12 +30,12 @@ export function getUser(): TgUser | null {
 }
 
 // Canvas color the page paints behind everything (matches CSS --bg).
-const CANVAS = "#141210";
+const CANVAS = "#F4F4EF";
 
-// The app is dark-only; the light theme was removed.
+// VITRINE — white-cube gallery, light-only theme.
 export function initTelegram(): ThemeName {
   const tg = getWebApp();
-  document.documentElement.dataset.theme = "dark";
+  document.documentElement.dataset.theme = "light";
   try {
     tg?.ready();
     tg?.expand();
@@ -44,7 +44,7 @@ export function initTelegram(): ThemeName {
   } catch {
     /* not running inside Telegram — ignore */
   }
-  return "dark";
+  return "light";
 }
 
 export function haptic(style: "light" | "medium" | "heavy" = "light"): void {

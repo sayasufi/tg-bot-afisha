@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
-import { categoryMeta } from "../../lib/categories";
+import { CategoryIcon } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 
 export type View = "map" | "recs" | "profile";
@@ -16,9 +16,9 @@ function shortDate(iso: string): string {
 }
 
 const NAV: { key: View; label: string; glyph: string }[] = [
-  { key: "map", label: "Карта", glyph: "🗺" },
-  { key: "recs", label: "Рекомендации", glyph: "✦" },
-  { key: "profile", label: "Профиль", glyph: "☻" },
+  { key: "map", label: "Карта", glyph: "▦" },
+  { key: "recs", label: "Рекомендации", glyph: "✷" },
+  { key: "profile", label: "Профиль", glyph: "◑" },
 ];
 
 export function Sidebar({ open, view, onSelect, onClose }: { open: boolean; view: View; onSelect: (v: View) => void; onClose: () => void }) {
@@ -46,7 +46,6 @@ export function Sidebar({ open, view, onSelect, onClose }: { open: boolean; view
 }
 
 function EventRow({ item, index, onSelect }: { item: EventItem; index: number; onSelect: (i: EventItem) => void }) {
-  const meta = categoryMeta(item.category);
   return (
     <button
       type="button"
@@ -54,8 +53,8 @@ function EventRow({ item, index, onSelect }: { item: EventItem; index: number; o
       style={{ "--i": index } as CSSProperties}
       onClick={() => onSelect(item)}
     >
-      <span className="erow__mark" style={{ background: meta.color }}>
-        {meta.glyph}
+      <span className="erow__mark">
+        <CategoryIcon cat={item.category} size={22} />
       </span>
       <span className="erow__body">
         <span className="erow__title">{item.title}</span>

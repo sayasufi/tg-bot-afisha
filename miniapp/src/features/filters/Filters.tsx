@@ -1,6 +1,7 @@
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 
 import { CATEGORIES } from "../../lib/categories";
+import { CategoryIcon } from "../../lib/icons";
 import { hapticSelection } from "../../lib/telegram";
 
 export type FilterState = {
@@ -49,7 +50,7 @@ export function Filters({ value, total, onChange, onMenu }: Props) {
       </div>
 
       <div className="search">
-        <span className="search__glyph">🔍</span>
+        <span className="search__glyph">⌕</span>
         <input
           className="search__input"
           placeholder="Поиск событий"
@@ -72,10 +73,9 @@ export function Filters({ value, total, onChange, onMenu }: Props) {
             key={c.key}
             type="button"
             className={`chip${value.category === c.key ? " chip--active" : ""}`}
-            style={{ "--c": c.color } as CSSProperties}
             onClick={() => pick(c.key)}
           >
-            <span className="chip__glyph">{c.glyph}</span>
+            <CategoryIcon cat={c.key} size={14} />
             {c.label}
           </button>
         ))}
