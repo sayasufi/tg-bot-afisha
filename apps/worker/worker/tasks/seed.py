@@ -95,7 +95,7 @@ def _minzoom_for(bbox: tuple[float, float, float, float]) -> int:
     return 15
 
 _METRO_QUERY = """
-SELECT ?station ?stationLabel ?coord ?color WHERE {
+SELECT ?station ?stationLabel ?coord ?color ?line ?lineLabel WHERE {
   ?station wdt:P81 ?line . ?line wdt:P16 wd:Q5499 .
   ?station wdt:P625 ?coord .
   OPTIONAL { ?line wdt:P465 ?color . }
@@ -131,9 +131,14 @@ def _seed_metro(db, city_id: int) -> int:
         if not coord:
             continue
         color = ("#" + r["color"]["value"]) if r.get("color") else "#9aa6bd"
+        # Keep the line name + Wikidata id so the map can highlight a whole
+        # ветка when a station is tapped (colour alone is ambiguous).
+        line_id = r["line"]["value"].rsplit("/", 1)[-1] if r.get("line") else None
+        line_name = r["lineLabel"]["value"] if r.get("lineLabel") else None
         upsert_map_place(
             db, kind="metro", city_id=city_id, name=r["stationLabel"]["value"],
             lat=coord[0], lon=coord[1], color=color, source="wikidata",
+            meta={"line": line_name, "line_id": line_id},
         )
         count += 1
     return count

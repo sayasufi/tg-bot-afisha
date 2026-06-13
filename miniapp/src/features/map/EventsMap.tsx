@@ -211,6 +211,49 @@ function VectorBasemap() {
         paint: { "text-color": ["get", "color"], "text-halo-color": "#f4f4ef", "text-halo-width": 1.9 },
       });
 
+      // Tap a metro station to spotlight its whole line (dim the rest). Purely
+      // map-side; degrades to a no-op when the seed lacks line data.
+      let activeLine: string | null = null;
+      const lineKey: any = ["coalesce", ["get", "line_id"], ["get", "line"]];
+      const applyMetro = (id: string | null) => {
+        if (!mlMap.getLayer("metro-dot")) return;
+        try {
+          if (id == null) {
+            mlMap.setPaintProperty("metro-dot", "circle-opacity", 1);
+            mlMap.setPaintProperty("metro-dot", "circle-stroke-width", 1.4);
+            mlMap.setPaintProperty("metro-label", "text-opacity", 1);
+          } else {
+            const on: any = ["==", lineKey, id];
+            mlMap.setPaintProperty("metro-dot", "circle-opacity", ["case", on, 1, 0.16]);
+            mlMap.setPaintProperty("metro-dot", "circle-stroke-width", ["case", on, 2.6, 1.4]);
+            mlMap.setPaintProperty("metro-label", "text-opacity", ["case", on, 1, 0.1]);
+          }
+        } catch {
+          /* paint prop unavailable — ignore */
+        }
+      };
+      mlMap.on("click", "metro-dot", (e: any) => {
+        const f = e.features && e.features[0];
+        const id = f && (f.properties.line_id || f.properties.line);
+        if (!id) return;
+        activeLine = activeLine === id ? null : id;
+        applyMetro(activeLine);
+      });
+      mlMap.on("click", (e: any) => {
+        if (activeLine == null) return;
+        const hit = mlMap.queryRenderedFeatures(e.point, { layers: ["metro-dot"] });
+        if (!hit.length) {
+          activeLine = null;
+          applyMetro(null);
+        }
+      });
+      mlMap.on("mouseenter", "metro-dot", () => {
+        mlMap.getCanvas().style.cursor = "pointer";
+      });
+      mlMap.on("mouseleave", "metro-dot", () => {
+        mlMap.getCanvas().style.cursor = "";
+      });
+
       // The tile source injects its own "OpenFreeMap …" credit into Leaflet's
       // attribution control; reset it to just the licence-required minimum.
       try {
@@ -251,7 +294,7 @@ function Basemap() {
 function pinIcon(item: EventItem, active: boolean): L.DivIcon {
   return L.divIcon({
     className: "vpin-wrap",
-    html: `<div class="vpin${active ? " vpin--active" : ""}"><div class="vpin__plate">${categorySvg(item.category, 17)}</div><div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
+    html: `<div class="vpin${active ? " vpin--active" : ""}"><div class="vpin__plate">${categorySvg(item.category, 18)}</div><div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
     iconSize: [30, 40],
     iconAnchor: [15, 40],
     popupAnchor: [0, -40],

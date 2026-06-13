@@ -30,18 +30,25 @@ def places(kind: str, city: str | None = None, db: Session = Depends(get_db)) ->
         city_id = db.execute(select(City.city_id).where(City.name == city)).scalar_one_or_none()
 
     rows = list_map_places(db, kind=kind, city_id=city_id)
-    features = [
-        {
+
+    def _feature(row) -> dict:
+        m = _meta(row.get("meta_json"))
+        props = {
+            "name": row["name"],
+            "color": row["color"],
+            "kind": kind,
+            "minzoom": m.get("minzoom", 13),
+        }
+        # Metro stations carry their line (for whole-line highlighting).
+        if m.get("line"):
+            props["line"] = m["line"]
+        if m.get("line_id"):
+            props["line_id"] = m["line_id"]
+        return {
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [row["lon"], row["lat"]]},
-            "properties": {
-                "name": row["name"],
-                "color": row["color"],
-                "kind": kind,
-                "minzoom": _meta(row.get("meta_json")).get("minzoom", 13),
-            },
+            "properties": props,
         }
-        for row in rows
-        if row["lat"] is not None and row["lon"] is not None
-    ]
+
+    features = [_feature(row) for row in rows if row["lat"] is not None and row["lon"] is not None]
     return {"type": "FeatureCollection", "features": features}

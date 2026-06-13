@@ -1,32 +1,36 @@
-// VITRINE "vinyl-cut" icon set — bespoke 24×24 pictograms, reductive like
-// exhibition wayfinding signage. Solid fill (reads as cut vinyl) using
-// currentColor. One source of truth (inner markup) feeds both the React
-// <CategoryIcon> and the map divIcon HTML strings.
+// Category icon set — Phosphor Icons (fill weight, MIT licensed, viewBox
+// 0 0 256 256). Solid silhouettes read as cut vinyl in the VITRINE white-cube
+// and are crisp + distinct at small sizes on the map. One source of truth
+// feeds both the React <CategoryIcon> and the map divIcon HTML strings.
+
+const VB = "0 0 256 256";
 
 // Inner SVG markup per category key (no <svg> wrapper, fill = currentColor).
-// Each is a bold, distinct silhouette so categories are instantly told apart
-// on the monochrome white-cube map.
 export const ICON_MARKUP: Record<string, string> = {
-  // concert — eighth note
-  concert: '<circle cx="8" cy="18" r="3.2"/><rect x="10.6" y="5" width="1.9" height="13"/><path d="M12.5 5l6-1.6v3.4l-6 1.6z"/>',
-  // theatre — comedy mask (eyes + smile cut out)
+  // music-notes
+  concert:
+    '<path d="M212.92,17.71a7.89,7.89,0,0,0-6.86-1.46l-128,32A8,8,0,0,0,72,56V166.1A36,36,0,1,0,88,196V102.25l112-28V134.1A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.71Z"/>',
+  // mask-happy
   theatre:
-    '<path fill-rule="evenodd" d="M6 3h12v7c0 5.5-2.7 10.5-6 10.5S6 15.5 6 10V3zM8.2 9a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zM13.2 9a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zM9 14c1 1.3 2 1.9 3 1.9s2-.6 3-1.9c-1 .7-2 1-3 1s-2-.3-3-1z"/>',
-  // exhibition — framed landscape (sun + mountains inside a frame)
+    '<path d="M217,34.8a15.94,15.94,0,0,0-14.82-1.71C188.15,38.55,159.82,47.71,128,47.71S67.84,38.55,53.79,33.09A16,16,0,0,0,32,48v55.77c0,35.84,9.65,69.65,27.18,95.18,18.16,26.46,42.6,41,68.82,41s50.66-14.57,68.82-41C214.35,173.44,224,139.63,224,103.79V48A16,16,0,0,0,217,34.8ZM78,133.33A8,8,0,1,1,66,122.66C71.75,116.28,82.18,112,92,112s20.25,4.28,26,10.66A8,8,0,1,1,106,133.33c-2.68-3-8.85-5.33-14-5.33S80.64,130.34,78,133.33Zm90.49,47.86a52.9,52.9,0,0,1-80.9,0A8,8,0,1,1,99.72,170.8a36.89,36.89,0,0,0,56.56,0,8,8,0,0,1,12.17,10.39ZM189.34,134a8,8,0,0,1-11.3-.63c-2.68-3-8.85-5.33-14-5.33s-11.36,2.34-14,5.33A8,8,0,1,1,138,122.66c5.71-6.38,16.14-10.66,26-10.66s20.25,4.28,26,10.66A8,8,0,0,1,189.34,134Z"/>',
+  // image (framed picture)
   exhibition:
-    '<path fill-rule="evenodd" d="M3 5h18v14H3V5zm2 2v10h14V7H5z"/><circle cx="8.5" cy="10" r="1.7"/><path d="M5 17l4.5-5.6 3 3.3L16 10l3 7z"/>',
-  // standup — microphone on a stand
+    '<path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM156,88a12,12,0,1,1-12,12A12,12,0,0,1,156,88Zm60,112H40V160.69l46.34-46.35a8,8,0,0,1,11.32,0h0L165,181.66a8,8,0,0,0,11.32-11.32l-17.66-17.65L173,138.34a8,8,0,0,1,11.31,0L216,170.07V200Z"/>',
+  // microphone-stage
   standup:
-    '<path d="M12 3a4 4 0 0 0-4 4v3a4 4 0 0 0 8 0V7a4 4 0 0 0-4-4z"/><path d="M6 10a6 6 0 0 0 12 0h-1.8a4.2 4.2 0 0 1-8.4 0z"/><rect x="11" y="16.4" width="2" height="3.4"/><rect x="8.4" y="19.6" width="7.2" height="1.9"/>',
-  // festival — bunting garland with hanging flags
+    '<path d="M115.06,46.36a4,4,0,0,0-6.11.54A71.54,71.54,0,0,0,96,88a73.29,73.29,0,0,0,.63,9.42L27.12,192.22A15.93,15.93,0,0,0,28.71,213L43,227.29a15.93,15.93,0,0,0,20.78,1.59l94.81-69.53A73.29,73.29,0,0,0,168,160a71.54,71.54,0,0,0,41.09-12.93,4,4,0,0,0,.54-6.11Zm2.61,103.28-16,16a8,8,0,1,1-11.31-11.31l16-16a8,8,0,0,1,11.31,11.31Zm109.4-20.56a4,4,0,0,1-6.12.54L126.38,35.05a4,4,0,0,1,.54-6.12A71.93,71.93,0,0,1,227.07,129.08Z"/>',
+  // confetti
   festival:
-    '<path d="M3 5c6-2.2 12-2.2 18 0v1.8c-6-2.2-12-2.2-18 0z"/><path d="M4.5 6.6l2.4 4.6 2.4-4.6z"/><path d="M9.6 7l2.4 4.6 2.4-4.6z"/><path d="M14.7 6.6l2.4 4.6 2.4-4.6z"/>',
-  // lecture — graduation cap
-  lecture: '<path d="M12 4 1.5 9 12 14l8.5-4.05V15h1.6V9z"/><path d="M6 12.2V16c0 1.4 2.7 2.8 6 2.8s6-1.4 6-2.8v-3.8l-6 2.9z"/>',
-  // kids — balloon
-  kids: '<path d="M12 3c3.5 0 6.3 2.9 6.3 6.6 0 3.9-3.1 6.5-5.2 7.5.3.4.5.8.5 1.3 0 1-.9 1.8-1.6 1.8s-1.6-.8-1.6-1.8c0-.5.2-.9.5-1.3C8.8 16.1 5.7 13.5 5.7 9.6 5.7 5.9 8.5 3 12 3z"/>',
-  // other — four-point sparkle
-  other: '<path d="M12 3c.6 4.8 3.6 7.8 8.4 8.4-4.8.6-7.8 3.6-8.4 8.4-.6-4.8-3.6-7.8-8.4-8.4C8.4 10.8 11.4 7.8 12 3z"/>',
+    '<path d="M111.49,52.63a15.8,15.8,0,0,0-26,5.77L33,202.78A15.83,15.83,0,0,0,47.76,224a16,16,0,0,0,5.46-1l144.37-52.5a15.8,15.8,0,0,0,5.78-26ZM65.14,161.13l19.2-52.79,63.32,63.32-52.8,19.2ZM160,72a37.8,37.8,0,0,1,3.84-15.58C169.14,45.83,179.14,40,192,40c6.7,0,11-2.29,13.65-7.21A22,22,0,0,0,208,23.94,8,8,0,0,1,224,24c0,12.86-8.52,32-32,32-6.7,0-11,2.29-13.65,7.21A22,22,0,0,0,176,72.06,8,8,0,0,1,160,72ZM136,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm101.66,82.34a8,8,0,1,1-11.32,11.31l-16-16a8,8,0,0,1,11.32-11.32Zm4.87-42.75-24,8a8,8,0,0,1-5.06-15.18l24-8a8,8,0,0,1,5.06,15.18Z"/>',
+  // graduation-cap
+  lecture:
+    '<path d="M176,207.24a119,119,0,0,0,16-7.73V240a8,8,0,0,1-16,0Zm11.76-88.43-56-29.87a8,8,0,0,0-7.52,14.12L171,128l17-9.06Zm64-29.87-120-64a8,8,0,0,0-7.52,0l-120,64a8,8,0,0,0,0,14.12L32,117.87v48.42a15.91,15.91,0,0,0,4.06,10.65C49.16,191.53,78.51,216,128,216a130,130,0,0,0,48-8.76V130.67L171,128l-43,22.93L43.83,106l0,0L25,96,128,41.07,231,96l-18.78,10-.06,0L188,118.94a8,8,0,0,1,4,6.93v73.64a115.63,115.63,0,0,0,27.94-22.57A15.91,15.91,0,0,0,224,166.29V117.87l27.76-14.81a8,8,0,0,0,0-14.12Z"/>',
+  // baby
+  kids:
+    '<path d="M134.16,24.1a4,4,0,0,0-3.56,1.81C120.3,41.48,120,55.79,120,56a8,8,0,0,0,9.68,7.79A8.24,8.24,0,0,0,136,55.68,8,8,0,0,1,144.8,48a8.14,8.14,0,0,1,7.2,8.23,24,24,0,0,1-48-.27c0-.63.09-10.78,5.44-24a4,4,0,0,0-4.59-5.39A104.16,104.16,0,0,0,24.07,131.66C26,186.72,71.23,231,126.32,231.9a104,104,0,0,0,7.84-207.8ZM80,127.91a12,12,0,1,1,12,12A12,12,0,0,1,80,127.91Zm80.27,54.77a61,61,0,0,1-64.54,0,8,8,0,0,1,8.54-13.54,45,45,0,0,0,47.46,0,8,8,0,0,1,8.54,13.54ZM164,139.91a12,12,0,1,1,12-12A12,12,0,0,1,164,139.91Z"/>',
+  // sparkle
+  other:
+    '<path d="M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z"/>',
 };
 
 function inner(key: string | null | undefined): string {
@@ -35,14 +39,14 @@ function inner(key: string | null | undefined): string {
 
 // Full <svg> string for embedding in Leaflet divIcon HTML.
 export function categorySvg(key: string | null | undefined, size = 18): string {
-  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" aria-hidden="true">${inner(key)}</svg>`;
+  return `<svg viewBox="${VB}" width="${size}" height="${size}" fill="currentColor" aria-hidden="true">${inner(key)}</svg>`;
 }
 
 // React component for inline use (chips, sheet, lists).
 export function CategoryIcon({ cat, size = 16, className }: { cat: string | null | undefined; size?: number; className?: string }) {
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox={VB}
       width={size}
       height={size}
       fill="currentColor"
