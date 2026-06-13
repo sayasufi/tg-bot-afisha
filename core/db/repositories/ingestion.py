@@ -268,17 +268,38 @@ def dedup_and_upsert_event(
         db.refresh(event)
         decision = MatchDecision(decision="new-event", score=0.0, matched_event_id=str(event.event_id))
 
-    occurrence = EventOccurrence(
-        event_id=event.event_id,
-        venue_id=venue.venue_id if venue else None,
-        date_start=candidate.date_start or datetime.utcnow(),
-        date_end=candidate.date_end,
-        price_min=candidate.price_min,
-        price_max=candidate.price_max,
-        currency=candidate.currency,
-        source_best_url=candidate.source_url,
-    )
-    db.add(occurrence)
+    # Upsert the occurrence on (event_id, date_start, venue_id) so re-ingesting
+    # the same event updates the row instead of creating a duplicate.
+    occ_start = candidate.date_start or datetime.utcnow()
+    occ_venue_id = venue.venue_id if venue else None
+    venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
+    occurrence = db.execute(
+        select(EventOccurrence).where(
+            and_(
+                EventOccurrence.event_id == event.event_id,
+                EventOccurrence.date_start == occ_start,
+                venue_filter,
+            )
+        )
+    ).scalars().first()
+    if occurrence:
+        occurrence.date_end = candidate.date_end
+        occurrence.price_min = candidate.price_min
+        occurrence.price_max = candidate.price_max
+        occurrence.currency = candidate.currency
+        occurrence.source_best_url = candidate.source_url
+    else:
+        occurrence = EventOccurrence(
+            event_id=event.event_id,
+            venue_id=occ_venue_id,
+            date_start=occ_start,
+            date_end=candidate.date_end,
+            price_min=candidate.price_min,
+            price_max=candidate.price_max,
+            currency=candidate.currency,
+            source_best_url=candidate.source_url,
+        )
+        db.add(occurrence)
     db.flush()
 
     db.add(

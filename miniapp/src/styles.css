@@ -1029,13 +1029,43 @@ body {
   animation-delay: calc(min(var(--i, 0), 16) * 22ms);
 }
 
-.erow:first-child {
-  border-top: 1px solid var(--line);
+/* Sticky time-bucket headers in the recommendations list. */
+.recs__section {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 9px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.recs__section::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: var(--acid);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.recs__n {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
 }
 
 @keyframes rowIn {
   from {
     opacity: 0;
+    transform: translateY(10px);
   }
 }
 

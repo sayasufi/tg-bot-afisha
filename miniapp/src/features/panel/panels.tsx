@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
-import { formatWhenShort } from "../../lib/datetime";
+import { eventBucket, formatWhenShort } from "../../lib/datetime";
 import { CategoryIcon } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 
@@ -60,7 +60,21 @@ function EventRow({ item, index, onSelect }: { item: EventItem; index: number; o
 }
 
 export function RecommendationsPanel({ items, onSelect, onClose }: { items: EventItem[]; onSelect: (i: EventItem) => void; onClose: () => void }) {
-  const sorted = [...items].sort((a, b) => (a.date_start || "").localeCompare(b.date_start || "")).slice(0, 60);
+  const sorted = [...items].sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""));
+  // Group into time buckets (Сегодня / На этой неделе / Позже / Идут сейчас / Постоянно).
+  const groups = new Map<number, { label: string; items: EventItem[] }>();
+  for (const it of sorted) {
+    const b = eventBucket(it.date_start, it.date_end);
+    let g = groups.get(b.order);
+    if (!g) {
+      g = { label: b.label, items: [] };
+      groups.set(b.order, g);
+    }
+    g.items.push(it);
+  }
+  const ordered = [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => g);
+  let idx = 0;
+
   return (
     <div className="panelview">
       <header className="panelview__head">
@@ -70,9 +84,17 @@ export function RecommendationsPanel({ items, onSelect, onClose }: { items: Even
         </button>
       </header>
       <div className="panelview__scroll">
-        {sorted.length === 0 && <p className="panelview__empty">Пока нечего показать</p>}
-        {sorted.map((it, i) => (
-          <EventRow key={it.event_id} item={it} index={i} onSelect={onSelect} />
+        {ordered.length === 0 && <p className="panelview__empty">Пока нечего показать</p>}
+        {ordered.map((g) => (
+          <section key={g.label}>
+            <div className="recs__section">
+              {g.label}
+              <span className="recs__n">{g.items.length}</span>
+            </div>
+            {g.items.map((it) => (
+              <EventRow key={it.event_id} item={it} index={idx++} onSelect={onSelect} />
+            ))}
+          </section>
         ))}
       </div>
     </div>

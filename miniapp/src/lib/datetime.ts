@@ -87,3 +87,22 @@ export function formatWhenShort(startIso?: string | null, endIso?: string | null
   }
   return dmy(s, yr(s), true) + (hasTime ? `, ${hm(s)}` : "");
 }
+
+// Time bucket for grouping a listing: separates one-off upcoming events from
+// long-running exhibitions ("идут сейчас") and permanent ones ("постоянно").
+export type Bucket = { key: string; label: string; order: number };
+
+export function eventBucket(startIso?: string | null, endIso?: string | null, now: Date = new Date()): Bucket {
+  const s = parse(startIso);
+  if (!s) return { key: "later", label: "Позже", order: 3 };
+  const { end: e, open } = endInfo(s, endIso, now);
+  if (open) return { key: "perm", label: "Постоянно", order: 5 };
+  if (e && dayDiff(s, e) > 3 && s.getTime() <= now.getTime()) {
+    return { key: "ongoing", label: "Идут сейчас", order: 4 };
+  }
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ds = dayDiff(today, s);
+  if (ds <= 0) return { key: "today", label: "Сегодня", order: 1 };
+  if (ds <= 7) return { key: "week", label: "На этой неделе", order: 2 };
+  return { key: "later", label: "Позже", order: 3 };
+}

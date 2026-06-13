@@ -4,6 +4,7 @@ import { CATEGORIES, categoryMeta } from "../../lib/categories";
 import { PRESETS, matchPreset, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
 import { CategoryIcon } from "../../lib/icons";
 import { haptic, hapticSelection } from "../../lib/telegram";
+import { useCountUp } from "../../lib/useCountUp";
 
 export type FilterState = {
   q: string;
@@ -27,6 +28,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
   const searchRef = useRef<HTMLInputElement>(null);
 
   const advancedCount = [value.q, value.category, value.dateFrom || value.dateTo, value.priceMax].filter(Boolean).length;
+  const shownTotal = useCountUp(total);
   const activePreset = matchPreset(value.dateFrom, value.dateTo);
   const isCustomDates = (!!value.dateFrom || !!value.dateTo) && activePreset === null;
   const catLabel = value.category ? categoryMeta(value.category).label : "Все";
@@ -171,7 +173,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
               Сбросить
             </button>
             <button type="button" className="csheet__apply" onClick={close}>
-              Показать {total}
+              Показать {shownTotal}
             </button>
           </div>
         </div>
