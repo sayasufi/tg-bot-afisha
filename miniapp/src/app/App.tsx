@@ -19,6 +19,7 @@ export function App() {
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<EventItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [view, setView] = useState<View>("map");
   const [locating, setLocating] = useState(false);
   const [locateNonce, setLocateNonce] = useState(0);
@@ -65,9 +66,10 @@ export function App() {
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || drawerOpen || view !== "map";
+    const stacked = selected || filtersOpen || drawerOpen || view !== "map";
     const pop = () => {
       if (selected) setSelected(null);
+      else if (filtersOpen) setFiltersOpen(false);
       else if (drawerOpen) setDrawerOpen(false);
       else setView("map");
     };
@@ -78,7 +80,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, drawerOpen, view]);
+  }, [selected, filtersOpen, drawerOpen, view]);
 
   // Live position watch. Prefers Telegram's LocationManager — the grant is
   // stored per-bot, so the user is asked ONCE and never re-prompted on later
@@ -173,7 +175,14 @@ export function App() {
 
   return (
     <div className="app">
-      <Filters value={filters} total={total} onChange={setFilters} onMenu={() => setDrawerOpen(true)} />
+      <Filters
+        value={filters}
+        total={total}
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        onChange={setFilters}
+        onMenu={() => setDrawerOpen(true)}
+      />
 
       <EventsMap
         items={items}

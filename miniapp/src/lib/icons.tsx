@@ -4,27 +4,29 @@
 // <CategoryIcon> and the map divIcon HTML strings.
 
 // Inner SVG markup per category key (no <svg> wrapper, fill = currentColor).
+// Each is a bold, distinct silhouette so categories are instantly told apart
+// on the monochrome white-cube map.
 export const ICON_MARKUP: Record<string, string> = {
-  // concert — equaliser bars
-  concert:
-    '<rect x="3" y="13" width="2.7" height="8"/><rect x="7.6" y="8" width="2.7" height="13"/><rect x="12.2" y="3" width="2.7" height="18"/><rect x="16.8" y="11" width="2.7" height="10"/>',
-  // theatre — two proscenium curtains meeting at a centre split
+  // concert — eighth note
+  concert: '<circle cx="8" cy="18" r="3.2"/><rect x="10.6" y="5" width="1.9" height="13"/><path d="M12.5 5l6-1.6v3.4l-6 1.6z"/>',
+  // theatre — comedy mask (eyes + smile cut out)
   theatre:
-    '<path d="M4 4h7v16c-3.2 0-5.6-1-7-3z"/><path d="M20 4h-7v16c3.2 0 5.6-1 7-3z"/>',
-  // exhibition — framed canvas with a raking diagonal
+    '<path fill-rule="evenodd" d="M6 3h12v7c0 5.5-2.7 10.5-6 10.5S6 15.5 6 10V3zM8.2 9a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zM13.2 9a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zM9 14c1 1.3 2 1.9 3 1.9s2-.6 3-1.9c-1 .7-2 1-3 1s-2-.3-3-1z"/>',
+  // exhibition — framed landscape (sun + mountains inside a frame)
   exhibition:
-    '<path fill-rule="evenodd" d="M4 4h16v16H4V4zm2.4 2.4v11.2h11.2V6.4H6.4z"/><path d="M7.2 16.2l6.6-8.6 1.7 1.3-6.6 8.6z"/>',
-  // standup — freestanding microphone
-  standup: '<circle cx="12" cy="8" r="4.2"/><rect x="11" y="11.5" width="2" height="6.5"/><rect x="7.5" y="18" width="9" height="2"/>',
-  // festival — tent with an apex pennant
-  festival: '<path d="M12 5l8.5 15.5H3.5z"/><path d="M11.2 5.4V1.6h4.2l-1.5 1.3 1.5 1.3z"/>',
-  // lecture — speaker's podium
-  lecture: '<path d="M6.4 6h11.2l1 4.6H5.4z"/><rect x="11" y="10.6" width="2" height="7.4"/><rect x="6.4" y="18" width="11.2" height="2"/>',
-  // kids — paper boat
-  kids: '<path d="M3 12.4h18l-3.2 5.2H6.2z"/><path d="M11 3.2v8.2H5.2z"/><rect x="3" y="19" width="18" height="1.6"/>',
-  // other — eight-ray asterisk (the editorial footnote mark)
-  other:
-    '<rect x="11" y="3" width="2" height="18"/><rect x="11" y="3" width="2" height="18" transform="rotate(45 12 12)"/><rect x="11" y="3" width="2" height="18" transform="rotate(90 12 12)"/><rect x="11" y="3" width="2" height="18" transform="rotate(135 12 12)"/>',
+    '<path fill-rule="evenodd" d="M3 5h18v14H3V5zm2 2v10h14V7H5z"/><circle cx="8.5" cy="10" r="1.7"/><path d="M5 17l4.5-5.6 3 3.3L16 10l3 7z"/>',
+  // standup — microphone on a stand
+  standup:
+    '<path d="M12 3a4 4 0 0 0-4 4v3a4 4 0 0 0 8 0V7a4 4 0 0 0-4-4z"/><path d="M6 10a6 6 0 0 0 12 0h-1.8a4.2 4.2 0 0 1-8.4 0z"/><rect x="11" y="16.4" width="2" height="3.4"/><rect x="8.4" y="19.6" width="7.2" height="1.9"/>',
+  // festival — bunting garland with hanging flags
+  festival:
+    '<path d="M3 5c6-2.2 12-2.2 18 0v1.8c-6-2.2-12-2.2-18 0z"/><path d="M4.5 6.6l2.4 4.6 2.4-4.6z"/><path d="M9.6 7l2.4 4.6 2.4-4.6z"/><path d="M14.7 6.6l2.4 4.6 2.4-4.6z"/>',
+  // lecture — graduation cap
+  lecture: '<path d="M12 4 1.5 9 12 14l8.5-4.05V15h1.6V9z"/><path d="M6 12.2V16c0 1.4 2.7 2.8 6 2.8s6-1.4 6-2.8v-3.8l-6 2.9z"/>',
+  // kids — balloon
+  kids: '<path d="M12 3c3.5 0 6.3 2.9 6.3 6.6 0 3.9-3.1 6.5-5.2 7.5.3.4.5.8.5 1.3 0 1-.9 1.8-1.6 1.8s-1.6-.8-1.6-1.8c0-.5.2-.9.5-1.3C8.8 16.1 5.7 13.5 5.7 9.6 5.7 5.9 8.5 3 12 3z"/>',
+  // other — four-point sparkle
+  other: '<path d="M12 3c.6 4.8 3.6 7.8 8.4 8.4-4.8.6-7.8 3.6-8.4 8.4-.6-4.8-3.6-7.8-8.4-8.4C8.4 10.8 11.4 7.8 12 3z"/>',
 };
 
 function inner(key: string | null | undefined): string {
