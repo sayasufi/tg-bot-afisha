@@ -4,7 +4,9 @@ import { fetchMapEvents, type EventItem } from "../api/client";
 import { Filters, type FilterState } from "../features/filters/Filters";
 import { EventsMap } from "../features/map/EventsMap";
 import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel/panels";
+import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
+import { categoryMeta } from "../lib/categories";
 import { getUser, getWebApp, haptic, initTelegram } from "../lib/telegram";
 import { openLocationSettings, watchLocation } from "../lib/telegramLocation";
 
@@ -40,6 +42,18 @@ export function App() {
     if (filters.priceMax) params.set("price_max", filters.priceMax);
     return params;
   }, [filters]);
+
+  // Gallery ticker line: total + city + the busiest categories.
+  const tickerText = useMemo(() => {
+    const segs = [`${total} СОБЫТИЙ`, "МОСКВА", "АФИША"];
+    const counts: Record<string, number> = {};
+    for (const it of items) counts[it.category] = (counts[it.category] || 0) + 1;
+    Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .forEach(([k, n]) => segs.push(`${categoryMeta(k).label.toUpperCase()} ${n}`));
+    return segs.join(" ● ");
+  }, [items, total]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -183,6 +197,7 @@ export function App() {
         onChange={setFilters}
         onMenu={() => setDrawerOpen(true)}
       />
+      {view === "map" && !selected && !filtersOpen && <Ticker text={tickerText} />}
 
       <EventsMap
         items={items}
@@ -228,6 +243,8 @@ export function App() {
           setDrawerOpen(false);
         }}
       />
+
+      <ProofFrame />
     </div>
   );
 }

@@ -109,7 +109,19 @@ export function EventSheet({ selected, onClose }: Props) {
 
       {/* mounted print */}
       <div className="sheet__frame">
-        {image ? <img src={image} alt="" loading="lazy" /> : <CategoryIcon cat={selected.category} size={64} className="sheet__plate-glyph" />}
+        {image ? (
+          <img src={image} alt="" loading="lazy" />
+        ) : detail ? (
+          <CategoryIcon cat={selected.category} size={64} className="sheet__plate-glyph" />
+        ) : (
+          <span className="printing">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        )}
         <span className="sheet__tag">
           <CategoryIcon cat={selected.category} size={13} />
           {meta.label}
@@ -137,7 +149,7 @@ export function EventSheet({ selected, onClose }: Props) {
           <div className="wall-label">
             <span className="wall-label__cap">Цена</span>
             <span className="wall-label__val">
-              {formatPrice(occ?.price_min ?? selected.price_min)}
+              <span className="swipe">{formatPrice(occ?.price_min ?? selected.price_min)}</span>
               {detail?.age_limit ? <span className="badge">{detail.age_limit}</span> : null}
             </span>
           </div>
