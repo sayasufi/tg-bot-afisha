@@ -65,6 +65,12 @@ export function EventSheet({ selected, onClose }: Props) {
 
   const meta = categoryMeta(selected.category);
   const occ = detail?.occurrences?.[0];
+  const kickerDate = (() => {
+    const iso = occ?.date_start || selected.date_start;
+    if (!iso) return "";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : dateOnly.format(d);
+  })();
   const lat = selected.lat ?? occ?.lat ?? null;
   const lon = selected.lon ?? occ?.lon ?? null;
   const address = occ?.address || null;
@@ -85,6 +91,10 @@ export function EventSheet({ selected, onClose }: Props) {
 
       <div className={`sheet__hero${image ? "" : " sheet__hero--plain"}`} style={{ "--c": meta.color } as CSSProperties}>
         {image ? <img src={image} alt="" loading="lazy" /> : <span className="sheet__hero-glyph">{meta.glyph}</span>}
+        <span className="sheet__kicker kicker">
+          {meta.label}
+          {kickerDate ? ` · ${kickerDate}` : ""}
+        </span>
         <span className="sheet__chip" style={{ "--c": meta.color } as CSSProperties}>
           <span>{meta.glyph}</span>
           {meta.label}

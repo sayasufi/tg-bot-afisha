@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import type { TgUser } from "../../lib/telegram";
@@ -43,10 +45,15 @@ export function Sidebar({ open, view, onSelect, onClose }: { open: boolean; view
   );
 }
 
-function EventRow({ item, onSelect }: { item: EventItem; onSelect: (i: EventItem) => void }) {
+function EventRow({ item, index, onSelect }: { item: EventItem; index: number; onSelect: (i: EventItem) => void }) {
   const meta = categoryMeta(item.category);
   return (
-    <button type="button" className="erow" onClick={() => onSelect(item)}>
+    <button
+      type="button"
+      className={`erow${index === 0 ? " erow--featured" : ""}`}
+      style={{ "--i": index } as CSSProperties}
+      onClick={() => onSelect(item)}
+    >
       <span className="erow__mark" style={{ background: meta.color }}>
         {meta.glyph}
       </span>
@@ -73,8 +80,8 @@ export function RecommendationsPanel({ items, onSelect, onClose }: { items: Even
       </header>
       <div className="panelview__scroll">
         {sorted.length === 0 && <p className="panelview__empty">Пока нечего показать</p>}
-        {sorted.map((it) => (
-          <EventRow key={it.event_id} item={it} onSelect={onSelect} />
+        {sorted.map((it, i) => (
+          <EventRow key={it.event_id} item={it} index={i} onSelect={onSelect} />
         ))}
       </div>
     </div>
@@ -97,8 +104,10 @@ export function ProfilePanel({ user, total, city, onClose }: { user: TgUser | nu
           <div className="profile__avatar" style={user?.photo_url ? { backgroundImage: `url(${user.photo_url})` } : undefined}>
             {user?.photo_url ? "" : initial}
           </div>
-          <div className="profile__name">{name}</div>
-          {user?.username && <div className="profile__handle">@{user.username}</div>}
+          <div className="profile__id">
+            <div className="profile__name">{name}</div>
+            <div className="profile__handle">{user?.username ? `@${user.username}` : "Telegram"}</div>
+          </div>
         </div>
         <div className="profile__rows">
           <div className="profile__row">

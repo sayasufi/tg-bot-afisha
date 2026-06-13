@@ -30,7 +30,7 @@ export function getUser(): TgUser | null {
 }
 
 // Canvas color the page paints behind everything (matches CSS --bg).
-const CANVAS = "#121014";
+const CANVAS = "#141210";
 
 // The app is dark-only; the light theme was removed.
 export function initTelegram(): ThemeName {
