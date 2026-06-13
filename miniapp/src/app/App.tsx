@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchMapEvents, type EventItem } from "../api/client";
 import { Filters, type FilterState } from "../features/filters/Filters";
@@ -26,6 +26,7 @@ export function App() {
   const watchId = useRef<number | null>(null);
   const wantCenter = useRef(false);
   const orientHandler = useRef<((e: any) => void) | null>(null);
+  const lastHeading = useRef<number | null>(null);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -107,7 +108,18 @@ export function App() {
       let h: number | null = null;
       if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading; // iOS: clockwise from north
       else if (e.absolute && e.alpha != null) h = (360 - e.alpha) % 360;
-      if (h != null && !Number.isNaN(h)) setHeading(Math.round(h));
+      if (h == null || Number.isNaN(h)) return;
+      h = Math.round(h);
+      // Throttle: only re-render when the heading moved meaningfully (>=2°,
+      // shortest way around the circle). Compass alpha is noisy and fires many
+      // times/sec — without this every tick re-renders the whole map.
+      const prev = lastHeading.current;
+      if (prev != null) {
+        const delta = Math.min(Math.abs(h - prev), 360 - Math.abs(h - prev));
+        if (delta < 2) return;
+      }
+      lastHeading.current = h;
+      setHeading(h);
     };
     orientHandler.current = handler;
     const evt = "ondeviceorientationabsolute" in window ? "deviceorientationabsolute" : "deviceorientation";
@@ -147,11 +159,11 @@ export function App() {
     }
   };
 
-  const openEvent = (i: EventItem) => {
+  const openEvent = useCallback((i: EventItem) => {
     haptic("light");
     setView("map");
     setSelected(i);
-  };
+  }, []);
 
   return (
     <div className="app">

@@ -1,6 +1,6 @@
 import L from "leaflet";
 import maplibregl from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AttributionControl, MapContainer, Marker, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -283,29 +283,41 @@ function MapController({
 }
 
 export function EventsMap({ items, selected, userPos, heading, locateNonce, onSelect }: Props) {
-  const pins = items.filter((i) => i.lat != null && i.lon != null);
+  const selectedId = selected?.event_id ?? null;
+
+  // Memoise the clustered markers so frequent re-renders (live heading/userPos
+  // updates, locate taps) don't rebuild every pin. Rebuilding recreates each
+  // divIcon and replays its entrance animation — which is what made markers
+  // "blink" on a static screen. Only item/selection/handler changes regenerate.
+  const cluster = useMemo(() => {
+    const pins = items.filter((i) => i.lat != null && i.lon != null);
+    return (
+      <MarkerClusterGroup
+        chunkedLoading
+        showCoverageOnHover={false}
+        spiderfyOnMaxZoom
+        maxClusterRadius={48}
+        iconCreateFunction={clusterIcon}
+        animate={false}
+      >
+        {pins.map((item) => (
+          <Marker
+            key={item.event_id}
+            position={[item.lat as number, item.lon as number]}
+            icon={pinIcon(item, item.event_id === selectedId)}
+            eventHandlers={{ click: () => onSelect(item) }}
+          />
+        ))}
+      </MarkerClusterGroup>
+    );
+  }, [items, selectedId, onSelect]);
 
   return (
     <div className="map-wrap">
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap />
-        <MarkerClusterGroup
-          chunkedLoading
-          showCoverageOnHover={false}
-          spiderfyOnMaxZoom
-          maxClusterRadius={48}
-          iconCreateFunction={clusterIcon}
-        >
-          {pins.map((item) => (
-            <Marker
-              key={item.event_id}
-              position={[item.lat as number, item.lon as number]}
-              icon={pinIcon(item, selected?.event_id === item.event_id)}
-              eventHandlers={{ click: () => onSelect(item) }}
-            />
-          ))}
-        </MarkerClusterGroup>
+        {cluster}
         {userPos && <Marker position={userPos} icon={userIcon(heading)} zIndexOffset={1000} interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
       </MapContainer>
