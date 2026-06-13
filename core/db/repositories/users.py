@@ -1,8 +1,24 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.db.models import City, RawEvent, User
 from core.db.repositories.ingestion import ensure_source, upsert_raw_event
+
+
+def upsert_user(db: Session, telegram_user_id: int, username: str | None = None, first_name: str | None = None) -> User:
+    """Create or refresh a bot user (profile + last-active)."""
+    user = db.get(User, telegram_user_id)
+    if not user:
+        user = User(telegram_user_id=telegram_user_id)
+    user.username = username
+    user.first_name = first_name
+    user.last_active_at = datetime.now(timezone.utc)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def get_or_create_city(db: Session, name: str, country: str = "RU") -> City:

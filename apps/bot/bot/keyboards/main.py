@@ -11,13 +11,19 @@ def webapp_button(webapp_url: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text="🗺 Открыть карту", url=webapp_url)
 
 
-def main_keyboard(webapp_url: str) -> InlineKeyboardMarkup:
-    rows = [[webapp_button(webapp_url)]]
-    rows += [
+def _city_rows() -> list[list[InlineKeyboardButton]]:
+    return [
         [InlineKeyboardButton(text=a, callback_data=f"city:{a}"), InlineKeyboardButton(text=b, callback_data=f"city:{b}")]
         for a, b in (CITIES[0:2], CITIES[2:4])
     ]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def main_keyboard(webapp_url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[webapp_button(webapp_url)], *_city_rows()])
+
+
+def city_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=_city_rows())
 
 
 def webapp_keyboard(webapp_url: str) -> InlineKeyboardMarkup:

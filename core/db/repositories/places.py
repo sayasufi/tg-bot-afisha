@@ -40,7 +40,7 @@ def upsert_map_place(
 def list_map_places(db: Session, kind: str, city_id: int | None = None) -> list[dict]:
     rows = db.execute(
         text(
-            "SELECT name, color, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
+            "SELECT name, color, meta_json, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
             "FROM ref.map_places WHERE kind = :kind AND (:city_id IS NULL OR city_id = :city_id)"
         ),
         {"kind": kind, "city_id": city_id},

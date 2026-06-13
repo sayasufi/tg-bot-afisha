@@ -127,6 +127,41 @@ body {
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.42);
 }
 
+/* ---------- User location dot ---------- */
+.user-dot-wrap {
+  background: none;
+}
+
+.user-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2f8fff;
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 0 2px rgba(47, 143, 255, 0.4);
+  position: relative;
+}
+
+.user-dot::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(47, 143, 255, 0.5);
+  animation: userPulse 1.8s ease-out infinite;
+}
+
+@keyframes userPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
 /* ---------- Topbar ---------- */
 .topbar {
   position: absolute;

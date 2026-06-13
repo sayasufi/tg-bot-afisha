@@ -1,6 +1,6 @@
 import L from "leaflet";
 import maplibregl from "maplibre-gl";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AttributionControl, MapContainer, Marker, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -15,11 +15,19 @@ import { categoryMeta } from "../../lib/categories";
 type Props = {
   items: EventItem[];
   selected: EventItem | null;
+  userPos: [number, number] | null;
   fitNonce: number;
   onSelect: (item: EventItem) => void;
 };
 
 const MOSCOW: [number, number] = [55.751244, 37.618423];
+
+const userIcon = L.divIcon({
+  className: "user-dot-wrap",
+  html: '<div class="user-dot"></div>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
 
 // OpenFreeMap "Fiord" — a keyless vector (MapLibre GL) slate-blue style. Crisp
 // labels at every zoom; we deepen the palette and green the parks so coloured
@@ -108,6 +116,9 @@ function VectorBasemap() {
           "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 15, 14],
           "text-max-width": 8,
           "text-padding": 4,
+          // Notable parks (priority 0) win label collisions; the long tail of smaller
+          // parks fills in as you zoom. Lower sort-key = higher priority.
+          "symbol-sort-key": ["coalesce", ["get", "priority"], 1],
         },
         paint: { "text-color": "#8fd3a8", "text-halo-color": "#0e1a14", "text-halo-width": 1.6 },
       });
@@ -235,8 +246,19 @@ function clusterIcon(cluster: any): L.DivIcon {
   });
 }
 
-function MapController({ selected, items, fitNonce }: { selected: EventItem | null; items: EventItem[]; fitNonce: number }) {
+function MapController({
+  selected,
+  items,
+  fitNonce,
+  userPos,
+}: {
+  selected: EventItem | null;
+  items: EventItem[];
+  fitNonce: number;
+  userPos: [number, number] | null;
+}) {
   const map = useMap();
+  const lastFit = useRef(0);
 
   useEffect(() => {
     if (selected && selected.lat != null && selected.lon != null) {
@@ -244,17 +266,23 @@ function MapController({ selected, items, fitNonce }: { selected: EventItem | nu
     }
   }, [selected, map]);
 
+  // On a "locate" request the nearby fetch bumps fitNonce; centre on the user.
   useEffect(() => {
-    if (fitNonce === 0) return;
+    if (fitNonce === 0 || fitNonce === lastFit.current) return;
+    lastFit.current = fitNonce;
+    if (userPos) {
+      map.flyTo(userPos, Math.max(map.getZoom(), 14), { duration: 0.6 });
+      return;
+    }
     const pts = items.filter((i) => i.lat != null && i.lon != null).map((i) => [i.lat as number, i.lon as number] as [number, number]);
     if (pts.length === 1) map.flyTo(pts[0], 14, { duration: 0.6 });
     else if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.2), { animate: true });
-  }, [fitNonce, items, map]);
+  }, [fitNonce, items, map, userPos]);
 
   return null;
 }
 
-export function EventsMap({ items, selected, fitNonce, onSelect }: Props) {
+export function EventsMap({ items, selected, userPos, fitNonce, onSelect }: Props) {
   const pins = items.filter((i) => i.lat != null && i.lon != null);
 
   return (
@@ -278,7 +306,8 @@ export function EventsMap({ items, selected, fitNonce, onSelect }: Props) {
             />
           ))}
         </MarkerClusterGroup>
-        <MapController selected={selected} items={items} fitNonce={fitNonce} />
+        {userPos && <Marker position={userPos} icon={userIcon} zIndexOffset={1000} interactive={false} />}
+        <MapController selected={selected} items={items} fitNonce={fitNonce} userPos={userPos} />
       </MapContainer>
     </div>
   );

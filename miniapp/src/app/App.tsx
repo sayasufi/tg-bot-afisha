@@ -16,6 +16,9 @@ export function App() {
   const [selected, setSelected] = useState<EventItem | null>(null);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [fitNonce, setFitNonce] = useState(0);
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const watchId = useRef<number | null>(null);
+  const wantNearby = useRef(false);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -63,31 +66,67 @@ export function App() {
     return () => back.offClick(close);
   }, [selected]);
 
-  const loadNearby = () => {
-    if (!navigator.geolocation) return;
-    haptic("medium");
+  const doNearby = (lat: number, lon: number) => {
     setLoadingNearby(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        fetchNearby(position.coords.latitude, position.coords.longitude, 5000)
-          .then((res) => {
-            setItems(res.items);
-            setTotal(res.total);
-            setFitNonce((n) => n + 1);
-          })
-          .catch(() => undefined)
-          .finally(() => setLoadingNearby(false));
-      },
+    fetchNearby(lat, lon, 5000)
+      .then((res) => {
+        setItems(res.items);
+        setTotal(res.total);
+        setFitNonce((n) => n + 1);
+      })
+      .catch(() => undefined)
+      .finally(() => setLoadingNearby(false));
+  };
+
+  // Start a single continuous geolocation watch — Telegram/browsers prompt once,
+  // then the live position updates without re-asking on every tap.
+  const startWatch = () => {
+    if (watchId.current != null || !navigator.geolocation) return;
+    watchId.current = navigator.geolocation.watchPosition(
+      (p) => setUserPos([p.coords.latitude, p.coords.longitude]),
       () => setLoadingNearby(false),
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 },
     );
+  };
+
+  useEffect(() => {
+    return () => {
+      if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
+    };
+  }, []);
+
+  // When the watch yields a fix after a "locate" tap, load nearby once.
+  useEffect(() => {
+    if (userPos && wantNearby.current) {
+      wantNearby.current = false;
+      doNearby(userPos[0], userPos[1]);
+    }
+  }, [userPos]);
+
+  const onLocate = () => {
+    haptic("medium");
+    if (userPos) {
+      doNearby(userPos[0], userPos[1]);
+    } else {
+      wantNearby.current = true;
+      startWatch();
+    }
   };
 
   return (
     <div className="app">
       <Filters value={filters} total={total} onChange={setFilters} />
-      <EventsMap items={items} selected={selected} fitNonce={fitNonce} onSelect={(i) => { haptic("light"); setSelected(i); }} />
-      <button type="button" className={`fab${loadingNearby ? " fab--busy" : ""}`} onClick={loadNearby} aria-label="События рядом">
+      <EventsMap
+        items={items}
+        selected={selected}
+        userPos={userPos}
+        fitNonce={fitNonce}
+        onSelect={(i) => {
+          haptic("light");
+          setSelected(i);
+        }}
+      />
+      <button type="button" className={`fab${loadingNearby ? " fab--busy" : ""}`} onClick={onLocate} aria-label="События рядом">
         <span className="fab__glyph">{loadingNearby ? "…" : "📍"}</span>
       </button>
       <EventSheet selected={selected} onClose={() => setSelected(null)} />

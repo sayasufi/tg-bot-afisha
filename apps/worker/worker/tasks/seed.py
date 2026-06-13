@@ -12,21 +12,28 @@ from apps.worker.worker.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 _WDQS = "https://query.wikidata.org/sparql"
+_OVERPASS = "https://overpass-api.de/api/interpreter"
 _HEADERS = {"User-Agent": "tg-bot-afisha/1.0 (map places seeder)"}
 _POINT_RE = re.compile(r"Point\(([-0-9.]+) ([-0-9.]+)\)")
 
-# Metro line colours missing from Wikidata P465.
-_LINE_COLOR_FALLBACK = {"Рублёво-Архангельская линия": "#6BC4C9"}
+# All named green areas in Moscow (centres via `out center`).
+_PARKS_OVERPASS_QUERY = """[out:json][timeout:120];
+area["name"="Москва"]["admin_level"="4"]->.m;
+(
+  way["leisure"~"^(park|garden|nature_reserve)$"]["name"](area.m);
+  relation["leisure"~"^(park|garden|nature_reserve)$"]["name"](area.m);
+  way["tourism"="theme_park"]["name"](area.m);
+  relation["tourism"="theme_park"]["name"](area.m);
+  relation["boundary"="national_park"]["name"](area.m);
+);
+out center tags;"""
 
-# Shorten a few official park names to what people actually call them.
-_PARK_NAME_OVERRIDES = {
-    "Выставка достижений народного хозяйства": "ВДНХ",
-    "Центральный парк культуры и отдыха им. Горького": "Парк Горького",
-    "Царицыно (дворцово-парковый ансамбль)": "Царицыно",
-    "Главный ботанический сад имени Н. В. Цицина РАН": "Ботанический сад",
-    "Парк Победы (Москва)": "Парк Победы",
-    "Парк искусств": "Музеон",
-}
+# Famous parks OSM tags here as something other than leisure=park (or sit outside the
+# admin boundary), so they slip through the query — add them with central coords.
+_MANUAL_PARKS = [
+    ("ВДНХ", 55.829722, 37.632222),
+    ("Лосиный Остров", 55.8716, 37.7906),
+]
 
 _METRO_QUERY = """
 SELECT ?station ?stationLabel ?coord ?color WHERE {
@@ -36,16 +43,6 @@ SELECT ?station ?stationLabel ?coord ?color WHERE {
   ?station rdfs:label ?stationLabel . FILTER(LANG(?stationLabel)="ru")
   ?line rdfs:label ?lineLabel . FILTER(LANG(?lineLabel)="ru")
 }
-"""
-
-_PARKS_QUERY = """
-SELECT ?item ?itemLabel ?coord (COUNT(DISTINCT ?sl) AS ?links) WHERE {
-  ?item wdt:P31 ?type . VALUES ?type { wd:Q22698 wd:Q22746 wd:Q167346 wd:Q1107656 wd:Q194195 wd:Q2416723 }
-  ?item wdt:P131* wd:Q649 .
-  ?item wdt:P625 ?coord .
-  ?item rdfs:label ?itemLabel . FILTER(LANG(?itemLabel)="ru")
-  OPTIONAL { ?sl schema:about ?item . }
-} GROUP BY ?item ?itemLabel ?coord HAVING(COUNT(DISTINCT ?sl) >= 6)
 """
 
 
@@ -84,19 +81,32 @@ def _seed_metro(db, city_id: int) -> int:
 
 
 def _seed_parks(db, city_id: int) -> int:
-    count = 0
-    for r in _wdqs(_PARKS_QUERY):
-        coord = _coord(r)
-        if not coord:
-            continue
-        raw_name = r["itemLabel"]["value"]
-        name = _PARK_NAME_OVERRIDES.get(raw_name, raw_name)
+    # name_key -> (name, lat, lon, priority). priority 0 = notable (label first).
+    merged: dict[str, tuple[str, float, float, int]] = {}
+    with httpx.Client(timeout=130, headers=_HEADERS) as client:
+        resp = client.post(_OVERPASS, content=_PARKS_OVERPASS_QUERY.encode("utf-8"))
+        resp.raise_for_status()
+        for e in resp.json().get("elements", []):
+            tags = e.get("tags", {})
+            name = (tags.get("name") or "").strip()
+            center = e.get("center") or ({"lat": e.get("lat"), "lon": e.get("lon")} if e.get("lat") is not None else None)
+            if not name or not center or center.get("lat") is None:
+                continue
+            lat, lon = float(center["lat"]), float(center["lon"])
+            if not (55.0 <= lat <= 56.2 and 36.7 <= lon <= 38.4):
+                continue
+            priority = 0 if (tags.get("wikidata") or tags.get("wikipedia")) else 1
+            merged[name.casefold()] = (name, lat, lon, priority)
+
+    for name, lat, lon in _MANUAL_PARKS:
+        merged[name.casefold()] = (name, lat, lon, 0)
+
+    for name, lat, lon, priority in merged.values():
         upsert_map_place(
             db, kind="park", city_id=city_id, name=name,
-            lat=coord[0], lon=coord[1], source="wikidata",
+            lat=lat, lon=lon, source="osm", meta={"priority": priority},
         )
-        count += 1
-    return count
+    return len(merged)
 
 
 @celery_app.task(bind=True, max_retries=2)
