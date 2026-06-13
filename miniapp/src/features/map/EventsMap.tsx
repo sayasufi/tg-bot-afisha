@@ -58,13 +58,14 @@ function VectorBasemap() {
           /* layer id may shift if OFM updates the style */
         }
       };
-      // White-cube plaster: pale land, recessive water, near-black ink labels.
+      // White-cube plaster: pale land, near-black ink labels — with a touch of
+      // colour so parks read green and water reads blue (kept muted/pastel).
       repaint("background", "background-color", "#f4f4ef");
-      repaint("water", "fill-color", "#e2e2da");
-      repaint("waterway", "line-color", "#c9c9bf");
-      repaint("park", "fill-color", "#e9ece0");
-      repaint("park_outline", "line-color", "#d6d8c8");
-      repaint("landcover_wood", "fill-color", "rgba(220,224,206,0.6)");
+      repaint("water", "fill-color", "#cddfeb"); // soft pale blue
+      repaint("waterway", "line-color", "#a3c3db"); // rivers read blue
+      repaint("park", "fill-color", "#dce9cf"); // parks & gardens → soft sage
+      repaint("park_outline", "line-color", "#bfd4a6");
+      repaint("landcover_wood", "fill-color", "#d0e1bd"); // forests a touch deeper green
       const layers = mlMap.getStyle()?.layers || [];
       const font = layers.map((l: any) => l.layout && l.layout["text-font"]).find(Boolean) || ["Noto Sans Regular"];
       // Roads → white channels on plaster, with a pale grey casing.
@@ -110,7 +111,19 @@ function VectorBasemap() {
           source: "openmaptiles",
           "source-layer": "landcover",
           filter: ["in", ["get", "class"], ["literal", ["grass", "wetland", "scrub"]]],
-          paint: { "fill-color": "#e7ead9", "fill-opacity": 0.6 },
+          paint: { "fill-color": "#dcebcc", "fill-opacity": 0.7 },
+        },
+        beforeId,
+      );
+      // Positron has no park outline; add a faint green one so park edges read crisp.
+      addLayer(
+        {
+          id: "ofm-park-outline",
+          type: "line",
+          source: "openmaptiles",
+          "source-layer": "park",
+          minzoom: 11,
+          paint: { "line-color": "#b6cf99", "line-width": 0.8, "line-opacity": 0.7 },
         },
         beforeId,
       );
