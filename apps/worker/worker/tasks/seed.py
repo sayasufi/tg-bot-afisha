@@ -30,10 +30,14 @@ area["name"="Москва"]["admin_level"="4"]->.m;
 );
 out geom;"""
 
-# Famous parks OSM tags here as something other than leisure=park (or sit outside the
-# admin boundary), so they slip through the query — (name, lat, lon, minzoom).
+# Shorten a few long official OSM names to what people actually say.
+_PARK_NAME_OVERRIDES = {
+    "Выставка достижений народного хозяйства": "ВДНХ",
+}
+
+# Parks OSM tags outside the query (national park beyond the admin boundary) —
+# (name, lat, lon, minzoom). ВДНХ comes from Overpass (renamed above).
 _MANUAL_PARKS = [
-    ("ВДНХ", 55.829722, 37.632222, 11),
     ("Лосиный Остров", 55.8716, 37.7906, 10),
 ]
 
@@ -173,6 +177,7 @@ def _seed_parks(db, city_id: int) -> int:
         resp.raise_for_status()
         for e in resp.json().get("elements", []):
             name = (e.get("tags", {}).get("name") or "").strip()
+            name = _PARK_NAME_OVERRIDES.get(name, name)
             bbox = _bbox(e)
             if not name or not bbox:
                 continue
