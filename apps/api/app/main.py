@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from apps.api.app.routes.events import router as events_router
 from apps.api.app.routes.health import router as health_router
@@ -19,6 +20,8 @@ if settings.sentry_dsn and sentry_sdk is not None:
     sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.app_env)
 
 app = FastAPI(title="Afisha API", version="0.1.0")
+# Compress JSON responses (map/places payloads are tens of KB → a few KB).
+app.add_middleware(GZipMiddleware, minimum_size=600)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,6 +29,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Cache read endpoints so repeat loads come from the browser cache. Places are
+# near-static (re-seeded rarely); the map/list changes slowly.
+@app.middleware("http")
+async def cache_control(request: Request, call_next):
+    response = await call_next(request)
+    if request.method == "GET" and response.status_code == 200:
+        path = request.url.path
+        if path.startswith("/v1/places"):
+            response.headers.setdefault("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+        elif path.startswith("/v1/events/map"):
+            response.headers.setdefault("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
+        elif path.startswith("/v1/events/"):
+            response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
+    return response
+
 
 app.include_router(health_router)
 app.include_router(events_router)

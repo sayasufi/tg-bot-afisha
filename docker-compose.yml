@@ -32,7 +32,7 @@ services:
       context: .
       dockerfile: infra/docker/python.Dockerfile
     env_file: .env
-    command: sh -c "alembic upgrade head && uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: sh -c "alembic upgrade head && uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     ports:
       - "8000:8000"
     volumes:
@@ -102,7 +102,7 @@ services:
       dockerfile: ../infra/docker/miniapp.Dockerfile
     environment:
       VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+    command: sh -c "npm run build && npm run preview -- --host 0.0.0.0 --port 5173 --strictPort"
     ports:
       - "5173:5173"
     volumes:

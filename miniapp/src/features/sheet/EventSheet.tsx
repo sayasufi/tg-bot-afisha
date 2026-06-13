@@ -133,7 +133,7 @@ export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Pro
       {/* mounted print */}
       <div className="sheet__frame">
         {image ? (
-          <img ref={imgRef} src={image} alt="" loading="lazy" />
+          <img ref={imgRef} src={image} alt="" loading="lazy" decoding="async" />
         ) : detail ? (
           <CategoryIcon cat={selected.category} size={64} className="sheet__plate-glyph" />
         ) : (
