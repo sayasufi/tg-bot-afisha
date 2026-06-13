@@ -54,54 +54,53 @@ def _bbox(element: dict) -> tuple[float, float, float, float] | None:
     return min(lats), min(lons), max(lats), max(lons)
 
 
-def _ring_coords(points: list) -> str | None:
+def _linestring(points: list) -> str | None:
     coords = [(p["lon"], p["lat"]) for p in (points or []) if p and "lat" in p and "lon" in p]
-    if len(coords) < 3:
+    if len(coords) < 2:
         return None
-    if coords[0] != coords[-1]:
-        coords.append(coords[0])
-    if len(coords) < 4:
-        return None
-    return ",".join(f"{lon} {lat}" for lon, lat in coords)
+    return "(" + ",".join(f"{lon} {lat}" for lon, lat in coords) + ")"
 
 
-def _polygon_wkt(element: dict) -> str | None:
-    """WKT polygon/multipolygon for a park, used to derive a point guaranteed inside it."""
+def _segments_wkt(element: dict) -> str | None:
+    """MULTILINESTRING of a park's boundary segments.
+
+    A big park is an OSM relation whose boundary is split into many way-segments, so
+    we hand PostGIS the raw segments and let ST_LineMerge/ST_BuildArea stitch them into
+    real polygons (closing each segment into its own polygon produced edge slivers,
+    which is why labels drifted to a corner)."""
+    lines: list[str] = []
     if element.get("type") == "way":
-        coords = _ring_coords(element.get("geometry"))
-        return f"POLYGON(({coords}))" if coords else None
-    if element.get("type") == "relation":
-        parts = []
+        ls = _linestring(element.get("geometry"))
+        if ls:
+            lines.append(ls)
+    elif element.get("type") == "relation":
         for member in element.get("members", []):
             if member.get("type") == "way" and member.get("role") in ("outer", ""):
-                coords = _ring_coords(member.get("geometry"))
-                if coords:
-                    parts.append(f"(({coords}))")
-        if parts:
-            return "MULTIPOLYGON(" + ",".join(parts) + ")"
-    return None
+                ls = _linestring(member.get("geometry"))
+                if ls:
+                    lines.append(ls)
+    if not lines:
+        return None
+    return "MULTILINESTRING(" + ",".join(lines) + ")"
 
 
 def _label_point(db, wkt: str, fallback_lat: float, fallback_lon: float) -> tuple[float, float]:
-    """Most central interior point of a park polygon for the label.
-
-    ST_MaximumInscribedCircle (pole of inaccessibility) centres the label far better
-    than a bbox centre, which for elongated/L-shaped parks lands on the edge or on
-    surrounding streets. Falls back to PointOnSurface, then the bbox centre.
-    """
-    queries = (
-        "SELECT ST_Y(c) AS lat, ST_X(c) AS lon FROM "
-        "(SELECT (ST_MaximumInscribedCircle(ST_Buffer(ST_GeomFromText(:wkt, 4326), 0))).center AS c) s",
-        "SELECT ST_Y(p) AS lat, ST_X(p) AS lon FROM "
-        "(SELECT ST_PointOnSurface(ST_Buffer(ST_GeomFromText(:wkt, 4326), 0)) AS p) s",
+    """Most central interior point of the park for the label: build the area from
+    boundary segments, take its largest polygon, then ST_MaximumInscribedCircle
+    (pole of inaccessibility). Falls back to the bbox centre."""
+    sql = (
+        "SELECT ST_Y(c) AS lat, ST_X(c) AS lon FROM ("
+        "  SELECT (ST_MaximumInscribedCircle(g)).center AS c FROM ("
+        "    SELECT (ST_Dump(ST_BuildArea(ST_LineMerge(ST_GeomFromText(:wkt, 4326))))).geom AS g"
+        "  ) d WHERE g IS NOT NULL ORDER BY ST_Area(g) DESC LIMIT 1"
+        ") s"
     )
-    for sql in queries:
-        try:
-            row = db.execute(text(sql), {"wkt": wkt}).first()
-            if row and row.lat is not None:
-                return float(row.lat), float(row.lon)
-        except Exception:
-            db.rollback()
+    try:
+        row = db.execute(text(sql), {"wkt": wkt}).first()
+        if row and row.lat is not None:
+            return float(row.lat), float(row.lon)
+    except Exception:
+        db.rollback()
     return fallback_lat, fallback_lon
 
 
@@ -183,7 +182,7 @@ def _seed_parks(db, city_id: int) -> int:
                 continue
             cx = (bbox[1] + bbox[3]) / 2
             cy = (bbox[0] + bbox[2]) / 2
-            wkt = _polygon_wkt(e)
+            wkt = _segments_wkt(e)
             lat, lon = _label_point(db, wkt, cy, cx) if wkt else (cy, cx)
             if not (55.0 <= lat <= 56.2 and 36.7 <= lon <= 38.4):
                 continue
