@@ -312,13 +312,18 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, onSe
     );
   }, [items, selectedId, onSelect]);
 
+  // Rebuild the user icon only when the (throttled) heading changes, so the
+  // user marker doesn't get a fresh divIcon — and replay its pulse — on every
+  // unrelated re-render.
+  const userIco = useMemo(() => userIcon(heading), [heading]);
+
   return (
     <div className="map-wrap">
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap />
         {cluster}
-        {userPos && <Marker position={userPos} icon={userIcon(heading)} zIndexOffset={1000} interactive={false} />}
+        {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
       </MapContainer>
     </div>

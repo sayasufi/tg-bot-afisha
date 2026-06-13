@@ -6,6 +6,7 @@ import { EventsMap } from "../features/map/EventsMap";
 import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel/panels";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { getUser, getWebApp, haptic, initTelegram } from "../lib/telegram";
+import { openLocationSettings, watchLocation } from "../lib/telegramLocation";
 
 const initialFilters: FilterState = { q: "", category: "", dateFrom: "", dateTo: "", priceMax: "" };
 const CITY = "Москва";
@@ -23,7 +24,7 @@ export function App() {
   const [locateNonce, setLocateNonce] = useState(0);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
-  const watchId = useRef<number | null>(null);
+  const stopWatch = useRef<(() => void) | null>(null);
   const wantCenter = useRef(false);
   const orientHandler = useRef<((e: any) => void) | null>(null);
   const lastHeading = useRef<number | null>(null);
@@ -79,14 +80,19 @@ export function App() {
     return () => back.offClick(pop);
   }, [selected, drawerOpen, view]);
 
-  // Single continuous geolocation watch — prompts once, then the live position
-  // streams in without re-asking on every tap.
+  // Live position watch. Prefers Telegram's LocationManager — the grant is
+  // stored per-bot, so the user is asked ONCE and never re-prompted on later
+  // opens (navigator.geolocation re-prompts every open inside the WebView).
   const startWatch = () => {
-    if (watchId.current != null || !navigator.geolocation) return;
-    watchId.current = navigator.geolocation.watchPosition(
-      (p) => setUserPos([p.coords.latitude, p.coords.longitude]),
-      () => setLocating(false),
-      { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 },
+    if (stopWatch.current) return;
+    stopWatch.current = watchLocation(
+      (c) => setUserPos([c.latitude, c.longitude]),
+      {
+        onDenied: () => {
+          setLocating(false);
+          openLocationSettings(); // offer Telegram's settings if previously denied
+        },
+      },
     );
   };
 
@@ -128,7 +134,7 @@ export function App() {
 
   useEffect(() => {
     return () => {
-      if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
+      stopWatch.current?.();
       if (orientHandler.current) {
         window.removeEventListener("deviceorientationabsolute", orientHandler.current, true);
         window.removeEventListener("deviceorientation", orientHandler.current, true);
