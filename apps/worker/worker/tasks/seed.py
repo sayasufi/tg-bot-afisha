@@ -3,7 +3,6 @@ import math
 import re
 
 import httpx
-from sqlalchemy import text
 
 from core.db.repositories.places import upsert_map_place
 from core.db.repositories.users import get_or_create_city
@@ -54,54 +53,26 @@ def _bbox(element: dict) -> tuple[float, float, float, float] | None:
     return min(lats), min(lons), max(lats), max(lons)
 
 
-def _linestring(points: list) -> str | None:
-    coords = [(p["lon"], p["lat"]) for p in (points or []) if p and "lat" in p and "lon" in p]
-    if len(coords) < 2:
-        return None
-    return "(" + ",".join(f"{lon} {lat}" for lon, lat in coords) + ")"
+def _wikidata_coords(qids: set[str]) -> dict[str, tuple[float, float]]:
+    """Batch-fetch P625 (coordinate location) for many Wikidata items at once.
 
-
-def _segments_wkt(element: dict) -> str | None:
-    """MULTILINESTRING of a park's boundary segments.
-
-    A big park is an OSM relation whose boundary is split into many way-segments, so
-    we hand PostGIS the raw segments and let ST_LineMerge/ST_BuildArea stitch them into
-    real polygons (closing each segment into its own polygon produced edge slivers,
-    which is why labels drifted to a corner)."""
-    lines: list[str] = []
-    if element.get("type") == "way":
-        ls = _linestring(element.get("geometry"))
-        if ls:
-            lines.append(ls)
-    elif element.get("type") == "relation":
-        for member in element.get("members", []):
-            if member.get("type") == "way" and member.get("role") in ("outer", ""):
-                ls = _linestring(member.get("geometry"))
-                if ls:
-                    lines.append(ls)
-    if not lines:
-        return None
-    return "MULTILINESTRING(" + ",".join(lines) + ")"
-
-
-def _label_point(db, wkt: str, fallback_lat: float, fallback_lon: float) -> tuple[float, float]:
-    """Most central interior point of the park for the label: build the area from
-    boundary segments, take its largest polygon, then ST_MaximumInscribedCircle
-    (pole of inaccessibility). Falls back to the bbox centre."""
-    sql = (
-        "SELECT ST_Y(c) AS lat, ST_X(c) AS lon FROM ("
-        "  SELECT (ST_MaximumInscribedCircle(g)).center AS c FROM ("
-        "    SELECT (ST_Dump(ST_BuildArea(ST_LineMerge(ST_GeomFromText(:wkt, 4326))))).geom AS g"
-        "  ) d WHERE g IS NOT NULL ORDER BY ST_Area(g) DESC LIMIT 1"
-        ") s"
-    )
-    try:
-        row = db.execute(text(sql), {"wkt": wkt}).first()
-        if row and row.lat is not None:
-            return float(row.lat), float(row.lon)
-    except Exception:
-        db.rollback()
-    return fallback_lat, fallback_lon
+    Editors place a park's Wikidata coordinate near its centre, which is a far more
+    reliable label point than anything derived from OSM relation boundary segments."""
+    valid = sorted(q for q in qids if q and q.startswith("Q"))
+    out: dict[str, tuple[float, float]] = {}
+    for i in range(0, len(valid), 200):
+        chunk = valid[i : i + 200]
+        values = " ".join(f"wd:{q}" for q in chunk)
+        query = f"SELECT ?item ?coord WHERE {{ VALUES ?item {{ {values} }} ?item wdt:P625 ?coord }}"
+        try:
+            for r in _wdqs(query):
+                qid = r["item"]["value"].rsplit("/", 1)[-1]
+                coord = _coord(r)
+                if coord:
+                    out[qid] = coord
+        except Exception:
+            logger.exception("wikidata coords batch failed")
+    return out
 
 
 def _minzoom_for(bbox: tuple[float, float, float, float]) -> int:
@@ -169,24 +140,33 @@ def _seed_metro(db, city_id: int) -> int:
 
 
 def _seed_parks(db, city_id: int) -> int:
-    # name_key -> (name, lat, lon, minzoom). Label point = bbox centre; minzoom by size.
-    merged: dict[str, tuple[str, float, float, int]] = {}
+    # Collect named parks from Overpass: (name, bbox, wikidata-qid).
+    prelim: list[tuple[str, tuple[float, float, float, float], str | None]] = []
     with httpx.Client(timeout=200, headers=_HEADERS) as client:
         resp = client.post(_OVERPASS, content=_PARKS_OVERPASS_QUERY.encode("utf-8"))
         resp.raise_for_status()
         for e in resp.json().get("elements", []):
-            name = (e.get("tags", {}).get("name") or "").strip()
-            name = _PARK_NAME_OVERRIDES.get(name, name)
+            tags = e.get("tags", {})
+            name = _PARK_NAME_OVERRIDES.get((tags.get("name") or "").strip(), (tags.get("name") or "").strip())
             bbox = _bbox(e)
             if not name or not bbox:
                 continue
-            cx = (bbox[1] + bbox[3]) / 2
-            cy = (bbox[0] + bbox[2]) / 2
-            wkt = _segments_wkt(e)
-            lat, lon = _label_point(db, wkt, cy, cx) if wkt else (cy, cx)
-            if not (55.0 <= lat <= 56.2 and 36.7 <= lon <= 38.4):
-                continue
-            merged[name.casefold()] = (name, lat, lon, _minzoom_for(bbox))
+            prelim.append((name, bbox, tags.get("wikidata")))
+
+    # Central coordinate from Wikidata for parks that carry a wikidata tag (the big,
+    # notable ones); bbox centre is fine for the small remainder.
+    wd = _wikidata_coords({qid for _, _, qid in prelim if qid})
+
+    merged: dict[str, tuple[str, float, float, int]] = {}
+    for name, bbox, qid in prelim:
+        if qid and qid in wd:
+            lat, lon = wd[qid]
+        else:
+            lat = (bbox[0] + bbox[2]) / 2
+            lon = (bbox[1] + bbox[3]) / 2
+        if not (55.0 <= lat <= 56.2 and 36.7 <= lon <= 38.4):
+            continue
+        merged[name.casefold()] = (name, lat, lon, _minzoom_for(bbox))
 
     for name, lat, lon, minzoom in _MANUAL_PARKS:
         merged[name.casefold()] = (name, lat, lon, minzoom)
