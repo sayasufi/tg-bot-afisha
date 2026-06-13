@@ -16,18 +16,24 @@ type Props = {
   items: EventItem[];
   selected: EventItem | null;
   userPos: [number, number] | null;
-  fitNonce: number;
+  heading: number | null;
+  locateNonce: number;
   onSelect: (item: EventItem) => void;
 };
 
 const MOSCOW: [number, number] = [55.751244, 37.618423];
 
-const userIcon = L.divIcon({
-  className: "user-dot-wrap",
-  html: '<div class="user-dot"></div>',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-});
+// User location marker — a blue dot, plus a fanned "beam" pointing where the
+// phone is facing when a compass heading is available.
+function userIcon(heading: number | null): L.DivIcon {
+  const beam = heading == null ? "" : `<span class="user-loc__beam" style="--h:${heading}deg"></span>`;
+  return L.divIcon({
+    className: "user-loc-wrap",
+    html: `<div class="user-loc">${beam}<span class="user-loc__core"></span></div>`,
+    iconSize: [56, 56],
+    iconAnchor: [28, 28],
+  });
+}
 
 // OpenFreeMap "Fiord" — a keyless vector (MapLibre GL) slate-blue style. Crisp
 // labels at every zoom; we deepen the palette and green the parks so coloured
@@ -250,17 +256,15 @@ function clusterIcon(cluster: any): L.DivIcon {
 
 function MapController({
   selected,
-  items,
-  fitNonce,
+  locateNonce,
   userPos,
 }: {
   selected: EventItem | null;
-  items: EventItem[];
-  fitNonce: number;
+  locateNonce: number;
   userPos: [number, number] | null;
 }) {
   const map = useMap();
-  const lastFit = useRef(0);
+  const lastLocate = useRef(0);
 
   useEffect(() => {
     if (selected && selected.lat != null && selected.lon != null) {
@@ -268,23 +272,17 @@ function MapController({
     }
   }, [selected, map]);
 
-  // On a "locate" request the nearby fetch bumps fitNonce; centre on the user.
+  // A "locate" tap bumps locateNonce; recentre on the user without touching pins.
   useEffect(() => {
-    if (fitNonce === 0 || fitNonce === lastFit.current) return;
-    lastFit.current = fitNonce;
-    if (userPos) {
-      map.flyTo(userPos, Math.max(map.getZoom(), 14), { duration: 0.6 });
-      return;
-    }
-    const pts = items.filter((i) => i.lat != null && i.lon != null).map((i) => [i.lat as number, i.lon as number] as [number, number]);
-    if (pts.length === 1) map.flyTo(pts[0], 14, { duration: 0.6 });
-    else if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.2), { animate: true });
-  }, [fitNonce, items, map, userPos]);
+    if (locateNonce === 0 || locateNonce === lastLocate.current) return;
+    lastLocate.current = locateNonce;
+    if (userPos) map.flyTo(userPos, Math.max(map.getZoom(), 15), { duration: 0.6 });
+  }, [locateNonce, map, userPos]);
 
   return null;
 }
 
-export function EventsMap({ items, selected, userPos, fitNonce, onSelect }: Props) {
+export function EventsMap({ items, selected, userPos, heading, locateNonce, onSelect }: Props) {
   const pins = items.filter((i) => i.lat != null && i.lon != null);
 
   return (
@@ -308,8 +306,8 @@ export function EventsMap({ items, selected, userPos, fitNonce, onSelect }: Prop
             />
           ))}
         </MarkerClusterGroup>
-        {userPos && <Marker position={userPos} icon={userIcon} zIndexOffset={1000} interactive={false} />}
-        <MapController selected={selected} items={items} fitNonce={fitNonce} userPos={userPos} />
+        {userPos && <Marker position={userPos} icon={userIcon(heading)} zIndexOffset={1000} interactive={false} />}
+        <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
       </MapContainer>
     </div>
   );

@@ -76,10 +76,12 @@ export function EventSheet({ selected, onClose }: Props) {
 
   return (
     <div className="sheet" role="dialog" aria-label={selected.title}>
-      <div className="sheet__grip" />
-      <button type="button" className="sheet__close" aria-label="Закрыть" onClick={onClose}>
-        ✕
-      </button>
+      <div className="sheet__sticky">
+        <span className="sheet__grip" />
+        <button type="button" className="sheet__close" aria-label="Закрыть" onClick={onClose}>
+          ✕
+        </button>
+      </div>
 
       <div className={`sheet__hero${image ? "" : " sheet__hero--plain"}`} style={{ "--c": meta.color } as CSSProperties}>
         {image ? <img src={image} alt="" loading="lazy" /> : <span className="sheet__hero-glyph">{meta.glyph}</span>}

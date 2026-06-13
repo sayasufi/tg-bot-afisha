@@ -23,8 +23,14 @@ export function getWebApp(): TelegramWebApp | undefined {
   return (window as any).Telegram?.WebApp;
 }
 
+export type TgUser = { id: number; first_name?: string; last_name?: string; username?: string; photo_url?: string };
+
+export function getUser(): TgUser | null {
+  return (getWebApp() as any)?.initDataUnsafe?.user ?? null;
+}
+
 // Canvas color the page paints behind everything (matches CSS --bg).
-const CANVAS = "#0E0F13";
+const CANVAS = "#121014";
 
 // The app is dark-only; the light theme was removed.
 export function initTelegram(): ThemeName {

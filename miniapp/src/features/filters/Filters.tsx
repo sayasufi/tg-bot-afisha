@@ -15,9 +15,10 @@ type Props = {
   value: FilterState;
   total: number;
   onChange: (value: FilterState) => void;
+  onMenu: () => void;
 };
 
-export function Filters({ value, total, onChange }: Props) {
+export function Filters({ value, total, onChange, onMenu }: Props) {
   const [showPanel, setShowPanel] = useState(false);
   const advancedCount = [value.dateFrom, value.dateTo, value.priceMax].filter(Boolean).length;
 
@@ -29,6 +30,9 @@ export function Filters({ value, total, onChange }: Props) {
   return (
     <div className="topbar">
       <div className="topbar__row">
+        <button type="button" className="icon-btn icon-btn--menu" aria-label="Меню" onClick={onMenu}>
+          <span className="icon-btn__glyph">☰</span>
+        </button>
         <div className="brand">
           <span className="brand__mark">афиша</span>
           <span className="brand__count">{total} событий</span>

@@ -7,6 +7,7 @@ __pycache__/
 .venv/
 node_modules/
 miniapp/node_modules/
+miniapp/dist/
 .env
 .env.local
 .tmp_*

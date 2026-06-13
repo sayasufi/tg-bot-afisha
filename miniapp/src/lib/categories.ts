@@ -5,16 +5,16 @@ export type CategoryMeta = {
   color: string;
 };
 
-// Vivid, mutually distinct hues that pop against a muted basemap.
+// Muted, editorial palette — distinct but never neon (no bright pink).
 export const CATEGORIES: CategoryMeta[] = [
-  { key: "concert", label: "Концерты", glyph: "🎵", color: "#FF4D6D" },
-  { key: "theatre", label: "Театр", glyph: "🎭", color: "#FFB020" },
-  { key: "exhibition", label: "Выставки", glyph: "🖼️", color: "#A66BFF" },
-  { key: "standup", label: "Стендап", glyph: "🎤", color: "#FF7A1A" },
-  { key: "festival", label: "Фестивали", glyph: "🎪", color: "#1FCF9A" },
-  { key: "lecture", label: "Лекции", glyph: "🎓", color: "#4D96FF" },
-  { key: "kids", label: "Детям", glyph: "🧸", color: "#2DD4D4" },
-  { key: "other", label: "Другое", glyph: "✨", color: "#8B93A7" },
+  { key: "concert", label: "Концерты", glyph: "🎵", color: "#DB6A4E" },
+  { key: "theatre", label: "Театр", glyph: "🎭", color: "#C9A24A" },
+  { key: "exhibition", label: "Выставки", glyph: "🖼️", color: "#9C7BD0" },
+  { key: "standup", label: "Стендап", glyph: "🎤", color: "#E08A3C" },
+  { key: "festival", label: "Фестивали", glyph: "🎪", color: "#4FA487" },
+  { key: "lecture", label: "Лекции", glyph: "🎓", color: "#5784C2" },
+  { key: "kids", label: "Детям", glyph: "🧸", color: "#5BC0B6" },
+  { key: "other", label: "Другое", glyph: "✨", color: "#9A9082" },
 ];
 
 const BY_KEY = new Map(CATEGORIES.map((c) => [c.key, c]));
