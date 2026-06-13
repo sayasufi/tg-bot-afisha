@@ -109,16 +109,18 @@ function VectorBasemap() {
         id: "parks-label",
         type: "symbol",
         source: "parks",
-        minzoom: 11,
+        minzoom: 10,
+        // Each park carries a size-based minzoom: big parks appear from far out,
+        // tiny squares only once you zoom right in. Bigger parks (lower minzoom)
+        // also win label collisions.
+        filter: [">=", ["zoom"], ["coalesce", ["get", "minzoom"], 13]],
         layout: {
           "text-field": ["get", "name"],
           "text-font": font,
           "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 15, 14],
           "text-max-width": 8,
           "text-padding": 4,
-          // Notable parks (priority 0) win label collisions; the long tail of smaller
-          // parks fills in as you zoom. Lower sort-key = higher priority.
-          "symbol-sort-key": ["coalesce", ["get", "priority"], 1],
+          "symbol-sort-key": ["coalesce", ["get", "minzoom"], 13],
         },
         paint: { "text-color": "#8fd3a8", "text-halo-color": "#0e1a14", "text-halo-width": 1.6 },
       });

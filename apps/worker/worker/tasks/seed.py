@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 
 import httpx
@@ -16,8 +17,8 @@ _OVERPASS = "https://overpass-api.de/api/interpreter"
 _HEADERS = {"User-Agent": "tg-bot-afisha/1.0 (map places seeder)"}
 _POINT_RE = re.compile(r"Point\(([-0-9.]+) ([-0-9.]+)\)")
 
-# All named green areas in Moscow (centres via `out center`).
-_PARKS_OVERPASS_QUERY = """[out:json][timeout:120];
+# All named green areas in Moscow with full geometry (to size each park).
+_PARKS_OVERPASS_QUERY = """[out:json][timeout:180];
 area["name"="Москва"]["admin_level"="4"]->.m;
 (
   way["leisure"~"^(park|garden|nature_reserve)$"]["name"](area.m);
@@ -26,14 +27,46 @@ area["name"="Москва"]["admin_level"="4"]->.m;
   relation["tourism"="theme_park"]["name"](area.m);
   relation["boundary"="national_park"]["name"](area.m);
 );
-out center tags;"""
+out geom;"""
 
 # Famous parks OSM tags here as something other than leisure=park (or sit outside the
-# admin boundary), so they slip through the query — add them with central coords.
+# admin boundary), so they slip through the query — (name, lat, lon, minzoom).
 _MANUAL_PARKS = [
-    ("ВДНХ", 55.829722, 37.632222),
-    ("Лосиный Остров", 55.8716, 37.7906),
+    ("ВДНХ", 55.829722, 37.632222, 11),
+    ("Лосиный Остров", 55.8716, 37.7906, 10),
 ]
+
+
+def _bbox(element: dict) -> tuple[float, float, float, float] | None:
+    bounds = element.get("bounds")
+    if bounds:
+        return bounds["minlat"], bounds["minlon"], bounds["maxlat"], bounds["maxlon"]
+    geometry = element.get("geometry") or []
+    lats = [p["lat"] for p in geometry if p]
+    lons = [p["lon"] for p in geometry if p]
+    if not lats:
+        return None
+    return min(lats), min(lons), max(lats), max(lons)
+
+
+def _minzoom_for(bbox: tuple[float, float, float, float]) -> int:
+    """Larger parks get a lower minzoom (labelled from farther out); tiny squares
+    only appear when you are zoomed right in."""
+    minlat, minlon, maxlat, maxlon = bbox
+    height = (maxlat - minlat) * 111320
+    width = (maxlon - minlon) * 111320 * math.cos(math.radians((minlat + maxlat) / 2))
+    size = max(height, width)
+    if size >= 3000:
+        return 10
+    if size >= 1500:
+        return 11
+    if size >= 800:
+        return 12
+    if size >= 400:
+        return 13
+    if size >= 200:
+        return 14
+    return 15
 
 _METRO_QUERY = """
 SELECT ?station ?stationLabel ?coord ?color WHERE {
@@ -81,30 +114,29 @@ def _seed_metro(db, city_id: int) -> int:
 
 
 def _seed_parks(db, city_id: int) -> int:
-    # name_key -> (name, lat, lon, priority). priority 0 = notable (label first).
+    # name_key -> (name, lat, lon, minzoom). Label point = bbox centre; minzoom by size.
     merged: dict[str, tuple[str, float, float, int]] = {}
-    with httpx.Client(timeout=130, headers=_HEADERS) as client:
+    with httpx.Client(timeout=200, headers=_HEADERS) as client:
         resp = client.post(_OVERPASS, content=_PARKS_OVERPASS_QUERY.encode("utf-8"))
         resp.raise_for_status()
         for e in resp.json().get("elements", []):
-            tags = e.get("tags", {})
-            name = (tags.get("name") or "").strip()
-            center = e.get("center") or ({"lat": e.get("lat"), "lon": e.get("lon")} if e.get("lat") is not None else None)
-            if not name or not center or center.get("lat") is None:
+            name = (e.get("tags", {}).get("name") or "").strip()
+            bbox = _bbox(e)
+            if not name or not bbox:
                 continue
-            lat, lon = float(center["lat"]), float(center["lon"])
+            lat = (bbox[0] + bbox[2]) / 2
+            lon = (bbox[1] + bbox[3]) / 2
             if not (55.0 <= lat <= 56.2 and 36.7 <= lon <= 38.4):
                 continue
-            priority = 0 if (tags.get("wikidata") or tags.get("wikipedia")) else 1
-            merged[name.casefold()] = (name, lat, lon, priority)
+            merged[name.casefold()] = (name, lat, lon, _minzoom_for(bbox))
 
-    for name, lat, lon in _MANUAL_PARKS:
-        merged[name.casefold()] = (name, lat, lon, 0)
+    for name, lat, lon, minzoom in _MANUAL_PARKS:
+        merged[name.casefold()] = (name, lat, lon, minzoom)
 
-    for name, lat, lon, priority in merged.values():
+    for name, lat, lon, minzoom in merged.values():
         upsert_map_place(
             db, kind="park", city_id=city_id, name=name,
-            lat=lat, lon=lon, source="osm", meta={"priority": priority},
+            lat=lat, lon=lon, source="osm", meta={"minzoom": minzoom},
         )
     return len(merged)
 

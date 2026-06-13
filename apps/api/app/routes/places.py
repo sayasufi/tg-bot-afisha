@@ -38,7 +38,7 @@ def places(kind: str, city: str | None = None, db: Session = Depends(get_db)) ->
                 "name": row["name"],
                 "color": row["color"],
                 "kind": kind,
-                "priority": _meta(row.get("meta_json")).get("priority", 1),
+                "minzoom": _meta(row.get("meta_json")).get("minzoom", 13),
             },
         }
         for row in rows
