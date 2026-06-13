@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -32,8 +32,12 @@ class EventQueryService:
         q: str | None,
     ):
         filters = []
-        if date_from:
-            filters.append(EventOccurrence.date_start >= date_from)
+        # Hide events that have already ENDED. An occurrence is "active" from
+        # `floor` onward if it ends at/after the floor (ongoing exhibitions whose
+        # start is in the past are kept; truly finished events drop out). Default
+        # floor is the start of today, so the map never shows past events.
+        floor = date_from or datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        filters.append(func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= floor)
         if date_to:
             filters.append(EventOccurrence.date_start <= date_to)
         if categories:

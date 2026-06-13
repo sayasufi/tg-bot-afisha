@@ -1748,3 +1748,75 @@ body {
     transform: scaleX(0);
   }
 }
+
+/* ---- Orchestrated entrances: staggered rise on open ---- */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+}
+
+/* Drawer nav items stagger in when the partition slides open. */
+.drawer--open .navitem {
+  animation: riseIn 0.42s var(--ease-cut) both;
+}
+.drawer--open .navitem:nth-child(1) {
+  animation-delay: 0.08s;
+}
+.drawer--open .navitem:nth-child(2) {
+  animation-delay: 0.14s;
+}
+.drawer--open .navitem:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.drawer--open .navitem:nth-child(4) {
+  animation-delay: 0.26s;
+}
+
+/* Filter sheet: presets + category tiles pop in on open. */
+.csheet--open .csheet__presets .chip,
+.csheet--open .csheet__cat {
+  animation: riseIn 0.4s var(--ease-cut) both;
+}
+.csheet--open .csheet__cat:nth-child(1) {
+  animation-delay: 0.04s;
+}
+.csheet--open .csheet__cat:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.csheet--open .csheet__cat:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.csheet--open .csheet__cat:nth-child(4) {
+  animation-delay: 0.16s;
+}
+.csheet--open .csheet__cat:nth-child(5) {
+  animation-delay: 0.2s;
+}
+.csheet--open .csheet__cat:nth-child(6) {
+  animation-delay: 0.24s;
+}
+.csheet--open .csheet__cat:nth-child(7) {
+  animation-delay: 0.28s;
+}
+.csheet--open .csheet__cat:nth-child(8) {
+  animation-delay: 0.32s;
+}
+.csheet--open .csheet__cat:nth-child(9) {
+  animation-delay: 0.36s;
+}
+
+/* Detail sheet: wall-label rows stagger in. */
+.sheet__meta .wall-label {
+  animation: riseIn 0.4s var(--ease-cut) both;
+}
+.sheet__meta .wall-label:nth-child(1) {
+  animation-delay: 0.06s;
+}
+.sheet__meta .wall-label:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.sheet__meta .wall-label:nth-child(3) {
+  animation-delay: 0.18s;
+}
