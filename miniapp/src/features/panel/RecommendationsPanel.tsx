@@ -1,19 +1,39 @@
+import type { CSSProperties } from "react";
+
 import type { EventItem } from "../../api/client";
 import { eventBucket } from "../../lib/datetime";
 import type { LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
 import { EventRow } from "./EventRow";
 
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 7 }).map((_, i) => (
+        <div key={i} className="erow erow--skel" style={{ "--i": i } as CSSProperties}>
+          <span className="erow__mark" />
+          <span className="erow__body">
+            <span className="skel skel--title" />
+            <span className="skel skel--meta" />
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function RecommendationsPanel({
   items,
   query,
   userPos,
+  loading = false,
   onSelect,
   onClose,
 }: {
   items: EventItem[];
   query?: string;
   userPos?: LatLon | null;
+  loading?: boolean;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
@@ -41,7 +61,8 @@ export function RecommendationsPanel({
         </button>
       </header>
       <div className="panelview__scroll">
-        {ordered.length === 0 && <p className="panelview__empty">Пока нечего показать</p>}
+        {ordered.length === 0 &&
+          (loading ? <SkeletonRows /> : <p className="panelview__empty">Пока нечего показать</p>)}
         {ordered.map((g) => (
           <section key={g.label}>
             <div className="recs__section">

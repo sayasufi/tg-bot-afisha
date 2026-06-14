@@ -10,3 +10,12 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />
   </React.StrictMode>
 );
+
+// Fade out the instant brand splash once the app has mounted.
+const splash = document.getElementById("splash");
+if (splash) {
+  requestAnimationFrame(() => {
+    setTimeout(() => splash.classList.add("hide"), 250);
+    setTimeout(() => splash.remove(), 700);
+  });
+}

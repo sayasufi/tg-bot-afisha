@@ -30,8 +30,51 @@
         href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
       />
     </noscript>
+    <style>
+      /* Instant brand splash (shown before the bundle/CSS load, removed on mount). */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: #f4f4ef;
+        transition: opacity 0.35s ease;
+      }
+      #splash.hide {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash .splash__word {
+        font-family: "Unbounded", system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 30px;
+        letter-spacing: -0.04em;
+        color: #0b0b0b;
+      }
+      #splash svg {
+        animation: splashpin 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      @keyframes splashpin {
+        from {
+          transform: translateY(-12px) scale(0.9);
+          opacity: 0;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash">
+      <svg width="92" height="92" viewBox="0 0 512 512" aria-hidden="true">
+        <path d="M256 56 C168.9 56 98 126.9 98 214 C98 320 256 456 256 456 C256 456 414 320 414 214 C414 126.9 343.1 56 256 56 Z" fill="#0b0b0b" />
+        <circle cx="256" cy="202" r="84" fill="#ccff00" />
+        <circle cx="256" cy="202" r="32" fill="#0b0b0b" />
+      </svg>
+      <div class="splash__word">окрест</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
