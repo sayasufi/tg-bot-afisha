@@ -865,21 +865,120 @@ body {
   background: var(--vitrine);
 }
 
-/* "В календарь" — a standalone full-width secondary action under the row. */
-.sheet__cal {
-  width: 100%;
-  height: 48px;
-  margin-top: 8px;
-  border: 1px solid var(--line);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+/* "Рядом ещё" — a compact swipeable card strip of nearby events. */
+.sheet__similar {
+  margin-top: 24px;
 }
 
-/* "Рядом ещё" — nearest other events, listed under the detail. */
-.sheet__similar {
-  margin-top: 22px;
+.sheet__similar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.sheet__similar-head::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: var(--acid);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.sheet__similar-head .recs__n {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.simstrip {
+  display: flex;
+  gap: 10px;
+  margin: 12px -16px 0;
+  padding: 2px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.simstrip::-webkit-scrollbar {
+  display: none;
+}
+
+.simcard {
+  flex: 0 0 152px;
+  width: 152px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: box-shadow 0.12s ease;
+}
+
+.simcard:active {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.simcard__cover {
+  height: 80px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.simcard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 11px 11px;
+}
+
+.simcard__title {
+  font-family: var(--grotesk);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.simcard__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.simcard__when {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.simcard__dist {
+  flex: 0 0 auto;
+  background: var(--acid);
+  color: var(--on-acid);
+  padding: 1px 5px;
 }
 
 /* ---------- Left drawer — partition wall ---------- */
@@ -1197,12 +1296,14 @@ mark.hl {
   text-overflow: ellipsis;
 }
 
-/* Distance to the user — a right-hand ledger cell ("480 м"). */
+/* Distance to the user — a fixed-width right-hand ledger cell ("480 м") so the
+   divider lines up across every row. */
 .erow__dist {
-  flex: 0 0 auto;
+  flex: 0 0 76px;
+  width: 76px;
   display: grid;
   place-items: center;
-  padding: 0 14px;
+  padding: 0 8px;
   border-left: 1px solid var(--line);
   font-family: var(--mono);
   font-size: 11px;
@@ -1789,10 +1890,8 @@ mark.hl {
 }
 
 /* Two-ink misregistration: a cinnabar offset ghost behind acid blocks. */
-.btn--primary,
 .csheet__apply,
-.cmdpill__badge,
-.erow--featured .erow__mark {
+.cmdpill__badge {
   box-shadow: 1.6px 1.6px 0 var(--cinnabar);
 }
 

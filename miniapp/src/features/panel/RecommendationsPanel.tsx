@@ -56,7 +56,6 @@ export function RecommendationsPanel({
                   item={it}
                   index={i}
                   query={query}
-                  featured={i === 0}
                   userPos={userPos}
                   onSelect={onSelect}
                 />

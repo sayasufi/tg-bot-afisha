@@ -10,14 +10,12 @@ export function EventRow({
   item,
   index,
   query,
-  featured = false,
   userPos,
   onSelect,
 }: {
   item: EventItem;
   index: number;
   query?: string;
-  featured?: boolean;
   userPos?: LatLon | null;
   onSelect: (i: EventItem) => void;
 }) {
@@ -27,7 +25,7 @@ export function EventRow({
   return (
     <button
       type="button"
-      className={`erow${featured ? " erow--featured" : ""}`}
+      className="erow"
       style={{ "--i": index } as CSSProperties}
       onClick={() => onSelect(item)}
     >

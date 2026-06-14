@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/client";
-import { addToCalendar } from "../../lib/calendar";
 import { categoryMeta } from "../../lib/categories";
 import { formatWhen } from "../../lib/datetime";
 import { nearLabel, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
-import { CategoryIcon, IconCalendar, IconClose, IconHeart, IconShare } from "../../lib/icons";
+import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
@@ -77,20 +76,6 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
   const onShare = () => {
     haptic("light");
     shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: sourceUrl });
-  };
-
-  const startIso = occ?.date_start ?? selected.date_start;
-  const onCalendar = () => {
-    haptic("light");
-    addToCalendar({
-      id: selected.event_id,
-      title: selected.title,
-      start: startIso,
-      end: occ?.date_end ?? selected.date_end,
-      location: [venue, address].filter(Boolean).join(", ") || null,
-      description: [description, sourceUrl].filter(Boolean).join("\n\n") || null,
-      url: sourceUrl,
-    });
   };
 
   return (
@@ -189,12 +174,6 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
             </a>
           )}
         </div>
-
-        {startIso && (
-          <button type="button" className="btn btn--ghost sheet__cal" onClick={onCalendar}>
-            <IconCalendar size={16} />В календарь
-          </button>
-        )}
 
         <SimilarEvents selected={selected} items={items} userPos={userPos} onSelect={onSelect} />
       </div>
