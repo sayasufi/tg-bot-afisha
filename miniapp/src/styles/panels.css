@@ -108,6 +108,22 @@
   position: relative;
 }
 
+.navitem__badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
 .drawer__foot {
   margin-top: auto;
   font-family: var(--mono);
@@ -211,6 +227,23 @@ mark.hl {
   line-height: 1.6;
   letter-spacing: 0.03em;
   color: var(--ink-dim);
+}
+
+.favempty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.favempty__glyph {
+  color: var(--ink-faint);
+  margin-bottom: 4px;
+}
+
+.favempty .panelview__hint {
+  margin-top: 14px;
+  max-width: 280px;
 }
 
 /* ---------- Event rows (recommendations) — gallery labels ---------- */

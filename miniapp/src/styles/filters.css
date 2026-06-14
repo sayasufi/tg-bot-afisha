@@ -91,6 +91,97 @@
   animation: dropIn 0.2s ease both;
 }
 
+/* Day-strip — a horizontal rail of single-day cells. */
+.daystrip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: -2px;
+  padding: 2px;
+}
+
+.daystrip::-webkit-scrollbar {
+  display: none;
+}
+
+.daycell {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.daycell__dow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.daycell__num {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.daycell--today {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.daycell--active {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.daycell--active .daycell__dow {
+  color: var(--on-acid);
+}
+
+/* Recent searches — a wrap of compact history chips. */
+.histrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: -2px;
+}
+
+.chip--hist {
+  height: 32px;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--ink-dim);
+}
+
+.chip--hist svg {
+  color: var(--ink-faint);
+}
+
+.histrow__clear {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
 .csheet__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -58,6 +58,20 @@ export function matchPreset(dateFrom: string, dateTo: string, now: Date = new Da
   return null; // dates set, but a custom range
 }
 
+const RU_DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+export type DayCell = { iso: string; dow: string; day: number; today: boolean; tomorrow: boolean };
+
+// The next `count` days as cells for the day-strip selector. The first two are
+// flagged so the UI can label them "Сегодня" / "Завтра".
+export function nextDays(count = 14, now: Date = new Date()): DayCell[] {
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Array.from({ length: count }, (_, i) => {
+    const d = addDays(t, i);
+    return { iso: iso(d), dow: RU_DOW[d.getDay()], day: d.getDate(), today: i === 0, tomorrow: i === 1 };
+  });
+}
+
 const RU_MON = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 // Compact pill summary token, e.g. "СЕГОДНЯ" / "12–18 ИЮН" / "ВСЕ ДАТЫ".

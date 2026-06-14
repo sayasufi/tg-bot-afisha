@@ -3,17 +3,20 @@ import type { View } from "./view";
 const NAV: { key: View; label: string; glyph: string }[] = [
   { key: "map", label: "Карта", glyph: "▦" },
   { key: "recs", label: "Рекомендации", glyph: "✷" },
+  { key: "favorites", label: "Избранное", glyph: "♥" },
   { key: "profile", label: "Профиль", glyph: "◑" },
 ];
 
 export function Sidebar({
   open,
   view,
+  favCount = 0,
   onSelect,
   onClose,
 }: {
   open: boolean;
   view: View;
+  favCount?: number;
   onSelect: (v: View) => void;
   onClose: () => void;
 }) {
@@ -33,6 +36,7 @@ export function Sidebar({
             >
               <span className="navitem__glyph">{n.glyph}</span>
               {n.label}
+              {n.key === "favorites" && favCount > 0 && <span className="navitem__badge">{favCount}</span>}
             </button>
           ))}
         </nav>

@@ -5,7 +5,7 @@ import { Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
 import { EventsMap } from "../features/map/EventsMap";
 import { Coach, EmptyState, LoadingBar, RadarPing } from "../features/map/MapOverlays";
-import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
+import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
@@ -249,6 +249,9 @@ export function App() {
       {view === "recs" && (
         <RecommendationsPanel items={items} query={filters.q} userPos={userPos} loading={loading} onSelect={openEvent} onClose={() => setView("map")} />
       )}
+      {view === "favorites" && (
+        <FavoritesPanel items={items} favIds={fav.ids} query={filters.q} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
+      )}
       {view === "profile" && (
         <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} query={filters.q} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
       )}
@@ -256,6 +259,7 @@ export function App() {
       <Sidebar
         open={drawerOpen}
         view={view}
+        favCount={fav.ids.size}
         onClose={() => setDrawerOpen(false)}
         onSelect={(v) => {
           haptic("light");

@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { CATEGORIES, categoryMeta } from "../../lib/categories";
-import { PRESETS, matchPreset, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
+import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
 import { CategoryIcon, IconClose, IconGrid, IconMenu, IconSearch } from "../../lib/icons";
+import { clearHistory, pushHistory, readHistory } from "../../lib/searchHistory";
 import { haptic, hapticSelection } from "../../lib/telegram";
 import { useCountUp } from "../../lib/useCountUp";
+
+// Free / cheap price shortcuts (₽). Empty string = no cap.
+const PRICE_CHIPS: { label: string; value: string }[] = [
+  { label: "Бесплатно", value: "0" },
+  { label: "До 500 ₽", value: "500" },
+];
 
 export type FilterState = {
   q: string;
@@ -25,6 +32,7 @@ type Props = {
 
 export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: Props) {
   const [showCustomDates, setShowCustomDates] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const advancedCount = [value.q, value.category, value.dateFrom || value.dateTo, value.priceMax].filter(Boolean).length;
@@ -39,12 +47,30 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
     if (isCustomDates) setShowCustomDates(true);
   }, [isCustomDates]);
 
+  // Refresh the recent-search list each time the sheet opens.
+  useEffect(() => {
+    if (open) setHistory(readHistory());
+  }, [open]);
+
+  const commitSearch = () => {
+    if (value.q.trim()) {
+      pushHistory(value.q);
+      setHistory(readHistory());
+    }
+  };
   const openSheet = (focusSearch = false) => {
     haptic("light");
     onOpenChange(true);
     if (focusSearch) setTimeout(() => searchRef.current?.focus(), 320);
   };
-  const close = () => onOpenChange(false);
+  const close = () => {
+    commitSearch();
+    onOpenChange(false);
+  };
+  const wipeHistory = () => {
+    clearHistory();
+    setHistory([]);
+  };
   const pick = (category: string) => {
     hapticSelection();
     onChange({ ...value, category });
@@ -54,6 +80,13 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
     const next = activePreset === key ? { dateFrom: "", dateTo: "" } : rangeFor(key);
     setShowCustomDates(false);
     onChange({ ...value, ...next });
+  };
+  const days = useMemo(() => nextDays(14), []);
+  const activeDay = value.dateFrom && value.dateFrom === value.dateTo ? value.dateFrom : null;
+  const tapDay = (iso: string) => {
+    hapticSelection();
+    setShowCustomDates(false);
+    onChange(activeDay === iso ? { ...value, dateFrom: "", dateTo: "" } : { ...value, dateFrom: iso, dateTo: iso });
   };
 
   return (
@@ -97,6 +130,12 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
               placeholder="Поиск событий"
               value={value.q}
               onChange={(e) => onChange({ ...value, q: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  commitSearch();
+                  searchRef.current?.blur();
+                }
+              }}
             />
             {value.q && (
               <button type="button" className="search__clear" aria-label="Очистить" onClick={() => onChange({ ...value, q: "" })}>
@@ -104,6 +143,28 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
               </button>
             )}
           </div>
+
+          {!value.q && history.length > 0 && (
+            <div className="histrow">
+              {history.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  className="chip chip--hist"
+                  onClick={() => {
+                    hapticSelection();
+                    onChange({ ...value, q: h });
+                  }}
+                >
+                  <IconSearch size={12} />
+                  {h}
+                </button>
+              ))}
+              <button type="button" className="histrow__clear" aria-label="Очистить историю" onClick={wipeHistory}>
+                <IconClose size={13} />
+              </button>
+            </div>
+          )}
 
           <span className="kicker">Когда</span>
           <div className="chips csheet__presets">
@@ -119,6 +180,21 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
             >
               Даты…
             </button>
+          </div>
+
+          {/* Day-strip — pick a single day fast without the native picker. */}
+          <div className="daystrip">
+            {days.map((d) => (
+              <button
+                key={d.iso}
+                type="button"
+                className={`daycell${activeDay === d.iso ? " daycell--active" : ""}${d.today ? " daycell--today" : ""}`}
+                onClick={() => tapDay(d.iso)}
+              >
+                <span className="daycell__dow">{d.today ? "сег" : d.tomorrow ? "зав" : d.dow}</span>
+                <span className="daycell__num">{d.day}</span>
+              </button>
+            ))}
           </div>
           {(showCustomDates || isCustomDates) && (
             <div className="csheet__dates">
@@ -154,6 +230,21 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
           </div>
 
           <span className="kicker">Цена до, ₽</span>
+          <div className="chips">
+            {PRICE_CHIPS.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                className={`chip${value.priceMax === p.value ? " chip--active" : ""}`}
+                onClick={() => {
+                  hapticSelection();
+                  onChange({ ...value, priceMax: value.priceMax === p.value ? "" : p.value });
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <label className="panel__field panel__field--solo">
             <input
               type="number"

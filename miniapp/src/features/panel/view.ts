@@ -1,1 +1,1 @@
-export type View = "map" | "recs" | "profile";
+export type View = "map" | "recs" | "favorites" | "profile";
