@@ -160,7 +160,7 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
           )}
           {near && (
             <div className="wall-label">
-              <span className="wall-label__cap">Рядом</span>
+              <span className="wall-label__cap">От тебя</span>
               <span className="wall-label__val">
                 <span className="sheet__near">{near}</span>
               </span>
