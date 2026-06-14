@@ -45,8 +45,8 @@ html[data-theme="dark"] {
   --ink-faint: #6c685e;
   --line: #3a3830; /* visible warm-grey hairline frames */
   --line-soft: rgba(241, 236, 222, 0.13);
-  --acid: #ccff00; /* unchanged — pops on ink */
-  --acid-deep: #aad400;
+  --acid: #ffb02e; /* after-dark accent: warm amber, not chartreuse */
+  --acid-deep: #e0951f;
   --on-acid: #0b0b0b;
   --cinnabar: #ff5a3c; /* nudged brighter so it reads on dark */
   color: var(--ink);

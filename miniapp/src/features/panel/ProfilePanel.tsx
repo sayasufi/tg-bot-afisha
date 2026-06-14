@@ -1,10 +1,8 @@
 import type { EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
-import type { LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
-import { EventRow } from "./EventRow";
 
 export function ProfilePanel({
   user,
@@ -12,9 +10,6 @@ export function ProfilePanel({
   city,
   items,
   favIds,
-  query,
-  userPos,
-  onSelect,
   onClose,
 }: {
   user: TgUser | null;
@@ -22,9 +17,6 @@ export function ProfilePanel({
   city: string;
   items: EventItem[];
   favIds: Set<string>;
-  query?: string;
-  userPos?: LatLon | null;
-  onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
@@ -94,19 +86,9 @@ export function ProfilePanel({
           </>
         )}
 
-        {favs.length > 0 ? (
-          <>
-            <div className="recs__section">
-              Избранное
-              <span className="recs__n">{favs.length}</span>
-            </div>
-            {favs.map((it, i) => (
-              <EventRow key={it.event_id} item={it} index={i} query={query} userPos={userPos} onSelect={onSelect} />
-            ))}
-          </>
-        ) : (
+        {taste.length === 0 && (
           <p className="panelview__hint">
-            Отмечай события сердечком в карточке — они появятся здесь. Город определяется по твоей геолокации прямо в карте.
+            Отмечай события сердечком в карточке — они соберутся во вкладке «Избранное», а здесь сложится твой вкус. Город определяется по геолокации прямо в карте.
           </p>
         )}
       </div>

@@ -7,12 +7,6 @@ import { clearHistory, pushHistory, readHistory } from "../../lib/searchHistory"
 import { haptic, hapticSelection } from "../../lib/telegram";
 import { useCountUp } from "../../lib/useCountUp";
 
-// Free / cheap price shortcuts (₽). Empty string = no cap.
-const PRICE_CHIPS: { label: string; value: string }[] = [
-  { label: "Бесплатно", value: "0" },
-  { label: "До 500 ₽", value: "500" },
-];
-
 export type FilterState = {
   q: string;
   category: string;
@@ -230,21 +224,6 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
           </div>
 
           <span className="kicker">Цена до, ₽</span>
-          <div className="chips">
-            {PRICE_CHIPS.map((p) => (
-              <button
-                key={p.value}
-                type="button"
-                className={`chip${value.priceMax === p.value ? " chip--active" : ""}`}
-                onClick={() => {
-                  hapticSelection();
-                  onChange({ ...value, priceMax: value.priceMax === p.value ? "" : p.value });
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
           <label className="panel__field panel__field--solo">
             <input
               type="number"

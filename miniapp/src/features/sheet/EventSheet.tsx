@@ -26,7 +26,6 @@ type Props = {
 export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav, onSelect, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
-  const stickyRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
@@ -50,8 +49,6 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
         raf = 0;
         const y = sheet.scrollTop;
         if (imgRef.current) imgRef.current.style.transform = `translateY(${Math.min(y * 0.25, 24)}px)`;
-        // Reveal the compact title bar once the cover has scrolled away.
-        stickyRef.current?.classList.toggle("sheet__sticky--titled", y > 150);
       });
     };
     sheet.addEventListener("scroll", onScroll, { passive: true });
@@ -96,10 +93,7 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
 
   return (
     <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
-      <div className="sheet__sticky" ref={stickyRef}>
-        <div className="sheet__bar">
-          <span className="sheet__bar-title">{selected.title}</span>
-        </div>
+      <div className="sheet__sticky">
         <span className="sheet__grip" />
         <button
           type="button"
