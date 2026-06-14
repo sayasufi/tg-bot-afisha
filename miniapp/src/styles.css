@@ -1296,14 +1296,14 @@ mark.hl {
   color: var(--ink);
 }
 
-/* The leading "о" rendered as the logo mark (acid ring + ink dot) so the
-   wordmark echoes the app icon. Sized in em, so it scales with each context. */
-.brand-o {
-  display: inline-block;
-  width: 0.72em;
-  height: 0.72em;
-  vertical-align: -0.12em;
-  margin-right: 0.01em;
+/* The leading "о" of the wordmark, painted acid with a hairline ink outline so
+   it echoes the round acid logo. It stays the real glyph, so size, baseline and
+   spacing are always perfect; paint-order keeps the acid fill full under the
+   centred stroke. */
+.brand-o-letter {
+  color: var(--acid);
+  -webkit-text-stroke: 0.11em var(--ink);
+  paint-order: stroke;
 }
 
 .cmdpill__body {

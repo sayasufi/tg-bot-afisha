@@ -63,11 +63,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
         <button type="button" className="cmdpill__menu" aria-label="Меню" onClick={(e) => { e.stopPropagation(); onMenu(); }}>
           <span className="cmdpill__burger">☰</span>
           <span className="cmdpill__mark">
-            <svg className="brand-o" viewBox="0 0 100 100" aria-hidden="true">
-              <circle cx="50" cy="50" r="45" fill="#CCFF00" stroke="#0B0B0B" strokeWidth="10" />
-              <circle cx="50" cy="50" r="15" fill="#0B0B0B" />
-            </svg>
-            крест
+            <span className="brand-o-letter">о</span>крест
           </span>
         </button>
         <button type="button" className="cmdpill__body" aria-label="Фильтры" onClick={() => openSheet(false)}>
