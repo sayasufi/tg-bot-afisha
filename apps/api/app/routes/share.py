@@ -5,10 +5,13 @@ from html import escape
 from urllib.parse import urlparse
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 
+from apps.api.app.services.telegram_auth import validate_init_data
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
 from core.db.session import SessionLocal
@@ -129,3 +132,75 @@ def share(event_id: UUID):
         .replace("__BOT__", BOT_URL)
     )
     return HTMLResponse(html, headers={"Cache-Control": "public, max-age=600"})
+
+
+class PrepareRequest(BaseModel):
+    init_data: str
+    event_id: UUID
+
+
+@router.post("/prepare")
+def prepare(payload: PrepareRequest):
+    """Prepare a photo inline-message for the user so the Mini App can share an
+    actual image (not a link) into any chat via Telegram.WebApp.shareMessage."""
+    user = validate_init_data(payload.init_data)
+    uid = user.get("id")
+    settings = get_settings()
+    if not uid or not settings.telegram_bot_token:
+        raise HTTPException(status_code=400, detail="cannot prepare")
+
+    db = SessionLocal()
+    try:
+        row = db.execute(
+            select(Event, EventOccurrence, Venue.name.label("venue"))
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
+            .where(Event.event_id == payload.event_id)
+            .order_by(EventOccurrence.date_start.asc())
+            .limit(1)
+        ).first()
+    finally:
+        db.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="not found")
+
+    event, occ, venue = row
+    image = _safe_image(event.cached_image_url or event.primary_image_url or "")
+    if not image:
+        return {"ok": False}  # no photo to send → caller falls back to a link share
+
+    title = event.canonical_title or "Событие"
+    parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
+    caption = f"<b>{escape(title)}</b>"
+    if parts:
+        caption += "\n" + escape(" · ".join(parts))
+    caption += "\nОкрест — события рядом"
+
+    result = {
+        "type": "photo",
+        "id": str(payload.event_id),
+        "photo_url": image,
+        "thumbnail_url": image,
+        "caption": caption[:1024],
+        "parse_mode": "HTML",
+        "reply_markup": {"inline_keyboard": [[{"text": "Открыть в Окрест", "url": BOT_URL}]]},
+    }
+    try:
+        resp = httpx.post(
+            f"https://api.telegram.org/bot{settings.telegram_bot_token}/savePreparedInlineMessage",
+            json={
+                "user_id": int(uid),
+                "result": result,
+                "allow_user_chats": True,
+                "allow_group_chats": True,
+                "allow_channel_chats": True,
+            },
+            timeout=10,
+        )
+        data = resp.json()
+    except Exception:
+        raise HTTPException(status_code=502, detail="telegram unreachable")
+
+    if not data.get("ok"):
+        return {"ok": False}
+    return {"ok": True, "id": data["result"]["id"]}

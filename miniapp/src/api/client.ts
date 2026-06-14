@@ -3,3 +3,4 @@
 export type { EventItem, EventOccurrence, EventDetail, MapResponse } from "./types";
 export { fetchMapEvents, fetchNearby, fetchEventDetail } from "./events";
 export { saveUserLocation } from "./users";
+export { prepareShare } from "./share";

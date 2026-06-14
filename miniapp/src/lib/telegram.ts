@@ -19,6 +19,9 @@ type TelegramWebApp = {
   };
   openTelegramLink?: (url: string) => void;
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+  initData?: string;
+  isVersionAtLeast?: (version: string) => boolean;
+  shareMessage?: (msgId: string, callback?: (sent: boolean) => void) => void;
 };
 
 const BOT_LINK = "https://t.me/okrestmap_bot";

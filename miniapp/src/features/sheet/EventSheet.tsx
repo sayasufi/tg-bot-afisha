@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
-import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/client";
+import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import { formatWhen } from "../../lib/datetime";
 import { nearLabel, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
-import { haptic, shareEvent } from "../../lib/telegram";
+import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
 import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
@@ -73,10 +73,19 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
   const accession = `ОКР · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
 
-  const onShare = () => {
+  const onShare = async () => {
     haptic("light");
-    // Share our branded OG page (photo + title + "Окрест" card preview) so it
-    // looks good in any chat, not the bare source link.
+    const wa = getWebApp();
+    // Preferred: send a real photo message (Bot API 8.0 shareMessage) — the card
+    // appears as an image in the chat, not a link with a preview.
+    if (wa?.initData && typeof wa.shareMessage === "function" && wa.isVersionAtLeast?.("8.0")) {
+      const prepared = await prepareShare(selected.event_id);
+      if (prepared.ok && prepared.id) {
+        wa.shareMessage(prepared.id);
+        return;
+      }
+    }
+    // Fallback (older clients / no photo): share the branded OG page link.
     const shareUrl = `${window.location.origin}/v1/share/${selected.event_id}`;
     shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: shareUrl });
   };
