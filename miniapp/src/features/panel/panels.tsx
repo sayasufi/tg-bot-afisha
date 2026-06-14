@@ -19,7 +19,13 @@ export function Sidebar({ open, view, onSelect, onClose }: { open: boolean; view
   return (
     <div className={`drawer${open ? " drawer--open" : ""}`} onClick={onClose}>
       <aside className="drawer__panel" onClick={(e) => e.stopPropagation()}>
-        <div className="drawer__brand">окрест</div>
+        <div className="drawer__brand">
+          <svg className="brand-o" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="45" fill="#CCFF00" stroke="#0B0B0B" strokeWidth="10" />
+            <circle cx="50" cy="50" r="15" fill="#0B0B0B" />
+          </svg>
+          крест
+        </div>
         <nav className="drawer__nav">
           {NAV.map((n) => (
             <button

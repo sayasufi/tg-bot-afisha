@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { fetchMapEvents, type EventItem } from "../api/client";
+import { fetchMapEvents, saveUserLocation, type EventItem } from "../api/client";
 import { Filters, type FilterState } from "../features/filters/Filters";
 import { EventsMap } from "../features/map/EventsMap";
 import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel/panels";
@@ -31,6 +31,7 @@ export function App() {
   const [heading, setHeading] = useState<number | null>(null);
   const stopWatch = useRef<(() => void) | null>(null);
   const wantCenter = useRef(false);
+  const savedLoc = useRef(false);
   const orientHandler = useRef<((e: any) => void) | null>(null);
   const lastHeading = useRef<number | null>(null);
 
@@ -104,7 +105,14 @@ export function App() {
   const startWatch = () => {
     if (stopWatch.current) return;
     stopWatch.current = watchLocation(
-      (c) => setUserPos([c.latitude, c.longitude]),
+      (c) => {
+        setUserPos([c.latitude, c.longitude]);
+        // Save the home city from the first fix only (reverse-geocoded server-side).
+        if (!savedLoc.current) {
+          savedLoc.current = true;
+          void saveUserLocation(c.latitude, c.longitude);
+        }
+      },
       {
         onDenied: () => {
           setLocating(false);

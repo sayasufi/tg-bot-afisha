@@ -21,7 +21,7 @@ type TelegramWebApp = {
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
 };
 
-const BOT_LINK = "https://t.me/tg_afisha_bot";
+const BOT_LINK = "https://t.me/okrestmap_bot";
 
 // Share an event via Telegram's native share sheet (falls back to the Web
 // Share API, then a plain share link).

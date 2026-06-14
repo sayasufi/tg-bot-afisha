@@ -1296,6 +1296,16 @@ mark.hl {
   color: var(--ink);
 }
 
+/* The leading "о" rendered as the logo mark (acid ring + ink dot) so the
+   wordmark echoes the app icon. Sized in em, so it scales with each context. */
+.brand-o {
+  display: inline-block;
+  width: 0.72em;
+  height: 0.72em;
+  vertical-align: -0.12em;
+  margin-right: 0.01em;
+}
+
 .cmdpill__body {
   flex: 1;
   min-width: 0;

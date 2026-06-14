@@ -6,6 +6,7 @@ from apps.api.app.routes.events import router as events_router
 from apps.api.app.routes.health import router as health_router
 from apps.api.app.routes.places import router as places_router
 from apps.api.app.routes.telegram import router as telegram_router
+from apps.api.app.routes.users import router as users_router
 from core.config.settings import get_settings
 from core.logging.setup import setup_logging
 
@@ -51,3 +52,4 @@ app.include_router(health_router)
 app.include_router(events_router)
 app.include_router(places_router)
 app.include_router(telegram_router)
+app.include_router(users_router)
