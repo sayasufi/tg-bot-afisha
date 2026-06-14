@@ -7,23 +7,36 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
-from apps.bot.bot.handlers import forwarded, search, start
+from apps.bot.bot.handlers import fallback, forwarded, search, start
 from core.config.settings import get_settings
 from core.logging.setup import setup_logging
 
 COMMANDS = [
-    BotCommand(command="start", description="Открыть карту и выбрать город"),
-    BotCommand(command="search", description="Найти событие по названию"),
-    BotCommand(command="city", description="Выбрать город"),
-    BotCommand(command="help", description="Помощь"),
+    BotCommand(command="start", description="Открыть карту"),
+    BotCommand(command="search", description="Поиск события по названию"),
+    BotCommand(command="help", description="Как это работает"),
 ]
+
+DESCRIPTION = (
+    "Окрест — карта культурных событий вокруг тебя: концерты, выставки, спектакли, "
+    "фестивали, стендап. Открой карту и посмотри, что происходит рядом сегодня."
+)
+SHORT_DESCRIPTION = "Карта культурных событий вокруг тебя. Что рядом сегодня."
 
 
 async def _setup_bot(bot: Bot, webapp_url: str) -> None:
+    """Brand config lives in code so it is consistent across redeploys."""
     await bot.set_my_commands(COMMANDS)
+    try:
+        await bot.set_my_description(DESCRIPTION)
+        await bot.set_my_short_description(SHORT_DESCRIPTION)
+    except Exception:
+        logging.getLogger(__name__).warning("could not set bot description", exc_info=True)
     # Persistent menu button (next to the input) opens the Mini App — needs HTTPS.
     if webapp_url.startswith("https://"):
-        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Карта", web_app=WebAppInfo(url=webapp_url)))
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(text="Открыть карту", web_app=WebAppInfo(url=webapp_url))
+        )
 
 
 async def main() -> None:
@@ -39,6 +52,7 @@ async def main() -> None:
     dp.include_router(start.router)
     dp.include_router(search.router)
     dp.include_router(forwarded.router)
+    dp.include_router(fallback.router)  # catch-all — must stay last
 
     await _setup_bot(bot, settings.telegram_webapp_url)
     await dp.start_polling(bot)

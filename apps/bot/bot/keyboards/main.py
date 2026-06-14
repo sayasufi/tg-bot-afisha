@@ -1,30 +1,41 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    WebAppInfo,
+)
 
-CITIES = ["Москва", "Санкт-Петербург", "Казань", "Екатеринбург"]
-
-
-def webapp_button(webapp_url: str) -> InlineKeyboardButton:
-    # Telegram only accepts web_app buttons over HTTPS; otherwise degrade to a
-    # plain URL button that opens the map in the browser.
-    if webapp_url.startswith("https://"):
-        return InlineKeyboardButton(text="🗺 Открыть карту", web_app=WebAppInfo(url=webapp_url))
-    return InlineKeyboardButton(text="🗺 Открыть карту", url=webapp_url)
+MAP_BUTTON_TEXT = "🗺 Открыть карту"
 
 
-def _city_rows() -> list[list[InlineKeyboardButton]]:
-    return [
-        [InlineKeyboardButton(text=a, callback_data=f"city:{a}"), InlineKeyboardButton(text=b, callback_data=f"city:{b}")]
-        for a, b in (CITIES[0:2], CITIES[2:4])
-    ]
+def _is_https(url: str) -> bool:
+    # Telegram only renders web_app buttons over HTTPS; on local http we degrade.
+    return url.startswith("https://")
 
 
-def main_keyboard(webapp_url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[webapp_button(webapp_url)], *_city_rows()])
-
-
-def city_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=_city_rows())
+def webapp_inline(webapp_url: str) -> InlineKeyboardButton:
+    if _is_https(webapp_url):
+        return InlineKeyboardButton(text=MAP_BUTTON_TEXT, web_app=WebAppInfo(url=webapp_url))
+    return InlineKeyboardButton(text=MAP_BUTTON_TEXT, url=webapp_url)
 
 
 def webapp_keyboard(webapp_url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[webapp_button(webapp_url)]])
+    """A single inline button that opens the map."""
+    return InlineKeyboardMarkup(inline_keyboard=[[webapp_inline(webapp_url)]])
+
+
+def map_reply_keyboard(webapp_url: str) -> ReplyKeyboardMarkup | None:
+    """Persistent bottom keyboard so the map is always one tap away.
+
+    web_app reply buttons need HTTPS; on non-HTTPS dev we return None and the
+    caller falls back to the inline button.
+    """
+    if not _is_https(webapp_url):
+        return None
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=MAP_BUTTON_TEXT, web_app=WebAppInfo(url=webapp_url))]],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Открой карту — события уже рядом",
+    )
