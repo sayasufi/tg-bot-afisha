@@ -464,6 +464,115 @@ mark.hl {
   color: var(--on-acid);
 }
 
+/* Segment row + list/grid view toggle. */
+.seg-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 16px 2px;
+}
+
+.seg-row .seg {
+  flex: 1;
+  margin: 0;
+}
+
+.viewtoggle {
+  width: 44px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease-cut);
+}
+
+.viewtoggle:active {
+  transform: scale(0.94);
+  background: var(--vitrine);
+}
+
+/* Contact-sheet grid — duotone thumbnails, mono captions, accession numbers. */
+.contact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 12px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.ccard {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  animation: rowIn 0.3s var(--ease-cut) both;
+  animation-delay: calc(var(--i) * 0.015s);
+}
+
+.ccard__cover {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--vitrine);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.ccard__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.05);
+  transition: filter 0.25s ease;
+}
+
+.ccard:active .ccard__cover img {
+  filter: none;
+}
+
+.ccard__glyph {
+  color: var(--ink-faint);
+}
+
+.ccard__no {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: var(--ink);
+  color: var(--plinth);
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 2px 5px;
+}
+
+.ccard__title {
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+  padding: 8px 10px 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ccard__meta {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 10px 10px;
+}
+
 @keyframes rowIn {
   from {
     opacity: 0;

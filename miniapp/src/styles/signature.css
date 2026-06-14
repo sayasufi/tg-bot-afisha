@@ -135,22 +135,35 @@
   font-size: 11px;
 }
 
-/* Live cue — a pulsing cinnabar dot replacing ▸ when events run now. */
-.ticker__live {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cinnabar);
-  box-shadow: 0 0 0 0 var(--cinnabar);
-  animation: tickerLive 1.5s ease-out infinite;
+/* Dot-matrix "city pulse" — a travelling sine of dots (variant.com SIGNAL
+   NOISE). Tints to cinnabar when something is live right now. */
+.ticker__wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
 }
 
-@keyframes tickerLive {
-  0% {
-    box-shadow: 0 0 0 0 rgba(230, 51, 18, 0.7);
-  }
+.ticker__wave i {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--acid);
+  animation: tickerWave 1s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.09s);
+}
+
+.ticker--live .ticker__wave i {
+  background: var(--cinnabar);
+}
+
+@keyframes tickerWave {
+  0%,
   100% {
-    box-shadow: 0 0 0 7px rgba(230, 51, 18, 0);
+    transform: translateY(-3px);
+  }
+  50% {
+    transform: translateY(3px);
   }
 }
 

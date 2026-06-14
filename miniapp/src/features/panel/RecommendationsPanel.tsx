@@ -3,9 +3,10 @@ import { useMemo, useState, type CSSProperties } from "react";
 import type { EventItem } from "../../api/client";
 import { eventBucket } from "../../lib/datetime";
 import type { LatLon } from "../../lib/distance";
-import { IconClose } from "../../lib/icons";
+import { IconClose, IconGrid, IconMenu } from "../../lib/icons";
 import { hapticSelection } from "../../lib/telegram";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
+import { ContactCard } from "./ContactCard";
 import { EventRow } from "./EventRow";
 import { PullHint } from "./PullHint";
 
@@ -53,6 +54,7 @@ export function RecommendationsPanel({
 }) {
   const ptr = usePullToRefresh(() => onRefresh?.());
   const [seg, setSeg] = useState<Seg>("all");
+  const [grid, setGrid] = useState(false);
   const maxOrder = SEGMENTS.find((s) => s.key === seg)!.maxOrder;
 
   const sorted = useMemo(
@@ -85,6 +87,12 @@ export function RecommendationsPanel({
     return sorted.filter((it) => set.has(it.category) && eventBucket(it.date_start, it.date_end).order <= maxOrder).slice(0, 6);
   }, [sorted, favCategories, maxOrder]);
 
+  // Flat segment-filtered list for the contact-sheet grid view.
+  const flat = useMemo(
+    () => sorted.filter((it) => eventBucket(it.date_start, it.date_end).order <= maxOrder),
+    [sorted, maxOrder],
+  );
+
   let idx = 0;
   const empty = ordered.length === 0 && forYou.length === 0;
 
@@ -96,26 +104,47 @@ export function RecommendationsPanel({
           <IconClose size={18} />
         </button>
       </header>
-      <div className="seg">
-        {SEGMENTS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            className={`seg__btn${seg === s.key ? " seg__btn--active" : ""}`}
-            onClick={() => {
-              hapticSelection();
-              setSeg(s.key);
-            }}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="seg-row">
+        <div className="seg">
+          {SEGMENTS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              className={`seg__btn${seg === s.key ? " seg__btn--active" : ""}`}
+              onClick={() => {
+                hapticSelection();
+                setSeg(s.key);
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="viewtoggle"
+          aria-label={grid ? "Списком" : "Сеткой"}
+          onClick={() => {
+            hapticSelection();
+            setGrid((g) => !g);
+          }}
+        >
+          {grid ? <IconMenu size={17} /> : <IconGrid size={17} />}
+        </button>
       </div>
       <div className="panelview__scroll" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {empty && (loading ? <SkeletonRows /> : <p className="panelview__empty">Пока нечего показать</p>)}
 
-        {forYou.length > 0 && (
+        {grid && !empty && (
+          <div className="contact">
+            {flat.map((it, i) => (
+              <ContactCard key={it.event_id} item={it} index={i} onSelect={onSelect} />
+            ))}
+          </div>
+        )}
+
+        {!grid && forYou.length > 0 && (
           <section>
             <div className="recs__section recs__section--you">
               Для тебя
@@ -127,17 +156,18 @@ export function RecommendationsPanel({
           </section>
         )}
 
-        {ordered.map((g) => (
-          <section key={g.label}>
-            <div className="recs__section">
-              {g.label}
-              <span className="recs__n">{g.items.length}</span>
-            </div>
-            {g.items.map((it) => (
-              <EventRow key={it.event_id} item={it} index={idx++} query={query} userPos={userPos} onSelect={onSelect} />
-            ))}
-          </section>
-        ))}
+        {!grid &&
+          ordered.map((g) => (
+            <section key={g.label}>
+              <div className="recs__section">
+                {g.label}
+                <span className="recs__n">{g.items.length}</span>
+              </div>
+              {g.items.map((it) => (
+                <EventRow key={it.event_id} item={it} index={idx++} query={query} userPos={userPos} onSelect={onSelect} />
+              ))}
+            </section>
+          ))}
       </div>
     </div>
   );

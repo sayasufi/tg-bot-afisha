@@ -23,7 +23,13 @@ export function ProofFrame() {
 export function Ticker({ text, live = false, onClick }: { text: string; live?: boolean; onClick?: () => void }) {
   return (
     <button type="button" className={`ticker${live ? " ticker--live" : ""}`} aria-label="Все события" onClick={onClick}>
-      <span className="ticker__cue">{live ? <span className="ticker__live" /> : "▸"}</span>
+      <span className="ticker__cue" aria-hidden="true">
+        <span className="ticker__wave">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <i key={i} style={{ ["--i" as string]: i }} />
+          ))}
+        </span>
+      </span>
       <div className="ticker__track">
         <span>{text}</span>
         <span>{text}</span>
