@@ -5,6 +5,7 @@ import { Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
 import { EventsMap } from "../features/map/EventsMap";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
+import { Onboarding } from "../features/onboarding/Onboarding";
 import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
@@ -35,6 +36,13 @@ export function App() {
   const [coachSeen, setCoachSeen] = useState(() => {
     try {
       return localStorage.getItem("okrest_coach") === "1";
+    } catch {
+      return true;
+    }
+  });
+  const [onboarded, setOnboarded] = useState(() => {
+    try {
+      return localStorage.getItem("okrest_onboarded") === "1";
     } catch {
       return true;
     }
@@ -159,6 +167,15 @@ export function App() {
   const onRefresh = useCallback(() => {
     haptic("medium");
     setRefreshNonce((n) => n + 1);
+  }, []);
+
+  const finishOnboarding = useCallback(() => {
+    setOnboarded(true);
+    try {
+      localStorage.setItem("okrest_onboarded", "1");
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   // Deep link: open a specific event passed via startapp (?startapp=<id>) or a
@@ -286,6 +303,8 @@ export function App() {
       />
 
       <ProofFrame />
+
+      {!onboarded && <Onboarding onDone={finishOnboarding} />}
     </div>
   );
 }

@@ -229,6 +229,57 @@ mark.hl {
   color: var(--ink-dim);
 }
 
+/* "Твой вкус" — favourite category mix. */
+.taste {
+  margin-top: 12px;
+}
+
+.taste__bar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.taste__seg {
+  height: 100%;
+  min-width: 3px;
+}
+
+.taste__seg + .taste__seg {
+  border-left: 1px solid var(--plinth);
+}
+
+.taste__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.taste__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+
+.taste__chip b {
+  font-family: var(--mono);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.taste__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
 .favempty {
   display: grid;
   place-items: center;

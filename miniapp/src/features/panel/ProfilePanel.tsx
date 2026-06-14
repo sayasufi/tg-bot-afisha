@@ -1,4 +1,5 @@
 import type { EventItem } from "../../api/client";
+import { categoryMeta } from "../../lib/categories";
 import type { LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
@@ -30,6 +31,14 @@ export function ProfilePanel({
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
   const favs = items.filter((it) => favIds.has(it.event_id));
+
+  // "Твой вкус" — the category mix of your favourites, as a proportion bar.
+  const taste = (() => {
+    const counts = new Map<string, number>();
+    for (const it of favs) counts.set(it.category, (counts.get(it.category) || 0) + 1);
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return ranked.map(([key, n]) => ({ key, n, meta: categoryMeta(key), pct: (n / favs.length) * 100 }));
+  })();
   return (
     <div className="panelview">
       <header className="panelview__head">
@@ -62,6 +71,28 @@ export function ProfilePanel({
             <b>{favIds.size}</b>
           </div>
         </div>
+
+        {taste.length > 0 && (
+          <>
+            <div className="recs__section">Твой вкус</div>
+            <div className="taste">
+              <div className="taste__bar">
+                {taste.map((t) => (
+                  <span key={t.key} className="taste__seg" style={{ width: `${t.pct}%`, background: t.meta.color }} title={t.meta.label} />
+                ))}
+              </div>
+              <div className="taste__chips">
+                {taste.slice(0, 4).map((t) => (
+                  <span key={t.key} className="taste__chip">
+                    <span className="taste__dot" style={{ background: t.meta.color }} />
+                    {t.meta.label}
+                    <b>{t.n}</b>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {favs.length > 0 ? (
           <>
