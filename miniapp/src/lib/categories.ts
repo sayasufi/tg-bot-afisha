@@ -10,9 +10,12 @@ export const CATEGORIES: CategoryMeta[] = [
   { key: "concert", label: "Концерты", glyph: "🎵", color: "#DB6A4E" },
   { key: "theatre", label: "Театр", glyph: "🎭", color: "#C9A24A" },
   { key: "exhibition", label: "Выставки", glyph: "🖼️", color: "#9C7BD0" },
+  { key: "cinema", label: "Кино", glyph: "🎬", color: "#5C6BC0" },
   { key: "standup", label: "Стендап", glyph: "🎤", color: "#E08A3C" },
   { key: "festival", label: "Фестивали", glyph: "🎪", color: "#4FA487" },
   { key: "lecture", label: "Лекции", glyph: "🎓", color: "#5784C2" },
+  { key: "tour", label: "Экскурсии", glyph: "🗺️", color: "#8A9A52" },
+  { key: "party", label: "Вечеринки", glyph: "🥂", color: "#A85B92" },
   { key: "kids", label: "Детям", glyph: "🧸", color: "#5BC0B6" },
   { key: "other", label: "Другое", glyph: "✨", color: "#9A9082" },
 ];

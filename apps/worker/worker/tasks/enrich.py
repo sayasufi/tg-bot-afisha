@@ -103,7 +103,9 @@ def enrich_candidates(self):
                     confidence=confidence,
                 )
             candidate.venue_id = venue.venue_id
-            classify = asyncio.run(llm.classify(candidate.title, candidate.description))
+            # Pass the source's own categories/tags as hints so the LLM maps them
+            # into our taxonomy instead of guessing from the venue name alone.
+            classify = asyncio.run(llm.classify(candidate.title, candidate.description, candidate.tags_json))
             candidate.tags_json = list(set(candidate.tags_json + classify.tags))
             if classify.category and classify.category != "other":
                 candidate.tags_json.append(f"category:{classify.category}")

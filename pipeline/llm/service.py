@@ -11,8 +11,8 @@ class LLMService:
             timeout_seconds=settings.llm_timeout_seconds,
         )
 
-    async def classify(self, title: str, description: str) -> CategoryResult:
+    async def classify(self, title: str, description: str, hints: list[str] | None = None) -> CategoryResult:
         try:
-            return await self.adapter.classify(title, description)
+            return await self.adapter.classify(title, description, hints)
         except Exception:
             return CategoryResult(category="other", subcategory="", tags=[], confidence=0.0, provider="fallback")

@@ -5,9 +5,12 @@ export const CAT_CODE: Record<string, string> = {
   concert: "КОНЦ",
   theatre: "ТЕАТР",
   exhibition: "ВЫСТ",
+  cinema: "КИНО",
   standup: "СТЕНД",
   festival: "ФЕСТ",
   lecture: "ЛЕКЦ",
+  tour: "ЭКСК",
+  party: "ВЕЧЕР",
   kids: "ДЕТИ",
   other: "ПРОЧ",
 };
@@ -21,10 +24,16 @@ export function stripHtml(text: string): string {
     .trim();
 }
 
-export function formatPrice(price: number | null | undefined): string {
-  if (price == null) return "Цена не указана";
-  if (price === 0) return "Бесплатно";
-  return `от ${Math.round(price)} ₽`;
+const rub = (n: number) => `${Math.round(n)} ₽`;
+
+export function formatPrice(min: number | null | undefined, max?: number | null): string {
+  if (min == null && max == null) return "Цена не указана";
+  const lo = min ?? 0;
+  const hi = max ?? null;
+  if (lo === 0 && (hi == null || hi === 0)) return "Бесплатно";
+  if (lo === 0 && hi != null && hi > 0) return `до ${rub(hi)}`;
+  if (hi != null && hi > lo) return `${Math.round(lo)}–${rub(hi)}`;
+  return `от ${rub(lo)}`;
 }
 
 // Stable 4-digit "accession" sequence from the event id.

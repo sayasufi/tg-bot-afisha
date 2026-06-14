@@ -34,7 +34,7 @@ def dedup_candidates(self):
             subcategory = ""
             tags: list[str] = []
             if not any(tag.startswith("category:") for tag in candidate.tags_json):
-                classification = asyncio.run(llm.classify(candidate.title, candidate.description))
+                classification = asyncio.run(llm.classify(candidate.title, candidate.description, candidate.tags_json))
                 category = classification.category
                 subcategory = classification.subcategory
                 tags = classification.tags

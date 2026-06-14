@@ -185,7 +185,7 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
           <div className="wall-label">
             <span className="wall-label__cap">Цена</span>
             <span className="wall-label__val">
-              <span className="swipe">{formatPrice(occ?.price_min ?? selected.price_min)}</span>
+              <span className="swipe">{formatPrice(occ?.price_min ?? selected.price_min, occ?.price_max)}</span>
               {detail?.age_limit ? <span className="badge">{detail.age_limit}</span> : null}
             </span>
           </div>

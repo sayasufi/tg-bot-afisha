@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import dateparser
 
-from pipeline.normalizer.extractors import NormalizedCandidate, parse_age, parse_dates, parse_price
+from pipeline.normalizer.extractors import NormalizedCandidate, parse_age, parse_dates, parse_price, parse_price_field
 
 
 def _safe_ts_to_dt(value: object) -> datetime | None:
@@ -127,9 +127,14 @@ class RuleBasedNormalizer:
 
         venue, address = _extract_venue(payload)
 
+        # Prefer the source's dedicated price field (trusted), then fall back to
+        # currency-anchored numbers in the free text; never scan raw digits
+        # (addresses/phones/years would poison it).
         price_text = str(payload.get("price") or "")
-        price_min, price_max = parse_price(f"{raw_text} {description} {price_text}")
-        if payload.get("is_free") is True and price_min is None and price_max is None:
+        price_min, price_max = parse_price_field(price_text)
+        if price_min is None and price_max is None:
+            price_min, price_max = parse_price(f"{description} {raw_text}")
+        if payload.get("is_free") is True and not price_min and not price_max:
             price_min, price_max = 0.0, 0.0
 
         age_raw = payload.get("age_restriction")
