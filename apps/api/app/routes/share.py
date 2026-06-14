@@ -2,6 +2,7 @@
 the link is shared into any Telegram chat (or anywhere)."""
 from datetime import datetime
 from html import escape
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
@@ -26,6 +27,23 @@ def _when(dt: datetime | None) -> str:
     if not dt:
         return ""
     return f"{dt.day} {_MONTHS[dt.month - 1]}, {dt:%H:%M}"
+
+
+def _safe_image(url: str) -> str:
+    """Image URLs may come from untrusted feeds and land in inline CSS url() and
+    meta attributes — html.escape is the wrong context, so validate strictly:
+    only clean http(s) URLs without quotes/backslash/parens/whitespace."""
+    if not url:
+        return ""
+    try:
+        scheme = urlparse(url).scheme
+    except Exception:
+        return ""
+    if scheme not in ("http", "https"):
+        return ""
+    if any(c in url for c in "'\"\\()<> \n\r\t"):
+        return ""
+    return url
 
 
 _PAGE = """<!doctype html>
@@ -96,11 +114,11 @@ def share(event_id: UUID):
 
     event, occ, venue = row
     title = event.canonical_title or "Событие"
-    image = event.cached_image_url or event.primary_image_url or ""
+    image = _safe_image(event.cached_image_url or event.primary_image_url or "")
     base = get_settings().telegram_webapp_url.rstrip("/")
     parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
     desc = " · ".join(parts) + (" · " if parts else "") + "Окрест — события рядом"
-    cover_style = f"background-image:url('{escape(image)}')" if image else ""
+    cover_style = f"background-image:url('{image}')" if image else ""
 
     html = (
         _PAGE.replace("__TITLE__", escape(title))
