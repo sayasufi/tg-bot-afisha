@@ -133,13 +133,13 @@ def render_card(title: str, meta: str, category: str, photo: bytes | None) -> by
     d.text((W - 48 - d.textlength(tag, font=tagf), by - 18), tag, font=tagf, fill=INK_DIM)
 
     out = io.BytesIO()
-    img.save(out, "PNG")
+    img.save(out, "JPEG", quality=90, optimize=True)
     return out.getvalue()
 
 
 def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: str) -> str:
     """Return the public URL of the cached card, rendering + storing it if needed."""
-    key = f"cards/{event_id}.png"
+    key = f"cards/{event_id}.jpg"
     try:
         if object_exists(key):
             return public_url(key)
@@ -164,9 +164,9 @@ def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: 
             photo = None
 
     try:
-        png = render_card(title, meta, category, photo)
+        data = render_card(title, meta, category, photo)
         ensure_bucket()
-        put_image(key, png, "image/png")
+        put_image(key, data, "image/jpeg")
         return public_url(key)
     except Exception:
         logger.warning("card render failed for %s", event_id, exc_info=True)
