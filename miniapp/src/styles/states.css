@@ -1,3 +1,54 @@
+/* ---------- Map FX: time-of-day tone, radar locate sweep ---------- */
+.map-tone {
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  pointer-events: none;
+  transition: background 8s linear;
+}
+
+.radar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 850;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.radar span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border: 2px solid var(--acid);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--ink);
+  opacity: 0;
+  animation: radar 1.4s var(--ease-cut) forwards;
+}
+
+.radar span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.radar span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes radar {
+  0% {
+    transform: scale(0.25);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(9);
+    opacity: 0;
+  }
+}
+
 /* ---------- Screen states: loading bar, empty, coach, skeletons ---------- */
 .loadbar {
   position: fixed;

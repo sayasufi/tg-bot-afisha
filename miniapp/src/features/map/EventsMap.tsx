@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { AttributionControl, MapContainer, Marker } from "react-leaflet";
+import { AttributionControl, MapContainer, Marker, Polyline } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { EventItem } from "../../api/client";
@@ -59,6 +59,12 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, onSe
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap />
         {cluster}
+        {userPos && selected && selected.lat != null && selected.lon != null && (
+          <Polyline
+            positions={[userPos, [selected.lat, selected.lon]]}
+            pathOptions={{ color: "#0b0b0b", weight: 2, opacity: 0.65, dashArray: "1 8", lineCap: "round" }}
+          />
+        )}
         {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
       </MapContainer>
