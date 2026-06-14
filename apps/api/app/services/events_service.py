@@ -109,6 +109,7 @@ class EventQueryService:
                 "venue": venue_name,
                 "lat": float(lat) if lat is not None else None,
                 "lon": float(lon) if lon is not None else None,
+                "primary_image_url": event.primary_image_url,
             }
             for event, occ, venue_name, lat, lon in rows
         ]

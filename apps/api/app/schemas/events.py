@@ -17,6 +17,7 @@ class EventMapItem(BaseModel):
     venue: str | None
     lat: float | None
     lon: float | None
+    primary_image_url: str | None = None
 
 
 class EventCluster(BaseModel):

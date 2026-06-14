@@ -8,6 +8,7 @@ export type EventItem = {
   venue: string | null;
   lat: number | null;
   lon: number | null;
+  primary_image_url?: string | null;
 };
 
 export type MapResponse = {
