@@ -9,6 +9,7 @@ import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
+import { VenueMini } from "./VenueMini";
 import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
 
 type Props = {
@@ -25,6 +26,7 @@ type Props = {
 export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav, onSelect, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const stickyRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
@@ -48,6 +50,8 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
         raf = 0;
         const y = sheet.scrollTop;
         if (imgRef.current) imgRef.current.style.transform = `translateY(${Math.min(y * 0.25, 24)}px)`;
+        // Reveal the compact title bar once the cover has scrolled away.
+        stickyRef.current?.classList.toggle("sheet__sticky--titled", y > 150);
       });
     };
     sheet.addEventListener("scroll", onScroll, { passive: true });
@@ -92,7 +96,10 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
 
   return (
     <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
-      <div className="sheet__sticky">
+      <div className="sheet__sticky" ref={stickyRef}>
+        <div className="sheet__bar">
+          <span className="sheet__bar-title">{selected.title}</span>
+        </div>
         <span className="sheet__grip" />
         <button
           type="button"
@@ -172,20 +179,17 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
           </div>
         </div>
 
+        {lat != null && lon != null && <VenueMini lat={lat} lon={lon} href={routeUrl} />}
+
         {description && <p className="sheet__desc">{description}</p>}
 
-        <div className="sheet__actions">
-          {sourceUrl && (
+        {sourceUrl && (
+          <div className="sheet__actions">
             <a className="btn btn--primary" href={sourceUrl} target="_blank" rel="noopener noreferrer">
               Подробнее
             </a>
-          )}
-          {routeUrl && (
-            <a className="btn btn--ghost" href={routeUrl} target="_blank" rel="noopener noreferrer">
-              Маршрут
-            </a>
-          )}
-        </div>
+          </div>
+        )}
 
         <SimilarEvents selected={selected} items={items} userPos={userPos} onSelect={onSelect} />
       </div>
