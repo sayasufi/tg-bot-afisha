@@ -254,18 +254,15 @@ mark.hl {
 .panelview__scroll {
   flex: 1;
   overflow-y: auto;
+  /* Hide the scrollbar so the content's right edge lines up with the header /
+     segment row (the visible bar otherwise ate ~9px only on the right). */
   padding: 0 16px calc(env(safe-area-inset-bottom) + 24px);
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink) transparent;
+  scrollbar-width: none;
 }
 
 .panelview__scroll::-webkit-scrollbar {
-  width: 9px;
-}
-
-.panelview__scroll::-webkit-scrollbar-thumb {
-  background-color: var(--ink);
-  border: 3px solid var(--bg);
+  width: 0;
+  height: 0;
 }
 
 .panelview__empty {
@@ -528,7 +525,9 @@ mark.hl {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: grayscale(1) contrast(1.05);
+  /* Muted (lower contrast) by default for catalogue cohesion — full colour on
+     tap. Not greyscale. */
+  filter: contrast(0.88) saturate(0.92);
   transition: filter 0.25s ease;
 }
 
