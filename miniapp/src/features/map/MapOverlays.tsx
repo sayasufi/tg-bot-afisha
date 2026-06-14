@@ -1,26 +1,5 @@
-import { useEffect, useState } from "react";
-
-// Lightweight map-screen states: a top loading bar, an empty-result card, and a
-// one-time coach hint pointing at the locate button.
-
-// Time-of-day tint over the map — a soft wash that warms toward evening and
-// cools/dims at night (no full dark theme, just a living sense of the hour).
-function toneForHour(h: number): { rgb: string; o: number } {
-  if (h < 6) return { rgb: "26, 35, 72", o: 0.16 }; // night — deep blue dusk
-  if (h < 11) return { rgb: "180, 214, 255", o: 0.07 }; // morning — cool light
-  if (h < 17) return { rgb: "255, 255, 255", o: 0 }; // midday — clear
-  if (h < 21) return { rgb: "255, 168, 64", o: 0.12 }; // evening — golden
-  return { rgb: "58, 42, 90", o: 0.14 }; // late — violet dusk
-}
-
-export function MapTone() {
-  const [tone, setTone] = useState(() => toneForHour(new Date().getHours()));
-  useEffect(() => {
-    const id = setInterval(() => setTone(toneForHour(new Date().getHours())), 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, []);
-  return <div className="map-tone" style={{ background: `rgba(${tone.rgb}, ${tone.o})` }} aria-hidden="true" />;
-}
+// Lightweight map-screen states: a top loading bar, an empty-result card, a
+// one-time coach hint, and the radar sweep on locate.
 
 // Radar sweep from the user on each locate tap — echoes the logo / "вокруг тебя".
 // Keyed by the locate nonce in App so it remounts and replays each tap.

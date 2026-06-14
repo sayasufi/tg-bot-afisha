@@ -1,12 +1,4 @@
-/* ---------- Map FX: time-of-day tone, radar locate sweep ---------- */
-.map-tone {
-  position: absolute;
-  inset: 0;
-  z-index: 450;
-  pointer-events: none;
-  transition: background 8s linear;
-}
-
+/* ---------- Map FX: radar locate sweep ---------- */
 .radar {
   position: absolute;
   left: 50%;

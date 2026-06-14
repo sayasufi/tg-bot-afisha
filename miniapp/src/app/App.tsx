@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchEventDetail, fetchMapEvents, type EventItem } from "../api/client";
 import { Filters, type FilterState } from "../features/filters/Filters";
 import { EventsMap } from "../features/map/EventsMap";
-import { Coach, EmptyState, LoadingBar, MapTone, RadarPing } from "../features/map/MapOverlays";
+import { Coach, EmptyState, LoadingBar, RadarPing } from "../features/map/MapOverlays";
 import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
@@ -192,7 +192,6 @@ export function App() {
         onSelect={openEvent}
       />
 
-      <MapTone />
       <RadarPing key={radarNonce} nonce={radarNonce} />
 
       <LoadingBar show={loading && view === "map"} />
