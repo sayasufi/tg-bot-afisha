@@ -62,7 +62,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
       <div className={`cmdpill${open ? " cmdpill--open" : ""}`}>
         <button type="button" className="cmdpill__menu" aria-label="Меню" onClick={(e) => { e.stopPropagation(); onMenu(); }}>
           <span className="cmdpill__burger">☰</span>
-          <span className="cmdpill__mark">афиша</span>
+          <span className="cmdpill__mark">окрест</span>
         </button>
         <button type="button" className="cmdpill__body" aria-label="Фильтры" onClick={() => openSheet(false)}>
           <span className="cmdpill__summary">

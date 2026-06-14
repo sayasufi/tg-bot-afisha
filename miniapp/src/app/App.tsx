@@ -47,7 +47,7 @@ export function App() {
 
   // Gallery ticker line: total + city + the busiest categories.
   const tickerText = useMemo(() => {
-    const segs = [`${total} СОБЫТИЙ`, "МОСКВА", "АФИША"];
+    const segs = [`${total} СОБЫТИЙ`, "МОСКВА", "ОКРЕСТ"];
     const counts: Record<string, number> = {};
     for (const it of items) counts[it.category] = (counts[it.category] || 0) + 1;
     Object.entries(counts)

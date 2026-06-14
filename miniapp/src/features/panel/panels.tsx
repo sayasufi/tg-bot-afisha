@@ -19,7 +19,7 @@ export function Sidebar({ open, view, onSelect, onClose }: { open: boolean; view
   return (
     <div className={`drawer${open ? " drawer--open" : ""}`} onClick={onClose}>
       <aside className="drawer__panel" onClick={(e) => e.stopPropagation()}>
-        <div className="drawer__brand">афиша</div>
+        <div className="drawer__brand">окрест</div>
         <nav className="drawer__nav">
           {NAV.map((n) => (
             <button

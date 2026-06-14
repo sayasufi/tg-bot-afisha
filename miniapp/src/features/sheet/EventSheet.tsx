@@ -98,7 +98,7 @@ export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Pro
   const lat = selected.lat ?? occ?.lat ?? null;
   const lon = selected.lon ?? occ?.lon ?? null;
   const routeUrl = lat != null && lon != null ? `https://yandex.ru/maps/?ll=${lon}%2C${lat}&z=16&pt=${lon},${lat}` : null;
-  const accession = `АФ · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
+  const accession = `ОКР · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
 
   const onShare = () => {
