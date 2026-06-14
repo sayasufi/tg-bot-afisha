@@ -108,7 +108,7 @@ export function useGeolocation() {
   // Centre the map on the user (and start showing the live position + heading).
   // It never replaces the events on the map — all of them stay put.
   const onLocate = useCallback(() => {
-    haptic("medium");
+    haptic("light"); // press feedback; the "found you" buzz fires with the radar
     void startOrientation();
     if (userPos) {
       setLocateNonce((n) => n + 1);

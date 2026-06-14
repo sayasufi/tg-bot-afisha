@@ -1,2 +1,2 @@
 export { ICON_MARKUP, categorySvg, CategoryIcon } from "./category";
-export { IconSearch, IconClose, IconShare, IconMenu, IconHeart, IconCalendar, IconGrid } from "./ui";
+export { IconSearch, IconClose, IconShare, IconMenu, IconHeart, IconCalendar, IconGrid, IconDice, IconFlame } from "./ui";

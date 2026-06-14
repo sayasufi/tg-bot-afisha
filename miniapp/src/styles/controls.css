@@ -276,3 +276,18 @@
   }
 }
 
+/* Stacked map controls above the locate FAB: "удиви меня" + "где кипит". */
+.fab--dice {
+  bottom: calc(env(safe-area-inset-bottom) + 82px);
+  animation-delay: 0.25s;
+}
+
+.fab--heat {
+  bottom: calc(env(safe-area-inset-bottom) + 142px);
+  animation-delay: 0.32s;
+}
+
+.fab--on {
+  background: var(--acid);
+}
+

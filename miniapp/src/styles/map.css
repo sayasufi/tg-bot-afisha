@@ -4,6 +4,13 @@
   inset: 0;
 }
 
+/* While "где кипит" heat is on, fade the pins so the density glow reads. */
+.map-wrap--heat .vpin-wrap,
+.map-wrap--heat .vcluster-wrap {
+  opacity: 0.4;
+  transition: opacity 0.25s ease;
+}
+
 .leaflet-container {
   background: var(--bg);
   font: inherit;
