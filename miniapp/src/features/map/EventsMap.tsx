@@ -4,7 +4,6 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { EventItem } from "../../api/client";
 import { Basemap } from "./basemap";
-import { HeatLayer } from "./HeatLayer";
 import { MapController } from "./MapController";
 import { clusterIcon, pinIcon, userIcon } from "./markers";
 
@@ -14,13 +13,12 @@ type Props = {
   userPos: [number, number] | null;
   heading: number | null;
   locateNonce: number;
-  heatOn: boolean;
   onSelect: (item: EventItem) => void;
 };
 
 const MOSCOW: [number, number] = [55.751244, 37.618423];
 
-export function EventsMap({ items, selected, userPos, heading, locateNonce, heatOn, onSelect }: Props) {
+export function EventsMap({ items, selected, userPos, heading, locateNonce, onSelect }: Props) {
   const selectedId = selected?.event_id ?? null;
 
   // Memoise the clustered markers so frequent re-renders (live heading/userPos
@@ -56,11 +54,10 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, heat
   const userIco = useMemo(() => userIcon(heading), [heading]);
 
   return (
-    <div className={`map-wrap${heatOn ? " map-wrap--heat" : ""}`}>
+    <div className="map-wrap">
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap />
-        {heatOn && <HeatLayer items={items} />}
         {cluster}
         {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />

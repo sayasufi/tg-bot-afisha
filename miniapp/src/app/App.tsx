@@ -8,9 +8,7 @@ import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../featu
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
-import { distanceMeters } from "../lib/distance";
 import { useFavorites } from "../lib/favorites";
-import { IconDice, IconFlame } from "../lib/icons";
 import { getUser, getWebApp, haptic, initTelegram } from "../lib/telegram";
 import { useGeolocation } from "../lib/useGeolocation";
 
@@ -29,7 +27,6 @@ export function App() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [view, setView] = useState<View>("map");
   const [loading, setLoading] = useState(true);
-  const [heatOn, setHeatOn] = useState(false);
   const [radarNonce, setRadarNonce] = useState(0);
   const [coachSeen, setCoachSeen] = useState(() => {
     try {
@@ -140,28 +137,6 @@ export function App() {
     setSelected(i);
   }, []);
 
-  // "Удиви меня" — open a random event that's on today; bias to nearby when we
-  // know where the user is, so the surprise is still within reach.
-  const surprise = useCallback(() => {
-    haptic("medium");
-    const now = new Date();
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    const withCoords = items.filter((it) => it.lat != null && it.lon != null);
-    let pool = withCoords.filter((it) => it.date_start && new Date(it.date_start) <= endOfToday);
-    if (pool.length === 0) pool = withCoords;
-    if (pool.length === 0) return;
-    if (userPos) {
-      pool = [...pool]
-        .sort(
-          (a, b) =>
-            distanceMeters(userPos, [a.lat as number, a.lon as number]) -
-            distanceMeters(userPos, [b.lat as number, b.lon as number]),
-        )
-        .slice(0, Math.max(8, Math.ceil(pool.length * 0.4)));
-    }
-    openEvent(pool[Math.floor(Math.random() * pool.length)]);
-  }, [items, userPos, openEvent]);
-
   return (
     <div className="app">
       <Filters
@@ -188,7 +163,6 @@ export function App() {
         userPos={userPos}
         heading={heading}
         locateNonce={locateNonce}
-        heatOn={heatOn}
         onSelect={openEvent}
       />
 
@@ -204,21 +178,6 @@ export function App() {
       {view === "map" && !selected && !filtersOpen && !drawerOpen && !coachSeen && !userPos && (
         <Coach onDismiss={dismissCoach} />
       )}
-
-      <button
-        type="button"
-        className={`fab fab--heat${heatOn ? " fab--on" : ""}`}
-        onClick={() => {
-          haptic("light");
-          setHeatOn((v) => !v);
-        }}
-        aria-label="Где кипит"
-      >
-        <IconFlame size={22} />
-      </button>
-      <button type="button" className="fab fab--dice" onClick={surprise} aria-label="Удиви меня">
-        <IconDice size={22} />
-      </button>
 
       <button
         type="button"

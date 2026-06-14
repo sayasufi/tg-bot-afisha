@@ -78,41 +78,6 @@ export function IconCalendar({ size = 18, className }: UiProps) {
   );
 }
 
-// "Удиви меня" — a die showing five (reads as random/surprise).
-export function IconDice({ size = 20, className }: UiProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="4" y="4" width="16" height="16" />
-      <g fill="currentColor" stroke="none">
-        <circle cx="9" cy="9" r="1.5" />
-        <circle cx="15" cy="9" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="9" cy="15" r="1.5" />
-        <circle cx="15" cy="15" r="1.5" />
-      </g>
-    </svg>
-  );
-}
-
-// "Где кипит" — a flame for the density heatmap toggle.
-export function IconFlame({ size = 20, className }: UiProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2c3 4 5 6 5 10a5 5 0 0 1-10 0c0-2 1-3.6 2.2-4.9C9 9 9.6 10.6 11 10.6c1.2 0 1.6-1.3 1.1-3C11.6 5.6 11.7 3.7 12 2Z" />
-    </svg>
-  );
-}
-
 // "All categories" mark — a filled 2×2 grid (reads as "everything").
 export function IconGrid({ size = 18, className }: UiProps) {
   return (
