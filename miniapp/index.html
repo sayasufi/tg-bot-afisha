@@ -16,18 +16,18 @@
     <link
       rel="preload"
       as="style"
-      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
     />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
       media="print"
       onload="this.media='all'"
     />
     <noscript>
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
       />
     </noscript>
     <style>
@@ -54,9 +54,31 @@
         font-size: 30px;
         letter-spacing: -0.04em;
         color: #0b0b0b;
+        display: flex;
       }
-      #splash svg {
+      /* Kinetic wordmark: letters rise in sequence (variant.com staggered type). */
+      #splash .splash__word span {
+        display: inline-block;
+        animation: splashletter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation-delay: calc(0.18s + var(--i) * 0.05s);
+      }
+      #splash .emblem {
+        position: relative;
         animation: splashpin 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      /* Soft halo behind the acid disc — emblem with light (variant.com RxH). */
+      #splash .emblem::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 40%;
+        width: 130px;
+        height: 130px;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(circle, #ccff00 0%, transparent 62%);
+        opacity: 0.32;
+        z-index: -1;
+        animation: splashglow 2.2s ease-in-out infinite;
       }
       @keyframes splashpin {
         from {
@@ -64,16 +86,29 @@
           opacity: 0;
         }
       }
+      @keyframes splashletter {
+        from {
+          transform: translateY(14px);
+          opacity: 0;
+        }
+      }
+      @keyframes splashglow {
+        50% {
+          opacity: 0.16;
+        }
+      }
     </style>
   </head>
   <body>
     <div id="splash">
-      <svg width="92" height="92" viewBox="0 0 512 512" aria-hidden="true">
+      <svg class="emblem" width="92" height="92" viewBox="0 0 512 512" aria-hidden="true">
         <path d="M256 56 C168.9 56 98 126.9 98 214 C98 320 256 456 256 456 C256 456 414 320 414 214 C414 126.9 343.1 56 256 56 Z" fill="#0b0b0b" />
         <circle cx="256" cy="202" r="84" fill="#ccff00" />
         <circle cx="256" cy="202" r="32" fill="#0b0b0b" />
       </svg>
-      <div class="splash__word">окрест</div>
+      <div class="splash__word">
+        <span style="--i: 0">о</span><span style="--i: 1">к</span><span style="--i: 2">р</span><span style="--i: 3">е</span><span style="--i: 4">с</span><span style="--i: 5">т</span>
+      </div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

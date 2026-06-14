@@ -49,18 +49,20 @@ export function ProfilePanel({
             <div className="profile__handle">{user?.username ? `@${user.username}` : "Telegram"}</div>
           </div>
         </div>
+        <div className="profile__hero">
+          <div className="profile__stat">
+            <span className="hero-num">{total}</span>
+            <span className="kicker kicker--code">событий рядом</span>
+          </div>
+          <div className="profile__stat">
+            <span className="hero-num">{favIds.size}</span>
+            <span className="kicker kicker--code">в избранном</span>
+          </div>
+        </div>
         <div className="profile__rows">
           <div className="profile__row">
             <span>Город</span>
             <b>{city}</b>
-          </div>
-          <div className="profile__row">
-            <span>Событий на карте</span>
-            <b>{total}</b>
-          </div>
-          <div className="profile__row">
-            <span>Избранное</span>
-            <b>{favIds.size}</b>
           </div>
         </div>
 

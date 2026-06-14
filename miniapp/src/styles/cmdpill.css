@@ -8,7 +8,9 @@
   height: 48px;
   display: flex;
   align-items: stretch;
-  background: var(--plinth);
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
   box-shadow: inset 0 0 0 1px var(--line);
   animation: dropIn 0.4s var(--ease-cut) both;
 }

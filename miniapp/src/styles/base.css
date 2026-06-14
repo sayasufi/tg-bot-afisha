@@ -14,11 +14,13 @@
   --acid-deep: #a8d400;
   --on-acid: #0b0b0b; /* black always sits on acid */
   --cinnabar: #e63312; /* misregistration ghost, used once */
+  --glass: rgba(255, 255, 255, 0.7); /* frosted chrome over the map */
   --radius: 0px;
 
   --display: "Unbounded", system-ui, sans-serif;
   --grotesk: "Familjen Grotesk", system-ui, sans-serif;
   --mono: "Martian Mono", ui-monospace, "SFMono-Regular", monospace;
+  --serif: "Instrument Serif", "Times New Roman", Georgia, serif; /* editorial accent */
 
   --ease-cut: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-snap: cubic-bezier(0.83, 0, 0.17, 1);
@@ -49,6 +51,7 @@ html[data-theme="dark"] {
   --acid-deep: #e0951f;
   --on-acid: #0b0b0b;
   --cinnabar: #ff5a3c; /* nudged brighter so it reads on dark */
+  --glass: rgba(30, 29, 23, 0.66);
   color: var(--ink);
   background: var(--bg);
 }
@@ -183,6 +186,36 @@ body {
   text-transform: uppercase;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
+}
+
+/* Mono "code-comment" system label — `// ОКРЕСТ` (variant.com pattern). */
+.kicker--code::before {
+  content: "// ";
+  color: var(--ink-faint);
+  opacity: 0.7;
+}
+
+/* Editorial serif accent — refined display for special moments, with an
+   optional italic emphasis word. The signature of elite editorial design. */
+.serif {
+  font-family: var(--serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.serif em,
+.serif .em {
+  font-style: italic;
+}
+
+/* Hero number — oversized tabular figure used as a display element. */
+.hero-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--ink);
 }
 
 .rule {

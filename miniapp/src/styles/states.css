@@ -73,6 +73,25 @@
   }
 }
 
+/* Generative dot-field — a slowly drifting point grid behind first-run / empty
+   states (variant.com: ~30% of top designs use a generative point layer). */
+.dotfield {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--ink-faint) 0.6px, transparent 0.7px);
+  background-size: 19px 19px;
+  opacity: 0.14;
+  animation: dotDrift 16s linear infinite;
+}
+
+@keyframes dotDrift {
+  to {
+    background-position: 19px 38px;
+  }
+}
+
 /* ---------- First-load shimmer veil ---------- */
 .mapshimmer {
   position: absolute;
@@ -85,6 +104,8 @@
 }
 
 .mapshimmer__card {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -169,6 +190,8 @@
 }
 
 .emptystate__card {
+  position: relative;
+  z-index: 1;
   pointer-events: auto;
   max-width: 300px;
   background: var(--plinth);
@@ -187,13 +210,17 @@
 }
 
 .emptystate__title {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 22px;
-  letter-spacing: -0.03em;
-  text-transform: lowercase;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
   color: var(--ink);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.emptystate__title em {
+  font-style: italic;
 }
 
 .emptystate__text {

@@ -101,9 +101,11 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
   };
 
   return (
-    <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
-      <div className="sheet__sticky">
-        <span className="sheet__grip" />
+    <>
+      <div className="sheet-veil" aria-hidden="true" />
+      <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
+        <div className="sheet__sticky">
+          <span className="sheet__grip" />
         <button
           type="button"
           className={`sheet__icon sheet__icon--fav${isFav ? " sheet__icon--on" : ""}`}
@@ -209,7 +211,8 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
         )}
 
         <SimilarEvents selected={selected} items={items} userPos={userPos} onSelect={onSelect} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

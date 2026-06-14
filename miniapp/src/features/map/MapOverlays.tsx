@@ -29,6 +29,7 @@ export function MapShimmer({ show }: { show: boolean }) {
   if (!show) return null;
   return (
     <div className="mapshimmer" role="status" aria-label="Загрузка">
+      <span className="dotfield" aria-hidden="true" />
       <div className="mapshimmer__card">
         <span className="mapshimmer__bar" />
         <span className="mapshimmer__cap">Проявляем окрест…</span>
@@ -61,13 +62,16 @@ export function EmptyState({
 
   return (
     <div className="emptystate" role="status">
+      <span className="dotfield" aria-hidden="true" />
       <div className="emptystate__card">
         <svg className="emptystate__mark" viewBox="0 0 48 48" aria-hidden="true">
           <circle cx="21" cy="21" r="13" fill="none" stroke="currentColor" strokeWidth="3" />
           <line x1="31" y1="31" x2="42" y2="42" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
-        <span className="kicker emptystate__kicker">Окрест · Москва</span>
-        <div className="emptystate__title">Тишина в зале</div>
+        <span className="kicker kicker--code emptystate__kicker">Окрест · Москва</span>
+        <div className="emptystate__title serif">
+          Тишина в <em>зале</em>
+        </div>
         <p className="emptystate__text">{text}</p>
         {narrowed && (
           <button type="button" className="btn btn--primary emptystate__btn" onClick={onWiden}>

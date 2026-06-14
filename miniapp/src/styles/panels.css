@@ -287,9 +287,31 @@ mark.hl {
   color: var(--ink-dim);
 }
 
+/* Hero stats — oversized tabular figures (variant.com "94"/"$2,275" pattern). */
+.profile__hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 18px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.profile__stat {
+  background: var(--bg);
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile__stat .hero-num {
+  font-size: clamp(40px, 13vw, 56px);
+}
+
 /* "Твой вкус" — favourite category mix. */
 .taste {
-  margin-top: 12px;
+  margin-top: 22px;
 }
 
 .taste__bar {

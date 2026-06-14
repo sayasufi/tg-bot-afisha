@@ -74,6 +74,35 @@
   z-index: 1000;
 }
 
+/* One warm light from the chosen exhibit — a soft radial glow behind the active
+   plate (variant.com "SYMPHONION" cinematic single-source light, best on ink). */
+.vpin--active::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 15px;
+  width: 72px;
+  height: 72px;
+  margin: -36px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--acid) 0%, transparent 68%);
+  opacity: 0.45;
+  z-index: -1;
+  pointer-events: none;
+  animation: pinGlow 2.4s ease-in-out infinite;
+}
+
+html[data-theme="dark"] .vpin--active::before {
+  opacity: 0.6;
+}
+
+@keyframes pinGlow {
+  50% {
+    opacity: 0.28;
+    transform: scale(1.12);
+  }
+}
+
 .vpin--active .vpin__plate {
   background: var(--acid);
   box-shadow:
