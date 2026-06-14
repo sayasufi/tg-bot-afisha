@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import { formatWhen } from "../../lib/datetime";
-import { nearLabel, type LatLon } from "../../lib/distance";
+import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
@@ -11,18 +11,21 @@ import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
 import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
 
+type MetroPing = { name: string; meters: number };
+
 type Props = {
   selected: EventItem | null;
   query?: string;
   userPos?: LatLon | null;
   items: EventItem[];
+  metro?: MetroPing | null;
   isFav: boolean;
   onToggleFav: () => void;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav, onSelect, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, metro, isFav, onToggleFav, onSelect, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -159,6 +162,15 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
               <span className="wall-label__val">
                 {venue}
                 {address ? <span className="dim"> · {address}</span> : null}
+              </span>
+            </div>
+          )}
+          {metro && metro.meters <= 2500 && (
+            <div className="wall-label">
+              <span className="wall-label__cap">Метро</span>
+              <span className="wall-label__val">
+                <span className="sheet__metro">м. {metro.name}</span>
+                <span className="dim"> · {formatDistance(metro.meters)} · {walkMinutes(metro.meters)} мин</span>
               </span>
             </div>
           )}

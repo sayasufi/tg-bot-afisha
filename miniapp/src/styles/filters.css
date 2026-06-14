@@ -195,6 +195,59 @@
   flex-direction: column;
 }
 
+/* "Рядом" radius slider. */
+.csheet__radius-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.csheet__radius-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.csheet__radius-hint {
+  margin: 0;
+  font-family: var(--grotesk);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-dim);
+}
+
+.radius {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  margin: 6px 0;
+  background: var(--ink);
+  outline: none;
+  cursor: pointer;
+}
+
+.radius::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--acid);
+  box-shadow: 0 0 0 1px var(--ink);
+  cursor: pointer;
+}
+
+.radius::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--acid);
+  cursor: pointer;
+}
+
 /* Price + date inputs share the unified 48px control look. */
 .csheet .panel__field input {
   height: 48px;

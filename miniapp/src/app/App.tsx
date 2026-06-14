@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchEventDetail, fetchMapEvents, type EventItem } from "../api/client";
-import { Filters, type FilterState } from "../features/filters/Filters";
+import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MetroStation } from "../api/client";
+import { EMPTY_FILTERS, Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
 import { EventsMap } from "../features/map/EventsMap";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
@@ -10,20 +10,21 @@ import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
 import { isLiveNow } from "../lib/datetime";
+import { distanceMeters, nearestOf } from "../lib/distance";
 import { useFavorites } from "../lib/favorites";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { useGeolocation } from "../lib/useGeolocation";
 
-const initialFilters: FilterState = { q: "", category: "", dateFrom: "", dateTo: "", priceMax: "" };
 const CITY = "Москва";
 
 export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
   const fav = useFavorites();
-  const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [metro, setMetro] = useState<MetroStation[]>([]);
   const [selected, setSelected] = useState<EventItem | null>(null);
   const [peek, setPeek] = useState<EventItem[] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -45,28 +46,60 @@ export function App() {
     const params = new URLSearchParams();
     params.set("limit", "300");
     if (filters.q) params.set("q", filters.q);
-    if (filters.category) params.append("categories", filters.category);
+    for (const c of filters.categories) params.append("categories", c);
     if (filters.dateFrom) params.set("date_from", new Date(filters.dateFrom).toISOString());
     if (filters.dateTo) params.set("date_to", new Date(filters.dateTo).toISOString());
     if (filters.priceMax) params.set("price_max", filters.priceMax);
     return params;
   }, [filters]);
 
+  // Distance filter ("Рядом") is applied client-side over the fetched set, so
+  // the radius slider responds instantly without a round-trip.
+  const shownItems = useMemo(() => {
+    if (!filters.radiusKm || !userPos) return items;
+    const limit = filters.radiusKm * 1000;
+    return items.filter((i) => i.lat != null && i.lon != null && distanceMeters(userPos, [i.lat, i.lon]) <= limit);
+  }, [items, filters.radiusKm, userPos]);
+  const shownTotal = filters.radiusKm && userPos ? shownItems.length : total;
+
+  // Favourite categories drive the "Для тебя" boost in recommendations.
+  const favCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const it of items) if (fav.ids.has(it.event_id)) counts.set(it.category, (counts.get(it.category) || 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  }, [items, fav.ids]);
+
+  // Nearest metro to the open event — shown in the sheet and pinged on the map.
+  const nearMetro = useMemo(() => {
+    if (!selected || selected.lat == null || selected.lon == null || metro.length === 0) return null;
+    const hit = nearestOf([selected.lat, selected.lon], metro);
+    return hit ? { ...hit.item, meters: hit.meters } : null;
+  }, [selected, metro]);
+
   // Count events happening right now — drives a "live" pulse on the ticker.
-  const liveCount = useMemo(() => items.filter((i) => isLiveNow(i.date_start, i.date_end)).length, [items]);
+  const liveCount = useMemo(() => shownItems.filter((i) => isLiveNow(i.date_start, i.date_end)).length, [shownItems]);
 
   // Gallery ticker line: total + city + live-now + the busiest categories.
   const tickerText = useMemo(() => {
-    const segs = [`${total} СОБЫТИЙ`, "МОСКВА", "ОКРЕСТ"];
+    const segs = [`${shownTotal} СОБЫТИЙ`, "МОСКВА", "ОКРЕСТ"];
     if (liveCount > 0) segs.push(`ИДЁТ СЕЙЧАС ${liveCount}`);
     const counts: Record<string, number> = {};
-    for (const it of items) counts[it.category] = (counts[it.category] || 0) + 1;
+    for (const it of shownItems) counts[it.category] = (counts[it.category] || 0) + 1;
     Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .forEach(([k, n]) => segs.push(`${categoryMeta(k).label.toUpperCase()} ${n}`));
     return segs.join(" ● ");
-  }, [items, total, liveCount]);
+  }, [shownItems, shownTotal, liveCount]);
+
+  // Load metro stations once (for the nearest-station label + map ping).
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetchMetro(ctrl.signal)
+      .then(setMetro)
+      .catch(() => undefined);
+    return () => ctrl.abort();
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -200,8 +233,9 @@ export function App() {
     <div className="app">
       <Filters
         value={filters}
-        total={total}
+        total={shownTotal}
         open={filtersOpen}
+        hasLocation={!!userPos}
         onOpenChange={setFiltersOpen}
         onChange={setFilters}
         onMenu={() => setDrawerOpen(true)}
@@ -218,12 +252,13 @@ export function App() {
       )}
 
       <EventsMap
-        items={items}
+        items={shownItems}
         selected={selected}
         userPos={userPos}
         heading={heading}
         locateNonce={locateNonce}
         theme={theme}
+        metro={nearMetro}
         onSelect={openEvent}
         onCluster={onCluster}
       />
@@ -235,8 +270,13 @@ export function App() {
       <LoadingBar show={loading && view === "map"} />
       <MapShimmer show={loading && items.length === 0 && view === "map" && !selected} />
 
-      {view === "map" && !selected && !filtersOpen && !drawerOpen && !loading && items.length === 0 && (
-        <EmptyState onReset={() => setFilters(initialFilters)} />
+      {view === "map" && !selected && !filtersOpen && !drawerOpen && !loading && shownItems.length === 0 && (
+        <EmptyState
+          filters={filters}
+          radiusActive={!!filters.radiusKm && !!userPos}
+          onReset={() => setFilters(EMPTY_FILTERS)}
+          onWiden={() => setFilters({ ...filters, radiusKm: 0, categories: [], priceMax: "" })}
+        />
       )}
 
       {view === "map" && !selected && !filtersOpen && !drawerOpen && !coachSeen && !userPos && (
@@ -266,7 +306,8 @@ export function App() {
         selected={selected}
         query={filters.q}
         userPos={userPos}
-        items={items}
+        items={shownItems}
+        metro={nearMetro}
         isFav={!!selected && fav.has(selected.event_id)}
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
         onSelect={openEvent}
@@ -274,7 +315,7 @@ export function App() {
       />
 
       {view === "recs" && (
-        <RecommendationsPanel items={items} query={filters.q} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
+        <RecommendationsPanel items={shownItems} query={filters.q} userPos={userPos} favCategories={favCategories} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "favorites" && (
         <FavoritesPanel items={items} favIds={fav.ids} query={filters.q} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />

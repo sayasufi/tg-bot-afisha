@@ -39,3 +39,20 @@ export function nearLabel(from: LatLon | null | undefined, to: LatLon | null | u
   const dist = formatDistance(m);
   return m <= 2500 ? `${dist} · ${walkMinutes(m)} мин пешком` : dist;
 }
+
+// Nearest point (by metres) from a list of {lat, lon, …} to a target.
+export function nearestOf<T extends { lat: number; lon: number }>(
+  to: LatLon,
+  list: T[],
+): { item: T; meters: number } | null {
+  let best: T | null = null;
+  let bestM = Infinity;
+  for (const s of list) {
+    const m = distanceMeters(to, [s.lat, s.lon]);
+    if (m < bestM) {
+      bestM = m;
+      best = s;
+    }
+  }
+  return best ? { item: best, meters: bestM } : null;
+}

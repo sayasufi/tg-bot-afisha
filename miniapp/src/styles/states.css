@@ -209,6 +209,10 @@
   border: 1px solid var(--ink);
 }
 
+.emptystate__btn + .emptystate__btn {
+  margin-top: 8px;
+}
+
 .coach {
   position: fixed;
   right: 84px;

@@ -130,6 +130,65 @@
   transition: opacity 0.2s ease;
 }
 
+/* First-load reveal: markers fade in, staggered by distance from centre (the
+   delay is set inline per marker). Opacity only — Leaflet owns the transform. */
+.leaflet-marker-icon.reveal {
+  animation: markerReveal 0.4s ease both;
+}
+
+@keyframes markerReveal {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- Nearest-metro ping (when an event is open) ---------- */
+.vmetro-wrap {
+  background: none;
+}
+
+.vmetro {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
+
+.vmetro__core {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--plinth);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.vmetro__ring {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--acid);
+  animation: metroPulse 1.6s ease-out infinite;
+}
+
+@keyframes metroPulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
 /* ---------- Clusters — stacked frames ---------- */
 .vcluster-wrap {
   background: none;

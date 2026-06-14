@@ -37,7 +37,28 @@ export function MapShimmer({ show }: { show: boolean }) {
   );
 }
 
-export function EmptyState({ onReset }: { onReset: () => void }) {
+type EmptyFilters = { q: string; categories: string[]; priceMax: string; radiusKm: number };
+
+export function EmptyState({
+  filters,
+  radiusActive,
+  onReset,
+  onWiden,
+}: {
+  filters: EmptyFilters;
+  radiusActive: boolean;
+  onReset: () => void;
+  onWiden: () => void;
+}) {
+  // Offer the smallest useful loosening first: drop the radius/category/price
+  // narrowing (keeping date + search), and only then a full reset.
+  const narrowed = radiusActive || filters.categories.length > 0 || !!filters.priceMax;
+  const text = radiusActive
+    ? "В этом радиусе пока пусто. Увеличь расстояние или сними другие фильтры — рядом наверняка что-то есть."
+    : narrowed
+      ? "Под выбранные категории и цену ничего не нашлось. Можно ослабить фильтры — события рядом вернутся."
+      : "Под эти фильтры экспозиция пуста. Расширь даты или поиск — и события вернутся.";
+
   return (
     <div className="emptystate" role="status">
       <div className="emptystate__card">
@@ -47,9 +68,14 @@ export function EmptyState({ onReset }: { onReset: () => void }) {
         </svg>
         <span className="kicker emptystate__kicker">Окрест · Москва</span>
         <div className="emptystate__title">Тишина в зале</div>
-        <p className="emptystate__text">Под эти фильтры экспозиция пуста. Расширь даты или сними категорию — и события вернутся.</p>
-        <button type="button" className="btn btn--primary emptystate__btn" onClick={onReset}>
-          Сбросить фильтры
+        <p className="emptystate__text">{text}</p>
+        {narrowed && (
+          <button type="button" className="btn btn--primary emptystate__btn" onClick={onWiden}>
+            Расширить поиск
+          </button>
+        )}
+        <button type="button" className={`btn emptystate__btn${narrowed ? " btn--ghost" : " btn--primary"}`} onClick={onReset}>
+          Сбросить всё
         </button>
       </div>
     </div>

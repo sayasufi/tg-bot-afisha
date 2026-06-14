@@ -51,3 +51,19 @@ export async function fetchNearby(
 export async function fetchEventDetail(eventId: string, signal?: AbortSignal): Promise<EventDetail> {
   return getJson<EventDetail>(`/v1/events/${eventId}`, signal);
 }
+
+export type MetroStation = { name: string; lat: number; lon: number };
+
+// Metro stations as a flat list (same GeoJSON the basemap draws), for finding
+// the nearest station to an event.
+export async function fetchMetro(signal?: AbortSignal): Promise<MetroStation[]> {
+  const data = await getJson<any>(`/v1/places?kind=metro&city=Moscow`, signal);
+  const feats: any[] = data?.features ?? [];
+  return feats
+    .map((f) => ({
+      name: f?.properties?.name ?? "",
+      lat: f?.geometry?.coordinates?.[1],
+      lon: f?.geometry?.coordinates?.[0],
+    }))
+    .filter((s) => s.name && typeof s.lat === "number" && typeof s.lon === "number");
+}

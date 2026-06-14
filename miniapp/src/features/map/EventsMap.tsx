@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AttributionControl, MapContainer, Marker } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
@@ -7,7 +7,9 @@ import { isLiveNow } from "../../lib/datetime";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
-import { clusterIcon, pinIcon, userIcon } from "./markers";
+import { clusterIcon, metroIcon, pinIcon, userIcon } from "./markers";
+
+type MetroPing = { name: string; lat: number; lon: number; meters: number };
 
 type Props = {
   items: EventItem[];
@@ -16,6 +18,7 @@ type Props = {
   heading: number | null;
   locateNonce: number;
   theme: ThemeName;
+  metro: MetroPing | null;
   onSelect: (item: EventItem) => void;
   onCluster: (events: EventItem[]) => void;
 };
@@ -24,8 +27,37 @@ const MOSCOW: [number, number] = [55.751244, 37.618423];
 
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 
-export function EventsMap({ items, selected, userPos, heading, locateNonce, theme, onSelect, onCluster }: Props) {
+export function EventsMap({ items, selected, userPos, heading, locateNonce, theme, metro, onSelect, onCluster }: Props) {
   const selectedId = selected?.event_id ?? null;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const revealedRef = useRef(false);
+  const metroIco = useMemo(() => metroIcon(), []);
+
+  // First-load reveal: once the first markers are in the DOM, stagger their
+  // entrance by distance from the map centre — pins ripple outward from the
+  // middle. Runs exactly once so zoom/pan never replays it.
+  useEffect(() => {
+    if (revealedRef.current || items.length === 0) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const t = setTimeout(() => {
+      const icons = el.querySelectorAll<HTMLElement>(".leaflet-marker-icon");
+      if (icons.length === 0) return;
+      revealedRef.current = true;
+      const box = el.getBoundingClientRect();
+      const cx = box.width / 2;
+      const cy = box.height / 2;
+      const maxR = Math.hypot(cx, cy) || 1;
+      icons.forEach((ic) => {
+        const r = ic.getBoundingClientRect();
+        const dx = r.left - box.left + r.width / 2 - cx;
+        const dy = r.top - box.top + r.height / 2 - cy;
+        ic.style.animationDelay = `${Math.min(Math.hypot(dx, dy) / maxR, 1) * 460}ms`;
+        ic.classList.add("reveal");
+      });
+    }, 180);
+    return () => clearTimeout(t);
+  }, [items.length]);
 
   // Index events by exact coordinate so a cluster click can resolve its child
   // markers back to events (many events can share a single venue point).
@@ -109,11 +141,14 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
   const userIco = useMemo(() => userIcon(heading), [heading]);
 
   return (
-    <div className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
+    <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} />
         {cluster}
+        {selected && metro && (
+          <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />
+        )}
         {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
       </MapContainer>

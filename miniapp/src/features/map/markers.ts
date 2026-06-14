@@ -33,6 +33,17 @@ export function pinIcon(item: EventItem, active: boolean, live = false): L.DivIc
   });
 }
 
+// Highlight ring for the metro station nearest the open event — a pulsing
+// target so the eye finds it without competing with the event pin.
+export function metroIcon(): L.DivIcon {
+  return L.divIcon({
+    className: "vmetro-wrap",
+    html: '<div class="vmetro"><span class="vmetro__ring"></span><span class="vmetro__core">M</span></div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
 // Cluster = stacked frames with a mono count; inverts to black past 40.
 export function clusterIcon(cluster: any): L.DivIcon {
   const count = cluster.getChildCount();

@@ -406,6 +406,42 @@ mark.hl {
   color: var(--ink-faint);
 }
 
+/* "Для тебя" heading — taste-boosted, set in ink so it reads as the priority. */
+.recs__section--you {
+  color: var(--ink);
+}
+
+/* Segmented control — Сегодня / Неделя / Всё above the recommendations list. */
+.seg {
+  display: flex;
+  margin: 12px 16px 2px;
+  border: 1px solid var(--line);
+}
+
+.seg__btn {
+  flex: 1;
+  height: 40px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink-dim);
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.seg__btn:last-child {
+  border-right: 0;
+}
+
+.seg__btn--active {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
 @keyframes rowIn {
   from {
     opacity: 0;

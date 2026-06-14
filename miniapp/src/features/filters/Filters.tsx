@@ -8,30 +8,35 @@ import { useCountUp } from "../../lib/useCountUp";
 
 export type FilterState = {
   q: string;
-  category: string;
+  categories: string[];
   dateFrom: string;
   dateTo: string;
   priceMax: string;
+  radiusKm: number; // 0 = no distance limit
 };
+
+export const EMPTY_FILTERS: FilterState = { q: "", categories: [], dateFrom: "", dateTo: "", priceMax: "", radiusKm: 0 };
 
 type Props = {
   value: FilterState;
   total: number;
   open: boolean;
+  hasLocation: boolean;
   onOpenChange: (open: boolean) => void;
   onChange: (value: FilterState) => void;
   onMenu: () => void;
 };
 
-export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: Props) {
+export function Filters({ value, total, open, hasLocation, onOpenChange, onChange, onMenu }: Props) {
   const [showCustomDates, setShowCustomDates] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const advancedCount = [value.q, value.category, value.dateFrom || value.dateTo, value.priceMax].filter(Boolean).length;
+  const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0].filter(Boolean).length;
   const shownTotal = useCountUp(total);
   const activePreset = matchPreset(value.dateFrom, value.dateTo);
   const isCustomDates = (!!value.dateFrom || !!value.dateTo) && activePreset === null;
-  const catLabel = value.category ? categoryMeta(value.category).label : "Все";
+  const catLabel =
+    value.categories.length === 0 ? "Все" : value.categories.length === 1 ? categoryMeta(value.categories[0]).label : `${value.categories.length} катег.`;
   const dateLabel = summarizeDate(value.dateFrom, value.dateTo);
 
   // Reveal native date inputs when a custom range is already set.
@@ -45,9 +50,16 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
     if (focusSearch) setTimeout(() => searchRef.current?.focus(), 320);
   };
   const close = () => onOpenChange(false);
+  // "" = all (clear). Any category toggles its membership in the multi-select.
   const pick = (category: string) => {
     hapticSelection();
-    onChange({ ...value, category });
+    if (category === "") {
+      onChange({ ...value, categories: [] });
+      return;
+    }
+    const has = value.categories.includes(category);
+    const categories = has ? value.categories.filter((c) => c !== category) : [...value.categories, category];
+    onChange({ ...value, categories });
   };
   const tapPreset = (key: PresetKey) => {
     hapticSelection();
@@ -160,7 +172,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
 
           <span className="kicker">Категория</span>
           <div className="csheet__grid">
-            <button type="button" className={`csheet__cat${value.category === "" ? " csheet__cat--active" : ""}`} onClick={() => pick("")}>
+            <button type="button" className={`csheet__cat${value.categories.length === 0 ? " csheet__cat--active" : ""}`} onClick={() => pick("")}>
               <IconGrid className="csheet__cat-all" size={18} />
               Все
             </button>
@@ -168,7 +180,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
               <button
                 key={c.key}
                 type="button"
-                className={`csheet__cat${value.category === c.key ? " csheet__cat--active" : ""}`}
+                className={`csheet__cat${value.categories.includes(c.key) ? " csheet__cat--active" : ""}`}
                 style={{ "--cat": c.color } as CSSProperties}
                 onClick={() => pick(c.key)}
               >
@@ -189,12 +201,30 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
             />
           </label>
 
+          <div className="csheet__radius-head">
+            <span className="kicker">Рядом</span>
+            <span className="csheet__radius-val">{value.radiusKm > 0 ? `до ${String(value.radiusKm).replace(".", ",")} км` : "без ограничений"}</span>
+          </div>
+          {hasLocation ? (
+            <input
+              type="range"
+              className="radius"
+              min={0}
+              max={10}
+              step={0.5}
+              value={value.radiusKm}
+              onChange={(e) => onChange({ ...value, radiusKm: Number(e.target.value) })}
+            />
+          ) : (
+            <p className="csheet__radius-hint">Включи геолокацию на карте, чтобы фильтровать по расстоянию.</p>
+          )}
+
           <div className="csheet__foot">
             <button
               type="button"
               className="csheet__reset"
               onClick={() => {
-                onChange({ q: "", category: "", dateFrom: "", dateTo: "", priceMax: "" });
+                onChange({ ...EMPTY_FILTERS });
                 setShowCustomDates(false);
               }}
             >

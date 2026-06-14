@@ -163,6 +163,18 @@ body {
   box-shadow: inset 0 0 0 1px var(--ink);
 }
 
+/* Metro proximity chip in the event sheet — a transit-token "M". */
+.sheet__metro {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--plinth);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+}
+
 .kicker {
   font-family: var(--mono);
   font-size: 10px;
