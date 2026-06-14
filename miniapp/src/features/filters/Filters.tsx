@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { CATEGORIES, categoryMeta } from "../../lib/categories";
 import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
 import { CategoryIcon, IconClose, IconGrid, IconMenu, IconSearch } from "../../lib/icons";
-import { clearHistory, pushHistory, readHistory } from "../../lib/searchHistory";
 import { haptic, hapticSelection } from "../../lib/telegram";
 import { useCountUp } from "../../lib/useCountUp";
 
@@ -26,7 +25,6 @@ type Props = {
 
 export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: Props) {
   const [showCustomDates, setShowCustomDates] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const advancedCount = [value.q, value.category, value.dateFrom || value.dateTo, value.priceMax].filter(Boolean).length;
@@ -41,30 +39,12 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
     if (isCustomDates) setShowCustomDates(true);
   }, [isCustomDates]);
 
-  // Refresh the recent-search list each time the sheet opens.
-  useEffect(() => {
-    if (open) setHistory(readHistory());
-  }, [open]);
-
-  const commitSearch = () => {
-    if (value.q.trim()) {
-      pushHistory(value.q);
-      setHistory(readHistory());
-    }
-  };
   const openSheet = (focusSearch = false) => {
     haptic("light");
     onOpenChange(true);
     if (focusSearch) setTimeout(() => searchRef.current?.focus(), 320);
   };
-  const close = () => {
-    commitSearch();
-    onOpenChange(false);
-  };
-  const wipeHistory = () => {
-    clearHistory();
-    setHistory([]);
-  };
+  const close = () => onOpenChange(false);
   const pick = (category: string) => {
     hapticSelection();
     onChange({ ...value, category });
@@ -125,10 +105,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
               value={value.q}
               onChange={(e) => onChange({ ...value, q: e.target.value })}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  commitSearch();
-                  searchRef.current?.blur();
-                }
+                if (e.key === "Enter") searchRef.current?.blur();
               }}
             />
             {value.q && (
@@ -137,28 +114,6 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
               </button>
             )}
           </div>
-
-          {!value.q && history.length > 0 && (
-            <div className="histrow">
-              {history.map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  className="chip chip--hist"
-                  onClick={() => {
-                    hapticSelection();
-                    onChange({ ...value, q: h });
-                  }}
-                >
-                  <IconSearch size={12} />
-                  {h}
-                </button>
-              ))}
-              <button type="button" className="histrow__clear" aria-label="Очистить историю" onClick={wipeHistory}>
-                <IconClose size={13} />
-              </button>
-            </div>
-          )}
 
           <span className="kicker">Когда</span>
           <div className="chips csheet__presets">

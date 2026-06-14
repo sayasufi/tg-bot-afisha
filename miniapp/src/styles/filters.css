@@ -148,39 +148,6 @@
   color: var(--on-acid);
 }
 
-/* Recent searches — a wrap of compact history chips. */
-.histrow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: -2px;
-}
-
-.chip--hist {
-  height: 32px;
-  gap: 6px;
-  padding: 0 10px;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  color: var(--ink-dim);
-}
-
-.chip--hist svg {
-  color: var(--ink-faint);
-}
-
-.histrow__clear {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  background: var(--plinth);
-  color: var(--ink-faint);
-  cursor: pointer;
-}
 
 .csheet__grid {
   display: grid;
