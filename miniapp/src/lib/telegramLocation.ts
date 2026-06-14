@@ -66,6 +66,19 @@ function ensureInited(): Promise<LocationManager | null> {
   return initPromise;
 }
 
+// True if location access is already granted, so the app can start watching on
+// open without triggering a permission prompt.
+export async function isLocationGranted(): Promise<boolean> {
+  const lm = await ensureInited();
+  if (lm) return !!lm.isAccessGranted;
+  try {
+    const status = await (navigator as any).permissions?.query({ name: "geolocation" });
+    return status?.state === "granted";
+  } catch {
+    return false;
+  }
+}
+
 // Call from a user gesture when access was previously denied. Returns true if it
 // could open Telegram's native settings screen.
 export function openLocationSettings(): boolean {
@@ -83,7 +96,7 @@ export function watchLocation(
   onUpdate: (c: Coords) => void,
   opts: { intervalMs?: number; onDenied?: () => void } = {},
 ): () => void {
-  const interval = opts.intervalMs ?? 10000;
+  const interval = opts.intervalMs ?? 5000;
   let stopped = false;
   let timer: ReturnType<typeof setInterval> | null = null;
   let browserId: number | null = null;
@@ -106,7 +119,7 @@ export function watchLocation(
       browserId = navigator.geolocation.watchPosition(
         (p) => onUpdate({ latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy }),
         () => opts.onDenied?.(),
-        { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 },
+        { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
       );
     }
   });

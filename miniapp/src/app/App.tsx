@@ -9,7 +9,7 @@ import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
 import { useFavorites } from "../lib/favorites";
 import { getUser, getWebApp, haptic, initTelegram } from "../lib/telegram";
-import { openLocationSettings, watchLocation } from "../lib/telegramLocation";
+import { isLocationGranted, openLocationSettings, watchLocation } from "../lib/telegramLocation";
 
 const initialFilters: FilterState = { q: "", category: "", dateFrom: "", dateTo: "", priceMax: "" };
 const CITY = "Москва";
@@ -102,7 +102,7 @@ export function App() {
   // Live position watch. Prefers Telegram's LocationManager — the grant is
   // stored per-bot, so the user is asked ONCE and never re-prompted on later
   // opens (navigator.geolocation re-prompts every open inside the WebView).
-  const startWatch = () => {
+  const startWatch = useCallback(() => {
     if (stopWatch.current) return;
     stopWatch.current = watchLocation(
       (c) => {
@@ -120,7 +120,19 @@ export function App() {
         },
       },
     );
-  };
+  }, []);
+
+  // Start tracking automatically on open when access was already granted (the
+  // Telegram grant is stored per-bot), so the live position shows without a tap.
+  useEffect(() => {
+    let cancelled = false;
+    isLocationGranted().then((ok) => {
+      if (ok && !cancelled) startWatch();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [startWatch]);
 
   // Compass heading (where the phone points). iOS needs an explicit permission
   // grant triggered from a user gesture, so we kick this off on the locate tap.
