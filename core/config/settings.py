@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     default_city: str = Field(default="Moscow", alias="DEFAULT_CITY")
     default_country: str = Field(default="RU", alias="DEFAULT_COUNTRY")
 
+    # MinIO (S3-compatible) object storage for cached event images.
+    minio_endpoint: str = Field(default="http://minio:9000", alias="MINIO_ENDPOINT")
+    minio_access_key: str = Field(default="okrest", alias="MINIO_ROOT_USER")
+    minio_secret_key: str = Field(default="okrest-minio-secret", alias="MINIO_ROOT_PASSWORD")
+    minio_bucket: str = Field(default="event-media", alias="MINIO_BUCKET")
+    # Absolute base the client uses to load images (e.g. https://host/v1/media).
+    # Falls back to the same-origin API path when empty.
+    media_public_base: str = Field(default="", alias="MEDIA_PUBLIC_BASE")
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

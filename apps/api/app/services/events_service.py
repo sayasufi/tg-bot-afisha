@@ -109,7 +109,7 @@ class EventQueryService:
                 "venue": venue_name,
                 "lat": float(lat) if lat is not None else None,
                 "lon": float(lon) if lon is not None else None,
-                "primary_image_url": event.primary_image_url,
+                "primary_image_url": event.cached_image_url or event.primary_image_url,
             }
             for event, occ, venue_name, lat, lon in rows
         ]
@@ -157,7 +157,7 @@ class EventQueryService:
             "category": event.category,
             "subcategory": event.subcategory,
             "age_limit": event.age_limit,
-            "primary_image_url": event.primary_image_url,
+            "primary_image_url": event.cached_image_url or event.primary_image_url,
             "occurrences": occurrences,
         }
 

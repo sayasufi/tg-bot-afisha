@@ -30,6 +30,8 @@ class Event(Base, TimestampMixin):
     popularity_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     rating_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     primary_image_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # URL of our own cached/resized copy (MinIO via /v1/media); null until cached.
+    cached_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
 
     occurrences = relationship("EventOccurrence", back_populates="event")

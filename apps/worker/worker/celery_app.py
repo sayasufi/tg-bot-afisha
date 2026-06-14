@@ -14,6 +14,7 @@ celery_app = Celery(
         "apps.worker.worker.tasks.enrich",
         "apps.worker.worker.tasks.dedup",
         "apps.worker.worker.tasks.seed",
+        "apps.worker.worker.tasks.media",
     ],
 )
 
@@ -23,6 +24,7 @@ celery_app.conf.task_routes = {
     "apps.worker.worker.tasks.enrich.*": {"queue": "enrich"},
     "apps.worker.worker.tasks.dedup.*": {"queue": "dedup"},
     "apps.worker.worker.tasks.seed.*": {"queue": "enrich"},
+    "apps.worker.worker.tasks.media.*": {"queue": "enrich"},
 }
 
 celery_app.conf.beat_schedule = {
@@ -53,6 +55,10 @@ celery_app.conf.beat_schedule = {
     "backfill-venues-osm": {
         "task": "apps.worker.worker.tasks.enrich.backfill_venues_osm",
         "schedule": 86400.0,
+    },
+    "cache-event-images": {
+        "task": "apps.worker.worker.tasks.media.cache_event_images",
+        "schedule": 120.0,
     },
 }
 
