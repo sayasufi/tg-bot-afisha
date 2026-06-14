@@ -4,6 +4,7 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { EventItem } from "../../api/client";
 import { isLiveNow } from "../../lib/datetime";
+import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
 import { clusterIcon, pinIcon, userIcon } from "./markers";
@@ -14,6 +15,7 @@ type Props = {
   userPos: [number, number] | null;
   heading: number | null;
   locateNonce: number;
+  theme: ThemeName;
   onSelect: (item: EventItem) => void;
   onCluster: (events: EventItem[]) => void;
 };
@@ -22,7 +24,7 @@ const MOSCOW: [number, number] = [55.751244, 37.618423];
 
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 
-export function EventsMap({ items, selected, userPos, heading, locateNonce, onSelect, onCluster }: Props) {
+export function EventsMap({ items, selected, userPos, heading, locateNonce, theme, onSelect, onCluster }: Props) {
   const selectedId = selected?.event_id ?? null;
 
   // Index events by exact coordinate so a cluster click can resolve its child
@@ -110,7 +112,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, onSe
     <div className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
-        <Basemap />
+        <Basemap theme={theme} />
         {cluster}
         {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />

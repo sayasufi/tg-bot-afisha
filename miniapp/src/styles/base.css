@@ -32,6 +32,47 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---------- After-dark — the white-cube at night ----------
+   The same gallery, lights down: warm-ink walls, off-white "vinyl" text, light
+   hairline frames, acid still the only saturated mark. Every surface is a token
+   override, so the whole app inverts without touching a single component. */
+html[data-theme="dark"] {
+  --bg: #14130e; /* warm-ink wall */
+  --plinth: #1e1d17; /* raised objects: cards, sheet, pins */
+  --vitrine: #272620; /* recessed wells: inputs, inactive chips */
+  --ink: #f1ecde; /* warm off-white — the new vinyl */
+  --ink-dim: #9a958a;
+  --ink-faint: #6c685e;
+  --line: #3a3830; /* visible warm-grey hairline frames */
+  --line-soft: rgba(241, 236, 222, 0.13);
+  --acid: #ccff00; /* unchanged — pops on ink */
+  --acid-deep: #aad400;
+  --on-acid: #0b0b0b;
+  --cinnabar: #ff5a3c; /* nudged brighter so it reads on dark */
+  color: var(--ink);
+  background: var(--bg);
+}
+
+/* On dark, the chrome grain should lighten the surface, not darken it. */
+html[data-theme="dark"] .csheet__panel::before,
+html[data-theme="dark"] .sheet::before,
+html[data-theme="dark"] .drawer__panel::before,
+html[data-theme="dark"] .panelview::before {
+  mix-blend-mode: screen;
+  opacity: 0.04;
+}
+
+/* The photocopy/halftone veil multiplies on plaster; on ink, screen it so the
+   grain lightens instead of vanishing into the dark. */
+html[data-theme="dark"] .photocopy {
+  mix-blend-mode: screen;
+  opacity: 0.05;
+}
+
+html[data-theme="dark"] .vmini__credit {
+  background: rgba(20, 19, 14, 0.7);
+}
+
 * {
   box-sizing: border-box;
 }

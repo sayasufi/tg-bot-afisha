@@ -5,16 +5,83 @@ import { useMap } from "react-leaflet";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@maplibre/maplibre-gl-leaflet";
 
+import type { ThemeName } from "../../lib/telegram";
+
 // maplibre-gl-leaflet 0.1.x looks up maplibre-gl on the global scope.
 (window as any).maplibregl = maplibregl;
 
-const OFM_FIORD = "https://tiles.openfreemap.org/styles/positron";
+const STYLE: Record<ThemeName, string> = {
+  light: "https://tiles.openfreemap.org/styles/positron",
+  dark: "https://tiles.openfreemap.org/styles/dark",
+};
+
+// Per-theme palette: the white-cube by day, warm-ink gallery after dark. Every
+// repaint below reads from this object so one switch re-skins the whole map.
+type MapPalette = {
+  bg: string;
+  water: string;
+  waterway: string;
+  park: string;
+  parkOutline: string;
+  wood: string;
+  road: string;
+  building: string;
+  buildingOutline: string;
+  label: string;
+  halo: string;
+  grass: string;
+  grassOutline: string;
+  parksLabel: string;
+  housenum: string;
+  poi: string;
+};
+
+const PALETTE: Record<ThemeName, MapPalette> = {
+  light: {
+    bg: "#f4f4ef",
+    water: "#cddfeb",
+    waterway: "#a3c3db",
+    park: "#dce9cf",
+    parkOutline: "#bfd4a6",
+    wood: "#d0e1bd",
+    road: "#ffffff",
+    building: "#eaeae2",
+    buildingOutline: "#d8d8ce",
+    label: "#0b0b0b",
+    halo: "#f4f4ef",
+    grass: "#dcebcc",
+    grassOutline: "#b6cf99",
+    parksLabel: "#6e6e66",
+    housenum: "#a8a89e",
+    poi: "#a8a89e",
+  },
+  dark: {
+    bg: "#14130e",
+    water: "#0e1418",
+    waterway: "#243038",
+    park: "#172019",
+    parkOutline: "#26331f",
+    wood: "#19231a",
+    road: "#2c2b25",
+    building: "#1d1c16",
+    buildingOutline: "#2a2820",
+    label: "#e9e4d6",
+    halo: "#14130e",
+    grass: "#18231a",
+    grassOutline: "#2c3a2a",
+    parksLabel: "#8a8576",
+    housenum: "#55534a",
+    poi: "#6a675c",
+  },
+};
+
 // Only the legally-required data credit (OpenStreetMap / ODbL). The non-required
 // "Leaflet" prefix, "OpenFreeMap" and "OpenMapTiles" credits are dropped.
-function VectorBasemap() {
+function VectorBasemap({ theme }: { theme: ThemeName }) {
   const map = useMap();
   useEffect(() => {
-    const gl = (L as any).maplibreGL({ style: OFM_FIORD}).addTo(map);
+    const pal = PALETTE[theme];
+    const gl = (L as any).maplibreGL({ style: STYLE[theme] }).addTo(map);
     const mlMap = gl.getMaplibreMap();
     // Cyrillic-only labels (drop the Latin transliteration the OMT style adds).
     const cyrillic = ["coalesce", ["get", "name:ru"], ["get", "name:nonlatin"], ["get", "name"]];
@@ -29,22 +96,22 @@ function VectorBasemap() {
       };
       // White-cube plaster: pale land, near-black ink labels — with a touch of
       // colour so parks read green and water reads blue (kept muted/pastel).
-      repaint("background", "background-color", "#f4f4ef");
-      repaint("water", "fill-color", "#cddfeb"); // soft pale blue
-      repaint("waterway", "line-color", "#a3c3db"); // rivers read blue
-      repaint("park", "fill-color", "#dce9cf"); // parks & gardens → soft sage
-      repaint("park_outline", "line-color", "#bfd4a6");
-      repaint("landcover_wood", "fill-color", "#d0e1bd"); // forests a touch deeper green
+      repaint("background", "background-color", pal.bg);
+      repaint("water", "fill-color", pal.water);
+      repaint("waterway", "line-color", pal.waterway);
+      repaint("park", "fill-color", pal.park);
+      repaint("park_outline", "line-color", pal.parkOutline);
+      repaint("landcover_wood", "fill-color", pal.wood);
       const layers = mlMap.getStyle()?.layers || [];
       const font = layers.map((l: any) => l.layout && l.layout["text-font"]).find(Boolean) || ["Noto Sans Regular"];
-      // Roads → white channels on plaster, with a pale grey casing.
+      // Roads → bright channels by day, muted grey after dark.
       for (const layer of layers) {
         if (layer.type === "line" && (layer["source-layer"] === "transportation" || /road|highway|street|bridge|tunnel/i.test(layer.id))) {
-          repaint(layer.id, "line-color", "#ffffff");
+          repaint(layer.id, "line-color", pal.road);
         }
         if (layer.type === "fill" && (layer["source-layer"] === "building" || /building/i.test(layer.id))) {
-          repaint(layer.id, "fill-color", "#eaeae2");
-          repaint(layer.id, "fill-outline-color", "#d8d8ce");
+          repaint(layer.id, "fill-color", pal.building);
+          repaint(layer.id, "fill-outline-color", pal.buildingOutline);
         }
       }
       for (const layer of layers) {
@@ -52,9 +119,9 @@ function VectorBasemap() {
         if (layer.id === "ofm-housenumbers" || layer["source-layer"] === "housenumber") continue;
         try {
           mlMap.setLayoutProperty(layer.id, "text-field", cyrillic);
-          // Near-black "vinyl" labels with a paper halo — gallery wall-text on plaster.
-          mlMap.setPaintProperty(layer.id, "text-color", "#0b0b0b");
-          mlMap.setPaintProperty(layer.id, "text-halo-color", "#f4f4ef");
+          // "Vinyl" labels with a paper halo — gallery wall-text, inverted after dark.
+          mlMap.setPaintProperty(layer.id, "text-color", pal.label);
+          mlMap.setPaintProperty(layer.id, "text-halo-color", pal.halo);
           mlMap.setPaintProperty(layer.id, "text-halo-width", 1.4);
         } catch {
           /* skip layers that reject the override */
@@ -80,7 +147,7 @@ function VectorBasemap() {
           source: "openmaptiles",
           "source-layer": "landcover",
           filter: ["in", ["get", "class"], ["literal", ["grass", "wetland", "scrub"]]],
-          paint: { "fill-color": "#dcebcc", "fill-opacity": 0.7 },
+          paint: { "fill-color": pal.grass, "fill-opacity": 0.7 },
         },
         beforeId,
       );
@@ -92,7 +159,7 @@ function VectorBasemap() {
           source: "openmaptiles",
           "source-layer": "park",
           minzoom: 11,
-          paint: { "line-color": "#b6cf99", "line-width": 0.8, "line-opacity": 0.7 },
+          paint: { "line-color": pal.grassOutline, "line-width": 0.8, "line-opacity": 0.7 },
         },
         beforeId,
       );
@@ -123,7 +190,7 @@ function VectorBasemap() {
           "text-padding": 4,
           "symbol-sort-key": ["coalesce", ["get", "minzoom"], 13],
         },
-        paint: { "text-color": "#6e6e66", "text-halo-color": "#f4f4ef", "text-halo-width": 1.6 },
+        paint: { "text-color": pal.parksLabel, "text-halo-color": pal.halo, "text-halo-width": 1.6 },
       });
 
       addLayer({
@@ -133,7 +200,7 @@ function VectorBasemap() {
         "source-layer": "housenumber",
         minzoom: 16,
         layout: { "text-field": ["get", "housenumber"], "text-font": font, "text-size": 10, "text-padding": 2 },
-        paint: { "text-color": "#a8a89e", "text-halo-color": "#f4f4ef", "text-halo-width": 1 },
+        paint: { "text-color": pal.housenum, "text-halo-color": pal.halo, "text-halo-width": 1 },
       });
 
       // Named POIs (parks, shops, venues…) — deliberately subordinate to streets:
@@ -153,7 +220,7 @@ function VectorBasemap() {
           "text-padding": 3,
           "text-max-width": 7,
         },
-        paint: { "text-color": "#a8a89e", "text-halo-color": "#f4f4ef", "text-halo-width": 1.1 },
+        paint: { "text-color": pal.poi, "text-halo-color": pal.halo, "text-halo-width": 1.1 },
       });
 
       // Metro stations coloured by their official line (ветка) colour — data baked
@@ -173,7 +240,7 @@ function VectorBasemap() {
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 14, 5, 16, 7],
           "circle-color": ["get", "color"],
-          "circle-stroke-color": "#f4f4ef",
+          "circle-stroke-color": pal.halo,
           "circle-stroke-width": 1.4,
         },
       });
@@ -190,7 +257,7 @@ function VectorBasemap() {
           "text-offset": [0, 0.85],
           "text-optional": true,
         },
-        paint: { "text-color": ["get", "color"], "text-halo-color": "#f4f4ef", "text-halo-width": 1.9 },
+        paint: { "text-color": ["get", "color"], "text-halo-color": pal.halo, "text-halo-width": 1.9 },
       });
 
       // Tap a metro station to spotlight its whole line (dim the rest). Purely
@@ -263,10 +330,12 @@ function VectorBasemap() {
     return () => {
       map.removeLayer(gl);
     };
-  }, [map]);
+    // Recreate the GL layer when the theme flips — the simplest correct way to
+    // re-skin every base layer (tile style + all custom repaints) at once.
+  }, [map, theme]);
   return null;
 }
 
-export function Basemap() {
-  return <VectorBasemap />;
+export function Basemap({ theme }: { theme: ThemeName }) {
+  return <VectorBasemap theme={theme} />;
 }

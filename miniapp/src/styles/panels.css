@@ -124,13 +124,71 @@
   box-shadow: 0 0 0 1px var(--ink);
 }
 
-.drawer__foot {
+/* Theme toggle — day/after-dark, pinned above the drawer foot. */
+.themetoggle {
   margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 52px;
+  padding: 0 6px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  color: var(--ink-dim);
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.themetoggle__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.themetoggle__glyph {
+  width: 22px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--ink-faint);
+}
+
+.themetoggle__switch {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  flex: 0 0 auto;
+  background: var(--vitrine);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.themetoggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--ink);
+  transition: transform 0.2s var(--ease-cut);
+}
+
+.themetoggle--dark .themetoggle__knob {
+  transform: translateX(20px);
+  background: var(--acid);
+}
+
+.drawer__foot {
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-faint);
+  padding-top: 14px;
 }
 
 /* ---------- Full-screen panels (recommendations / profile) ---------- */

@@ -12,14 +12,14 @@ import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
 import { isLiveNow } from "../lib/datetime";
 import { useFavorites } from "../lib/favorites";
-import { getUser, getWebApp, haptic, hapticNotify, initTelegram } from "../lib/telegram";
+import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { useGeolocation } from "../lib/useGeolocation";
 
 const initialFilters: FilterState = { q: "", category: "", dateFrom: "", dateTo: "", priceMax: "" };
 const CITY = "Москва";
 
 export function App() {
-  useState(() => initTelegram()); // dark-only theme bootstrap (runs once)
+  const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
   const fav = useFavorites();
   const [filters, setFilters] = useState<FilterState>(initialFilters);
@@ -169,6 +169,15 @@ export function App() {
     setRefreshNonce((n) => n + 1);
   }, []);
 
+  const toggleTheme = useCallback(() => {
+    haptic("light");
+    setTheme((t) => {
+      const next: ThemeName = t === "dark" ? "light" : "dark";
+      applyTheme(next);
+      return next;
+    });
+  }, []);
+
   const finishOnboarding = useCallback(() => {
     setOnboarded(true);
     try {
@@ -231,6 +240,7 @@ export function App() {
         userPos={userPos}
         heading={heading}
         locateNonce={locateNonce}
+        theme={theme}
         onSelect={openEvent}
         onCluster={onCluster}
       />
@@ -294,6 +304,8 @@ export function App() {
         open={drawerOpen}
         view={view}
         favCount={fav.ids.size}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onClose={() => setDrawerOpen(false)}
         onSelect={(v) => {
           haptic("light");

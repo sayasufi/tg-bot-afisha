@@ -1,4 +1,4 @@
-type ThemeName = "dark" | "light";
+export type ThemeName = "dark" | "light";
 
 type TelegramWebApp = {
   ready: () => void;
@@ -55,22 +55,47 @@ export function getUser(): TgUser | null {
   return (getWebApp() as any)?.initDataUnsafe?.user ?? null;
 }
 
-// Canvas color the page paints behind everything (matches CSS --bg).
-const CANVAS = "#F4F4EF";
+// Canvas colour the page paints behind everything (matches CSS --bg per theme).
+const CANVAS: Record<ThemeName, string> = { light: "#F4F4EF", dark: "#14130E" };
+const THEME_KEY = "okrest_theme";
 
-// VITRINE — white-cube gallery, light-only theme.
-export function initTelegram(): ThemeName {
-  const tg = getWebApp();
-  document.documentElement.dataset.theme = "light";
+export function getSavedTheme(): ThemeName {
   try {
-    tg?.ready();
-    tg?.expand();
-    tg?.setHeaderColor?.(CANVAS);
-    tg?.setBackgroundColor?.(CANVAS);
+    return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+// Apply a theme: set the document flag, match the Telegram chrome, and persist.
+export function applyTheme(theme: ThemeName): void {
+  document.documentElement.dataset.theme = theme;
+  const tg = getWebApp();
+  try {
+    tg?.setHeaderColor?.(CANVAS[theme]);
+    tg?.setBackgroundColor?.(CANVAS[theme]);
   } catch {
     /* not running inside Telegram — ignore */
   }
-  return "light";
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    /* ignore */
+  }
+}
+
+// VITRINE bootstrap — applies the saved theme (defaults to the white-cube).
+export function initTelegram(): ThemeName {
+  const tg = getWebApp();
+  const theme = getSavedTheme();
+  try {
+    tg?.ready();
+    tg?.expand();
+  } catch {
+    /* not running inside Telegram — ignore */
+  }
+  applyTheme(theme);
+  return theme;
 }
 
 export function haptic(style: "light" | "medium" | "heavy" = "light"): void {

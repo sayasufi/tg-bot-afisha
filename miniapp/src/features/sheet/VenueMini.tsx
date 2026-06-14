@@ -12,6 +12,10 @@ const pin = L.divIcon({
 });
 
 export function VenueMini({ lat, lon, href }: { lat: number; lon: number; href: string | null }) {
+  const dark = document.documentElement.dataset.theme === "dark";
+  const tiles = dark
+    ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
   const open = () => {
     if (href) window.open(href, "_blank", "noopener,noreferrer");
   };
@@ -30,11 +34,7 @@ export function VenueMini({ lat, lon, href }: { lat: number; lon: number; href: 
         boxZoom={false}
         style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
-          maxZoom={19}
-        />
+        <TileLayer url={tiles} subdomains="abcd" maxZoom={19} />
         <Marker position={[lat, lon]} icon={pin} interactive={false} />
       </MapContainer>
       <span className="vmini__credit">© OSM · CARTO</span>

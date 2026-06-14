@@ -1,3 +1,4 @@
+import type { ThemeName } from "../../lib/telegram";
 import type { View } from "./view";
 
 const NAV: { key: View; label: string; glyph: string }[] = [
@@ -11,15 +12,20 @@ export function Sidebar({
   open,
   view,
   favCount = 0,
+  theme = "light",
+  onToggleTheme,
   onSelect,
   onClose,
 }: {
   open: boolean;
   view: View;
   favCount?: number;
+  theme?: ThemeName;
+  onToggleTheme?: () => void;
   onSelect: (v: View) => void;
   onClose: () => void;
 }) {
+  const dark = theme === "dark";
   return (
     <div className={`drawer${open ? " drawer--open" : ""}`} onClick={onClose}>
       <aside className="drawer__panel" onClick={(e) => e.stopPropagation()}>
@@ -40,6 +46,20 @@ export function Sidebar({
             </button>
           ))}
         </nav>
+        <button
+          type="button"
+          className={`themetoggle${dark ? " themetoggle--dark" : ""}`}
+          onClick={onToggleTheme}
+          aria-pressed={dark}
+        >
+          <span className="themetoggle__label">
+            <span className="themetoggle__glyph">{dark ? "☾" : "☀"}</span>
+            {dark ? "После заката" : "Дневной свет"}
+          </span>
+          <span className="themetoggle__switch">
+            <span className="themetoggle__knob" />
+          </span>
+        </button>
         <div className="drawer__foot">Москва · события рядом</div>
       </aside>
     </div>
