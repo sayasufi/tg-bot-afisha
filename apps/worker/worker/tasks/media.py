@@ -1,6 +1,9 @@
 """Cache external event images into MinIO (downscaled JPEG) for fast serving."""
 import io
+import ipaddress
 import logging
+import socket
+from urllib.parse import urlparse
 
 import httpx
 from PIL import Image
@@ -17,12 +20,30 @@ MAX_WIDTH = 900
 BATCH = 40
 
 
+def _is_public_url(url: str) -> bool:
+    """SSRF guard: image URLs come from external feeds, so only allow http(s)
+    hosts that resolve exclusively to globally-routable IPs (no loopback,
+    private, link-local or reserved ranges)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        infos = socket.getaddrinfo(parsed.hostname, port, proto=socket.IPPROTO_TCP)
+        if not infos:
+            return False
+        return all(ipaddress.ip_address(info[4][0]).is_global for info in infos)
+    except Exception:
+        return False
+
+
 def _cache_one(db, event: Event) -> bool:
     src = (event.primary_image_url or "").strip()
-    if not src.startswith("http"):
+    if not _is_public_url(src):
         return False
     try:
-        resp = httpx.get(src, timeout=20, follow_redirects=True, headers={"User-Agent": "okrest-media/1.0"})
+        # follow_redirects=False so a public URL can't 30x into an internal host.
+        resp = httpx.get(src, timeout=20, follow_redirects=False, headers={"User-Agent": "okrest-media/1.0"})
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGB")
         if img.width > MAX_WIDTH:
