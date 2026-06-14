@@ -1,9 +1,6 @@
 """Cache external event images into MinIO (downscaled JPEG) for fast serving."""
 import io
-import ipaddress
 import logging
-import socket
-from urllib.parse import urlparse
 
 import httpx
 from PIL import Image
@@ -12,6 +9,7 @@ from sqlalchemy import select
 from apps.worker.worker.celery_app import celery_app
 from core.db.models import Event
 from core.db.session import SessionLocal
+from core.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, public_url, put_image
 
 logger = logging.getLogger(__name__)
@@ -20,26 +18,9 @@ MAX_WIDTH = 900
 BATCH = 40
 
 
-def _is_public_url(url: str) -> bool:
-    """SSRF guard: image URLs come from external feeds, so only allow http(s)
-    hosts that resolve exclusively to globally-routable IPs (no loopback,
-    private, link-local or reserved ranges)."""
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
-            return False
-        port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        infos = socket.getaddrinfo(parsed.hostname, port, proto=socket.IPPROTO_TCP)
-        if not infos:
-            return False
-        return all(ipaddress.ip_address(info[4][0]).is_global for info in infos)
-    except Exception:
-        return False
-
-
 def _cache_one(db, event: Event) -> bool:
     src = (event.primary_image_url or "").strip()
-    if not _is_public_url(src):
+    if not is_public_http_url(src):
         return False
     try:
         # follow_redirects=False so a public URL can't 30x into an internal host.

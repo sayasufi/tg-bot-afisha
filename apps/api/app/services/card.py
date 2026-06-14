@@ -6,7 +6,8 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from core.media.storage import ensure_bucket, object_exists, public_url, put_image
+from core.http_safety import is_public_http_url
+from core.media.storage import ensure_bucket, get_object, object_exists, public_url, put_image
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,15 @@ def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: 
         pass
 
     photo: bytes | None = None
-    if image_url:
+    # Fast path: our own cached copy straight from MinIO (no network round-trip).
+    try:
+        direct = get_object(f"events/{event_id}.jpg")
+        if direct:
+            photo = direct[0]
+    except Exception:
+        photo = None
+    # Otherwise fetch the source image — SSRF-guarded, it can come from a feed.
+    if photo is None and image_url and is_public_http_url(image_url):
         try:
             r = httpx.get(image_url, timeout=15, follow_redirects=False, headers={"User-Agent": "okrest-card/1.0"})
             r.raise_for_status()

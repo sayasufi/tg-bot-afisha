@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchMapEvents, type EventItem } from "../api/client";
+import { fetchEventDetail, fetchMapEvents, type EventItem } from "../api/client";
 import { Filters, type FilterState } from "../features/filters/Filters";
 import { EventsMap } from "../features/map/EventsMap";
 import { Coach, EmptyState, LoadingBar, MapTone, RadarPing } from "../features/map/MapOverlays";
@@ -136,6 +136,32 @@ export function App() {
     setView("map");
     setSelected(i);
   }, []);
+
+  // Deep link: open a specific event passed via startapp (?startapp=<id>) or a
+  // ?event=<id> query — e.g. when a shared card is tapped.
+  useEffect(() => {
+    const wa = getWebApp() as any;
+    const param: string | undefined =
+      wa?.initDataUnsafe?.start_param || new URLSearchParams(window.location.search).get("event") || undefined;
+    if (!param) return;
+    fetchEventDetail(param)
+      .then((d) => {
+        const occ = d.occurrences?.[0];
+        openEvent({
+          event_id: d.event_id,
+          title: d.canonical_title,
+          category: d.category,
+          date_start: occ?.date_start ?? "",
+          date_end: occ?.date_end ?? null,
+          price_min: occ?.price_min ?? null,
+          venue: occ?.venue ?? null,
+          lat: occ?.lat ?? null,
+          lon: occ?.lon ?? null,
+          primary_image_url: d.primary_image_url,
+        });
+      })
+      .catch(() => undefined);
+  }, [openEvent]);
 
   return (
     <div className="app">

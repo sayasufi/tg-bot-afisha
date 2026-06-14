@@ -19,7 +19,12 @@ from core.db.session import SessionLocal
 
 router = APIRouter(prefix="/v1/share", tags=["share"])
 
-BOT_URL = "https://t.me/okrestmap_bot"
+BOT_USERNAME = "okrestmap_bot"
+
+
+def _open_url(event_id) -> str:
+    # startapp deep link → opens the Mini App with this event as the start param.
+    return f"https://t.me/{BOT_USERNAME}?startapp={event_id}"
 
 _MONTHS = [
     "января", "февраля", "марта", "апреля", "мая", "июня",
@@ -133,7 +138,7 @@ def share(event_id: UUID):
         .replace("__IMAGE__", escape(og_image))
         .replace("__URL__", escape(f"{base}/v1/share/{event_id}"))
         .replace("__COVERSTYLE__", cover_style)
-        .replace("__BOT__", BOT_URL)
+        .replace("__BOT__", _open_url(event_id))
     )
     return HTMLResponse(html, headers={"Cache-Control": "public, max-age=600"})
 
@@ -189,7 +194,7 @@ def prepare(payload: PrepareRequest):
         "thumbnail_url": photo_url,
         "caption": caption[:1024],
         "parse_mode": "HTML",
-        "reply_markup": {"inline_keyboard": [[{"text": "Открыть в Окрест", "url": BOT_URL}]]},
+        "reply_markup": {"inline_keyboard": [[{"text": "Открыть в Окрест", "url": _open_url(payload.event_id)}]]},
     }
     try:
         resp = httpx.post(
