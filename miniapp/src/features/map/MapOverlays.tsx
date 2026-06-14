@@ -23,6 +23,20 @@ export function LoadingBar({ show }: { show: boolean }) {
   );
 }
 
+// First-load veil: a soft shimmer + "developing" caption while the very first
+// set of events is being fetched (the map tiles fade in underneath).
+export function MapShimmer({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div className="mapshimmer" role="status" aria-label="Загрузка">
+      <div className="mapshimmer__card">
+        <span className="mapshimmer__bar" />
+        <span className="mapshimmer__cap">Проявляем окрест…</span>
+      </div>
+    </div>
+  );
+}
+
 export function EmptyState({ onReset }: { onReset: () => void }) {
   return (
     <div className="emptystate" role="status">
@@ -31,8 +45,9 @@ export function EmptyState({ onReset }: { onReset: () => void }) {
           <circle cx="21" cy="21" r="13" fill="none" stroke="currentColor" strokeWidth="3" />
           <line x1="31" y1="31" x2="42" y2="42" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
-        <div className="emptystate__title">Вокруг пусто</div>
-        <p className="emptystate__text">Под выбранные фильтры ничего не нашлось. Попробуй расширить даты или категории.</p>
+        <span className="kicker emptystate__kicker">Окрест · Москва</span>
+        <div className="emptystate__title">Тишина в зале</div>
+        <p className="emptystate__text">Под эти фильтры экспозиция пуста. Расширь даты или сними категорию — и события вернутся.</p>
         <button type="button" className="btn btn--primary emptystate__btn" onClick={onReset}>
           Сбросить фильтры
         </button>

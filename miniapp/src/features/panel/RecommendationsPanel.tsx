@@ -4,7 +4,9 @@ import type { EventItem } from "../../api/client";
 import { eventBucket } from "../../lib/datetime";
 import type { LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
+import { usePullToRefresh } from "../../lib/usePullToRefresh";
 import { EventRow } from "./EventRow";
+import { PullHint } from "./PullHint";
 
 function SkeletonRows() {
   return (
@@ -27,6 +29,7 @@ export function RecommendationsPanel({
   query,
   userPos,
   loading = false,
+  onRefresh,
   onSelect,
   onClose,
 }: {
@@ -34,9 +37,11 @@ export function RecommendationsPanel({
   query?: string;
   userPos?: LatLon | null;
   loading?: boolean;
+  onRefresh?: () => void;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
+  const ptr = usePullToRefresh(() => onRefresh?.());
   const sorted = [...items].sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""));
   // Group into time buckets (Сегодня / На этой неделе / Позже / Идут сейчас / Постоянно).
   const groups = new Map<number, { label: string; items: EventItem[] }>();
@@ -60,7 +65,8 @@ export function RecommendationsPanel({
           <IconClose size={18} />
         </button>
       </header>
-      <div className="panelview__scroll">
+      <div className="panelview__scroll" ref={ptr.ref}>
+        <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {ordered.length === 0 &&
           (loading ? <SkeletonRows /> : <p className="panelview__empty">Пока нечего показать</p>)}
         {ordered.map((g) => (

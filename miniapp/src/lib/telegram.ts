@@ -10,6 +10,7 @@ type TelegramWebApp = {
   HapticFeedback?: {
     impactOccurred?: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
     selectionChanged?: () => void;
+    notificationOccurred?: (type: "error" | "success" | "warning") => void;
   };
   BackButton?: {
     show: () => void;
@@ -78,4 +79,8 @@ export function haptic(style: "light" | "medium" | "heavy" = "light"): void {
 
 export function hapticSelection(): void {
   getWebApp()?.HapticFeedback?.selectionChanged?.();
+}
+
+export function hapticNotify(type: "success" | "warning" | "error" = "success"): void {
+  getWebApp()?.HapticFeedback?.notificationOccurred?.(type);
 }

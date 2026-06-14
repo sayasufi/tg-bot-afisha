@@ -19,10 +19,11 @@ export function ProofFrame() {
 
 // A continuous mono ticker. Two identical tracks scroll -50% for a seamless
 // loop. `text` is the already-joined status line. Tapping it opens the listing.
-export function Ticker({ text, onClick }: { text: string; onClick?: () => void }) {
+// When `live`, the cue becomes a pulsing cinnabar dot (events happening now).
+export function Ticker({ text, live = false, onClick }: { text: string; live?: boolean; onClick?: () => void }) {
   return (
-    <button type="button" className="ticker" aria-label="Все события" onClick={onClick}>
-      <span className="ticker__cue">▸</span>
+    <button type="button" className={`ticker${live ? " ticker--live" : ""}`} aria-label="Все события" onClick={onClick}>
+      <span className="ticker__cue">{live ? <span className="ticker__live" /> : "▸"}</span>
       <div className="ticker__track">
         <span>{text}</span>
         <span>{text}</span>

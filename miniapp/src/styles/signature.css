@@ -135,6 +135,25 @@
   font-size: 11px;
 }
 
+/* Live cue — a pulsing cinnabar dot replacing ▸ when events run now. */
+.ticker__live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  box-shadow: 0 0 0 0 var(--cinnabar);
+  animation: tickerLive 1.5s ease-out infinite;
+}
+
+@keyframes tickerLive {
+  0% {
+    box-shadow: 0 0 0 0 rgba(230, 51, 18, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 7px rgba(230, 51, 18, 0);
+  }
+}
+
 .ticker__track {
   display: flex;
   flex: 0 0 auto;

@@ -73,6 +73,85 @@
   }
 }
 
+/* ---------- First-load shimmer veil ---------- */
+.mapshimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 880;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: dropIn 0.3s var(--ease-cut) both;
+}
+
+.mapshimmer__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 26px;
+  background: var(--plinth);
+  border: 1px solid var(--line);
+}
+
+.mapshimmer__bar {
+  width: 120px;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(11, 11, 11, 0.06), var(--acid), rgba(11, 11, 11, 0.06));
+  background-size: 200% 100%;
+  box-shadow: 0 0 0 1px var(--ink);
+  animation: shimmer 1.2s linear infinite;
+}
+
+.mapshimmer__cap {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* ---------- Pull-to-refresh hint ---------- */
+.pullhint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.pullhint__mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--plinth);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  transition: background 0.15s ease;
+}
+
+.pullhint__mark--on {
+  background: var(--acid);
+}
+
+.pullhint--busy .pullhint__mark--on {
+  animation: shimmerPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes shimmerPulse {
+  50% {
+    transform: scale(1.4);
+  }
+}
+
+.pullhint__label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
 .emptystate {
   position: absolute;
   inset: 0;
@@ -81,6 +160,12 @@
   place-items: center;
   padding: 20px;
   pointer-events: none;
+}
+
+.emptystate__kicker {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ink-faint);
 }
 
 .emptystate__card {

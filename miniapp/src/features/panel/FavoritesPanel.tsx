@@ -1,7 +1,9 @@
 import type { EventItem } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
 import { IconClose, IconHeart } from "../../lib/icons";
+import { usePullToRefresh } from "../../lib/usePullToRefresh";
 import { EventRow } from "./EventRow";
+import { PullHint } from "./PullHint";
 
 // Favourites you've hearted. Filtered from the loaded map set, soonest first.
 export function FavoritesPanel({
@@ -9,6 +11,8 @@ export function FavoritesPanel({
   favIds,
   query,
   userPos,
+  loading = false,
+  onRefresh,
   onSelect,
   onClose,
 }: {
@@ -16,9 +20,12 @@ export function FavoritesPanel({
   favIds: Set<string>;
   query?: string;
   userPos?: LatLon | null;
+  loading?: boolean;
+  onRefresh?: () => void;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
+  const ptr = usePullToRefresh(() => onRefresh?.());
   const favs = items
     .filter((it) => favIds.has(it.event_id))
     .sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""));
@@ -31,7 +38,8 @@ export function FavoritesPanel({
           <IconClose size={18} />
         </button>
       </header>
-      <div className="panelview__scroll">
+      <div className="panelview__scroll" ref={ptr.ref}>
+        <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {favs.length > 0 ? (
           favs.map((it, i) => (
             <EventRow key={it.event_id} item={it} index={i} query={query} userPos={userPos} onSelect={onSelect} />

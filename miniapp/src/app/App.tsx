@@ -4,13 +4,14 @@ import { fetchEventDetail, fetchMapEvents, type EventItem } from "../api/client"
 import { Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
 import { EventsMap } from "../features/map/EventsMap";
-import { Coach, EmptyState, LoadingBar, RadarPing } from "../features/map/MapOverlays";
+import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
 import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
+import { isLiveNow } from "../lib/datetime";
 import { useFavorites } from "../lib/favorites";
-import { getUser, getWebApp, haptic, initTelegram } from "../lib/telegram";
+import { getUser, getWebApp, haptic, hapticNotify, initTelegram } from "../lib/telegram";
 import { useGeolocation } from "../lib/useGeolocation";
 
 const initialFilters: FilterState = { q: "", category: "", dateFrom: "", dateTo: "", priceMax: "" };
@@ -30,6 +31,7 @@ export function App() {
   const [view, setView] = useState<View>("map");
   const [loading, setLoading] = useState(true);
   const [radarNonce, setRadarNonce] = useState(0);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [coachSeen, setCoachSeen] = useState(() => {
     try {
       return localStorage.getItem("okrest_coach") === "1";
@@ -50,9 +52,13 @@ export function App() {
     return params;
   }, [filters]);
 
-  // Gallery ticker line: total + city + the busiest categories.
+  // Count events happening right now — drives a "live" pulse on the ticker.
+  const liveCount = useMemo(() => items.filter((i) => isLiveNow(i.date_start, i.date_end)).length, [items]);
+
+  // Gallery ticker line: total + city + live-now + the busiest categories.
   const tickerText = useMemo(() => {
     const segs = [`${total} СОБЫТИЙ`, "МОСКВА", "ОКРЕСТ"];
+    if (liveCount > 0) segs.push(`ИДЁТ СЕЙЧАС ${liveCount}`);
     const counts: Record<string, number> = {};
     for (const it of items) counts[it.category] = (counts[it.category] || 0) + 1;
     Object.entries(counts)
@@ -60,7 +66,7 @@ export function App() {
       .slice(0, 3)
       .forEach(([k, n]) => segs.push(`${categoryMeta(k).label.toUpperCase()} ${n}`));
     return segs.join(" ● ");
-  }, [items, total]);
+  }, [items, total, liveCount]);
 
   useEffect(() => {
     setLoading(true);
@@ -71,6 +77,7 @@ export function App() {
           setItems(res.items);
           setTotal(res.total);
           setLoading(false);
+          if (refreshNonce > 0) hapticNotify("success");
         })
         .catch((e) => {
           if (e?.name !== "AbortError") {
@@ -84,7 +91,10 @@ export function App() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [query]);
+    // refreshNonce forces a re-fetch on pull-to-refresh even when the query is
+    // unchanged; it is intentionally part of the dependency list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, refreshNonce]);
 
   // Telegram back button closes whatever is on top (sheet → panel → drawer).
   useEffect(() => {
@@ -146,6 +156,11 @@ export function App() {
     setPeek(evs);
   }, []);
 
+  const onRefresh = useCallback(() => {
+    haptic("medium");
+    setRefreshNonce((n) => n + 1);
+  }, []);
+
   // Deep link: open a specific event passed via startapp (?startapp=<id>) or a
   // ?event=<id> query — e.g. when a shared card is tapped.
   useEffect(() => {
@@ -185,6 +200,7 @@ export function App() {
       {view === "map" && !selected && !filtersOpen && (
         <Ticker
           text={tickerText}
+          live={liveCount > 0}
           onClick={() => {
             haptic("light");
             setView("recs");
@@ -207,6 +223,7 @@ export function App() {
       <RadarPing key={radarNonce} nonce={radarNonce} />
 
       <LoadingBar show={loading && view === "map"} />
+      <MapShimmer show={loading && items.length === 0 && view === "map" && !selected} />
 
       {view === "map" && !selected && !filtersOpen && !drawerOpen && !loading && items.length === 0 && (
         <EmptyState onReset={() => setFilters(initialFilters)} />
@@ -247,10 +264,10 @@ export function App() {
       />
 
       {view === "recs" && (
-        <RecommendationsPanel items={items} query={filters.q} userPos={userPos} loading={loading} onSelect={openEvent} onClose={() => setView("map")} />
+        <RecommendationsPanel items={items} query={filters.q} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "favorites" && (
-        <FavoritesPanel items={items} favIds={fav.ids} query={filters.q} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
+        <FavoritesPanel items={items} favIds={fav.ids} query={filters.q} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "profile" && (
         <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} query={filters.q} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
