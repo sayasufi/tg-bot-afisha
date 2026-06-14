@@ -16,11 +16,14 @@ export function userIcon(heading: number | null): L.DivIcon {
 }
 
 // Pin = a gallery nameplate: a white plate with a 1px frame and the category's
-// vinyl-cut icon; a nail + dot drops to the geo point. Active flips to acid.
-export function pinIcon(item: EventItem, active: boolean): L.DivIcon {
+// vinyl-cut icon; a nail + dot drops to the geo point. Active flips to acid;
+// a live (happening-now) event gets a cinnabar pulse.
+export function pinIcon(item: EventItem, active: boolean, live = false): L.DivIcon {
+  const cls = `vpin${active ? " vpin--active" : ""}${live ? " vpin--live" : ""}`;
+  const liveDot = live ? '<span class="vpin__live"></span>' : "";
   return L.divIcon({
     className: "vpin-wrap",
-    html: `<div class="vpin${active ? " vpin--active" : ""}"><div class="vpin__plate">${categorySvg(item.category, 18)}</div><div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
+    html: `<div class="${cls}"><div class="vpin__plate">${categorySvg(item.category, 18)}</div>${liveDot}<div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
     iconSize: [30, 40],
     iconAnchor: [15, 40],
     popupAnchor: [0, -40],

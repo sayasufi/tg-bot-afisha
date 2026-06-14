@@ -63,8 +63,8 @@
   background: var(--acid);
   box-shadow:
     inset 0 0 0 1px var(--ink),
-    1.5px 1.5px 0 var(--cinnabar); /* misregistration ghost */
-  transform: scale(1.16);
+    0 5px 12px rgba(11, 11, 11, 0.25); /* lift the chosen pin off the wall */
+  transform: scale(1.24);
 }
 
 @keyframes vpinIn {
@@ -73,6 +73,46 @@
     transform-origin: bottom;
     opacity: 0;
   }
+}
+
+/* Live-now: the one cinnabar accent — a pulsing dot on events happening now. */
+.vpin__live {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  box-shadow: 0 0 0 1.5px var(--plinth);
+  z-index: 2;
+}
+
+.vpin__live::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cinnabar);
+  animation: livePulse 1.7s var(--ease-cut) infinite;
+}
+
+@keyframes livePulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* Spotlight the selected pin — fade the rest of the map's markers. */
+.map-wrap--has-selected .vpin:not(.vpin--active),
+.map-wrap--has-selected .vcluster {
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
 }
 
 /* ---------- Clusters — stacked frames ---------- */

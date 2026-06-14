@@ -25,6 +25,18 @@ const dayDiff = (a: Date, b: Date) => {
   const B = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
   return Math.round((B - A) / 86400000);
 };
+
+// True if the event is happening right now: started and not yet over. Point
+// events (no end) count as live for ~3h after start; the far-future sentinel
+// (year 9998) means a permanent/ongoing event → live once it has started.
+export function isLiveNow(start?: string | null, end?: string | null): boolean {
+  const s = parse(start);
+  if (!s) return false;
+  const now = Date.now();
+  const e = parse(end);
+  const endMs = e ? e.getTime() : s.getTime() + 3 * 3600 * 1000;
+  return s.getTime() <= now && now <= endMs;
+}
 const dmy = (d: Date, withYear: boolean, short = false) =>
   `${d.getDate()} ${(short ? MONTHS_SHORT : MONTHS)[d.getMonth()]}${withYear ? ` ${d.getFullYear()}` : ""}`;
 

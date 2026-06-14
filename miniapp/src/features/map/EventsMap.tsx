@@ -3,6 +3,7 @@ import { AttributionControl, MapContainer, Marker } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { EventItem } from "../../api/client";
+import { isLiveNow } from "../../lib/datetime";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
 import { clusterIcon, pinIcon, userIcon } from "./markers";
@@ -40,7 +41,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, onSe
           <Marker
             key={item.event_id}
             position={[item.lat as number, item.lon as number]}
-            icon={pinIcon(item, item.event_id === selectedId)}
+            icon={pinIcon(item, item.event_id === selectedId, isLiveNow(item.date_start, item.date_end))}
             eventHandlers={{ click: () => onSelect(item) }}
           />
         ))}
@@ -54,7 +55,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, onSe
   const userIco = useMemo(() => userIcon(heading), [heading]);
 
   return (
-    <div className="map-wrap">
+    <div className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap />
