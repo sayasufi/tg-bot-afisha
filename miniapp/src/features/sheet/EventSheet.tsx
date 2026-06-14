@@ -78,7 +78,7 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
     const wa = getWebApp();
     // Preferred: send a real photo message (Bot API 8.0 shareMessage) — the card
     // appears as an image in the chat, not a link with a preview.
-    if (wa?.initData && typeof wa.shareMessage === "function" && wa.isVersionAtLeast?.("8.0")) {
+    if (wa?.initData && typeof wa.shareMessage === "function") {
       const prepared = await prepareShare(selected.event_id);
       if (prepared.ok && prepared.id) {
         wa.shareMessage(prepared.id);
