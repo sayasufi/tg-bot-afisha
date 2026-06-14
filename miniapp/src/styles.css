@@ -1439,6 +1439,12 @@ mark.hl {
   transform: translateY(0);
 }
 
+/* Keep every control at its real height — the panel scrolls instead of
+   squashing children (otherwise the search input collapses to ~20px). */
+.csheet__panel > * {
+  flex-shrink: 0;
+}
+
 .csheet__panel::-webkit-scrollbar {
   width: 9px;
 }
