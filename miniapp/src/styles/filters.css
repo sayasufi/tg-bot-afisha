@@ -1,0 +1,193 @@
+/* ---------- Filter sheet ---------- */
+.csheet {
+  position: absolute;
+  inset: 0;
+  z-index: 1450;
+  visibility: hidden;
+  transition: visibility 0s linear 0.34s;
+}
+
+.csheet--open {
+  visibility: visible;
+  transition: visibility 0s;
+}
+
+.csheet__scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(11, 11, 11, 0);
+  transition: background 0.3s ease;
+  cursor: pointer;
+}
+
+.csheet--open .csheet__scrim {
+  background: rgba(11, 11, 11, 0.32);
+}
+
+.csheet__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 88dvh;
+  overflow-y: auto;
+  background: var(--plinth);
+  border-top: 1px solid var(--line);
+  padding: 24px 16px calc(env(safe-area-inset-bottom) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transform: translateY(100%);
+  transition: transform 0.34s var(--ease-cut);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink) transparent;
+}
+
+.csheet--open .csheet__panel {
+  transform: translateY(0);
+}
+
+/* Keep every control at its real height — the panel scrolls instead of
+   squashing children (otherwise the search input collapses to ~20px). */
+.csheet__panel > * {
+  flex-shrink: 0;
+}
+
+.csheet__panel::-webkit-scrollbar {
+  width: 9px;
+}
+
+.csheet__panel::-webkit-scrollbar-thumb {
+  background-color: var(--ink);
+  border: 3px solid var(--plinth);
+}
+
+.csheet__grip {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 1px;
+  background: var(--ink);
+}
+
+.csheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.csheet__presets {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.csheet__dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  animation: dropIn 0.2s ease both;
+}
+
+.csheet__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.csheet__cat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.csheet__cat svg {
+  flex: 0 0 auto;
+  color: var(--ink);
+}
+
+.csheet__cat-all {
+  /* sized via the icon's size prop; colour handled by .csheet__cat svg */
+  flex: 0 0 auto;
+}
+
+.csheet__cat--active {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.csheet__cat--active svg {
+  color: var(--on-acid);
+}
+
+.panel__field--solo {
+  flex-direction: column;
+}
+
+/* Price + date inputs share the unified 48px control look. */
+.csheet .panel__field input {
+  height: 48px;
+  padding: 0 14px;
+  font-family: var(--grotesk);
+  font-size: 14px;
+}
+
+.csheet__foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+}
+
+.csheet__reset {
+  height: 50px;
+  padding: 0 18px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink-dim);
+  font-family: var(--grotesk);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.csheet__apply {
+  flex: 1;
+  height: 50px;
+  border: 0;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--grotesk);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.csheet__reset:active {
+  background: var(--vitrine);
+}
+
+.csheet__apply:active {
+  background: var(--acid-deep);
+}
+

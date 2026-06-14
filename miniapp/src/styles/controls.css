@@ -1,0 +1,278 @@
+/* ---------- Topbar ---------- */
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  padding: calc(env(safe-area-inset-top) + 14px) 16px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: dropIn 0.4s var(--ease-cut) both;
+}
+
+@keyframes dropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+.topbar__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  margin-right: auto;
+  line-height: 1;
+}
+
+.brand__mark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+  text-transform: lowercase;
+  color: var(--ink);
+}
+
+.brand__count {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-top: 7px;
+}
+
+.icon-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-size: 16px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  transition: background 0.12s ease;
+}
+
+.icon-btn:active {
+  background: var(--acid);
+}
+
+.icon-btn--active {
+  background: var(--acid);
+}
+
+.icon-btn__badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+
+/* ---------- Search ---------- */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--plinth);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 0 14px;
+  height: 48px;
+  transition: border-color 0.14s ease;
+}
+
+.search:focus-within {
+  border-color: var(--ink);
+}
+
+.search__glyph {
+  flex: 0 0 auto;
+  color: var(--ink-dim);
+}
+
+.search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--ink);
+  font-family: var(--grotesk);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.search__input::placeholder {
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+}
+
+.search__clear {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+/* ---------- Chips — square hairline boxes ---------- */
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: -2px;
+  padding: 2px;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip svg {
+  color: var(--ink);
+}
+
+.chip--active {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.chip--active svg {
+  color: var(--on-acid);
+}
+
+/* ---------- Filter panel ---------- */
+.panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 4px;
+  animation: dropIn 0.2s ease both;
+}
+
+.panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--grotesk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.panel__field input {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.panel__reset {
+  grid-column: 1 / -1;
+  height: 40px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-dim);
+  font-family: var(--grotesk);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* ---------- FAB — square nameplate, acid on press ---------- */
+.fab {
+  position: absolute;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 22px);
+  z-index: 1150;
+  width: 50px;
+  height: 50px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  background: var(--plinth);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.1s ease;
+  animation: dropIn 0.4s var(--ease-cut) both 0.15s;
+}
+
+.fab:active {
+  background: var(--acid);
+}
+
+.fab__icon {
+  display: block;
+}
+
+.fab--busy {
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    background: var(--acid);
+  }
+}
+

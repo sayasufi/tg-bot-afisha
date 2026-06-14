@@ -1,0 +1,424 @@
+/* ---------- Left drawer — partition wall ---------- */
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(11, 11, 11, 0);
+  visibility: hidden;
+  transition:
+    background 0.3s ease,
+    visibility 0s linear 0.3s;
+}
+
+.drawer--open {
+  background: rgba(11, 11, 11, 0.32);
+  visibility: visible;
+  transition: background 0.3s ease;
+}
+
+.drawer__panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(82vw, 300px);
+  padding: calc(env(safe-area-inset-top) + 22px) 18px calc(env(safe-area-inset-bottom) + 18px);
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  transform: translateX(-100%);
+  transition: transform 0.32s var(--ease-snap);
+}
+
+.drawer--open .drawer__panel {
+  transform: translateX(0);
+}
+
+.drawer__brand {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+  text-transform: lowercase;
+  color: var(--ink);
+}
+
+.drawer__brand::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 1px;
+  margin-top: 10px;
+  background: var(--line);
+}
+
+.drawer__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navitem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 50px;
+  padding: 0 6px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  color: var(--ink-dim);
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+.navitem__glyph {
+  width: 22px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--ink-faint);
+}
+
+.navitem--active {
+  color: var(--ink);
+}
+
+.navitem--active .navitem__glyph {
+  color: var(--ink);
+}
+
+.navitem--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 4px;
+  height: 22px;
+  background: var(--acid);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.navitem {
+  position: relative;
+}
+
+.drawer__foot {
+  margin-top: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---------- Full-screen panels (recommendations / profile) ---------- */
+.panelview {
+  position: absolute;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  animation: panelIn 0.26s var(--ease-cut) both;
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+}
+
+/* Search-match highlight (acid-as-highlighter). */
+mark.hl {
+  background: var(--acid);
+  color: var(--on-acid);
+  padding: 0 1px;
+}
+
+.panelview__head {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 18px) 16px 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.panelview__head h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(28px, 8vw, 40px);
+  letter-spacing: -0.04em;
+  text-transform: lowercase;
+  color: var(--ink);
+}
+
+.panelview__close {
+  width: 38px;
+  height: 38px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.panelview__close:active {
+  background: var(--acid);
+}
+
+.panelview__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px calc(env(safe-area-inset-bottom) + 24px);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink) transparent;
+}
+
+.panelview__scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.panelview__scroll::-webkit-scrollbar-thumb {
+  background-color: var(--ink);
+  border: 3px solid var(--bg);
+}
+
+.panelview__empty {
+  margin-top: 64px;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(24px, 8vw, 34px);
+  text-transform: lowercase;
+  color: var(--ink-faint);
+}
+
+.panelview__hint {
+  margin: 20px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: 0.03em;
+  color: var(--ink-dim);
+}
+
+/* ---------- Event rows (recommendations) — gallery labels ---------- */
+.erow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--grotesk);
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  animation: rowIn 0.32s var(--ease-cut) both;
+  animation-delay: calc(min(var(--i, 0), 16) * 22ms);
+}
+
+/* Sticky time-bucket headers in the recommendations list. */
+.recs__section {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 9px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.recs__section::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: var(--acid);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.recs__n {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.erow__mark {
+  flex: 0 0 auto;
+  width: 52px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  border-right: 1px solid var(--line);
+}
+
+.erow__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px 12px;
+}
+
+.erow__title {
+  font-family: var(--grotesk);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.erow__meta {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Distance to the user — a fixed-width right-hand ledger cell ("480 м") so the
+   divider lines up across every row. */
+.erow__dist {
+  flex: 0 0 76px;
+  width: 76px;
+  display: grid;
+  place-items: center;
+  padding: 0 8px;
+  border-left: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.erow--featured .erow__mark {
+  width: 64px;
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.erow--featured .erow__title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(17px, 5vw, 21px);
+  letter-spacing: -0.03em;
+  text-transform: lowercase;
+}
+
+/* ---------- Profile — accession ledger ---------- */
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile__avatar {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  border-radius: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 30px;
+  color: var(--on-acid);
+  background: var(--acid);
+  box-shadow: inset 0 0 0 1px var(--ink);
+  background-size: cover;
+  background-position: center;
+}
+
+.profile__id {
+  min-width: 0;
+}
+
+.profile__name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(24px, 7vw, 34px);
+  letter-spacing: -0.04em;
+  text-transform: lowercase;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.profile__handle {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.profile__rows {
+  margin-top: 4px;
+}
+
+.profile__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.profile__row span {
+  font-family: var(--grotesk);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.profile__row b {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+

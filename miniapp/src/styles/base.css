@@ -1,0 +1,154 @@
+:root {
+  /* VITRINE — acid white-cube. A contemporary-gallery system: warm plaster
+     white, near-black "vinyl" ink, hairline passe-partout frames, and ONE
+     radioactive chartreuse that only ever marks the selected exhibit. */
+  --bg: #f4f4ef; /* gallery plaster (not pure white — grain reads) */
+  --plinth: #ffffff; /* the hung white objects: cards, sheet, pins */
+  --vitrine: #ececE4; /* recessed wells: inputs, inactive chips */
+  --ink: #0b0b0b; /* vinyl wall-label black (never #000) */
+  --ink-dim: #6e6e66; /* captions, metadata */
+  --ink-faint: #a8a89e; /* accession numbers, 3rd tier */
+  --line: #0b0b0b; /* 1px frames / rules */
+  --line-soft: rgba(11, 11, 11, 0.14); /* inner dividers */
+  --acid: #ccff00; /* the only saturated colour — selection/highlight */
+  --acid-deep: #a8d400;
+  --on-acid: #0b0b0b; /* black always sits on acid */
+  --cinnabar: #e63312; /* misregistration ghost, used once */
+  --radius: 0px;
+
+  --display: "Unbounded", system-ui, sans-serif;
+  --grotesk: "Familjen Grotesk", system-ui, sans-serif;
+  --mono: "Martian Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --ease-cut: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-snap: cubic-bezier(0.83, 0, 0.17, 1);
+
+  /* Fine plaster grain (UI chrome only — never the map). */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--grotesk);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+}
+
+.app {
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Plaster tooth on chrome surfaces only. */
+.csheet__panel::before,
+.sheet::before,
+.drawer__panel::before,
+.panelview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--grain);
+  background-size: 160px 160px;
+  opacity: 0.055;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.csheet__panel > *,
+.sheet > *,
+.drawer__panel > *,
+.panelview > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Reusable: a mounted-print white object with a hairline passe-partout. */
+.plinth {
+  background: var(--plinth);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+/* Museum wall-label: spaced grotesk caption over a mono value. */
+.wall-label {
+  display: grid;
+  gap: 4px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.wall-label__cap {
+  font-family: var(--grotesk);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.wall-label__val {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13.5px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.wall-label__val .dim {
+  color: var(--ink-dim);
+}
+
+/* Proximity badge — the "рядом" promise, made tangible in acid. */
+.sheet__near {
+  display: inline-block;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.rule {
+  height: 1px;
+  width: 100%;
+  background: var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
