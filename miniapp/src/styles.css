@@ -911,8 +911,9 @@ body {
 }
 
 .simcard {
-  flex: 0 0 152px;
-  width: 152px;
+  /* Exactly two cards per view, flush with the content's left/right edges. */
+  flex: 0 0 calc((100% - 10px) / 2);
+  width: calc((100% - 10px) / 2);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
