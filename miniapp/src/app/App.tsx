@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMapEvents, saveUserLocation, type EventItem } from "../api/client";
 import { Filters, type FilterState } from "../features/filters/Filters";
 import { EventsMap } from "../features/map/EventsMap";
-import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel/panels";
+import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
@@ -257,16 +257,17 @@ export function App() {
       <EventSheet
         selected={selected}
         query={filters.q}
+        userPos={userPos}
         isFav={!!selected && fav.has(selected.event_id)}
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
         onClose={() => setSelected(null)}
       />
 
       {view === "recs" && (
-        <RecommendationsPanel items={items} query={filters.q} onSelect={openEvent} onClose={() => setView("map")} />
+        <RecommendationsPanel items={items} query={filters.q} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "profile" && (
-        <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} query={filters.q} onSelect={openEvent} onClose={() => setView("map")} />
+        <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} query={filters.q} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
       )}
 
       <Sidebar

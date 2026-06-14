@@ -113,6 +113,19 @@ body {
   color: var(--ink-dim);
 }
 
+/* Proximity badge — the "рядом" promise, made tangible in acid. */
+.sheet__near {
+  display: inline-block;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
 .kicker {
   font-family: var(--mono);
   font-size: 10px;
@@ -1135,6 +1148,7 @@ mark.hl {
 }
 
 .erow__body {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1164,6 +1178,21 @@ mark.hl {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Distance to the user — a right-hand ledger cell ("480 м"). */
+.erow__dist {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0 14px;
+  border-left: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .erow--featured .erow__mark {

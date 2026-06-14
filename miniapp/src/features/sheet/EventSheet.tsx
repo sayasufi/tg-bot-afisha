@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import { formatWhen } from "../../lib/datetime";
+import { nearLabel, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { haptic, shareEvent } from "../../lib/telegram";
@@ -11,6 +12,7 @@ import { safeHttpUrl } from "../../lib/url";
 type Props = {
   selected: EventItem | null;
   query?: string;
+  userPos?: LatLon | null;
   isFav: boolean;
   onToggleFav: () => void;
   onClose: () => void;
@@ -51,7 +53,7 @@ function accessionNo(id: string | number): string {
   return String(h % 10000).padStart(4, "0");
 }
 
-export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, isFav, onToggleFav, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -98,6 +100,7 @@ export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Pro
   const lat = selected.lat ?? occ?.lat ?? null;
   const lon = selected.lon ?? occ?.lon ?? null;
   const routeUrl = lat != null && lon != null ? `https://yandex.ru/maps/?ll=${lon}%2C${lat}&z=16&pt=${lon},${lat}` : null;
+  const near = nearLabel(userPos, lat != null && lon != null ? [lat, lon] : null);
   const accession = `ОКР · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
 
@@ -168,6 +171,14 @@ export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Pro
               <span className="wall-label__val">
                 {venue}
                 {address ? <span className="dim"> · {address}</span> : null}
+              </span>
+            </div>
+          )}
+          {near && (
+            <div className="wall-label">
+              <span className="wall-label__cap">Рядом</span>
+              <span className="wall-label__val">
+                <span className="sheet__near">{near}</span>
               </span>
             </div>
           )}
