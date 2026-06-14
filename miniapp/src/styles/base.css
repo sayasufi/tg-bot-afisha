@@ -69,10 +69,6 @@ html[data-theme="dark"] .photocopy {
   opacity: 0.05;
 }
 
-html[data-theme="dark"] .vmini__credit {
-  background: rgba(20, 19, 14, 0.7);
-}
-
 * {
   box-sizing: border-box;
 }

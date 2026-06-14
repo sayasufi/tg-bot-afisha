@@ -9,7 +9,6 @@ import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
-import { VenueMini } from "./VenueMini";
 import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
 
 type Props = {
@@ -69,7 +68,14 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
   const sourceUrl = safeHttpUrl(occ?.source_best_url);
   const lat = selected.lat ?? occ?.lat ?? null;
   const lon = selected.lon ?? occ?.lon ?? null;
-  const routeUrl = lat != null && lon != null ? `https://yandex.ru/maps/?ll=${lon}%2C${lat}&z=16&pt=${lon},${lat}` : null;
+  // Build a walking route straight to the venue: from the user's location when
+  // we have it (rtt=pd = pedestrian), otherwise let Yandex use "my location".
+  const routeUrl =
+    lat != null && lon != null
+      ? userPos
+        ? `https://yandex.ru/maps/?rtext=${userPos[0]},${userPos[1]}~${lat},${lon}&rtt=pd&z=16`
+        : `https://yandex.ru/maps/?rtext=~${lat},${lon}&rtt=pd&z=16`
+      : null;
   const near = nearLabel(userPos, lat != null && lon != null ? [lat, lon] : null);
   const accession = `ОКР · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
@@ -173,15 +179,20 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
           </div>
         </div>
 
-        {lat != null && lon != null && <VenueMini lat={lat} lon={lon} href={routeUrl} />}
-
         {description && <p className="sheet__desc">{description}</p>}
 
-        {sourceUrl && (
+        {(sourceUrl || routeUrl) && (
           <div className="sheet__actions">
-            <a className="btn btn--primary" href={sourceUrl} target="_blank" rel="noopener noreferrer">
-              Подробнее
-            </a>
+            {sourceUrl && (
+              <a className="btn btn--primary" href={sourceUrl} target="_blank" rel="noopener noreferrer">
+                Подробнее
+              </a>
+            )}
+            {routeUrl && (
+              <a className="btn btn--ghost" href={routeUrl} target="_blank" rel="noopener noreferrer">
+                Маршрут
+              </a>
+            )}
           </div>
         )}
 
