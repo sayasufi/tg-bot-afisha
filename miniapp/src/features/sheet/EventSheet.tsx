@@ -75,7 +75,10 @@ export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav
 
   const onShare = () => {
     haptic("light");
-    shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: sourceUrl });
+    // Share our branded OG page (photo + title + "Окрест" card preview) so it
+    // looks good in any chat, not the bare source link.
+    const shareUrl = `${window.location.origin}/v1/share/${selected.event_id}`;
+    shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: shareUrl });
   };
 
   return (
