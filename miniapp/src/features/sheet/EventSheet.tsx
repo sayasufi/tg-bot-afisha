@@ -129,7 +129,15 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
       {/* mounted print */}
       <div className="sheet__frame">
         {image ? (
-          <img ref={imgRef} src={image} alt="" loading="lazy" decoding="async" />
+          <img
+            ref={imgRef}
+            src={image}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="sheet__cover-img"
+            onLoad={(e) => e.currentTarget.classList.add("is-developed")}
+          />
         ) : detail ? (
           <CategoryIcon cat={selected.category} size={64} className="sheet__plate-glyph" />
         ) : (

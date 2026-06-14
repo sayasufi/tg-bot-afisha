@@ -178,6 +178,16 @@
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
+  transition: transform 0.12s var(--ease-cut);
+}
+
+/* Tactile springs — controls dip slightly on press (variant.com micro-feel). */
+.chip:active,
+.csheet__cat:active,
+.daycell:active,
+.seg__btn:active,
+.themetoggle:active {
+  transform: scale(0.96);
 }
 
 .chip svg {

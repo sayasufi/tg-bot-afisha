@@ -151,6 +151,17 @@ html[data-theme="dark"] .sheet-veil {
   will-change: transform;
 }
 
+/* Darkroom develop — the cover comes up out of a blurred, desaturated negative
+   and resolves into focus once decoded (variant.com photographic reveal). */
+.sheet__cover-img {
+  filter: blur(12px) grayscale(0.5) contrast(1.1);
+  transition: filter 0.6s var(--ease-cut);
+}
+
+.sheet__cover-img.is-developed {
+  filter: none;
+}
+
 .sheet__plate-glyph {
   color: var(--ink);
 }
