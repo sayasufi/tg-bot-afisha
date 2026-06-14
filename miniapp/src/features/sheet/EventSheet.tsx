@@ -4,7 +4,7 @@ import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/cl
 import { categoryMeta } from "../../lib/categories";
 import { formatWhen } from "../../lib/datetime";
 import { Highlight } from "../../lib/highlight";
-import { CategoryIcon } from "../../lib/icons";
+import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
@@ -120,13 +120,13 @@ export function EventSheet({ selected, query, isFav, onToggleFav, onClose }: Pro
             onToggleFav();
           }}
         >
-          {isFav ? "♥" : "♡"}
+          <IconHeart filled={isFav} size={18} />
         </button>
         <button type="button" className="sheet__icon sheet__icon--share" aria-label="Поделиться" onClick={onShare}>
-          ↗
+          <IconShare size={18} />
         </button>
         <button type="button" className="sheet__close" aria-label="Закрыть" onClick={onClose}>
-          ✕
+          <IconClose size={18} />
         </button>
       </div>
 

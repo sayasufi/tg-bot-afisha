@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CATEGORIES, categoryMeta } from "../../lib/categories";
 import { PRESETS, matchPreset, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
-import { CategoryIcon } from "../../lib/icons";
+import { CategoryIcon, IconClose, IconGrid, IconMenu, IconSearch } from "../../lib/icons";
 import { haptic, hapticSelection } from "../../lib/telegram";
 import { useCountUp } from "../../lib/useCountUp";
 
@@ -61,9 +61,9 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
       {/* Floating command pill — the only chrome over the map at rest. */}
       <div className={`cmdpill${open ? " cmdpill--open" : ""}`}>
         <button type="button" className="cmdpill__menu" aria-label="Меню" onClick={(e) => { e.stopPropagation(); onMenu(); }}>
-          <span className="cmdpill__burger">☰</span>
+          <IconMenu className="cmdpill__burger" size={18} />
           <span className="cmdpill__mark">
-            <span className="brand-o-letter">о</span>крест
+            <span className="brand-o">о</span>крест
           </span>
         </button>
         <button type="button" className="cmdpill__body" aria-label="Фильтры" onClick={() => openSheet(false)}>
@@ -73,7 +73,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
           {advancedCount > 0 && <span className="cmdpill__badge">{advancedCount}</span>}
         </button>
         <button type="button" className="cmdpill__search" aria-label="Поиск" onClick={() => openSheet(true)}>
-          ⌕
+          <IconSearch size={18} />
         </button>
       </div>
 
@@ -85,12 +85,12 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
           <div className="csheet__head">
             <span className="kicker">Фильтр</span>
             <button type="button" className="icon-btn" aria-label="Закрыть" onClick={close}>
-              <span className="icon-btn__glyph">✕</span>
+              <IconClose size={18} />
             </button>
           </div>
 
           <div className="search">
-            <span className="search__glyph">⌕</span>
+            <IconSearch className="search__glyph" size={18} />
             <input
               ref={searchRef}
               className="search__input"
@@ -100,7 +100,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
             />
             {value.q && (
               <button type="button" className="search__clear" aria-label="Очистить" onClick={() => onChange({ ...value, q: "" })}>
-                ✕
+                <IconClose size={15} />
               </button>
             )}
           </div>
@@ -136,7 +136,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
           <span className="kicker">Категория</span>
           <div className="csheet__grid">
             <button type="button" className={`csheet__cat${value.category === "" ? " csheet__cat--active" : ""}`} onClick={() => pick("")}>
-              <span className="csheet__cat-all">✳</span>
+              <IconGrid className="csheet__cat-all" size={18} />
               Все
             </button>
             {CATEGORIES.map((c) => (

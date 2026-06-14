@@ -20,7 +20,7 @@ export function Sidebar({ open, view, onSelect, onClose }: { open: boolean; view
     <div className={`drawer${open ? " drawer--open" : ""}`} onClick={onClose}>
       <aside className="drawer__panel" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__brand">
-          <span className="brand-o-letter">о</span>крест
+          <span className="brand-o">о</span>крест
         </div>
         <nav className="drawer__nav">
           {NAV.map((n) => (
