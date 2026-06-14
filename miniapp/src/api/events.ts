@@ -55,11 +55,15 @@ export async function fetchEventDetail(eventId: string, signal?: AbortSignal): P
 export type MetroStation = { name: string; lat: number; lon: number };
 
 // Metro stations as a flat list (same GeoJSON the basemap draws), for finding
-// the nearest station to an event.
+// the nearest station to an event. The dataset mixes in the (defunct) Moscow
+// Monorail — drop it so we never label a monorail stop as a metro "м.".
+const NON_METRO = /монорельс/i;
+
 export async function fetchMetro(signal?: AbortSignal): Promise<MetroStation[]> {
   const data = await getJson<any>(`/v1/places?kind=metro&city=Moscow`, signal);
   const feats: any[] = data?.features ?? [];
   return feats
+    .filter((f) => !NON_METRO.test(f?.properties?.line ?? ""))
     .map((f) => ({
       name: f?.properties?.name ?? "",
       lat: f?.geometry?.coordinates?.[1],
