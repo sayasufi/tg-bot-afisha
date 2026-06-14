@@ -1067,7 +1067,7 @@ body {
   margin-bottom: 18px;
 }
 
-.emptystate__btn {
+.emptystate__card .btn {
   width: 100%;
   border: 1px solid var(--ink);
 }
