@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from apps.api.app.services.card import ensure_card
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
@@ -121,12 +122,15 @@ def share(event_id: UUID):
     base = get_settings().telegram_webapp_url.rstrip("/")
     parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
     desc = " · ".join(parts) + (" · " if parts else "") + "Окрест — события рядом"
+    # Branded VITRINE card for the link preview; raw photo for the page cover.
+    card = ensure_card(str(event_id), title, " · ".join(parts) or "Событие", event.category, image)
+    og_image = card or image
     cover_style = f"background-image:url('{image}')" if image else ""
 
     html = (
         _PAGE.replace("__TITLE__", escape(title))
         .replace("__DESC__", escape(desc))
-        .replace("__IMAGE__", escape(image))
+        .replace("__IMAGE__", escape(og_image))
         .replace("__URL__", escape(f"{base}/v1/share/{event_id}"))
         .replace("__COVERSTYLE__", cover_style)
         .replace("__BOT__", BOT_URL)
@@ -165,12 +169,14 @@ def prepare(payload: PrepareRequest):
         raise HTTPException(status_code=404, detail="not found")
 
     event, occ, venue = row
-    image = _safe_image(event.cached_image_url or event.primary_image_url or "")
-    if not image:
-        return {"ok": False}  # no photo to send → caller falls back to a link share
-
     title = event.canonical_title or "Событие"
+    image = _safe_image(event.cached_image_url or event.primary_image_url or "")
     parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
+    # Send the branded VITRINE card as the photo; fall back to the raw image.
+    photo_url = ensure_card(str(payload.event_id), title, " · ".join(parts) or "Событие", event.category, image) or image
+    if not photo_url:
+        return {"ok": False}  # nothing to send → caller falls back to a link share
+
     caption = f"<b>{escape(title)}</b>"
     if parts:
         caption += "\n" + escape(" · ".join(parts))
@@ -179,8 +185,8 @@ def prepare(payload: PrepareRequest):
     result = {
         "type": "photo",
         "id": str(payload.event_id),
-        "photo_url": image,
-        "thumbnail_url": image,
+        "photo_url": photo_url,
+        "thumbnail_url": photo_url,
         "caption": caption[:1024],
         "parse_mode": "HTML",
         "reply_markup": {"inline_keyboard": [[{"text": "Открыть в Окрест", "url": BOT_URL}]]},
