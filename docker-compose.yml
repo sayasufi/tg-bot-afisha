@@ -114,7 +114,9 @@ services:
       context: ./miniapp
       dockerfile: ../infra/docker/miniapp.Dockerfile
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+      # Default only when UNSET; an explicit empty value means same-origin
+      # (the API is reverse-proxied under /v1 on whatever host serves the app).
+      VITE_API_BASE: ${VITE_API_BASE-http://localhost:8000}
     command: sh -c "npm run build && npm run preview -- --host 0.0.0.0 --port 5173 --strictPort"
     ports:
       - "5173:5173"
