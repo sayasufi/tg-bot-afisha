@@ -1,6 +1,7 @@
 import L from "leaflet";
 
 import type { EventItem } from "../../api/client";
+import { categoryMeta } from "../../lib/categories";
 import { categorySvg } from "../../lib/icons";
 
 // User location — a surveyor's crosshair (the map-maker's instrument), with a
@@ -15,15 +16,17 @@ export function userIcon(heading: number | null): L.DivIcon {
   });
 }
 
-// Pin = a gallery nameplate: a white plate with a 1px frame and the category's
-// vinyl-cut icon; a nail + dot drops to the geo point. Active flips to acid;
-// a live (happening-now) event gets a cinnabar pulse.
+// Pin = a gallery nameplate: a white plate with a 1px frame, the category's
+// vinyl-cut icon, and a thin category-colour rail along the bottom edge (a
+// gallery label's colour code); a nail + dot drops to the geo point. Active
+// flips to acid; a live (happening-now) event gets a cinnabar pulse.
 export function pinIcon(item: EventItem, active: boolean, live = false): L.DivIcon {
   const cls = `vpin${active ? " vpin--active" : ""}${live ? " vpin--live" : ""}`;
   const liveDot = live ? '<span class="vpin__live"></span>' : "";
+  const { color } = categoryMeta(item.category);
   return L.divIcon({
     className: "vpin-wrap",
-    html: `<div class="${cls}"><div class="vpin__plate">${categorySvg(item.category, 18)}</div>${liveDot}<div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
+    html: `<div class="${cls}"><div class="vpin__plate" style="--cat:${color}">${categorySvg(item.category, 18)}<i class="vpin__rail"></i></div>${liveDot}<div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
     iconSize: [30, 40],
     iconAnchor: [15, 40],
     popupAnchor: [0, -40],

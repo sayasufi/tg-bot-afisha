@@ -1,0 +1,88 @@
+/* ---------- Cluster peek — mini-list for a stacked point ---------- */
+.peek {
+  position: absolute;
+  inset: 0;
+  z-index: 1400;
+  visibility: hidden;
+  transition: visibility 0s linear 0.32s;
+}
+
+.peek--open {
+  visibility: visible;
+  transition: visibility 0s;
+}
+
+.peek__scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(11, 11, 11, 0);
+  transition: background 0.3s ease;
+  cursor: pointer;
+}
+
+.peek--open .peek__scrim {
+  background: rgba(11, 11, 11, 0.28);
+}
+
+.peek__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 62dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--plinth);
+  border-top: 1px solid var(--line);
+  padding: 22px 0 calc(env(safe-area-inset-bottom) + 8px);
+  transform: translateY(100%);
+  transition: transform 0.32s var(--ease-cut);
+}
+
+.peek--open .peek__panel {
+  transform: translateY(0);
+}
+
+.peek__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.peek__title {
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peek__venue {
+  color: var(--ink-dim);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.peek__scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink) transparent;
+}
+
+.peek__scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.peek__scroll::-webkit-scrollbar-thumb {
+  background-color: var(--ink);
+  border: 3px solid var(--plinth);
+}

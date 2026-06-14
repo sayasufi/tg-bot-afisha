@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { CATEGORIES, categoryMeta } from "../../lib/categories";
 import { PRESETS, matchPreset, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
@@ -144,6 +144,7 @@ export function Filters({ value, total, open, onOpenChange, onChange, onMenu }: 
                 key={c.key}
                 type="button"
                 className={`csheet__cat${value.category === c.key ? " csheet__cat--active" : ""}`}
+                style={{ "--cat": c.color } as CSSProperties}
                 onClick={() => pick(c.key)}
               >
                 <CategoryIcon cat={c.key} size={17} />

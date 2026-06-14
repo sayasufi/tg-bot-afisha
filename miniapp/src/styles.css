@@ -8,4 +8,5 @@
 @import "./styles/panels.css"; /* drawer, full-screen panels, rows, profile */
 @import "./styles/cmdpill.css"; /* floating command pill + wordmark */
 @import "./styles/filters.css"; /* bottom filter sheet */
+@import "./styles/peek.css"; /* cluster mini-list peek */
 @import "./styles/signature.css"; /* print-proof signature layer + entrances */

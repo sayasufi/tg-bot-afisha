@@ -15,12 +15,62 @@ type Props = {
   heading: number | null;
   locateNonce: number;
   onSelect: (item: EventItem) => void;
+  onCluster: (events: EventItem[]) => void;
 };
 
 const MOSCOW: [number, number] = [55.751244, 37.618423];
 
-export function EventsMap({ items, selected, userPos, heading, locateNonce, onSelect }: Props) {
+const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
+
+export function EventsMap({ items, selected, userPos, heading, locateNonce, onSelect, onCluster }: Props) {
   const selectedId = selected?.event_id ?? null;
+
+  // Index events by exact coordinate so a cluster click can resolve its child
+  // markers back to events (many events can share a single venue point).
+  const coordIndex = useMemo(() => {
+    const m = new Map<string, EventItem[]>();
+    for (const it of items) {
+      if (it.lat == null || it.lon == null) continue;
+      const k = coordKey(it.lat, it.lon);
+      const arr = m.get(k);
+      if (arr) arr.push(it);
+      else m.set(k, [it]);
+    }
+    return m;
+  }, [items]);
+
+  // Tapping a cluster that's spread out zooms to fit it (the familiar gesture).
+  // But when every event sits on one point (a single venue stacked, or we're
+  // already at max zoom), zooming does nothing useful — so peek a mini-list.
+  const clusterHandlers = useMemo(
+    () => ({
+      clusterclick: (e: any) => {
+        const cl = e.layer ?? e.sourceTarget ?? e.propagatedFrom;
+        if (!cl?.getAllChildMarkers) return;
+        const map = e.target?._map ?? cl._group?._map ?? cl._map;
+        const bounds = cl.getBounds();
+        const stacked = bounds.getNorthEast().equals(bounds.getSouthWest());
+        const maxed = map && map.getZoom() >= map.getMaxZoom();
+        if (stacked || maxed) {
+          const keys = new Set<string>(
+            cl.getAllChildMarkers().map((m2: any) => {
+              const ll = m2.getLatLng();
+              return coordKey(ll.lat, ll.lng);
+            }),
+          );
+          const evs: EventItem[] = [];
+          keys.forEach((k) => {
+            const arr = coordIndex.get(k);
+            if (arr) evs.push(...arr);
+          });
+          if (evs.length) onCluster(evs);
+        } else if (map) {
+          map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 17 });
+        }
+      },
+    }),
+    [coordIndex, onCluster],
+  );
 
   // Memoise the clustered markers so frequent re-renders (live heading/userPos
   // updates, locate taps) don't rebuild every pin. Rebuilding recreates each
@@ -32,10 +82,12 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, onSe
       <MarkerClusterGroup
         chunkedLoading
         showCoverageOnHover={false}
-        spiderfyOnMaxZoom
+        spiderfyOnMaxZoom={false}
+        zoomToBoundsOnClick={false}
         maxClusterRadius={48}
         iconCreateFunction={clusterIcon}
         animate={false}
+        eventHandlers={clusterHandlers}
       >
         {pins.map((item) => (
           <Marker
@@ -47,7 +99,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, onSe
         ))}
       </MarkerClusterGroup>
     );
-  }, [items, selectedId, onSelect]);
+  }, [items, selectedId, onSelect, clusterHandlers]);
 
   // Rebuild the user icon only when the (throttled) heading changes, so the
   // user marker doesn't get a fresh divIcon — and replay its pulse — on every

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchEventDetail, fetchMapEvents, type EventItem } from "../api/client";
 import { Filters, type FilterState } from "../features/filters/Filters";
+import { ClusterPeek } from "../features/map/ClusterPeek";
 import { EventsMap } from "../features/map/EventsMap";
 import { Coach, EmptyState, LoadingBar, RadarPing } from "../features/map/MapOverlays";
 import { ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
@@ -23,6 +24,7 @@ export function App() {
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<EventItem | null>(null);
+  const [peek, setPeek] = useState<EventItem[] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [view, setView] = useState<View>("map");
@@ -88,9 +90,10 @@ export function App() {
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || filtersOpen || drawerOpen || view !== "map";
+    const stacked = selected || peek || filtersOpen || drawerOpen || view !== "map";
     const pop = () => {
       if (selected) setSelected(null);
+      else if (peek) setPeek(null);
       else if (filtersOpen) setFiltersOpen(false);
       else if (drawerOpen) setDrawerOpen(false);
       else setView("map");
@@ -102,7 +105,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, filtersOpen, drawerOpen, view]);
+  }, [selected, peek, filtersOpen, drawerOpen, view]);
 
   const dismissCoach = useCallback(() => {
     setCoachSeen(true);
@@ -134,7 +137,13 @@ export function App() {
   const openEvent = useCallback((i: EventItem) => {
     haptic("light");
     setView("map");
+    setPeek(null);
     setSelected(i);
+  }, []);
+
+  const onCluster = useCallback((evs: EventItem[]) => {
+    haptic("light");
+    setPeek(evs);
   }, []);
 
   // Deep link: open a specific event passed via startapp (?startapp=<id>) or a
@@ -190,7 +199,10 @@ export function App() {
         heading={heading}
         locateNonce={locateNonce}
         onSelect={openEvent}
+        onCluster={onCluster}
       />
+
+      <ClusterPeek events={selected ? null : peek} userPos={userPos} onSelect={openEvent} onClose={() => setPeek(null)} />
 
       <RadarPing key={radarNonce} nonce={radarNonce} />
 

@@ -28,6 +28,7 @@
 }
 
 .vpin__plate {
+  position: relative;
   width: 30px;
   height: 30px;
   background: var(--plinth);
@@ -39,6 +40,20 @@
 
 .vpin__plate svg {
   display: block;
+}
+
+/* Category colour code — a thin rail along the plate's bottom edge. */
+.vpin__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--cat, transparent);
+}
+
+.vpin--active .vpin__rail {
+  display: none;
 }
 
 .vpin__nail {

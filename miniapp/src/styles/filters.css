@@ -116,7 +116,7 @@
 
 .csheet__cat svg {
   flex: 0 0 auto;
-  color: var(--ink);
+  color: var(--cat, var(--ink));
 }
 
 .csheet__cat-all {
