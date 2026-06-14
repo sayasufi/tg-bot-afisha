@@ -258,8 +258,10 @@ export function App() {
         selected={selected}
         query={filters.q}
         userPos={userPos}
+        items={items}
         isFav={!!selected && fav.has(selected.event_id)}
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
+        onSelect={openEvent}
         onClose={() => setSelected(null)}
       />
 

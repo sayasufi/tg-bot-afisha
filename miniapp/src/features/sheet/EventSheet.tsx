@@ -1,59 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, type EventDetail, type EventItem } from "../../api/client";
+import { addToCalendar } from "../../lib/calendar";
 import { categoryMeta } from "../../lib/categories";
 import { formatWhen } from "../../lib/datetime";
 import { nearLabel, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
-import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
+import { CategoryIcon, IconCalendar, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
+import { SimilarEvents } from "./SimilarEvents";
+import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
 
 type Props = {
   selected: EventItem | null;
   query?: string;
   userPos?: LatLon | null;
+  items: EventItem[];
   isFav: boolean;
   onToggleFav: () => void;
+  onSelect: (i: EventItem) => void;
   onClose: () => void;
 };
 
-// Short museum "accession" codes per category, for the catalogue affect.
-const CAT_CODE: Record<string, string> = {
-  concert: "КОНЦ",
-  theatre: "ТЕАТР",
-  exhibition: "ВЫСТ",
-  standup: "СТЕНД",
-  festival: "ФЕСТ",
-  lecture: "ЛЕКЦ",
-  kids: "ДЕТИ",
-  other: "ПРОЧ",
-};
-
-function stripHtml(text: string): string {
-  return text
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&[a-z]+;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function formatPrice(price: number | null | undefined): string {
-  if (price == null) return "Цена не указана";
-  if (price === 0) return "Бесплатно";
-  return `от ${Math.round(price)} ₽`;
-}
-
-// Stable 4-digit "accession" sequence from the event id.
-function accessionNo(id: string | number): string {
-  const s = String(id);
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return String(h % 10000).padStart(4, "0");
-}
-
-export function EventSheet({ selected, query, userPos, isFav, onToggleFav, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, isFav, onToggleFav, onSelect, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -107,6 +77,20 @@ export function EventSheet({ selected, query, userPos, isFav, onToggleFav, onClo
   const onShare = () => {
     haptic("light");
     shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: sourceUrl });
+  };
+
+  const startIso = occ?.date_start ?? selected.date_start;
+  const onCalendar = () => {
+    haptic("light");
+    addToCalendar({
+      id: selected.event_id,
+      title: selected.title,
+      start: startIso,
+      end: occ?.date_end ?? selected.date_end,
+      location: [venue, address].filter(Boolean).join(", ") || null,
+      description: [description, sourceUrl].filter(Boolean).join("\n\n") || null,
+      url: sourceUrl,
+    });
   };
 
   return (
@@ -205,6 +189,14 @@ export function EventSheet({ selected, query, userPos, isFav, onToggleFav, onClo
             </a>
           )}
         </div>
+
+        {startIso && (
+          <button type="button" className="btn btn--ghost sheet__cal" onClick={onCalendar}>
+            <IconCalendar size={16} />В календарь
+          </button>
+        )}
+
+        <SimilarEvents selected={selected} items={items} userPos={userPos} onSelect={onSelect} />
       </div>
     </div>
   );

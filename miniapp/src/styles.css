@@ -865,6 +865,23 @@ body {
   background: var(--vitrine);
 }
 
+/* "В календарь" — a standalone full-width secondary action under the row. */
+.sheet__cal {
+  width: 100%;
+  height: 48px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* "Рядом ещё" — nearest other events, listed under the detail. */
+.sheet__similar {
+  margin-top: 22px;
+}
+
 /* ---------- Left drawer — partition wall ---------- */
 .drawer {
   position: fixed;
