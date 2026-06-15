@@ -27,11 +27,8 @@ export function MapController({
 
   useEffect(() => {
     if (selected && selected.lat != null && selected.lon != null) {
-      // Offset the camera so the pin lands in the visible strip ABOVE the sheet
-      // (which covers the lower ~82%) — keeps the pin + its constellation in view.
-      const z = Math.max(map.getZoom(), 16);
-      const p = map.project([selected.lat, selected.lon], z).add([0, map.getSize().y * 0.34]);
-      map.flyTo(map.unproject(p, z), z, { duration: 0.7 });
+      // Centre the pin on screen — the sheet then blooms out of it.
+      map.flyTo([selected.lat, selected.lon], Math.max(map.getZoom(), 16), { duration: 0.9 });
     }
   }, [selected, map]);
 

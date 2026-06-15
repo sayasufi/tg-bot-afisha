@@ -35,16 +35,22 @@ html[data-theme="dark"] .sheet-veil {
   border-top: 1px solid var(--line);
   border-radius: 0;
   padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
-  animation: sheetUp 0.42s var(--ease-cut) both;
+  /* Blooms out of the selected pin: the pin is centred on screen, which lands
+     ~40% down the sheet, so we scale from there — the card feels pulled out of
+     the map at the marker. */
+  transform-origin: 50% 40%;
+  animation: sheetUp 0.5s var(--ease-cut) both;
   scrollbar-width: thin;
   scrollbar-color: var(--ink) transparent;
 }
 
-/* Rises from below so the map (spark, fly, constellation) shows during the
-   slide rather than being snapped over. */
 @keyframes sheetUp {
   from {
-    transform: translateY(100%);
+    transform: scale(0.06);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
   }
 }
 

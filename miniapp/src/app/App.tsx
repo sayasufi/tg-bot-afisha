@@ -193,7 +193,7 @@ export function App() {
       setSheetReady(false);
       return;
     }
-    const t = setTimeout(() => setSheetReady(true), 360);
+    const t = setTimeout(() => setSheetReady(true), 560);
     return () => clearTimeout(t);
   }, [selected]);
 
