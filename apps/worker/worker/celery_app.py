@@ -76,3 +76,10 @@ celery_app.conf.beat_schedule = {
 
 celery_app.conf.task_default_retry_delay = 10
 celery_app.conf.task_acks_late = True
+
+# RedBeat: store the beat schedule in Redis behind a distributed lock so the
+# scheduler is no longer a single hard-wired process — multiple beat replicas can
+# run and exactly one fires each tick (removes the beat SPOF when scaling out).
+celery_app.conf.redbeat_redis_url = settings.redis_url
+celery_app.conf.beat_scheduler = "redbeat.RedBeatScheduler"
+celery_app.conf.redbeat_lock_timeout = 900

@@ -13,6 +13,7 @@ dependencies = [
   "pydantic==2.11.7",
   "pydantic-settings==2.10.1",
   "celery[redis]==5.5.3",
+  "celery-redbeat==2.2.0",
   "redis==5.2.1",
   "httpx==0.28.1",
   "curl-cffi==0.15.0",

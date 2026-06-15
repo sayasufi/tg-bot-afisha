@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgis/postgis:16-3.4
+    restart: unless-stopped
     environment:
       POSTGRES_DB: afisha
       POSTGRES_USER: afisha
@@ -21,6 +22,7 @@ services:
 
   redis:
     image: redis:7.4-alpine
+    restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
@@ -48,6 +50,7 @@ services:
       context: .
       dockerfile: infra/docker/python.Dockerfile
     env_file: .env
+    restart: unless-stopped
     command: sh -c "alembic upgrade head && uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     ports:
       - "8000:8000"
@@ -70,6 +73,7 @@ services:
       context: .
       dockerfile: infra/docker/python.Dockerfile
     env_file: .env
+    restart: unless-stopped
     command: celery -A apps.worker.worker.celery_app.celery_app worker -l info -Q fetch,normalize,enrich,dedup
     # Lets the worker reach services published on the docker host (e.g. a local LLM).
     extra_hosts:
@@ -89,6 +93,7 @@ services:
       context: .
       dockerfile: infra/docker/python.Dockerfile
     env_file: .env
+    restart: unless-stopped
     command: celery -A apps.worker.worker.celery_app.celery_app beat -l info
     volumes:
       - .:/app
@@ -105,6 +110,7 @@ services:
       context: .
       dockerfile: infra/docker/python.Dockerfile
     env_file: .env
+    restart: unless-stopped
     command: python -m apps.bot.bot.main
     volumes:
       - .:/app
@@ -116,6 +122,7 @@ services:
     build:
       context: ./miniapp
       dockerfile: ../infra/docker/miniapp.Dockerfile
+    restart: unless-stopped
     environment:
       # Default only when UNSET; an explicit empty value means same-origin
       # (the API is reverse-proxied under /v1 on whatever host serves the app).
