@@ -5,6 +5,7 @@ import time
 
 from sqlalchemy import func, text
 
+from core.cities import city_for_source_config
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
     find_cached_venue,
@@ -47,7 +48,6 @@ def _source_coords(payload: dict | None) -> tuple[float, float] | None:
 @single_instance("enrich")
 def enrich_candidates(self):
     db = SessionLocal()
-    settings = get_settings()
     geocoder = GeocodingService()
     llm = LLMService()
     try:
@@ -59,8 +59,6 @@ def enrich_candidates(self):
                 continue
 
             venue_name = (candidate.venue or "").strip() or "Unknown venue"
-            city = settings.default_city
-            country = settings.default_country
             address = (candidate.address or "").strip()
             geo = None
             venue = None
@@ -69,6 +67,10 @@ def enrich_candidates(self):
             confidence = 0.0
 
             raw = get_raw(db, candidate.raw_id)
+            # City comes from the event's source (multi-city), not a global default.
+            city_cfg = city_for_source_config(raw.source.config_json if raw and raw.source else None)
+            city = city_cfg.name
+            country = city_cfg.country
             src = _source_coords(raw.raw_payload_json if raw else None)
 
             if src:

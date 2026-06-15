@@ -15,6 +15,7 @@ from core.db.repositories.ingestion import (
     finish_source_run,
     get_active_telegram_channels,
 )
+from core.cities import DEFAULT_CITY
 from core.db.session import SessionLocal
 from core.tasklock import single_instance
 
@@ -42,12 +43,12 @@ def fetch_kudago(self):
         "kudago",
         "web",
         settings.kudago_base_url,
-        {"cursor": "1", "location": "msk", "page_size": 100},
+        {"cursor": "1", "location": DEFAULT_CITY.kudago_location, "page_size": 100},
     )
     run = create_source_run(db, source.source_id)
     try:
         cursor = source.config_json.get("cursor")
-        location = source.config_json.get("location", "msk")
+        location = source.config_json.get("location", DEFAULT_CITY.kudago_location)
         page_size = int(source.config_json.get("page_size", 100))
         connector = KudaGoConnector(location=location, page_size=page_size)
         records, next_cursor = _fetch_kudago_page(connector, cursor)
@@ -74,11 +75,11 @@ def fetch_kudago_full_scan(self):
         "kudago",
         "web",
         settings.kudago_base_url,
-        {"cursor": "1", "location": "msk", "page_size": 100},
+        {"cursor": "1", "location": DEFAULT_CITY.kudago_location, "page_size": 100},
     )
     run = create_source_run(db, source.source_id)
     try:
-        location = source.config_json.get("location", "msk")
+        location = source.config_json.get("location", DEFAULT_CITY.kudago_location)
         page_size = int(source.config_json.get("page_size", 100))
         max_pages = int(source.config_json.get("full_scan_max_pages", 50))
         connector = KudaGoConnector(location=location, page_size=page_size)
@@ -123,7 +124,7 @@ def fetch_kudago_full_scan(self):
 
 
 def _yandex_config(settings) -> dict:
-    return {"cursor": "0", "city": "moscow", "page_size": 100}
+    return {"cursor": "0", "city": DEFAULT_CITY.yandex_city, "page_size": 100}
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -138,7 +139,7 @@ def fetch_yandex_afisha(self):
     run = create_source_run(db, source.source_id)
     try:
         cursor = source.config_json.get("cursor", "0")
-        city = source.config_json.get("city", "moscow")
+        city = source.config_json.get("city", DEFAULT_CITY.yandex_city)
         page_size = int(source.config_json.get("page_size", 100))
         connector = YandexAfishaConnector(city=city, page_size=page_size)
         records, next_cursor = asyncio.run(connector.fetch(cursor=cursor))
@@ -167,7 +168,7 @@ def fetch_yandex_afisha_full_scan(self):
     source = ensure_source(db, "yandex_afisha", "web", settings.yandex_afisha_base_url, _yandex_config(settings))
     run = create_source_run(db, source.source_id)
     try:
-        city = source.config_json.get("city", "moscow")
+        city = source.config_json.get("city", DEFAULT_CITY.yandex_city)
         page_size = int(source.config_json.get("page_size", 100))
         max_pages = int(source.config_json.get("full_scan_max_pages", 40))
         connector = YandexAfishaConnector(city=city, page_size=page_size)
