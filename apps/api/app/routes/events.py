@@ -27,7 +27,7 @@ async def get_map_events(
     price_min: float | None = None,
     price_max: float | None = None,
     q: str | None = None,
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int | None = Query(default=None, ge=1, le=20000),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_async_db),
 ):

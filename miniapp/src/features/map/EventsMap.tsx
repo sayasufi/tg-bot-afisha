@@ -29,7 +29,6 @@ const MOSCOW: [number, number] = [55.751244, 37.618423];
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 
 export function EventsMap({ items, selected, userPos, heading, locateNonce, theme, metro, onSelect, onCluster, onReady }: Props) {
-  const selectedId = selected?.event_id ?? null;
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
   const metroIco = useMemo(() => metroIcon(), []);
@@ -111,6 +110,9 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
   // updates, locate taps) don't rebuild every pin. Rebuilding recreates each
   // divIcon and replays its entrance animation — which is what made markers
   // "blink" on a static screen. Only item/selection/handler changes regenerate.
+  // Build the clustered pins WITHOUT the selected/active state, so tapping a pin
+  // does NOT rebuild all markers (at thousands of events that rebuild is the main
+  // source of lag). The active highlight is a separate overlay marker (below).
   const cluster = useMemo(() => {
     const pins = items.filter((i) => i.lat != null && i.lon != null);
     return (
@@ -128,13 +130,23 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
           <Marker
             key={item.event_id}
             position={[item.lat as number, item.lon as number]}
-            icon={pinIcon(item, item.event_id === selectedId, isLiveNow(item.date_start, item.date_end, item.venue_hours))}
+            icon={pinIcon(item, false, isLiveNow(item.date_start, item.date_end, item.venue_hours))}
             eventHandlers={{ click: () => onSelect(item) }}
           />
         ))}
       </MarkerClusterGroup>
     );
-  }, [items, selectedId, onSelect, clusterHandlers]);
+  }, [items, onSelect, clusterHandlers]);
+
+  // The selected event's highlighted pin, drawn once on top of the cluster — so
+  // selecting/deselecting touches one marker instead of regenerating the whole set.
+  const selectedIco = useMemo(
+    () =>
+      selected && selected.lat != null && selected.lon != null
+        ? pinIcon(selected, true, isLiveNow(selected.date_start, selected.date_end, selected.venue_hours))
+        : null,
+    [selected],
+  );
 
   // Rebuild the user icon only when the (throttled) heading changes, so the
   // user marker doesn't get a fresh divIcon — and replay its pulse — on every
@@ -147,10 +159,18 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
         {cluster}
+        {selected && selected.lat != null && selected.lon != null && selectedIco && (
+          <Marker
+            position={[selected.lat, selected.lon]}
+            icon={selectedIco}
+            zIndexOffset={800}
+            eventHandlers={{ click: () => onSelect(selected) }}
+          />
+        )}
         {selected && metro && (
           <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />
         )}
-        {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
+        {userPos && <Marker position={userPos} icon={userIco} pane="shadowPane" interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
       </MapContainer>
     </div>

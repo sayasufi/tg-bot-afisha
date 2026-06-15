@@ -48,7 +48,10 @@ export function App() {
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
-    params.set("limit", "300");
+    // No limit: fetch every event matching the filters so the map shows exactly the
+    // "Показать N" count (and the client-side radius filter works over the full set).
+    // Rendering is optimised by clustering (react-leaflet-cluster + chunkedLoading),
+    // which keeps thousands of markers smooth without capping the data.
     if (filters.q) params.set("q", filters.q);
     for (const c of filters.categories) params.append("categories", c);
     if (filters.dateFrom) params.set("date_from", new Date(filters.dateFrom).toISOString());
