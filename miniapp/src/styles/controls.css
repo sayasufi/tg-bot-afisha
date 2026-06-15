@@ -266,9 +266,9 @@
   display: flex;
   flex-direction: column;
   background: var(--plinth);
-  /* Crisp ink frame — the same inset hairline the map's pins & clusters wear,
-     so the controls read as part of the gallery, not a generic browser widget. */
-  box-shadow: inset 0 0 0 1px var(--ink);
+  /* Chrome frame — match the topbar / search / chips (--line), NOT the map's
+     pins & clusters, so a lone control never reads as a stray marker. */
+  border: 1px solid var(--line);
   animation: mapctlIn 0.34s var(--ease-cut) both;
 }
 
@@ -296,9 +296,9 @@
   transition: transform 0.1s ease;
 }
 
-/* the one internal line — an ink hairline splitting + from − */
+/* the one internal line — a hairline splitting + from − */
 .mapctl__btn--zoom + .mapctl__btn--zoom {
-  box-shadow: inset 0 1px 0 var(--ink);
+  border-top: 1px solid var(--line);
 }
 
 .mapctl__btn--zoom:active:not(:disabled) {
@@ -316,7 +316,7 @@
 }
 
 /* Locate — a detached control in the bottom-right corner; lifts to clear the
-   focus bar when one is showing. Same plinth + ink frame as the zoom unit. */
+   focus bar when one is showing. Same plinth + chrome frame as the zoom unit. */
 .mapctl-locate {
   position: absolute;
   right: 14px;
@@ -327,7 +327,7 @@
   display: grid;
   place-items: center;
   background: var(--plinth);
-  box-shadow: inset 0 0 0 1px var(--ink);
+  border: 1px solid var(--line);
   color: var(--ink);
   cursor: pointer;
   animation: ctlFade 0.3s var(--ease-cut) both;
