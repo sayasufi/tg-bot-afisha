@@ -334,6 +334,11 @@ export function App() {
     }, 230);
     return () => clearTimeout(t);
   }, [focusOut]);
+
+  const handleLocate = useCallback(() => {
+    dismissCoach();
+    onLocate();
+  }, [dismissCoach, onLocate]);
   // The slim "marked exhibit" bar shows on the map when a marker is highlighted
   // and no card is open.
   const focusBarVisible = view === "map" && !!focused && !selected;
@@ -431,6 +436,8 @@ export function App() {
           onCluster={onCluster}
           onZoom={onZoom}
           onClearFocus={clearFocus}
+          onLocate={handleLocate}
+          locating={locating}
           onReady={handleMapReady}
         />
       </Suspense>
@@ -456,25 +463,6 @@ export function App() {
       )}
 
       {focusBarVisible && focused && <FocusBar event={focused} out={focusOut} onOpen={openEvent} onClose={dismissFocus} />}
-
-      <button
-        type="button"
-        className={`fab${locating ? " fab--busy" : ""}`}
-        onClick={() => {
-          dismissCoach();
-          onLocate();
-        }}
-        aria-label="Моё местоположение"
-      >
-        <svg className="fab__icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-          <circle cx="12" cy="12" r="4.2" fill="currentColor" />
-          <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-          <line x1="12" y1="1.5" x2="12" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <line x1="12" y1="19" x2="12" y2="22.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <line x1="1.5" y1="12" x2="5" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <line x1="19" y1="12" x2="22.5" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      </button>
 
       <EventSheet
         selected={sheetReady ? selected : null}

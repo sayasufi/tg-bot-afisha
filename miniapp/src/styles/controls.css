@@ -253,83 +253,63 @@
 }
 
 /* ---------- FAB — square nameplate, acid on press ---------- */
-.fab {
+/* ---------- Map controls — one compact rail (zoom + locate) ---------- */
+.mapctl {
   position: absolute;
-  right: 16px;
-  bottom: calc(env(safe-area-inset-bottom) + 22px);
-  z-index: 1150;
-  width: 50px;
-  height: 50px;
-  border-radius: 0;
-  border: 1px solid var(--line);
-  display: grid;
-  place-items: center;
-  background: var(--plinth);
-  color: var(--ink);
-  cursor: pointer;
-  transition: transform 0.26s var(--ease-cut), background 0.1s ease;
-  animation: dropIn 0.4s var(--ease-cut) both 0.15s;
-}
-
-.fab:active {
-  background: var(--acid);
-}
-
-/* Lift the locate FAB above the focus bar while it's shown. */
-.app--focusbar .fab {
-  transform: translateY(-56px);
-}
-
-/* ---------- Zoom +/- buttons (stacked above the FAB) ---------- */
-.zoombtns {
-  position: absolute;
-  right: 16px;
-  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  right: 14px;
+  bottom: calc(env(safe-area-inset-bottom) + 20px);
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  animation: dropIn 0.4s var(--ease-cut) both 0.15s;
   transition: transform 0.26s var(--ease-cut);
 }
 
-.app--focusbar .zoombtns {
+.app--focusbar .mapctl {
   transform: translateY(-56px);
 }
 
-.zoombtn {
-  width: 50px;
-  height: 44px;
+.mapctl__btn {
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
-  background: var(--plinth);
+  border: none;
+  background: none;
   color: var(--ink);
-  font-family: var(--grotesk);
-  font-size: 22px;
-  font-weight: 300;
-  line-height: 1;
   cursor: pointer;
   transition: background 0.1s ease;
 }
 
-.zoombtn:first-child {
-  border-bottom: none;
+.mapctl__btn + .mapctl__btn {
+  border-top: 1px solid var(--line-soft);
 }
 
-.zoombtn:active:not(:disabled) {
+/* A firmer divider before the locate button. */
+.mapctl__btn--locate {
+  border-top: 1px solid var(--line);
+}
+
+.mapctl__btn--zoom {
+  font-family: var(--grotesk);
+  font-size: 19px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.mapctl__btn:active:not(:disabled) {
   background: var(--acid);
   color: var(--on-acid);
 }
 
-.zoombtn:disabled {
+.mapctl__btn:disabled {
   color: var(--ink-faint);
   cursor: default;
 }
 
-.fab__icon {
-  display: block;
-}
-
-.fab--busy {
+.mapctl__btn--busy {
   animation: blink 1s steps(2) infinite;
 }
 

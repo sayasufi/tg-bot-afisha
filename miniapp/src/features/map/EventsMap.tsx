@@ -33,6 +33,8 @@ type Props = {
   onCluster: (events: EventItem[]) => void;
   onZoom: (zoom: number) => void;
   onClearFocus: () => void;
+  onLocate: () => void;
+  locating: boolean;
   onReady?: () => void;
 };
 
@@ -65,8 +67,9 @@ function MapClickClear({ onClear }: { onClear: () => void }) {
   return null;
 }
 
-// Click-to-zoom +/- buttons (like every map app), styled to match the FAB.
-function ZoomButtons() {
+// One compact control rail — zoom +/- and locate grouped into a single hairline
+// column (instead of separate bulky buttons).
+function MapControls({ onLocate, locating }: { onLocate: () => void; locating: boolean }) {
   const map = useMap();
   const ref = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(map.getZoom());
@@ -83,12 +86,22 @@ function ZoomButtons() {
     };
   }, [map]);
   return (
-    <div className="zoombtns" ref={ref}>
-      <button type="button" className="zoombtn" aria-label="Приблизить" disabled={zoom >= map.getMaxZoom()} onClick={() => map.zoomIn()}>
+    <div className="mapctl" ref={ref}>
+      <button type="button" className="mapctl__btn mapctl__btn--zoom" aria-label="Приблизить" disabled={zoom >= map.getMaxZoom()} onClick={() => map.zoomIn()}>
         +
       </button>
-      <button type="button" className="zoombtn" aria-label="Отдалить" disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}>
+      <button type="button" className="mapctl__btn mapctl__btn--zoom" aria-label="Отдалить" disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}>
         −
+      </button>
+      <button type="button" className={`mapctl__btn mapctl__btn--locate${locating ? " mapctl__btn--busy" : ""}`} aria-label="Моё местоположение" onClick={onLocate}>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.6" fill="currentColor" />
+          <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <line x1="2" y1="12" x2="5" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
       </button>
     </div>
   );
@@ -145,6 +158,8 @@ export function EventsMap({
   onCluster,
   onZoom,
   onClearFocus,
+  onLocate,
+  locating,
   onReady,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -306,7 +321,7 @@ export function EventsMap({
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />
         <MapClickClear onClear={onClearFocus} />
-        <ZoomButtons />
+        <MapControls onLocate={onLocate} locating={locating} />
         {useServerClusters ? <ServerClusters clusters={clusters} /> : cluster}
         {focused && focused.lat != null && focused.lon != null && focusedIco && (
           <Marker
