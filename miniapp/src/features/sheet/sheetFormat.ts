@@ -26,14 +26,23 @@ export function stripHtml(text: string): string {
 
 const rub = (n: number) => `${Math.round(n)} ₽`;
 
-export function formatPrice(min: number | null | undefined, max?: number | null): string {
-  if (min == null && max == null) return "Цена не указана";
-  const lo = min ?? 0;
-  const hi = max ?? null;
-  if (lo === 0 && (hi == null || hi === 0)) return "Бесплатно";
-  if (lo === 0 && hi != null && hi > 0) return `до ${rub(hi)}`;
-  if (hi != null && hi > lo) return `${Math.round(lo)}–${rub(hi)}`;
-  return `от ${rub(lo)}`;
+// The detail API serialises Decimal as a string ("0.00"), the map as a number —
+// coerce so the free/“от 0” checks work for both.
+const num = (v: number | string | null | undefined): number | null => {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+export function formatPrice(min: number | string | null | undefined, max?: number | string | null): string {
+  const lo = num(min);
+  const hi = num(max);
+  if (lo == null && hi == null) return "Цена не указана";
+  const L = lo ?? 0;
+  if (L === 0 && (hi == null || hi === 0)) return "Бесплатно";
+  if (L === 0 && hi != null && hi > 0) return `до ${rub(hi)}`;
+  if (hi != null && hi > L) return `${Math.round(L)}–${rub(hi)}`;
+  return `от ${rub(L)}`;
 }
 
 // Stable 4-digit "accession" sequence from the event id.

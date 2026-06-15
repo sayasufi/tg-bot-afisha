@@ -50,7 +50,7 @@ function endInfo(s: Date, endIso: string | null | undefined, now: Date): { end: 
 }
 
 // Full format for the detail sheet, e.g.:
-//   "19 июня, 18:30"        "19 июня, 18:30–22:00"        "по 1 января"
+//   "19 июня, 18:30"        "19 июня, 18:30–22:00"        "до 1 января"
 //   "постоянно"             "с 9 августа"                 "19 июня — 21 июня"
 export function formatWhen(startIso?: string | null, endIso?: string | null, now: Date = new Date()): string {
   const s = parse(startIso);
@@ -74,7 +74,7 @@ export function formatWhen(startIso?: string | null, endIso?: string | null, now
     const ep = dmy(e, yr(e)) + (!isMidnight(e) ? `, ${hm(e)}` : "");
     return `${sp} — ${ep}`;
   }
-  if (s.getTime() <= now.getTime()) return `по ${dmy(e, yr(e))}`;
+  if (s.getTime() <= now.getTime()) return `до ${dmy(e, yr(e))}`;
   return `${dmy(s, yr(s))} — ${dmy(e, yr(e))}`;
 }
 
@@ -123,7 +123,7 @@ export function formatWhenShort(startIso?: string | null, endIso?: string | null
     return `с ${dmy(s, false, true)}`;
   }
   if (e && !sameDay(s, e)) {
-    if (dayDiff(s, e) > 2 && s.getTime() <= now.getTime()) return `по ${dmy(e, yr(e), true)}`;
+    if (dayDiff(s, e) > 2 && s.getTime() <= now.getTime()) return `до ${dmy(e, yr(e), true)}`;
     return `${dmy(s, false, true)} — ${dmy(e, yr(e), true)}`;
   }
   if (e && sameDay(s, e) && hasTime) {
