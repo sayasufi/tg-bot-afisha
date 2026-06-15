@@ -40,6 +40,9 @@ export function App() {
   const clusterCache = useRef<Map<string, MapCluster[]>>(new Map());
   const [metro, setMetro] = useState<MetroStation[]>([]);
   const [selected, setSelected] = useState<EventItem | null>(null);
+  // The marker that stays highlighted (acid) on the map — persists after the sheet
+  // closes and at any zoom, until you focus another event.
+  const [focused, setFocused] = useState<EventItem | null>(null);
   const [peek, setPeek] = useState<EventItem[] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -272,6 +275,7 @@ export function App() {
     // map), so closing the event returns you exactly where you were.
     setPeek(null);
     setSelected(i);
+    setFocused(i); // keep this marker highlighted on the map even after closing
     logEventSeen(i.event_id); // engagement signal for recommendations
     recordOpen(i.category); // behavioural profile for personalised ranking
   }, []);
@@ -389,6 +393,7 @@ export function App() {
           clusters={clusters}
           clusterMode={clusterMode}
           selected={selected}
+          focused={focused}
           userPos={userPos}
           heading={heading}
           locateNonce={locateNonce}

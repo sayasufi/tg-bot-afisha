@@ -21,6 +21,7 @@ type Props = {
   clusters: MapCluster[];
   clusterMode: boolean;
   selected: EventItem | null;
+  focused: EventItem | null;
   userPos: [number, number] | null;
   heading: number | null;
   locateNonce: number;
@@ -94,6 +95,7 @@ export function EventsMap({
   clusters,
   clusterMode,
   selected,
+  focused,
   userPos,
   heading,
   locateNonce,
@@ -239,14 +241,16 @@ export function EventsMap({
     );
   }, [pins, onSelect, clusterHandlers]);
 
-  // The selected event's highlighted pin, drawn once on top of the cluster — so
-  // selecting/deselecting touches one marker instead of regenerating the whole set.
-  const selectedIco = useMemo(
+  // The FOCUSED event's highlighted (acid) pin, drawn once on top of everything.
+  // It tracks `focused` — which persists after the sheet is closed and at any zoom
+  // (even over clusters) — so the marker you tapped stays marked until you pick
+  // another. Drawn as one overlay marker, so it never rebuilds the whole set.
+  const focusedIco = useMemo(
     () =>
-      selected && selected.lat != null && selected.lon != null
-        ? pinIcon(selected, true, isLiveNow(selected.date_start, selected.date_end, selected.venue_hours))
+      focused && focused.lat != null && focused.lon != null
+        ? pinIcon(focused, true, isLiveNow(focused.date_start, focused.date_end, focused.venue_hours))
         : null,
-    [selected],
+    [focused],
   );
 
   // Rebuild the user icon only when the (throttled) heading changes, so the
@@ -261,12 +265,12 @@ export function EventsMap({
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />
         {useServerClusters ? <ServerClusters clusters={clusters} /> : cluster}
-        {selected && selected.lat != null && selected.lon != null && selectedIco && (
+        {focused && focused.lat != null && focused.lon != null && focusedIco && (
           <Marker
-            position={[selected.lat, selected.lon]}
-            icon={selectedIco}
+            position={[focused.lat, focused.lon]}
+            icon={focusedIco}
             zIndexOffset={800}
-            eventHandlers={{ click: () => onSelect(selected) }}
+            eventHandlers={{ click: () => onSelect(focused) }}
           />
         )}
         {selected && metro && (
