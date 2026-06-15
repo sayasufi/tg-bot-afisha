@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
-import { formatWhen } from "../../lib/datetime";
+import { formatWhen, whenNeedsTimeHint } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
@@ -164,7 +164,12 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
         <div className="sheet__meta">
           <div className="wall-label">
             <span className="wall-label__cap">Когда</span>
-            <span className="wall-label__val">{dates || "—"}</span>
+            <span className="wall-label__val">
+              {dates || "—"}
+              {whenNeedsTimeHint(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end) && (
+                <span className="dim"> · время уточняйте</span>
+              )}
+            </span>
           </div>
           {venue && (
             <div className="wall-label">

@@ -78,6 +78,22 @@ export function formatWhen(startIso?: string | null, endIso?: string | null, now
   return `${dmy(s, yr(s))} — ${dmy(e, yr(e))}`;
 }
 
+// True when an event reads as "all day" only because it has NO clock time — a
+// single/short-day point without a time. Lets the UI say "время уточняйте"
+// instead of implying it runs round the clock. Runs, permanent exhibits and
+// already-timed events return false (their framing is honest as-is).
+export function whenNeedsTimeHint(startIso?: string | null, endIso?: string | null, now: Date = new Date()): boolean {
+  const s = parse(startIso);
+  if (!s) return false;
+  if (!isMidnight(s)) return false; // has a real time
+  const { end: e, open } = endInfo(s, endIso, now);
+  if (open) return false; // permanent / ongoing run
+  if (!e) return true; // single-day point, no time
+  if (sameDay(s, e)) return true; // same-day, no time
+  if (dayDiff(s, e) <= 2) return true; // short span, no time
+  return false; // a multi-day / "по X" run — framed as a range, not a clock
+}
+
 // Compact format for list rows / ticker (short months).
 export function formatWhenShort(startIso?: string | null, endIso?: string | null, now: Date = new Date()): string {
   const s = parse(startIso);
