@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MetroStation } from "../api/client";
 import { EMPTY_FILTERS, Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
-import { EventsMap } from "../features/map/EventsMap";
+
+// The map pulls in maplibre-gl (~1 MB) + leaflet; lazy-load it so the app shell
+// and the instant splash render without waiting on that bundle to parse.
+const EventsMap = lazy(() => import("../features/map/EventsMap").then((m) => ({ default: m.EventsMap })));
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
 import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
@@ -207,6 +210,16 @@ export function App() {
     setRefreshNonce((n) => n + 1);
   }, []);
 
+  // Drop the instant splash only once the basemap has actually rendered, so the
+  // user never sees a blank/initialising map (and no layout shift behind it).
+  const handleMapReady = useCallback(() => {
+    const splash = document.getElementById("splash");
+    if (splash) {
+      splash.classList.add("hide");
+      window.setTimeout(() => splash.remove(), 400);
+    }
+  }, []);
+
   const toggleTheme = useCallback(() => {
     haptic("light");
     setTheme((t) => {
@@ -264,17 +277,20 @@ export function App() {
         />
       )}
 
-      <EventsMap
-        items={shownItems}
-        selected={selected}
-        userPos={userPos}
-        heading={heading}
-        locateNonce={locateNonce}
-        theme={theme}
-        metro={nearMetro}
-        onSelect={openEvent}
-        onCluster={onCluster}
-      />
+      <Suspense fallback={null}>
+        <EventsMap
+          items={shownItems}
+          selected={selected}
+          userPos={userPos}
+          heading={heading}
+          locateNonce={locateNonce}
+          theme={theme}
+          metro={nearMetro}
+          onSelect={openEvent}
+          onCluster={onCluster}
+          onReady={handleMapReady}
+        />
+      </Suspense>
 
       <ClusterPeek events={selected ? null : peek} userPos={userPos} onSelect={openEvent} onClose={() => setPeek(null)} />
 

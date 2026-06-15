@@ -21,13 +21,14 @@ type Props = {
   metro: MetroPing | null;
   onSelect: (item: EventItem) => void;
   onCluster: (events: EventItem[]) => void;
+  onReady?: () => void;
 };
 
 const MOSCOW: [number, number] = [55.751244, 37.618423];
 
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 
-export function EventsMap({ items, selected, userPos, heading, locateNonce, theme, metro, onSelect, onCluster }: Props) {
+export function EventsMap({ items, selected, userPos, heading, locateNonce, theme, metro, onSelect, onCluster, onReady }: Props) {
   const selectedId = selected?.event_id ?? null;
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
@@ -144,7 +145,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
     <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
-        <Basemap theme={theme} />
+        <Basemap theme={theme} onReady={onReady} />
         {cluster}
         {selected && metro && (
           <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />

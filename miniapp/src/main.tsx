@@ -11,11 +11,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   </React.StrictMode>
 );
 
-// Fade out the instant brand splash once the app has mounted.
-const splash = document.getElementById("splash");
-if (splash) {
-  requestAnimationFrame(() => {
-    setTimeout(() => splash.classList.add("hide"), 250);
-    setTimeout(() => splash.remove(), 700);
-  });
-}
+// The splash is normally removed by App once the basemap has rendered (so the
+// map never flashes in blank). This is only a safety fallback in case the map
+// never signals ready.
+window.setTimeout(() => {
+  const splash = document.getElementById("splash");
+  if (splash) {
+    splash.classList.add("hide");
+    setTimeout(() => splash.remove(), 400);
+  }
+}, 7000);

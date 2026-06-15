@@ -77,7 +77,7 @@ const PALETTE: Record<ThemeName, MapPalette> = {
 
 // Only the legally-required data credit (OpenStreetMap / ODbL). The non-required
 // "Leaflet" prefix, "OpenFreeMap" and "OpenMapTiles" credits are dropped.
-function VectorBasemap({ theme }: { theme: ThemeName }) {
+function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => void }) {
   const map = useMap();
   useEffect(() => {
     const pal = PALETTE[theme];
@@ -325,17 +325,22 @@ function VectorBasemap({ theme }: { theme: ThemeName }) {
         /* attribution control internals changed — leave default */
       }
     };
-    if (mlMap.isStyleLoaded()) tune();
-    else mlMap.on("load", tune);
+    const ready = () => {
+      tune();
+      onReady?.();
+    };
+    if (mlMap.isStyleLoaded()) ready();
+    else mlMap.on("load", ready);
     return () => {
       map.removeLayer(gl);
     };
     // Recreate the GL layer when the theme flips — the simplest correct way to
     // re-skin every base layer (tile style + all custom repaints) at once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, theme]);
   return null;
 }
 
-export function Basemap({ theme }: { theme: ThemeName }) {
-  return <VectorBasemap theme={theme} />;
+export function Basemap({ theme, onReady }: { theme: ThemeName; onReady?: () => void }) {
+  return <VectorBasemap theme={theme} onReady={onReady} />;
 }
