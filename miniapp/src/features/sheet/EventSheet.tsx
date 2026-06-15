@@ -30,6 +30,8 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     setDetail(null);
@@ -58,6 +60,57 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
     return () => {
       sheet.removeEventListener("scroll", onScroll);
       if (raf) cancelAnimationFrame(raf);
+    };
+  }, [selected]);
+
+  // Swipe the sheet DOWN to dismiss (only when it's scrolled to the top, so it
+  // never fights the inner scroll). The sheet follows the finger, then snaps shut
+  // past a threshold or springs back.
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    let startY = 0;
+    let dy = 0;
+    let active = false;
+    const onStart = (e: TouchEvent) => {
+      if (sheet.scrollTop > 0 || e.touches.length !== 1) return;
+      startY = e.touches[0].clientY;
+      dy = 0;
+      active = true;
+      sheet.style.transition = "";
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!active) return;
+      dy = e.touches[0].clientY - startY;
+      if (dy <= 0 || sheet.scrollTop > 0) {
+        active = false;
+        sheet.style.transform = "";
+        return;
+      }
+      sheet.style.transform = `translateY(${Math.min(dy, 600)}px)`;
+      e.preventDefault();
+    };
+    const onEnd = () => {
+      if (!active) return;
+      active = false;
+      const dismiss = dy > 100;
+      sheet.style.transition = "transform 0.22s var(--ease-cut)";
+      sheet.style.transform = dismiss ? "translateY(105%)" : "";
+      if (dismiss) window.setTimeout(() => onCloseRef.current(), 190);
+      window.setTimeout(() => {
+        sheet.style.transition = "";
+        if (!dismiss) sheet.style.transform = "";
+      }, 240);
+    };
+    sheet.addEventListener("touchstart", onStart, { passive: true });
+    sheet.addEventListener("touchmove", onMove, { passive: false });
+    sheet.addEventListener("touchend", onEnd);
+    sheet.addEventListener("touchcancel", onEnd);
+    return () => {
+      sheet.removeEventListener("touchstart", onStart);
+      sheet.removeEventListener("touchmove", onMove);
+      sheet.removeEventListener("touchend", onEnd);
+      sheet.removeEventListener("touchcancel", onEnd);
     };
   }, [selected]);
 
@@ -107,7 +160,7 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
 
   return (
     <>
-      <div className="sheet-veil" aria-hidden="true" />
+      <div className="sheet-veil" onClick={onClose} />
       <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
         <div className="sheet__sticky">
           <span className="sheet__grip" />

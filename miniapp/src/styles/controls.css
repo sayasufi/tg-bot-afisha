@@ -294,7 +294,7 @@
   }
 }
 
-/* ---------- Focus bar — the marked exhibit (floating, acid-shadow) ---------- */
+/* ---------- Focus bar — the marked exhibit (a floating wall label) ---------- */
 .focusbar {
   position: absolute;
   left: 12px;
@@ -305,8 +305,6 @@
   align-items: stretch;
   background: var(--plinth);
   border: 1px solid var(--line);
-  /* The one accent: acid kept ONLY as a hard misregistration shadow. */
-  box-shadow: 3px 3px 0 var(--acid);
   animation: focusbarIn 0.26s var(--ease-cut) both;
 }
 
@@ -325,18 +323,17 @@
 @keyframes focusbarOut {
   to {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(10px) scale(0.985);
   }
 }
 
 .focusbar__main {
-  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 8px 7px 13px;
+  gap: 12px;
+  padding: 9px 8px 10px 14px;
   border: none;
   background: none;
   color: inherit;
@@ -344,63 +341,59 @@
   cursor: pointer;
 }
 
-/* Category-colour rail along the left edge. */
-.focusbar__main::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  background: var(--cat, var(--ink-faint));
-}
-
-.focusbar__cat {
+/* The one accent: a small acid tag with a cinnabar misregistration ghost. */
+.focusbar__tag {
   flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  color: var(--cat, var(--ink));
+  width: 8px;
+  height: 8px;
+  background: var(--acid);
+  box-shadow: 1.4px 1.4px 0 var(--cinnabar);
 }
 
 .focusbar__text {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
+}
+
+.focusbar__kicker {
+  font-family: var(--grotesk);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .focusbar__title {
-  font-family: var(--grotesk);
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 1.15;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.focusbar__meta {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.02em;
-  color: var(--ink-dim);
-}
-
 .focusbar__close {
   flex: 0 0 auto;
-  width: 42px;
+  width: 44px;
   display: grid;
   place-items: center;
   border: none;
-  border-left: 1px solid var(--line-soft);
   background: none;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
   cursor: pointer;
 }
 
 .focusbar__close:active {
-  background: var(--acid);
-  color: var(--on-acid);
+  color: var(--acid);
 }
 

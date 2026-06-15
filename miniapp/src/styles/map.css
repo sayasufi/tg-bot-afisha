@@ -278,61 +278,67 @@ html[data-theme="dark"] .vpin--active::before {
 
 .vyou {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 46px;
+  height: 46px;
 }
 
-.vyou__ch,
-.vyou__cv {
+/* The "you" dot — solid acid with a crisp light ring so it reads on any map. */
+.vyou__dot {
   position: absolute;
-  background: var(--acid-deep);
-}
-
-.vyou__ch {
-  left: 0;
-  top: 17px;
-  width: 36px;
-  height: 2px;
-}
-
-.vyou__cv {
-  top: 0;
-  left: 17px;
-  width: 2px;
-  height: 36px;
-}
-
-.vyou__ring {
-  position: absolute;
-  left: 9px;
-  top: 9px;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-  background: var(--bg);
-}
-
-.vyou__core {
-  position: absolute;
-  left: 15px;
-  top: 15px;
-  width: 6px;
-  height: 6px;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--acid);
-  box-shadow: 0 0 0 1px var(--ink);
+  border: 2.5px solid var(--plinth);
+  box-shadow: 0 0 0 1px var(--ink), 0 1px 5px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
 }
 
-/* heading needle — a single black instrument needle from the centre */
-.vyou__needle {
+/* Soft expanding halo — the "live" location feel. */
+.vyou__pulse {
   position: absolute;
-  left: 17px;
-  top: -4px;
-  width: 2px;
-  height: 22px;
-  background: var(--ink);
-  transform-origin: 50% 22px;
-  transform: rotate(var(--h, 0deg));
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--acid);
+  transform: translate(-50%, -50%);
+  animation: youPulse 2.4s var(--ease-cut) infinite;
+}
+
+@keyframes youPulse {
+  0% {
+    opacity: 0.35;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.2);
+  }
+}
+
+/* Heading cone — a soft acid flashlight wedge fanning out the facing way. */
+.vyou__cone {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 24px;
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -100%) rotate(var(--h, 0deg));
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  background: linear-gradient(to top, var(--acid), transparent);
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vyou__pulse {
+    animation: none;
+    opacity: 0.22;
+  }
 }
 

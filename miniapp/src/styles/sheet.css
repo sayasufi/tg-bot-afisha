@@ -6,7 +6,10 @@
   /* Above the section panels (1400) so the sheet overlays recs/favorites, not
      just the map — closing the event returns you to the panel you were in. */
   z-index: 1490;
-  pointer-events: none;
+  /* Tapping the strip above the sheet closes the card — and because the veil
+     captures the click, it never reaches the map, so the highlight stays. */
+  pointer-events: auto;
+  cursor: pointer;
   background: rgba(11, 11, 11, 0.05);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);

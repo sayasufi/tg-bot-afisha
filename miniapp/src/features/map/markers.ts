@@ -5,14 +5,15 @@ import { categoryMeta } from "../../lib/categories";
 import { categorySvg } from "../../lib/icons";
 
 // User location — a surveyor's crosshair (the map-maker's instrument), with a
-// single black needle for the compass heading when available.
+// User location — a clean acid "you" dot with a soft live pulse and, when a
+// heading is known, a flashlight cone fanning out in the facing direction.
 export function userIcon(heading: number | null): L.DivIcon {
-  const needle = heading == null ? "" : `<span class="vyou__needle" style="--h:${heading}deg"></span>`;
+  const cone = heading == null ? "" : `<span class="vyou__cone" style="--h:${heading}deg"></span>`;
   return L.divIcon({
     className: "vyou-wrap",
-    html: `<div class="vyou"><span class="vyou__ch"></span><span class="vyou__cv"></span>${needle}<span class="vyou__ring"></span><span class="vyou__core"></span></div>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
+    html: `<div class="vyou">${cone}<span class="vyou__pulse"></span><span class="vyou__dot"></span></div>`,
+    iconSize: [46, 46],
+    iconAnchor: [23, 23],
   });
 }
 
