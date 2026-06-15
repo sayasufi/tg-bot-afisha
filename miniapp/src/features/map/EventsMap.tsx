@@ -144,7 +144,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
   const userIco = useMemo(() => userIcon(heading), [heading]);
 
   return (
-    <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
+    <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`} data-mapready={mapInst ? "1" : "0"}>
       <ConstellationOverlay map={mapInst} items={items} selected={selected} />
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
