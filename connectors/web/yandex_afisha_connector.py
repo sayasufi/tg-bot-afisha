@@ -144,10 +144,14 @@ class YandexAfishaConnector:
         next_cursor = str(next_off) if 0 < total > next_off else str(offset)
         return records, next_cursor
 
-    async def scan(self, max_pages: int = 40) -> tuple[list[RawRecord], int, str]:
+    async def scan(self, max_pages: int = 40, on_page=None) -> tuple[list[RawRecord], int, str]:
         """Full in-window sweep over every offset, reusing ONE session (one TLS
         handshake) across all pages. Returns (records, pages_scanned, stop_reason);
-        de-duplicates by external_id in case the feed shifts mid-scan."""
+        de-duplicates by external_id in case the feed shifts mid-scan.
+
+        If ``on_page`` is given it's awaited with each page's fresh records as they
+        arrive, so a long scan persists incrementally — a crash keeps the pages
+        already fetched instead of losing everything."""
         today = datetime.now(_MSK).date()
         all_records: list[RawRecord] = []
         seen: set[str] = set()
@@ -158,10 +162,14 @@ class YandexAfishaConnector:
             while pages < max_pages:
                 records, total = await self._fetch_page(session, offset, today)
                 pages += 1
+                fresh = []
                 for rec in records:
                     if rec.external_id not in seen:
                         seen.add(rec.external_id)
                         all_records.append(rec)
+                        fresh.append(rec)
+                if on_page and fresh:
+                    await on_page(fresh)
                 if not records:
                     stop_reason = "empty_page"
                     break

@@ -192,9 +192,13 @@ async def _fetch_yandex_full_scan_impl() -> dict:
             max_pages = int(source.config_json.get("full_scan_max_pages", 40))
             connector = YandexAfishaConnector(city=city, page_size=page_size)
 
+            async def _persist(recs):
+                # Per-page durable write (bulk_upsert commits) so a crash mid-scan
+                # keeps everything fetched so far instead of losing the whole sweep.
+                await bulk_upsert_raw_events(db, source.source_id, recs)
+
             # One session/handshake paginates the whole in-window catalogue.
-            records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages)
-            await bulk_upsert_raw_events(db, source.source_id, records)
+            records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages, on_page=_persist)
 
             source.config_json = {**source.config_json, "cursor": "0"}
             db.add(source)
@@ -268,9 +272,14 @@ async def _fetch_afisha_full_scan_impl() -> dict:
         try:
             city = source.config_json.get("city", DEFAULT_CITY.afisha_city)
             max_pages = int(source.config_json.get("full_scan_max_pages", 80))
-            connector = AfishaRuConnector(city=city, proxy=settings.afisha_proxy)
-            records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages)
-            await bulk_upsert_raw_events(db, source.source_id, records)
+            connector = AfishaRuConnector(city=city, proxy=settings.afisha_proxy or None)
+
+            async def _persist(recs):
+                # bulk_upsert commits internally, so each page is durable as it's
+                # fetched — a crash mid-scan keeps everything fetched so far.
+                await bulk_upsert_raw_events(db, source.source_id, recs)
+
+            records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages, on_page=_persist)
             source.config_json = {**source.config_json, "cursor": "0"}
             db.add(source)
             await db.commit()

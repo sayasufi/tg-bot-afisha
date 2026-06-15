@@ -174,11 +174,15 @@ class AfishaRuConnector:
         next_cursor = str((ri + 1) % len(self.rubrics))
         return records, next_cursor
 
-    async def scan(self, max_pages: int = 60) -> tuple[list[RawRecord], int, str]:
+    async def scan(self, max_pages: int = 60, on_page=None) -> tuple[list[RawRecord], int, str]:
         """Full in-window sweep over every rubric and page, reusing ONE session.
         ``max_pages`` is the per-rubric page cap (so a dense rubric can't starve
         the others). Stops a rubric when a page yields no in-window records
-        (date-sorted feed) or the pager is exhausted. De-duplicates by external_id."""
+        (date-sorted feed) or the pager is exhausted. De-duplicates by external_id.
+
+        If ``on_page`` is given it's awaited with each page's fresh records as they
+        arrive, so a long scan persists incrementally — a crash keeps the pages
+        already fetched instead of losing everything."""
         today = datetime.now(_MSK).date()
         all_records: list[RawRecord] = []
         seen: set[str] = set()
@@ -197,10 +201,14 @@ class AfishaRuConnector:
                             return all_records, pages, "rate_limited"
                         raise
                     pages += 1
+                    fresh = []
                     for rec in records:
                         if rec.external_id not in seen:
                             seen.add(rec.external_id)
                             all_records.append(rec)
+                            fresh.append(rec)
+                    if on_page and fresh:
+                        await on_page(fresh)
                     if raw_count == 0:
                         stop_reason = "empty_page"
                         break
