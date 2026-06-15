@@ -152,8 +152,11 @@
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
-  margin: -2px;
-  padding: 2px;
+  /* Only vertical play (so overflow-x doesn't clip vertical accents); no
+     horizontal bleed — chips start flush with the 16px content column like every
+     other block, instead of poking 2px past it. */
+  margin: -2px 0;
+  padding: 2px 0;
 }
 
 .chips::-webkit-scrollbar {
