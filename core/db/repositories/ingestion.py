@@ -236,20 +236,25 @@ def get_or_create_venue(db: Session, name: str, address: str, city: str, country
     venue = db.execute(select(Venue).where(and_(Venue.name == name, Venue.address == address))).scalar_one_or_none()
     if venue:
         return venue
-    venue = Venue(
-        name=name,
-        address=address,
-        city=city,
-        country=country,
-        geocode_provider=provider,
-        geocode_confidence=confidence,
-    )
+    # Race-safe create: enrich and backfill_venues_osm can both reach the same
+    # (name, address) concurrently. INSERT ... ON CONFLICT DO NOTHING + re-select
+    # avoids the UniqueViolation on uq_venue_name_address.
+    values: dict = {
+        "name": name,
+        "address": address,
+        "city": city,
+        "country": country,
+        "geocode_provider": provider,
+        "geocode_confidence": confidence,
+    }
     if lat is not None and lon is not None:
-        venue.geom = func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326)
-    db.add(venue)
+        values["geom"] = func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326)
+    stmt = pg_insert(Venue).values(**values).on_conflict_do_nothing(constraint="uq_venue_name_address").returning(Venue.venue_id)
+    venue_id = db.execute(stmt).scalar_one_or_none()
     db.commit()
-    db.refresh(venue)
-    return venue
+    if venue_id is None:  # another worker inserted it first
+        return db.execute(select(Venue).where(and_(Venue.name == name, Venue.address == address))).scalar_one()
+    return db.get(Venue, venue_id)
 
 
 def find_cached_venue(db: Session, name: str, city: str, country: str) -> Venue | None:
