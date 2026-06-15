@@ -13,14 +13,17 @@ _SYSTEM_PROMPT = (
     "Pick EXACTLY ONE category from this fixed list: " + ", ".join(CATEGORIES) + ". "
     "Meaning of each: "
     "concert=живая музыка/концерт; theatre=спектакль/опера/балет/мюзикл; "
-    "exhibition=выставка/постоянная музейная экспозиция (которую осматривают); "
+    "exhibition=выставка/музейная экспозиция/интерактивное пространство, которое ОСМАТРИВАЮТ (в т.ч. научно-популярное); "
     "cinema=кинопоказ/фильм/киноклуб; standup=стендап/комедийный концерт; "
-    "festival=фестиваль/ярмарка/большой open-air; lecture=лекция/мастер-класс/обучение/дискуссия; "
-    "tour=экскурсия/прогулка/тур/смотровая; party=вечеринка/дискотека/квиз/викторина/знакомства; "
-    "kids=мероприятие явно для детей; other=только если ничего не подходит. "
+    "festival=фестиваль/ярмарка/большой open-air; lecture=лекция/семинар/образовательный курс/дискуссия; "
+    "tour=экскурсия/прогулка/тур/смотровая; party=вечеринка/дискотека/квиз/викторина/квест/знакомства; "
+    "kids=мероприятие явно для детей/всей семьи; other=только если ничего не подходит. "
     "RULES: classify by what people DO, not by the venue name — например свидание, квест или вечеринка В МУЗЕЕ это НЕ exhibition. "
-    "Source hints (the source's own categories/tags) are strong evidence — map them into the list above. "
-    "Use 'kids' only when the event is clearly aimed at children. Be decisive; avoid 'other' unless truly unclear."
+    "Source hints (the source's own categories/tags) are the STRONGEST evidence — if a hint matches a category, prefer it. "
+    "НЕ относи к lecture всё подряд: упоминание мастер-класса/«научиться» НЕ делает мероприятие лекцией. "
+    "Если это пространство/выставка/аттракцион, которые осматривают или посещают (даже с активностями) → exhibition; "
+    "если явно для детей или всей семьи → kids. "
+    "Use 'kids' when the event is for children or families. Be decisive; avoid 'other' unless truly unclear."
 )
 
 

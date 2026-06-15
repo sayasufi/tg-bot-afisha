@@ -5,6 +5,7 @@ import time
 
 from sqlalchemy import func, text
 
+from core.categorization import map_source_category
 from core.cities import city_for_source_config
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
@@ -117,12 +118,19 @@ async def _enrich_impl() -> dict:
                     confidence=confidence,
                 )
             candidate.venue_id = venue.venue_id
-            # Pass the source's own categories/tags as hints so the LLM maps them
-            # into our taxonomy instead of guessing from the venue name alone.
-            classify = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
-            candidate.tags_json = list(set(candidate.tags_json + classify.tags))
-            if classify.category and classify.category != "other":
-                candidate.tags_json.append(f"category:{classify.category}")
+            # Category: trust the structured source's own label first (Yandex
+            # type / KudaGo category), since the LLM over-fires 'lecture' on any
+            # mention of a master-class. Only ask the LLM when the source gave
+            # nothing usable (untyped events, Telegram free text) — which also
+            # skips the ~20s LLM round-trip for the common, well-typed case.
+            source_name = raw.source.name if raw and raw.source else ""
+            category = map_source_category(candidate.tags_json, source_name)
+            if category is None:
+                classify = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
+                category = classify.category
+                candidate.tags_json = list(set(candidate.tags_json + classify.tags))
+            if category and category != "other":
+                candidate.tags_json.append(f"category:{category}")
             db.add(candidate)
             db.add(venue)
             await db.commit()
