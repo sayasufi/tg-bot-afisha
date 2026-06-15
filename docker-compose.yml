@@ -6,7 +6,9 @@ services:
       POSTGRES_USER: afisha
       POSTGRES_PASSWORD: afisha
     ports:
-      - "127.0.0.1:5432:5432"
+      # Host 5433 -> container 5432: avoids clashing with a local Postgres on 5432.
+      # The app reaches the DB over the compose network (postgres:5432), not this port.
+      - "127.0.0.1:5433:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
