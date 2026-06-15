@@ -15,6 +15,7 @@ class EventMapItem(BaseModel):
     date_end: datetime | None = None
     price_min: Decimal | None
     venue: str | None
+    venue_hours: dict | None = None
     lat: float | None
     lon: float | None
     primary_image_url: str | None = None

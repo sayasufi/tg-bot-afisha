@@ -81,7 +81,7 @@ export function App() {
   }, [selected, metro]);
 
   // Count events happening right now — drives a "live" pulse on the ticker.
-  const liveCount = useMemo(() => shownItems.filter((i) => isLiveNow(i.date_start, i.date_end)).length, [shownItems]);
+  const liveCount = useMemo(() => shownItems.filter((i) => isLiveNow(i.date_start, i.date_end, i.venue_hours)).length, [shownItems]);
 
   // Gallery ticker line: total + city + live-now + the busiest categories.
   const tickerText = useMemo(() => {

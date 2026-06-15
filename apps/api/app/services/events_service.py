@@ -73,7 +73,7 @@ class EventQueryService:
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
         stmt = (
-            select(Event, EventOccurrence, Venue.name.label("venue_name"), lat_col, lon_col)
+            select(Event, EventOccurrence, Venue.name.label("venue_name"), Venue.hours_json.label("venue_hours"), lat_col, lon_col)
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active")
@@ -107,11 +107,12 @@ class EventQueryService:
                 "date_end": occ.date_end,
                 "price_min": occ.price_min,
                 "venue": venue_name,
+                "venue_hours": venue_hours,
                 "lat": float(lat) if lat is not None else None,
                 "lon": float(lon) if lon is not None else None,
                 "primary_image_url": event.cached_image_url or event.primary_image_url,
             }
-            for event, occ, venue_name, lat, lon in rows
+            for event, occ, venue_name, venue_hours, lat, lon in rows
         ]
 
         # The client clusters on the fly (react-leaflet-cluster); the server-side

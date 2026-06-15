@@ -128,7 +128,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
           <Marker
             key={item.event_id}
             position={[item.lat as number, item.lon as number]}
-            icon={pinIcon(item, item.event_id === selectedId, isLiveNow(item.date_start, item.date_end))}
+            icon={pinIcon(item, item.event_id === selectedId, isLiveNow(item.date_start, item.date_end, item.venue_hours))}
             eventHandlers={{ click: () => onSelect(item) }}
           />
         ))}

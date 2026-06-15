@@ -26,19 +26,51 @@ const dayDiff = (a: Date, b: Date) => {
   return Math.round((B - A) / 86400000);
 };
 
-// True only for a TIMED session that is in progress right now — what the red
-// "идёт сейчас" pulse promises. Excludes exhibitions / runs / all-day rows:
-// they have no real start time (midnight) or span more than a day, so they are
-// "open until X", not "happening now" (and the venue may even be closed today).
-// Point events (no end) count as live for ~3h after start.
-export function isLiveNow(start?: string | null, end?: string | null): boolean {
+const hmToMin = (hm: string): number => {
+  const [h, m] = String(hm).split(":");
+  return (Number(h) || 0) * 60 + (Number(m) || 0);
+};
+
+// Is the venue open at `now` per its weekly hours? true / false / null (unknown).
+export function venueOpenNow(
+  hours: { week?: (string[][] | null)[] } | null | undefined,
+  now: Date = new Date(),
+): boolean | null {
+  const week = hours?.week;
+  if (!Array.isArray(week) || week.length !== 7) return null;
+  const day = week[now.getDay()];
+  if (day === null) return false; // closed today
+  if (!Array.isArray(day) || day.length === 0) return null; // unknown
+  const mins = now.getHours() * 60 + now.getMinutes();
+  for (const r of day) {
+    if (!Array.isArray(r) || r.length !== 2) continue;
+    const open = hmToMin(r[0]);
+    const close = hmToMin(r[1]) || 1440; // 00:00 close = end of day
+    if (open === close) return true; // round-the-clock
+    if (mins >= open && mins < close) return true;
+  }
+  return false; // outside today's ranges
+}
+
+// True if you can experience the event RIGHT NOW — what the red "идёт сейчас"
+// pulse promises. Either a timed session is in progress, OR it's an ongoing run
+// (exhibition etc.) whose venue is open at this moment. A run with a venue
+// closed today does NOT pulse; unknown hours fall back to "ongoing → live".
+export function isLiveNow(start?: string | null, end?: string | null, hours?: { week?: (string[][] | null)[] } | null): boolean {
   const s = parse(start);
-  if (!s || isMidnight(s)) return false;
+  if (!s) return false;
   const now = Date.now();
+  if (s.getTime() > now) return false; // not started
   const e = parse(end);
   const endMs = e ? e.getTime() : s.getTime() + 3 * 3600 * 1000;
-  if (endMs - s.getTime() > 24 * 3600 * 1000) return false; // a multi-day run, not a session
-  return s.getTime() <= now && now <= endMs;
+  // Timed session (real start time, ≤24h window): live while inside it.
+  if (!isMidnight(s) && endMs - s.getTime() <= 24 * 3600 * 1000) {
+    return now <= endMs;
+  }
+  // Run / all-day / ongoing: must still be within its run, and venue open now.
+  const farFuture = !!e && e.getFullYear() > new Date(now).getFullYear() + 5;
+  if (e && !farFuture && now > e.getTime()) return false; // run already over
+  return venueOpenNow(hours, new Date()) !== false; // closed now → not live
 }
 const dmy = (d: Date, withYear: boolean, short = false) =>
   `${d.getDate()} ${(short ? MONTHS_SHORT : MONTHS)[d.getMonth()]}${withYear ? ` ${d.getFullYear()}` : ""}`;
