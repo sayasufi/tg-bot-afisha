@@ -94,7 +94,7 @@ function MapControls({ onLocate, locating }: { onLocate: () => void; locating: b
         −
       </button>
       <button type="button" className={`mapctl__btn mapctl__btn--locate${locating ? " mapctl__btn--busy" : ""}`} aria-label="Моё местоположение" onClick={onLocate}>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
           <circle cx="12" cy="12" r="3.6" fill="currentColor" />
           <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
