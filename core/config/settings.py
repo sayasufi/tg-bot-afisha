@@ -45,9 +45,12 @@ class Settings(BaseSettings):
     kudago_base_url: str = "https://kudago.com/public-api/v1.4"
     yandex_afisha_base_url: str = "https://afisha.yandex.ru/api/graphql"
     afisha_ru_base_url: str = "https://www.afisha.ru"
-    # afisha.ru blocks datacenter/cloud IP ranges (e.g. GCP) — every request 429s.
-    # Set a residential proxy URL (http://user:pass@host:port) to enable afisha
-    # ingestion; empty keeps it OFF (the fetch tasks no-op).
+    # afisha.ru shows an IP-reputation CAPTCHA to RU datacenter IPs (our VK Cloud
+    # egress). Prod routes afisha.ru through the WireGuard split-tunnel (→ a GCP
+    # exit), which afisha does NOT challenge — so ingestion is enabled by default.
+    afisha_enabled: bool = Field(default=True, alias="AFISHA_ENABLED")
+    # Optional residential-proxy override for hosts without such a route (empty =
+    # direct, relying on the tunnel routing).
     afisha_proxy: str = Field(default="", alias="AFISHA_PROXY")
 
     default_city: str = Field(default="Moscow", alias="DEFAULT_CITY")

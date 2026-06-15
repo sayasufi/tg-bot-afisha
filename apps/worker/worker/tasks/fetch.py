@@ -225,10 +225,8 @@ def fetch_afisha_ru(self):
 
 async def _fetch_afisha_impl() -> dict:
     settings = get_settings()
-    if not settings.afisha_proxy:
-        # afisha blocks cloud IPs (e.g. GCP); ingestion stays off until a
-        # residential proxy is set via AFISHA_PROXY. No-op rather than 429-spam.
-        return {"fetched": 0, "skipped": "no AFISHA_PROXY"}
+    if not settings.afisha_enabled:
+        return {"fetched": 0, "skipped": "afisha disabled"}
     async with WorkerAsyncSessionLocal() as db:
         source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
         run = await create_source_run(db, source.source_id)
@@ -262,8 +260,8 @@ def fetch_afisha_ru_full_scan(self):
 
 async def _fetch_afisha_full_scan_impl() -> dict:
     settings = get_settings()
-    if not settings.afisha_proxy:
-        return {"fetched": 0, "skipped": "no AFISHA_PROXY"}
+    if not settings.afisha_enabled:
+        return {"fetched": 0, "skipped": "afisha disabled"}
     async with WorkerAsyncSessionLocal() as db:
         source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
         run = await create_source_run(db, source.source_id)
