@@ -5,6 +5,7 @@ import httpx
 
 from connectors.telegram.telethon_connector import TelethonConnector
 from connectors.telegram.web_preview_connector import TelegramWebPreviewConnector
+from connectors.web.afisha_ru_connector import AfishaRuConnector
 from connectors.web.kudago_connector import KudaGoConnector
 from connectors.web.yandex_afisha_connector import YandexAfishaConnector
 from core.cities import DEFAULT_CITY
@@ -195,6 +196,77 @@ async def _fetch_yandex_full_scan_impl() -> dict:
             records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages)
             await bulk_upsert_raw_events(db, source.source_id, records)
 
+            source.config_json = {**source.config_json, "cursor": "0"}
+            db.add(source)
+            await db.commit()
+            stats = {"fetched": len(records), "pages_scanned": pages_scanned, "stop_reason": stop_reason}
+            await finish_source_run(db, run, "success", stats)
+            return stats
+        except Exception as exc:
+            await db.rollback()
+            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+            raise
+
+
+def _afisha_config() -> dict:
+    return {"cursor": "0", "city": DEFAULT_CITY.afisha_city}
+
+
+@celery_app.task(bind=True, max_retries=3)
+@single_instance("fetch_afisha_ru")
+def fetch_afisha_ru(self):
+    """Incremental afisha.ru fetch: refresh the soonest page of one rubric per
+    tick (cursor cycles through rubrics), reading the server-rendered listing."""
+    try:
+        return asyncio.run(_fetch_afisha_impl())
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+async def _fetch_afisha_impl() -> dict:
+    settings = get_settings()
+    async with WorkerAsyncSessionLocal() as db:
+        source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
+        run = await create_source_run(db, source.source_id)
+        try:
+            cursor = source.config_json.get("cursor", "0")
+            city = source.config_json.get("city", DEFAULT_CITY.afisha_city)
+            connector = AfishaRuConnector(city=city)
+            records, next_cursor = await connector.fetch(cursor=cursor)
+            await bulk_upsert_raw_events(db, source.source_id, records)
+            source.config_json = {**source.config_json, "cursor": next_cursor}
+            db.add(source)
+            await db.commit()
+            await finish_source_run(db, run, "success", {"fetched": len(records)})
+            return {"fetched": len(records), "cursor": next_cursor}
+        except Exception as exc:
+            await db.rollback()
+            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+            raise
+
+
+@celery_app.task(bind=True, max_retries=3)
+@single_instance("fetch_afisha_ru")
+def fetch_afisha_ru_full_scan(self):
+    """Full in-window sweep of every afisha.ru rubric, paging until the date-sorted
+    feed leaves the lookahead window (or max_pages)."""
+    try:
+        return asyncio.run(_fetch_afisha_full_scan_impl())
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+async def _fetch_afisha_full_scan_impl() -> dict:
+    settings = get_settings()
+    async with WorkerAsyncSessionLocal() as db:
+        source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
+        run = await create_source_run(db, source.source_id)
+        try:
+            city = source.config_json.get("city", DEFAULT_CITY.afisha_city)
+            max_pages = int(source.config_json.get("full_scan_max_pages", 80))
+            connector = AfishaRuConnector(city=city)
+            records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages)
+            await bulk_upsert_raw_events(db, source.source_id, records)
             source.config_json = {**source.config_json, "cursor": "0"}
             db.add(source)
             await db.commit()

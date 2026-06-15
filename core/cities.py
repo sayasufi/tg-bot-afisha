@@ -16,6 +16,7 @@ class CityConfig:
     timezone: str  # IANA tz
     kudago_location: str  # KudaGo location slug
     yandex_city: str  # Yandex Afisha city slug (afisha.yandex.ru/<slug>)
+    afisha_city: str  # afisha.ru city slug (afisha.ru/<slug>/schedule_*)
     active: bool  # whether the pipeline currently ingests this city
 
 
@@ -27,6 +28,7 @@ CITIES: dict[str, CityConfig] = {
         timezone="Europe/Moscow",
         kudago_location="msk",
         yandex_city="moscow",
+        afisha_city="msk",
         active=True,
     ),
     # Defined and ready — flip active=True and add beat tasks for it to ingest SPb.
@@ -37,6 +39,7 @@ CITIES: dict[str, CityConfig] = {
         timezone="Europe/Moscow",
         kudago_location="spb",
         yandex_city="saint-petersburg",
+        afisha_city="spb",
         active=False,
     ),
 }

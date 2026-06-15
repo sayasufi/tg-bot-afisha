@@ -44,6 +44,14 @@ celery_app.conf.beat_schedule = {
         "task": "apps.worker.worker.tasks.fetch.fetch_yandex_afisha_full_scan",
         "schedule": 43200.0,
     },
+    "fetch-afisha-ru": {
+        "task": "apps.worker.worker.tasks.fetch.fetch_afisha_ru",
+        "schedule": 300.0,
+    },
+    "fetch-afisha-ru-full-scan": {
+        "task": "apps.worker.worker.tasks.fetch.fetch_afisha_ru_full_scan",
+        "schedule": 43200.0,
+    },
     "fetch-telegram-public": {
         "task": "apps.worker.worker.tasks.fetch.fetch_telegram_public",
         "schedule": 180.0,
