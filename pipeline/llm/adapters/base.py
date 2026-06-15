@@ -23,6 +23,7 @@ CATEGORIES = (
     "lecture",
     "tour",
     "party",
+    "quest",
     "kids",
     "other",
 )

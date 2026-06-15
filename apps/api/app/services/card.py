@@ -24,9 +24,13 @@ CAT_LABEL = {
     "concert": "Концерт",
     "theatre": "Театр",
     "exhibition": "Выставка",
+    "cinema": "Кино",
     "standup": "Стендап",
     "festival": "Фестиваль",
     "lecture": "Лекция",
+    "tour": "Экскурсия",
+    "party": "Вечеринка",
+    "quest": "Квест",
     "kids": "Детям",
     "other": "Событие",
 }

@@ -16,6 +16,7 @@ export const CATEGORIES: CategoryMeta[] = [
   { key: "lecture", label: "Лекции", glyph: "🎓", color: "#5784C2" },
   { key: "tour", label: "Экскурсии", glyph: "🗺️", color: "#8A9A52" },
   { key: "party", label: "Вечеринки", glyph: "🥂", color: "#A85B92" },
+  { key: "quest", label: "Квесты", glyph: "🗝️", color: "#A24F54" },
   { key: "kids", label: "Детям", glyph: "🧸", color: "#5BC0B6" },
   { key: "other", label: "Другое", glyph: "✨", color: "#9A9082" },
 ];

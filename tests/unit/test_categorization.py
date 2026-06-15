@@ -13,9 +13,19 @@ def test_excursions_is_tour():
     assert map_source_category(["excursions"], "yandex_afisha") == "tour"
 
 
-def test_quest_and_entertainment_are_party():
-    assert map_source_category(["quest"], "yandex_afisha") == "party"
+def test_quest_is_its_own_category():
+    assert map_source_category(["quest"], "yandex_afisha") == "quest"
+    assert map_source_category(["квест"], "yandex_afisha") == "quest"
+
+
+def test_quiz_and_entertainment_are_party():
+    assert map_source_category(["квиз"], "kudago") == "party"
     assert map_source_category(["entertainment"], "kudago") == "party"
+
+
+def test_kids_quest_stays_kids():
+    # A children's quest is best found under «Детям», so kids outranks quest.
+    assert map_source_category(["quest", "kids", "Детям"], "yandex_afisha") == "kids"
 
 
 def test_kids_wins_over_primary_type():

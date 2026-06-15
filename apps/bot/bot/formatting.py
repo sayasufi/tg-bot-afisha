@@ -6,9 +6,13 @@ CATEGORY_GLYPH = {
     "concert": "🎵",
     "theatre": "🎭",
     "exhibition": "🖼",
+    "cinema": "🎬",
     "standup": "🎤",
     "festival": "🎪",
     "lecture": "🎓",
+    "tour": "🗺",
+    "party": "🥂",
+    "quest": "🗝",
     "kids": "🧸",
     "other": "✨",
 }
