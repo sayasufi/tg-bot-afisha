@@ -321,23 +321,23 @@ html[data-theme="dark"] .vpin--active::before {
   }
 }
 
-/* Heading cone — a bright acid flashlight wedge fanning out the facing way.
-   Solid near the dot, fading at the tip; a dark edge keeps it legible even on
-   pale map tiles (where a faint amber beam used to disappear). */
+/* Heading arrow — a bright acid wedge: wide base at the dot, sharp tip pointing
+   the facing way (a compass needle, not a flashlight beam). Solid near the dot,
+   a touch lighter at the tip; a dark edge keeps it legible on pale map tiles. */
 .vyou__cone {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 40px;
-  height: 34px;
+  width: 28px;
+  height: 31px;
   transform-origin: 50% 100%;
   transform: translate(-50%, -100%) rotate(var(--h, 0deg));
-  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
   background: linear-gradient(
     to top,
     var(--acid) 0%,
-    var(--acid) 45%,
-    rgba(255, 176, 46, 0.32) 100%
+    var(--acid) 55%,
+    rgba(255, 176, 46, 0.62) 100%
   );
   filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.5));
 }
