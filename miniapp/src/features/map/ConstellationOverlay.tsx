@@ -9,7 +9,7 @@ import { distanceMeters } from "../../lib/distance";
 // never clutters; redrawn on pan/zoom via container-pixel projection. Rendered
 // as a sibling SVG over the map (Leaflet won't host arbitrary child DOM).
 const MAX_LINKS = 5;
-const MAX_DIST_M = 4000;
+const MAX_DIST_M = 2000;
 
 export function ConstellationOverlay({ map, items, selected }: { map: L.Map | null; items: EventItem[]; selected: EventItem | null }) {
   const [, redraw] = useReducer((x) => x + 1, 0);
