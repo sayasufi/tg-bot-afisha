@@ -1,7 +1,6 @@
-// Signature "print proof" layer over VITRINE: printer's crop marks +
-// registration crosshairs framing the screen, a global photocopy/halftone
-// texture, and a running gallery ticker. Purely decorative (pointer-events
-// none), so it never interferes with interaction.
+// Signature "print proof" layer over VITRINE: printer's crop marks at the
+// corners, a global photocopy/halftone texture, and a running gallery ticker.
+// Purely decorative (pointer-events none), so it never interferes.
 
 export function ProofFrame() {
   return (
@@ -11,8 +10,6 @@ export function ProofFrame() {
       <span className="proof__crop proof__crop--tr" />
       <span className="proof__crop proof__crop--bl" />
       <span className="proof__crop proof__crop--br" />
-      <span className="proof__reg proof__reg--l">✛</span>
-      <span className="proof__reg proof__reg--r">✛</span>
     </div>
   );
 }

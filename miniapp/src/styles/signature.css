@@ -84,22 +84,6 @@
   right: 0;
 }
 
-.proof__reg {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--cinnabar);
-  font-size: 11px;
-  line-height: 1;
-}
-
-.proof__reg--l {
-  left: 4px;
-}
-
-.proof__reg--r {
-  right: 4px;
-}
 
 /* Running gallery ticker, under the command pill (map view only). Tap → list. */
 .ticker {
