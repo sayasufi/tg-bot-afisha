@@ -135,6 +135,14 @@ class EventQueryService:
             bindparam("max_lat", max_lat),
         )
 
+    # Only events in/around Moscow render — a permanent guard against bad/foreign
+    # coordinates (transposed lat/lon land in the Caspian near Iran; a touring date
+    # lands in Almaty). Envelope is generous (lon 30..45, lat 50..60) so legitimate
+    # Moscow-region events (Tver/Kaluga day-trips) stay visible.
+    @staticmethod
+    def _region_clause():
+        return text("ST_Intersects(venues.geom::geometry, ST_MakeEnvelope(30.0, 50.0, 45.0, 60.0, 4326))")
+
     async def map_events(
         self,
         bbox: tuple[float, float, float, float] | None,
@@ -174,6 +182,7 @@ class EventQueryService:
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active", Venue.geom.is_not(None))
+            .where(self._region_clause())
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
         return int(await self.db.scalar(stmt) or 0)
@@ -186,6 +195,7 @@ class EventQueryService:
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active", Venue.geom.is_not(None))
+            .where(self._region_clause())
         )
         inner = self._apply_filters(inner, date_from, date_to, categories, price_min, price_max, q)
         if bbox is not None:
@@ -252,8 +262,10 @@ class EventQueryService:
             .where(Event.status == "active")
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
+        # Only Moscow-region events with coordinates (implies geom is not null).
+        stmt = stmt.where(self._region_clause())
         if bbox:
-            stmt = stmt.where(Venue.geom.is_not(None)).where(self._bbox_clause(bbox))
+            stmt = stmt.where(self._bbox_clause(bbox))
         # One row per event — the soonest in-window occurrence — so an event with
         # several showtimes (e.g. 16 & 23 June) shows a single pin, not one per date.
         stmt = stmt.distinct(Event.event_id).order_by(Event.event_id, EventOccurrence.date_start.asc())

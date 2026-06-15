@@ -26,12 +26,32 @@ from pipeline.llm.service import LLMService
 from apps.worker.worker.celery_app import celery_app
 
 
+def _coords_sane(lat: float, lon: float) -> tuple[float, float] | None:
+    """Validate source coordinates as plausible for Russia (lat 41..82, lon 19..180).
+
+    Some sources TRANSPOSE lat/lon for ad-hoc places — Yandex Afisha does this for
+    certain excursion/quest meeting points — which lands the event in the Caspian
+    (~Iran). If the values are swapped, swap them back. Garbage like (0, 0) → None,
+    so enrich geocodes the text address instead.
+    """
+
+    def ok(la: float, lo: float) -> bool:
+        return 41.0 <= la <= 82.0 and 19.0 <= lo <= 180.0
+
+    if ok(lat, lon):
+        return (lat, lon)
+    if ok(lon, lat):
+        return (lon, lat)
+    return None
+
+
 def _source_coords(payload: dict | None) -> tuple[float, float] | None:
     """Exact venue coordinates supplied by the source (e.g. KudaGo place.coords).
 
     Far more accurate than re-geocoding the text address, which often resolves only
     to the street centroid (events landing 'in the middle of the road') or, worse,
-    to a wrong city entirely.
+    to a wrong city entirely. Coordinates are sanity-checked (and de-transposed) so
+    a source's swapped lat/lon doesn't drop the pin in the wrong country.
     """
     if not isinstance(payload, dict):
         return None
@@ -41,7 +61,7 @@ def _source_coords(payload: dict | None) -> tuple[float, float] | None:
         if isinstance(coords, dict):
             lat, lon = coords.get("lat"), coords.get("lon")
             if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                return float(lat), float(lon)
+                return _coords_sane(float(lat), float(lon))
     return None
 
 
