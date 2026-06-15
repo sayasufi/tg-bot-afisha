@@ -78,20 +78,18 @@ export function formatWhen(startIso?: string | null, endIso?: string | null, now
   return `${dmy(s, yr(s))} — ${dmy(e, yr(e))}`;
 }
 
-// True when an event reads as "all day" only because it has NO clock time — a
-// single/short-day point without a time. Lets the UI say "время уточняйте"
-// instead of implying it runs round the clock. Runs, permanent exhibits and
-// already-timed events return false (their framing is honest as-is).
-export function whenNeedsTimeHint(startIso?: string | null, endIso?: string | null, now: Date = new Date()): boolean {
+// An honest note for events with NO clock time, so they don't read as 24/7:
+//   ""               — has a real time, nothing to add
+//   "в часы работы"  — an ongoing run / permanent exhibit (open during venue hours)
+//   "время уточняйте" — a one-off without a known time (check before you go)
+export function whenTimeNote(startIso?: string | null, endIso?: string | null, now: Date = new Date()): string {
   const s = parse(startIso);
-  if (!s) return false;
-  if (!isMidnight(s)) return false; // has a real time
+  if (!s || !isMidnight(s)) return ""; // missing start, or has a real time
   const { end: e, open } = endInfo(s, endIso, now);
-  if (open) return false; // permanent / ongoing run
-  if (!e) return true; // single-day point, no time
-  if (sameDay(s, e)) return true; // same-day, no time
-  if (dayDiff(s, e) <= 2) return true; // short span, no time
-  return false; // a multi-day / "по X" run — framed as a range, not a clock
+  const started = s.getTime() <= now.getTime();
+  // Ongoing run / permanent exhibit → "постоянно" / "по X" in formatWhen.
+  if ((open && started) || (e && dayDiff(s, e) > 2 && started)) return "в часы работы";
+  return "время уточняйте"; // single/short or not-yet-started point, no time
 }
 
 // Compact format for list rows / ticker (short months).

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
-import { formatWhen, whenNeedsTimeHint } from "../../lib/datetime";
+import { formatWhen, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
@@ -82,6 +82,7 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
   const near = nearLabel(userPos, lat != null && lon != null ? [lat, lon] : null);
   const accession = `ОКР · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
+  const timeNote = whenTimeNote(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
 
   const onShare = async () => {
     haptic("light");
@@ -166,9 +167,7 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
             <span className="wall-label__cap">Когда</span>
             <span className="wall-label__val">
               {dates || "—"}
-              {whenNeedsTimeHint(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end) && (
-                <span className="dim"> · время уточняйте</span>
-              )}
+              {timeNote && <span className="dim"> · {timeNote}</span>}
             </span>
           </div>
           {venue && (
