@@ -1,9 +1,11 @@
+import asyncio
 import html as html_lib
 import json
 import re
 from datetime import datetime, timedelta, timezone
 
 from curl_cffi.requests import AsyncSession
+from curl_cffi.requests.exceptions import HTTPError
 
 from connectors.base import RawRecord
 
@@ -48,6 +50,9 @@ class AfishaRuConnector:
 
     source_name = "afisha_ru"
     _PAGE_SIZE = 24  # afisha's fixed listing page size
+    _PAGE_DELAY = 0.7  # polite pause between page fetches (afisha 429s on bursts)
+    _RETRY_ATTEMPTS = 3
+    _RETRY_BACKOFF = 4.0  # seconds, doubled each retry on 429/5xx
 
     def __init__(self, city: str = "msk", rubrics: list[tuple[str, str]] | None = None) -> None:
         self.city = city
@@ -108,14 +113,28 @@ class AfishaRuConnector:
         except (ValueError, AttributeError):
             return {}
 
+    async def _get(self, session: AsyncSession, url: str):
+        """GET with backoff on 429 (afisha throttles bursts) and transient 5xx."""
+        backoff = self._RETRY_BACKOFF
+        for attempt in range(self._RETRY_ATTEMPTS):
+            response = await session.get(url, headers=self._headers(), timeout=40)
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt == self._RETRY_ATTEMPTS - 1:
+                    response.raise_for_status()
+                await asyncio.sleep(backoff)
+                backoff *= 2
+                continue
+            response.raise_for_status()
+            return response
+        return response  # pragma: no cover
+
     async def _fetch_page(self, session: AsyncSession, rubric_idx: int, page: int, today) -> tuple[list[RawRecord], int, int]:
         """One listing page -> (records, total_pages, raw_item_count). raw_item_count
         lets a sweep tell 'empty page' (stop) from 'items present but all out of
         window' (also stop, since pages are date-sorted ascending)."""
         path, category = self.rubrics[rubric_idx]
         url = self._page_url(path, page)
-        response = await session.get(url, headers=self._headers(), timeout=40)
-        response.raise_for_status()
+        response = await self._get(session, url)
         model = self._extract_model(response.text)
         widget = model.get("ScheduleWidget") if isinstance(model.get("ScheduleWidget"), dict) else {}
         items = widget.get("Items") if isinstance(widget.get("Items"), list) else []
@@ -150,7 +169,14 @@ class AfishaRuConnector:
             for ri in range(len(self.rubrics)):
                 page = 1
                 while page <= max_pages:
-                    records, total_pages, raw_count = await self._fetch_page(session, ri, page, today)
+                    try:
+                        records, total_pages, raw_count = await self._fetch_page(session, ri, page, today)
+                    except HTTPError as exc:
+                        # Persistent throttle/outage — keep what we have rather than
+                        # failing the whole scan, and stop early.
+                        if "429" in str(exc):
+                            return all_records, pages, "rate_limited"
+                        raise
                     pages += 1
                     for rec in records:
                         if rec.external_id not in seen:
@@ -168,6 +194,7 @@ class AfishaRuConnector:
                         break
                     page += 1
                     stop_reason = "completed_iteration"
+                    await asyncio.sleep(self._PAGE_DELAY)
         return all_records, pages, stop_reason
 
     # --- record building ---------------------------------------------------
