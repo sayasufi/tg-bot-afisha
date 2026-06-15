@@ -97,8 +97,11 @@
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
-  margin: -2px;
-  padding: 2px;
+  /* Только вертикальный люфт 2px (чтобы overflow-x не срезал тень/обводку ячеек).
+     По горизонтали отступа нет — лента ровно по краям панели, как соседние блоки
+     (раньше margin:-2px тянул ленту на 2px за границы слева/справа). */
+  margin: -2px 0;
+  padding: 2px 0;
 }
 
 .daystrip::-webkit-scrollbar {
