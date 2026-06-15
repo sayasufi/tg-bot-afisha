@@ -113,6 +113,10 @@ services:
     environment:
       PREFECT_HOME: /data
       PREFECT_SERVER_API_HOST: 0.0.0.0
+      # So the browser-served UI talks to the API at the right origin. Default
+      # works via an SSH tunnel (ssh -L 4201:localhost:4201 …); override in .env
+      # with the public host for direct access.
+      PREFECT_UI_API_URL: ${PREFECT_UI_API_URL-http://localhost:4201/api}
     ports:
       # Host 4201 (4200 is taken by another Prefect stack on this host); the
       # in-network link prefect-serve -> prefect-server:4200 is unaffected.
