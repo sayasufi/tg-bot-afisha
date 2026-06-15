@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import get_raw, mark_raw_skipped, save_candidate, unprocessed_raw_ids
-from core.db.session import SessionLocal
+from core.db.session import WorkerAsyncSessionLocal
 from core.tasklock import single_instance
 from pipeline.llm.extraction_service import LLMExtractionService
 from pipeline.normalizer.rules import RuleBasedNormalizer
@@ -54,30 +54,36 @@ def _is_kudago_candidate_in_window(candidate) -> bool:
 @celery_app.task(bind=True, max_retries=3)
 @single_instance("normalize")
 def normalize_raw_events(self):
-    db = SessionLocal()
+    try:
+        return asyncio.run(_normalize_impl())
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+async def _normalize_impl() -> dict:
     settings = get_settings()
     normalizer = RuleBasedNormalizer()
     llm_extractor = LLMExtractionService()
-    try:
-        raw_ids = unprocessed_raw_ids(db)
+    async with WorkerAsyncSessionLocal() as db:
+        raw_ids = await unprocessed_raw_ids(db)
         created = 0
         skipped = 0
         skipped_reasons: Counter[str] = Counter()
         for raw_id in raw_ids:
-            raw = get_raw(db, raw_id)
+            raw = await get_raw(db, raw_id)
             if not raw:
                 continue
 
             source_name = raw.source.name if raw.source else ""
             payload = raw.raw_payload_json
             if _is_telegram_source_name(source_name):
-                extracted, skip_reason = asyncio.run(
-                    llm_extractor.extract_event_with_reason(raw.raw_text, city_hint=settings.default_city)
+                extracted, skip_reason = await llm_extractor.extract_event_with_reason(
+                    raw.raw_text, city_hint=settings.default_city
                 )
                 if extracted is None:
                     skipped += 1
                     skipped_reasons[skip_reason] += 1
-                    mark_raw_skipped(db, raw, skip_reason)
+                    await mark_raw_skipped(db, raw, skip_reason)
                     logger.info(
                         "normalize_skip_telegram",
                         extra={"raw_id": raw_id, "source": source_name, "reason": skip_reason},
@@ -119,11 +125,11 @@ def normalize_raw_events(self):
                         extra={"raw_id": raw_id, "source": source_name, "reason": last_skip_reason},
                     )
                     continue
-                save_candidate(db, raw_id, c)
+                await save_candidate(db, raw_id, c)
                 created += 1
                 saved_for_raw += 1
             if not saved_for_raw and last_skip_reason:
-                mark_raw_skipped(db, raw, last_skip_reason)
+                await mark_raw_skipped(db, raw, last_skip_reason)
         stats = {
             "candidates": created,
             "skipped": skipped,
@@ -131,7 +137,3 @@ def normalize_raw_events(self):
         }
         logger.info("normalize_summary", extra=stats)
         return stats
-    except Exception as exc:
-        raise self.retry(exc=exc)
-    finally:
-        db.close()

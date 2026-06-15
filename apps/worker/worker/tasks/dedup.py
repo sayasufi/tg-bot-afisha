@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from core.db.models import EventCandidate, EventSource, RawEvent, Source
 from core.db.repositories.ingestion import dedup_and_upsert_event, get_venue
-from core.db.session import SessionLocal
+from core.db.session import WorkerAsyncSessionLocal
 from core.tasklock import single_instance
 from pipeline.llm.service import LLMService
 
@@ -14,9 +14,15 @@ from apps.worker.worker.celery_app import celery_app
 @celery_app.task(bind=True, max_retries=3)
 @single_instance("dedup")
 def dedup_candidates(self):
-    db = SessionLocal()
-    llm = LLMService()
     try:
+        return asyncio.run(_dedup_impl())
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+async def _dedup_impl() -> dict:
+    llm = LLMService()
+    async with WorkerAsyncSessionLocal() as db:
         # Only candidates that enrich has finished (venue_id set) and that are
         # not yet linked to an event; ordered so old rows cannot starve new ones.
         stmt = (
@@ -29,14 +35,14 @@ def dedup_candidates(self):
             .order_by(EventCandidate.candidate_id.asc())
             .limit(200)
         )
-        rows = db.execute(stmt).all()
+        rows = (await db.execute(stmt)).all()
         decisions = {"auto-merge": 0, "new-event": 0, "needs-review": 0}
         for candidate, raw, source in rows:
             category = "other"
             subcategory = ""
             tags: list[str] = []
             if not any(tag.startswith("category:") for tag in candidate.tags_json):
-                classification = asyncio.run(llm.classify(candidate.title, candidate.description, candidate.tags_json))
+                classification = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
                 category = classification.category
                 subcategory = classification.subcategory
                 tags = classification.tags
@@ -44,8 +50,8 @@ def dedup_candidates(self):
                 for tag in candidate.tags_json:
                     if tag.startswith("category:"):
                         category = tag.split(":", 1)[1]
-            venue = get_venue(db, candidate.venue_id) if candidate.venue_id else None
-            decision = dedup_and_upsert_event(
+            venue = await get_venue(db, candidate.venue_id) if candidate.venue_id else None
+            decision = await dedup_and_upsert_event(
                 db,
                 candidate=candidate,
                 source_id=source.source_id,
@@ -57,7 +63,3 @@ def dedup_candidates(self):
             )
             decisions[decision.decision] += 1
         return decisions
-    except Exception as exc:
-        raise self.retry(exc=exc)
-    finally:
-        db.close()

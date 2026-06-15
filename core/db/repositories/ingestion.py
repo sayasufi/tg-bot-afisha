@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from core.db.models import (
     Event,
@@ -65,48 +66,48 @@ def _payload_session_dates(payload: object, now: datetime, until: datetime) -> l
     return out[:8]
 
 
-def get_active_sources(db: Session) -> list[Source]:
-    return db.execute(select(Source).where(Source.is_active.is_(True))).scalars().all()
+async def get_active_sources(db: AsyncSession) -> list[Source]:
+    return list((await db.execute(select(Source).where(Source.is_active.is_(True)))).scalars().all())
 
 
-def get_source_by_name(db: Session, name: str) -> Source | None:
-    return db.execute(select(Source).where(Source.name == name)).scalar_one_or_none()
+async def get_source_by_name(db: AsyncSession, name: str) -> Source | None:
+    return (await db.execute(select(Source).where(Source.name == name))).scalar_one_or_none()
 
 
-def get_active_telegram_channels(db: Session) -> list[TelegramChannel]:
+async def get_active_telegram_channels(db: AsyncSession) -> list[TelegramChannel]:
     stmt = select(TelegramChannel).where(TelegramChannel.is_active.is_(True)).order_by(TelegramChannel.channel_id.asc())
-    return db.execute(stmt).scalars().all()
+    return list((await db.execute(stmt)).scalars().all())
 
 
-def ensure_source(db: Session, name: str, kind: str, base_url: str, config_json: dict | None = None) -> Source:
-    source = get_source_by_name(db, name)
+async def ensure_source(db: AsyncSession, name: str, kind: str, base_url: str, config_json: dict | None = None) -> Source:
+    source = await get_source_by_name(db, name)
     if source:
         return source
     source = Source(name=name, kind=kind, base_url=base_url, config_json=config_json or {})
     db.add(source)
-    db.commit()
-    db.refresh(source)
+    await db.commit()
+    await db.refresh(source)
     return source
 
 
-def create_source_run(db: Session, source_id: int) -> SourceRun:
+async def create_source_run(db: AsyncSession, source_id: int) -> SourceRun:
     run = SourceRun(source_id=source_id, status="running", started_at=datetime.now(timezone.utc))
     db.add(run)
-    db.commit()
-    db.refresh(run)
+    await db.commit()
+    await db.refresh(run)
     return run
 
 
-def finish_source_run(db: Session, run: SourceRun, status: str, stats: dict, error_text: str = "") -> None:
+async def finish_source_run(db: AsyncSession, run: SourceRun, status: str, stats: dict, error_text: str = "") -> None:
     run.status = status
     run.finished_at = datetime.now(timezone.utc)
     run.stats_json = stats
     run.error_text = error_text
     db.add(run)
-    db.commit()
+    await db.commit()
 
 
-def upsert_raw_event(db: Session, source_id: int, external_id: str, payload: dict, raw_text: str) -> RawEvent:
+async def upsert_raw_event(db: AsyncSession, source_id: int, external_id: str, payload: dict, raw_text: str) -> RawEvent:
     # Atomic INSERT ... ON CONFLICT DO UPDATE on (source_id, external_id): avoids the
     # SELECT-then-INSERT race when several workers ingest the same event concurrently.
     # skip_reason is reopened ('') only when the content actually changed.
@@ -130,12 +131,12 @@ def upsert_raw_event(db: Session, source_id: int, external_id: str, payload: dic
             ),
         },
     ).returning(RawEvent)
-    row = db.execute(stmt, execution_options={"populate_existing": True}).scalar_one()
-    db.commit()
+    row = (await db.execute(stmt, execution_options={"populate_existing": True})).scalar_one()
+    await db.commit()
     return row
 
 
-def bulk_upsert_raw_events(db: Session, source_id: int, records: list) -> int:
+async def bulk_upsert_raw_events(db: AsyncSession, source_id: int, records: list) -> int:
     """Upsert many RawRecords in ONE statement + ONE commit (vs. a commit per row).
     Each record has .external_id/.payload/.raw_text. Returns the number of rows sent."""
     if not records:
@@ -165,12 +166,12 @@ def bulk_upsert_raw_events(db: Session, source_id: int, records: list) -> int:
             ),
         },
     )
-    db.execute(stmt)
-    db.commit()
+    await db.execute(stmt)
+    await db.commit()
     return len(rows)
 
 
-def save_candidate(db: Session, raw_id: int, candidate: NormalizedCandidate) -> EventCandidate:
+async def save_candidate(db: AsyncSession, raw_id: int, candidate: NormalizedCandidate) -> EventCandidate:
     row = EventCandidate(
         raw_id=raw_id,
         title=candidate.title,
@@ -189,12 +190,12 @@ def save_candidate(db: Session, raw_id: int, candidate: NormalizedCandidate) -> 
         parse_confidence=candidate.parse_confidence,
     )
     db.add(row)
-    db.commit()
-    db.refresh(row)
+    await db.commit()
+    await db.refresh(row)
     return row
 
 
-def unprocessed_raw_ids(db: Session, limit: int = 100) -> list[int]:
+async def unprocessed_raw_ids(db: AsyncSession, limit: int = 100) -> list[int]:
     stmt = (
         select(RawEvent.raw_id)
         .outerjoin(EventCandidate, EventCandidate.raw_id == RawEvent.raw_id)
@@ -203,16 +204,16 @@ def unprocessed_raw_ids(db: Session, limit: int = 100) -> list[int]:
         .order_by(RawEvent.raw_id.asc())
         .limit(limit)
     )
-    return db.execute(stmt).scalars().all()
+    return list((await db.execute(stmt)).scalars().all())
 
 
-def mark_raw_skipped(db: Session, raw: RawEvent, reason: str) -> None:
+async def mark_raw_skipped(db: AsyncSession, raw: RawEvent, reason: str) -> None:
     raw.skip_reason = (reason or "skipped")[:64]
     db.add(raw)
-    db.commit()
+    await db.commit()
 
 
-def unresolved_candidate_ids(db: Session, limit: int = 100) -> list[int]:
+async def unresolved_candidate_ids(db: AsyncSession, limit: int = 100) -> list[int]:
     stmt = (
         select(EventCandidate.candidate_id)
         .outerjoin(EventSource, EventSource.raw_id == EventCandidate.raw_id)
@@ -221,19 +222,22 @@ def unresolved_candidate_ids(db: Session, limit: int = 100) -> list[int]:
         .order_by(EventCandidate.candidate_id.asc())
         .limit(limit)
     )
-    return db.execute(stmt).scalars().all()
+    return list((await db.execute(stmt)).scalars().all())
 
 
-def get_candidate(db: Session, candidate_id: int) -> EventCandidate | None:
-    return db.get(EventCandidate, candidate_id)
+async def get_candidate(db: AsyncSession, candidate_id: int) -> EventCandidate | None:
+    return await db.get(EventCandidate, candidate_id)
 
 
-def get_raw(db: Session, raw_id: int) -> RawEvent | None:
-    return db.get(RawEvent, raw_id)
+async def get_raw(db: AsyncSession, raw_id: int) -> RawEvent | None:
+    # Eager-load the source: normalize/enrich read raw.source.* and async sessions
+    # do NOT support lazy relationship loading (would raise MissingGreenlet).
+    stmt = select(RawEvent).options(joinedload(RawEvent.source)).where(RawEvent.raw_id == raw_id)
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
-def get_or_create_venue(db: Session, name: str, address: str, city: str, country: str, lat: float | None, lon: float | None, provider: str, confidence: float) -> Venue:
-    venue = db.execute(select(Venue).where(and_(Venue.name == name, Venue.address == address))).scalar_one_or_none()
+async def get_or_create_venue(db: AsyncSession, name: str, address: str, city: str, country: str, lat: float | None, lon: float | None, provider: str, confidence: float) -> Venue:
+    venue = (await db.execute(select(Venue).where(and_(Venue.name == name, Venue.address == address)))).scalar_one_or_none()
     if venue:
         return venue
     # Race-safe create: enrich and backfill_venues_osm can both reach the same
@@ -250,14 +254,14 @@ def get_or_create_venue(db: Session, name: str, address: str, city: str, country
     if lat is not None and lon is not None:
         values["geom"] = func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326)
     stmt = pg_insert(Venue).values(**values).on_conflict_do_nothing(constraint="uq_venue_name_address").returning(Venue.venue_id)
-    venue_id = db.execute(stmt).scalar_one_or_none()
-    db.commit()
+    venue_id = (await db.execute(stmt)).scalar_one_or_none()
+    await db.commit()
     if venue_id is None:  # another worker inserted it first
-        return db.execute(select(Venue).where(and_(Venue.name == name, Venue.address == address))).scalar_one()
-    return db.get(Venue, venue_id)
+        return (await db.execute(select(Venue).where(and_(Venue.name == name, Venue.address == address)))).scalar_one()
+    return await db.get(Venue, venue_id)
 
 
-def find_cached_venue(db: Session, name: str, city: str, country: str) -> Venue | None:
+async def find_cached_venue(db: AsyncSession, name: str, city: str, country: str) -> Venue | None:
     normalized_name = (name or "").strip()
     normalized_city = (city or "").strip()
     normalized_country = (country or "").strip()
@@ -272,10 +276,10 @@ def find_cached_venue(db: Session, name: str, city: str, country: str) -> Venue 
             Venue.geom.is_not(None),
         )
     )
-    return db.execute(stmt).scalar_one_or_none()
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
-def unresolved_venue_ids(db: Session, limit: int = 200) -> list[int]:
+async def unresolved_venue_ids(db: AsyncSession, limit: int = 200) -> list[int]:
     stmt = (
         select(Venue.venue_id)
         .where(
@@ -286,15 +290,15 @@ def unresolved_venue_ids(db: Session, limit: int = 200) -> list[int]:
         )
         .limit(limit)
     )
-    return db.execute(stmt).scalars().all()
+    return list((await db.execute(stmt)).scalars().all())
 
 
-def get_venue(db: Session, venue_id: int) -> Venue | None:
-    return db.get(Venue, venue_id)
+async def get_venue(db: AsyncSession, venue_id: int) -> Venue | None:
+    return await db.get(Venue, venue_id)
 
 
-def dedup_and_upsert_event(
-    db: Session,
+async def dedup_and_upsert_event(
+    db: AsyncSession,
     candidate: EventCandidate,
     source_id: int,
     raw_id: int,
@@ -303,9 +307,9 @@ def dedup_and_upsert_event(
     tags: list[str],
     venue: Venue | None,
 ) -> MatchDecision:
-    existing_source_link = db.execute(select(EventSource).where(EventSource.raw_id == raw_id)).scalar_one_or_none()
+    existing_source_link = (await db.execute(select(EventSource).where(EventSource.raw_id == raw_id))).scalar_one_or_none()
     if existing_source_link:
-        existing_event = db.get(Event, existing_source_link.event_id)
+        existing_event = await db.get(Event, existing_source_link.event_id)
         return MatchDecision(
             decision="auto-merge",
             score=1.0,
@@ -322,7 +326,7 @@ def dedup_and_upsert_event(
         lo = local.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
         hi = local.replace(hour=23, minute=59, second=59, microsecond=0) + timedelta(days=1)
         stmt = stmt.where(and_(EventOccurrence.date_start >= lo, EventOccurrence.date_start <= hi))
-    matches = db.execute(stmt.limit(400)).all()
+    matches = (await db.execute(stmt.limit(400))).all()
 
     best: tuple[Event, float] | None = None
     for event, occurrence in matches:
@@ -352,15 +356,15 @@ def dedup_and_upsert_event(
             primary_image_url=(candidate.images_json[0] if candidate.images_json else ""),
         )
         db.add(event)
-        db.commit()
-        db.refresh(event)
+        await db.commit()
+        await db.refresh(event)
         decision = MatchDecision(decision="new-event", score=0.0, matched_event_id=str(event.event_id))
 
     # One occurrence per in-window session: an event with several showtimes (e.g.
     # 16 & 23 June, 21:00) becomes several occurrences. Sources without a `dates`
     # list keep the single primary date. Upsert on (event_id, date_start, venue_id)
     # so re-ingesting updates instead of duplicating.
-    raw = get_raw(db, raw_id)
+    raw = await get_raw(db, raw_id)
     now = datetime.now(timezone.utc)
     until = now + timedelta(days=_OCCURRENCE_LOOKAHEAD_DAYS)
     sessions = _payload_session_dates(raw.raw_payload_json if raw else None, now, until)
@@ -369,7 +373,7 @@ def dedup_and_upsert_event(
     occ_venue_id = venue.venue_id if venue else None
     venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
     for occ_start, occ_end in sessions:
-        occurrence = db.execute(
+        occurrence = (await db.execute(
             select(EventOccurrence).where(
                 and_(
                     EventOccurrence.event_id == event.event_id,
@@ -377,7 +381,7 @@ def dedup_and_upsert_event(
                     venue_filter,
                 )
             )
-        ).scalars().first()
+        )).scalars().first()
         if occurrence:
             occurrence.date_end = occ_end
             occurrence.price_min = candidate.price_min
@@ -397,7 +401,7 @@ def dedup_and_upsert_event(
                     source_best_url=candidate.source_url,
                 )
             )
-    db.flush()
+    await db.flush()
 
     db.add(
         EventSource(
@@ -411,6 +415,6 @@ def dedup_and_upsert_event(
         event.category = category
         event.subcategory = subcategory
     db.add(event)
-    db.commit()
+    await db.commit()
 
     return decision
