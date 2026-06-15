@@ -311,6 +311,9 @@ export function App() {
     setSelected(null);
   }, []);
 
+  // Tap on the empty map clears the persistent highlight (no-op if nothing focused).
+  const clearFocus = useCallback(() => setFocused((f) => (f ? null : f)), []);
+
   const onRefresh = useCallback(() => {
     haptic("medium");
     setRefreshNonce((n) => n + 1);
@@ -402,6 +405,7 @@ export function App() {
           onSelect={openEvent}
           onCluster={onCluster}
           onZoom={onZoom}
+          onClearFocus={clearFocus}
           onReady={handleMapReady}
         />
       </Suspense>

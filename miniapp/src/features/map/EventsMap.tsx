@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AttributionControl, MapContainer, Marker, useMap } from "react-leaflet";
+import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { EventItem, MapCluster } from "../../api/client";
@@ -30,6 +30,7 @@ type Props = {
   onSelect: (item: EventItem) => void;
   onCluster: (events: EventItem[]) => void;
   onZoom: (zoom: number) => void;
+  onClearFocus: () => void;
   onReady?: () => void;
 };
 
@@ -52,6 +53,13 @@ function ViewportReporter({ onChange }: { onChange: (bbox: Bbox, zoom: number) =
       map.off("moveend zoomend", emit);
     };
   }, [map, onChange]);
+  return null;
+}
+
+// A tap on the EMPTY map (not a marker — Leaflet doesn't bubble marker clicks
+// here) clears the persistent highlight.
+function MapClickClear({ onClear }: { onClear: () => void }) {
+  useMapEvents({ click: () => onClear() });
   return null;
 }
 
@@ -104,6 +112,7 @@ export function EventsMap({
   onSelect,
   onCluster,
   onZoom,
+  onClearFocus,
   onReady,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -264,6 +273,7 @@ export function EventsMap({
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />
+        <MapClickClear onClear={onClearFocus} />
         {useServerClusters ? <ServerClusters clusters={clusters} /> : cluster}
         {focused && focused.lat != null && focused.lon != null && focusedIco && (
           <Marker
