@@ -46,12 +46,23 @@ export function metroIcon(): L.DivIcon {
 
 // Cluster = stacked frames with a mono count; inverts to black past 40.
 export function clusterIcon(cluster: any): L.DivIcon {
-  const count = cluster.getChildCount();
-  const size = count < 10 ? 34 : count < 40 ? 40 : 46;
+  return countCluster(cluster.getChildCount());
+}
+
+// Server-aggregated cluster (low zoom): same gallery-frame face, but the count
+// is the backend's event total for that grid cell, not a client child-count.
+// Scales the frame across more buckets since these counts run much larger.
+export function serverClusterIcon(count: number): L.DivIcon {
+  return countCluster(count);
+}
+
+function countCluster(count: number): L.DivIcon {
+  const size = count < 10 ? 34 : count < 40 ? 40 : count < 150 ? 46 : 54;
   const big = count >= 40 ? " vcluster--big" : "";
+  const label = count >= 1000 ? `${Math.round(count / 100) / 10}k` : String(count);
   return L.divIcon({
     className: "vcluster-wrap",
-    html: `<div class="vcluster${big}" style="--s:${size}px"><span class="vcluster__face">${count}</span></div>`,
+    html: `<div class="vcluster${big}" style="--s:${size}px"><span class="vcluster__face">${label}</span></div>`,
     iconSize: [size, size],
   });
 }

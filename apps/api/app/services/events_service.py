@@ -49,6 +49,23 @@ class EventQueryService:
             stmt = stmt.where(and_(*filters))
         return stmt
 
+    # At/above this zoom the map returns individual pins; below it, the server
+    # returns grid-aggregated clusters so payload/marker count don't grow with the
+    # total number of events.
+    _DETAIL_ZOOM = 14
+
+    @staticmethod
+    def _bbox_clause(bbox: tuple[float, float, float, float]):
+        min_lon, min_lat, max_lon, max_lat = bbox
+        return text(
+            "ST_Intersects(venues.geom::geometry, ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326))"
+        ).bindparams(
+            bindparam("min_lon", min_lon),
+            bindparam("min_lat", min_lat),
+            bindparam("max_lon", max_lon),
+            bindparam("max_lat", max_lat),
+        )
+
     async def map_events(
         self,
         bbox: tuple[float, float, float, float] | None,
@@ -58,9 +75,64 @@ class EventQueryService:
         price_min: float | None,
         price_max: float | None,
         q: str | None,
-        limit: int,
+        limit: int | None,
         offset: int,
+        zoom: int | None = None,
     ):
+        # "Показать N" = filter-wide count of map-able events (stable while panning).
+        total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
+        if zoom is not None and bbox is not None and zoom < self._DETAIL_ZOOM:
+            clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q)
+            return {"clusters": clusters, "items": [], "total": total}
+        items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset)
+        return {"clusters": [], "items": items, "total": total}
+
+    async def _count_pinnable(self, date_from, date_to, categories, price_min, price_max, q) -> int:
+        stmt = (
+            select(func.count(func.distinct(Event.event_id)))
+            .select_from(Event)
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
+            .where(Event.status == "active", Venue.geom.is_not(None))
+        )
+        stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
+        return int(await self.db.scalar(stmt) or 0)
+
+    async def _cluster(self, bbox, zoom, date_from, date_to, categories, price_min, price_max, q):
+        # One representative point per event (soonest occurrence's venue) within the
+        # viewport, then snap to a zoom-sized grid and aggregate to cluster centroids.
+        inner = (
+            select(Event.event_id.label("eid"), cast(Venue.geom, Geometry).label("g"), EventOccurrence.date_start.label("ds"))
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
+            .where(Event.status == "active", Venue.geom.is_not(None))
+        )
+        inner = self._apply_filters(inner, date_from, date_to, categories, price_min, price_max, q)
+        inner = (
+            inner.where(self._bbox_clause(bbox))
+            .distinct(Event.event_id)
+            .order_by(Event.event_id, EventOccurrence.date_start.asc())
+            .subquery()
+        )
+        cell = 90.0 / (2 ** zoom)  # grid cell in degrees (~one cluster per ~80 screen px)
+        grid = func.ST_SnapToGrid(inner.c.g, cell, cell)
+        stmt = (
+            select(
+                func.count().label("cnt"),
+                func.ST_Y(func.ST_Centroid(func.ST_Collect(inner.c.g))).label("lat"),
+                func.ST_X(func.ST_Centroid(func.ST_Collect(inner.c.g))).label("lon"),
+            )
+            .select_from(inner)
+            .group_by(grid)
+        )
+        rows = (await self.db.execute(stmt)).all()
+        return [
+            {"id": f"c{i}", "lat": float(lat), "lon": float(lon), "count": int(cnt)}
+            for i, (cnt, lat, lon) in enumerate(rows)
+            if lat is not None and lon is not None
+        ]
+
+    async def _detail(self, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset):
         # Compute venue lat/lon in the main query (was an N+1 per-row subquery).
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
@@ -72,27 +144,10 @@ class EventQueryService:
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
         if bbox:
-            min_lon, min_lat, max_lon, max_lat = bbox
-            stmt = (
-                stmt.where(Venue.geom.is_not(None))
-                .where(
-                    text(
-                        "ST_Intersects(venues.geom::geometry, ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326))"
-                    ).bindparams(
-                        bindparam("min_lon", min_lon),
-                        bindparam("min_lat", min_lat),
-                        bindparam("max_lon", max_lon),
-                        bindparam("max_lat", max_lat),
-                    )
-                )
-            )
-
+            stmt = stmt.where(Venue.geom.is_not(None)).where(self._bbox_clause(bbox))
         # One row per event — the soonest in-window occurrence — so an event with
         # several showtimes (e.g. 16 & 23 June) shows a single pin, not one per date.
         stmt = stmt.distinct(Event.event_id).order_by(Event.event_id, EventOccurrence.date_start.asc())
-
-        total = (await self.db.scalar(select(func.count()).select_from(stmt.subquery()))) or 0
-
         rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
         items = [
             {
@@ -112,10 +167,7 @@ class EventQueryService:
         ]
         # DISTINCT ON forces event_id ordering; present pins by soonest date instead.
         items.sort(key=lambda it: it["date_start"])
-
-        # The client clusters on the fly (react-leaflet-cluster); the server-side
-        # cluster list is unused, so we skip that query entirely.
-        return {"clusters": [], "items": items, "total": total}
+        return items
 
     async def event_detail(self, event_id: UUID):
         event = await self.db.get(Event, event_id)

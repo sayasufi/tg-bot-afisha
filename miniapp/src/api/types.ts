@@ -12,8 +12,13 @@ export type EventItem = {
   primary_image_url?: string | null;
 };
 
+// A server-side aggregated cluster: a single point standing in for `count`
+// events, returned at low zoom so the map payload/marker count don't grow with
+// the total number of events.
+export type MapCluster = { id: string; lat: number; lon: number; count: number };
+
 export type MapResponse = {
-  clusters: Array<{ id: string; lat: number; lon: number; count: number }>;
+  clusters: MapCluster[];
   items: EventItem[];
   total: number;
 };

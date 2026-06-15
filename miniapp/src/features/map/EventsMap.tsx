@@ -1,18 +1,25 @@
-import { useEffect, useMemo, useRef } from "react";
-import { AttributionControl, MapContainer, Marker } from "react-leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AttributionControl, MapContainer, Marker, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
-import type { EventItem } from "../../api/client";
+import type { EventItem, MapCluster } from "../../api/client";
 import { isLiveNow } from "../../lib/datetime";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
-import { clusterIcon, metroIcon, pinIcon, userIcon } from "./markers";
+import { clusterIcon, metroIcon, pinIcon, serverClusterIcon, userIcon } from "./markers";
 
 type MetroPing = { name: string; lat: number; lon: number; meters: number };
+type Bbox = [number, number, number, number]; // [west, south, east, north]
+
+// At/above this zoom the map shows individual pins; below it the server returns
+// grid-aggregated clusters. MUST match `_DETAIL_ZOOM` in the API service.
+export const DETAIL_ZOOM = 14;
 
 type Props = {
   items: EventItem[];
+  clusters: MapCluster[];
+  clusterMode: boolean;
   selected: EventItem | null;
   userPos: [number, number] | null;
   heading: number | null;
@@ -21,6 +28,7 @@ type Props = {
   metro: MetroPing | null;
   onSelect: (item: EventItem) => void;
   onCluster: (events: EventItem[]) => void;
+  onViewport: (bbox: Bbox, zoom: number) => void;
   onReady?: () => void;
 };
 
@@ -28,16 +36,97 @@ const MOSCOW: [number, number] = [55.751244, 37.618423];
 
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 
-export function EventsMap({ items, selected, userPos, heading, locateNonce, theme, metro, onSelect, onCluster, onReady }: Props) {
+// Reports the map's bbox+zoom to the parent on every settle (moveend/zoomend)
+// and once on mount, so the parent can fetch the right clusters/pins.
+function ViewportReporter({ onChange }: { onChange: (bbox: Bbox, zoom: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const emit = () => {
+      const b = map.getBounds();
+      onChange([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], Math.round(map.getZoom()));
+    };
+    emit();
+    map.on("moveend zoomend", emit);
+    return () => {
+      map.off("moveend zoomend", emit);
+    };
+  }, [map, onChange]);
+  return null;
+}
+
+// Server-aggregated clusters (low zoom): one tap drills in toward detail zoom,
+// where the map switches to individual pins.
+function ServerClusters({ clusters }: { clusters: MapCluster[] }) {
+  const map = useMap();
+  return (
+    <>
+      {clusters.map((c) => (
+        <Marker
+          key={c.id}
+          position={[c.lat, c.lon]}
+          icon={serverClusterIcon(c.count)}
+          eventHandlers={{
+            click: () =>
+              map.flyTo([c.lat, c.lon], Math.min(map.getMaxZoom(), Math.max(DETAIL_ZOOM, map.getZoom() + 3)), {
+                duration: 0.6,
+              }),
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+// Keep pins whose point falls in the viewport, padded by 30% so markers near the
+// edge appear before they scroll fully into view.
+function inBbox(lat: number, lon: number, b: Bbox): boolean {
+  const [w, s, e, n] = b;
+  const px = (e - w) * 0.3;
+  const py = (n - s) * 0.3;
+  return lon >= w - px && lon <= e + px && lat >= s - py && lat <= n + py;
+}
+
+export function EventsMap({
+  items,
+  clusters,
+  clusterMode,
+  selected,
+  userPos,
+  heading,
+  locateNonce,
+  theme,
+  metro,
+  onSelect,
+  onCluster,
+  onViewport,
+  onReady,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
   const metroIco = useMemo(() => metroIcon(), []);
+  const [view, setView] = useState<{ bbox: Bbox; zoom: number } | null>(null);
+
+  // At/above detail zoom we draw real pins; below it (when clustering is allowed)
+  // the server clusters carry the load. The radius filter ("Рядом") disables
+  // server clustering — its set is small, so we just pin it directly.
+  const detail = view != null && view.zoom >= DETAIL_ZOOM;
+  const useServerClusters = clusterMode && !detail;
+
+  const onViewportRef = useRef(onViewport);
+  onViewportRef.current = onViewport;
+  const handleViewport = useMemo(
+    () => (bbox: Bbox, zoom: number) => {
+      setView({ bbox, zoom });
+      onViewportRef.current(bbox, zoom);
+    },
+    [],
+  );
 
   // First-load reveal: once the first markers are in the DOM, stagger their
   // entrance by distance from the map centre — pins ripple outward from the
   // middle. Runs exactly once so zoom/pan never replays it.
   useEffect(() => {
-    if (revealedRef.current || items.length === 0) return;
+    if (revealedRef.current) return;
     const el = wrapRef.current;
     if (!el) return;
     const t = setTimeout(() => {
@@ -57,13 +146,21 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
       });
     }, 180);
     return () => clearTimeout(t);
-  }, [items.length]);
+  }, [clusters.length, items.length]);
+
+  // Pins to draw: only when NOT showing server clusters, and only those within
+  // the current viewport — so we never instantiate thousands of Leaflet markers.
+  const pins = useMemo(() => {
+    if (useServerClusters) return [] as EventItem[];
+    const inView = items.filter((i) => i.lat != null && i.lon != null);
+    return view ? inView.filter((i) => inBbox(i.lat as number, i.lon as number, view.bbox)) : inView;
+  }, [useServerClusters, items, view]);
 
   // Index events by exact coordinate so a cluster click can resolve its child
   // markers back to events (many events can share a single venue point).
   const coordIndex = useMemo(() => {
     const m = new Map<string, EventItem[]>();
-    for (const it of items) {
+    for (const it of pins) {
       if (it.lat == null || it.lon == null) continue;
       const k = coordKey(it.lat, it.lon);
       const arr = m.get(k);
@@ -71,7 +168,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
       else m.set(k, [it]);
     }
     return m;
-  }, [items]);
+  }, [pins]);
 
   // Tapping a cluster that's spread out zooms to fit it (the familiar gesture).
   // But when every event sits on one point (a single venue stacked, or we're
@@ -109,12 +206,10 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
   // Memoise the clustered markers so frequent re-renders (live heading/userPos
   // updates, locate taps) don't rebuild every pin. Rebuilding recreates each
   // divIcon and replays its entrance animation — which is what made markers
-  // "blink" on a static screen. Only item/selection/handler changes regenerate.
-  // Build the clustered pins WITHOUT the selected/active state, so tapping a pin
-  // does NOT rebuild all markers (at thousands of events that rebuild is the main
-  // source of lag). The active highlight is a separate overlay marker (below).
+  // "blink" on a static screen. Build the pins WITHOUT the selected/active
+  // state, so tapping a pin does NOT rebuild all markers; the active highlight
+  // is a separate overlay marker (below).
   const cluster = useMemo(() => {
-    const pins = items.filter((i) => i.lat != null && i.lon != null);
     return (
       <MarkerClusterGroup
         chunkedLoading
@@ -136,7 +231,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
         ))}
       </MarkerClusterGroup>
     );
-  }, [items, onSelect, clusterHandlers]);
+  }, [pins, onSelect, clusterHandlers]);
 
   // The selected event's highlighted pin, drawn once on top of the cluster — so
   // selecting/deselecting touches one marker instead of regenerating the whole set.
@@ -158,7 +253,8 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
-        {cluster}
+        <ViewportReporter onChange={handleViewport} />
+        {useServerClusters ? <ServerClusters clusters={clusters} /> : cluster}
         {selected && selected.lat != null && selected.lon != null && selectedIco && (
           <Marker
             position={[selected.lat, selected.lon]}

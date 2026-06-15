@@ -27,6 +27,7 @@ async def get_map_events(
     price_min: float | None = None,
     price_max: float | None = None,
     q: str | None = None,
+    zoom: int | None = Query(default=None, ge=0, le=22),
     limit: int | None = Query(default=None, ge=1, le=20000),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_async_db),
@@ -39,7 +40,7 @@ async def get_map_events(
         bbox_tuple = (parts[0], parts[1], parts[2], parts[3])
 
     service = EventQueryService(db)
-    return await service.map_events(bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset)
+    return await service.map_events(bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom)
 
 
 @router.get("/events/nearby", response_model=NearbyResponse)

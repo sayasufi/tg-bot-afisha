@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MetroStation } from "../api/client";
+import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MapCluster, type MetroStation } from "../api/client";
 import { EMPTY_FILTERS, Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
 
@@ -20,6 +20,11 @@ import { useGeolocation } from "../lib/useGeolocation";
 
 const CITY = "Москва";
 
+// At/below this zoom the map shows server-aggregated clusters instead of pins.
+// Keep in sync with DETAIL_ZOOM in EventsMap / _DETAIL_ZOOM in the API service.
+const DETAIL_ZOOM = 14;
+type Viewport = { bbox: [number, number, number, number]; zoom: number };
+
 export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
@@ -27,6 +32,8 @@ export function App() {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [clusters, setClusters] = useState<MapCluster[]>([]);
+  const [viewport, setViewport] = useState<Viewport | null>(null);
   const [metro, setMetro] = useState<MetroStation[]>([]);
   const [selected, setSelected] = useState<EventItem | null>(null);
   const [peek, setPeek] = useState<EventItem[] | null>(null);
@@ -68,6 +75,13 @@ export function App() {
     return items.filter((i) => i.lat != null && i.lon != null && distanceMeters(userPos, [i.lat, i.lon]) <= limit);
   }, [items, filters.radiusKm, userPos]);
   const shownTotal = filters.radiusKm && userPos ? shownItems.length : total;
+
+  // Server clustering is used unless the radius filter ("Рядом") is active — that
+  // set is small and filtered client-side, so we pin it directly instead.
+  const clusterMode = !(filters.radiusKm > 0 && !!userPos);
+  const onViewport = useCallback((bbox: [number, number, number, number], zoom: number) => {
+    setViewport({ bbox, zoom });
+  }, []);
 
   // Favourite categories drive the "Для тебя" boost in recommendations.
   const favCategories = useMemo(() => {
@@ -135,6 +149,31 @@ export function App() {
     // unchanged; it is intentionally part of the dependency list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, refreshNonce]);
+
+  // Low-zoom map markers: a tiny server-clustered payload (a few dozen points)
+  // keyed on the current viewport + filters. Re-runs as the map pans/zooms; at
+  // detail zoom (or with the radius filter on) we clear it and draw real pins.
+  useEffect(() => {
+    if (!viewport || !clusterMode || viewport.zoom >= DETAIL_ZOOM) {
+      setClusters([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      const p = new URLSearchParams(query);
+      p.set("bbox", viewport.bbox.join(","));
+      p.set("zoom", String(viewport.zoom));
+      fetchMapEvents(p, ctrl.signal)
+        .then((res) => setClusters(res.clusters))
+        .catch((e) => {
+          if (e?.name !== "AbortError") setClusters([]);
+        });
+    }, 200);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [viewport, query, clusterMode]);
 
   // Telegram back button closes whatever is on top (sheet → panel → drawer).
   useEffect(() => {
@@ -287,6 +326,8 @@ export function App() {
       <Suspense fallback={null}>
         <EventsMap
           items={shownItems}
+          clusters={clusters}
+          clusterMode={clusterMode}
           selected={selected}
           userPos={userPos}
           heading={heading}
@@ -295,6 +336,7 @@ export function App() {
           metro={nearMetro}
           onSelect={openEvent}
           onCluster={onCluster}
+          onViewport={onViewport}
           onReady={handleMapReady}
         />
       </Suspense>
