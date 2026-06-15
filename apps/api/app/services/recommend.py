@@ -218,12 +218,36 @@ class RecommendationService:
             return None
         return {"key": key, "title": title, "subtitle": subtitle, "items": items}
 
+    @staticmethod
+    def _diverse(entries, per_rail, cap_per_cat=3):
+        """A varied top pick: cap items per category so «Для тебя» is a
+        cross-section of the best for you — not a clone of one focused category
+        rail. The single highest-scored event still leads. Tops up with the next
+        best if there are too few categories to fill the rail."""
+        out, counts, chosen = [], {}, set()
+        for e in entries:  # entries are pre-sorted by score
+            cat = e["c"]["category"]
+            if counts.get(cat, 0) >= cap_per_cat:
+                continue
+            out.append(e)
+            counts[cat] = counts.get(cat, 0) + 1
+            chosen.add(id(e))
+            if len(out) >= per_rail:
+                return out
+        for e in entries:
+            if id(e) not in chosen:
+                out.append(e)
+                if len(out) >= per_rail:
+                    break
+        return out
+
     def _build_rails(self, scored, today, has_loc, interests, per_rail):
         by_score = sorted(scored, key=lambda e: -e["score"])
         rails = []
 
-        # "Для тебя" — the personalised top of everything.
-        foryou = self._rail("for_you", "Для тебя", "Подобрано для вас", by_score, per_rail, min_items=1)
+        # "Для тебя" — a VARIED personalised top (capped per category), so it
+        # reads as a hand-picked cross-section rather than a copy of one rail.
+        foryou = self._rail("for_you", "Для тебя", "Подобрано для вас", self._diverse(by_score, per_rail), per_rail, min_items=1)
         if foryou:
             rails.append(foryou)
 
@@ -247,11 +271,6 @@ class RecommendationService:
         wkd = [e for e in by_score if (e["ds"] in weekend) or (min(weekend) <= e["de"] and e["ds"] <= max(weekend))]
         rails.append(self._rail("weekend", "На выходных", None, wkd, per_rail))
 
-        # "По интересам" — your favourite categories.
-        if interests:
-            byint = [e for e in by_score if e["c"]["category"] in interests]
-            rails.append(self._rail("interests", "По вашим интересам", None, byint, per_rail))
-
         # "Популярное" — most opened by others (live engagement).
         if any(e["views"] > 0 for e in scored):
             popular = sorted([e for e in scored if e["views"] > 0], key=lambda e: -e["views"])
@@ -261,14 +280,15 @@ class RecommendationService:
         free = [e for e in by_score if e["free"]]
         rails.append(self._rail("free", "Бесплатно", None, free, per_rail))
 
-        # A couple of category rails for browsing, busiest first (skip ones already
-        # central to the feed via interests).
+        # Category rails for focused browsing — the user's FAVOURITE categories
+        # first (these replace a vague «По интересам» with concrete, distinct rails
+        # like «Выставки»), then the other busiest categories.
         counts: dict[str, int] = {}
         for e in scored:
             counts[e["c"]["category"]] = counts.get(e["c"]["category"], 0) + 1
-        for cat, _ in sorted(counts.items(), key=lambda kv: -kv[1])[:3]:
-            if cat in interests or cat == "other":
-                continue
+        busiest = [c for c, _ in sorted(counts.items(), key=lambda kv: -kv[1]) if c != "other"]
+        ordered = [c for c in busiest if c in interests] + [c for c in busiest if c not in interests]
+        for cat in ordered[:4]:
             cat_entries = [e for e in by_score if e["c"]["category"] == cat]
             rails.append(self._rail(f"category:{cat}", _CATEGORY_LABELS.get(cat, cat), None, cat_entries, per_rail))
 
