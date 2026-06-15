@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { fetchRecommendations, type Rail, type RailItem } from "../../api/recommend";
+import { recentCategories } from "../../lib/affinity";
 import { categoryMeta } from "../../lib/categories";
 import { formatWhenShort, isLiveNow } from "../../lib/datetime";
 import { distanceLabel, formatDistance, type LatLon } from "../../lib/distance";
@@ -9,8 +10,14 @@ import { safeHttpUrl } from "../../lib/url";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
 import { PullHint } from "./PullHint";
 
+function priceLabel(p: number | null | undefined): { text: string; free: boolean } | null {
+  if (p == null) return null;
+  if (p <= 0) return { text: "бесплатно", free: true };
+  return { text: `от ${Math.round(p)} ₽`, free: false };
+}
+
 function RecCard({ item, userPos, onSelect }: { item: RailItem; userPos?: LatLon | null; onSelect: (i: RailItem) => void }) {
-  const { color } = categoryMeta(item.category);
+  const meta = categoryMeta(item.category);
   const live = isLiveNow(item.date_start, item.date_end, item.venue_hours);
   const img = safeHttpUrl(item.primary_image_url);
   const dist =
@@ -20,12 +27,13 @@ function RecCard({ item, userPos, onSelect }: { item: RailItem; userPos?: LatLon
         ? distanceLabel(userPos, [item.lat, item.lon])
         : null;
   const when = formatWhenShort(item.date_start, item.date_end);
+  const price = priceLabel(item.price_min);
   return (
     <button
       type="button"
       className="rcard"
-      style={{ "--cat": color } as CSSProperties}
-      aria-label={`${item.title}. ${when}${dist ? `. ${dist}` : ""}`}
+      style={{ "--cat": meta.color } as CSSProperties}
+      aria-label={`${item.title}. ${meta.label}. ${when}${dist ? `. ${dist}` : ""}${price ? `. ${price.text}` : ""}`}
       onClick={() => onSelect(item)}
     >
       <span className="rcard__img">
@@ -36,7 +44,14 @@ function RecCard({ item, userPos, onSelect }: { item: RailItem; userPos?: LatLon
             <CategoryIcon cat={item.category} size={30} />
           </span>
         )}
-        {live && <span className="rcard__live">идёт</span>}
+        <span className="rcard__scrim" aria-hidden="true" />
+        {live && (
+          <span className="rcard__live">
+            <i className="rcard__livedot" aria-hidden="true" />
+            сейчас
+          </span>
+        )}
+        {price && <span className={`rcard__price${price.free ? " rcard__price--free" : ""}`}>{price.text}</span>}
       </span>
       <span className="rcard__title">{item.title}</span>
       <span className="rcard__meta">
@@ -111,7 +126,7 @@ export function RecommendationsPanel({
   useEffect(() => {
     setLoading(true);
     const ctrl = new AbortController();
-    fetchRecommendations({ lat, lon, interests: interestsKey ? interestsKey.split(",") : [] }, ctrl.signal)
+    fetchRecommendations({ lat, lon, interests: interestsKey ? interestsKey.split(",") : [], recent: recentCategories() }, ctrl.signal)
       .then((r) => {
         setRails(r.rails);
         setLoading(false);

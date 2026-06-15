@@ -8,7 +8,7 @@ export type Rail = { key: string; title: string; subtitle?: string | null; items
 export type RecommendationsResponse = { rails: Rail[]; total: number };
 
 export async function fetchRecommendations(
-  params: { lat?: number | null; lon?: number | null; interests?: string[] },
+  params: { lat?: number | null; lon?: number | null; interests?: string[]; recent?: string[] },
   signal?: AbortSignal,
 ): Promise<RecommendationsResponse> {
   const p = new URLSearchParams();
@@ -17,6 +17,7 @@ export async function fetchRecommendations(
     p.set("lon", String(params.lon));
   }
   for (const c of params.interests ?? []) p.append("interests", c);
+  for (const c of params.recent ?? []) p.append("recent", c);
   const data = await getJson<RecommendationsResponse>(`/v1/recommendations?${p.toString()}`, signal);
   const rails = (data.rails ?? []).map((r) => ({
     ...r,

@@ -15,11 +15,12 @@ async def get_recommendations(
     lat: float | None = Query(default=None, ge=-90, le=90),
     lon: float | None = Query(default=None, ge=-180, le=180),
     interests: list[str] | None = Query(default=None),
+    recent: list[str] | None = Query(default=None, description="categories of recently opened events (behavioural profile)"),
     per_rail: int = Query(default=12, ge=4, le=30),
     db: AsyncSession = Depends(get_async_db),
 ):
     service = RecommendationService(db)
-    return await service.feed(lat, lon, interests, per_rail)
+    return await service.feed(lat, lon, interests, recent, per_rail)
 
 
 @router.post("/recommendations/seen/{event_id}", status_code=204)
