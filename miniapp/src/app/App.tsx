@@ -30,6 +30,7 @@ export function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [view, setView] = useState<View>("map");
+  const [sheetReady, setSheetReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [radarNonce, setRadarNonce] = useState(0);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -184,6 +185,18 @@ export function App() {
     setSelected(i);
   }, []);
 
+  // Hold the event sheet back briefly after a selection so the pin→sheet spark,
+  // the camera fly and the constellation play out on the open map before the
+  // card rises to cover it. Closing is instant.
+  useEffect(() => {
+    if (!selected) {
+      setSheetReady(false);
+      return;
+    }
+    const t = setTimeout(() => setSheetReady(true), 360);
+    return () => clearTimeout(t);
+  }, [selected]);
+
   const onCluster = useCallback((evs: EventItem[]) => {
     haptic("light");
     setPeek(evs);
@@ -303,7 +316,7 @@ export function App() {
       </button>
 
       <EventSheet
-        selected={selected}
+        selected={sheetReady ? selected : null}
         query={filters.q}
         userPos={userPos}
         items={shownItems}
