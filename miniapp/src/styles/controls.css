@@ -257,17 +257,20 @@
 .mapctl {
   position: absolute;
   right: 14px;
-  bottom: calc(env(safe-area-inset-bottom) + 40px);
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 1000;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  animation: dropIn 0.4s var(--ease-cut) both 0.15s;
-  transition: transform 0.26s var(--ease-cut);
+  animation: mapctlIn 0.34s var(--ease-cut) both;
 }
 
-.app--focusbar .mapctl {
-  transform: translateY(-56px);
+@keyframes mapctlIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(10px);
+  }
 }
 
 .mapctl__btn {
@@ -276,10 +279,12 @@
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
-  background: var(--plinth);
+  /* Slightly transparent, frosted over the map — no drop shadow. */
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
   color: var(--ink);
   cursor: pointer;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.38);
   transition: background 0.12s ease, transform 0.1s ease;
 }
 
