@@ -130,6 +130,92 @@ class YandexMapsScraper:
         return addresses
 
     @staticmethod
+    def _balanced_array(html: str, key: str) -> object | None:
+        """Slice the JSON array that follows `key` (e.g. '"workingTime":'),
+        balancing brackets so nested objects/arrays are captured, then parse it."""
+        idx = html.find(key)
+        if idx < 0:
+            return None
+        start = html.find("[", idx)
+        if start < 0:
+            return None
+        depth = 0
+        for i in range(start, min(len(html), start + 5000)):
+            c = html[i]
+            if c == "[":
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(html[start : i + 1])
+                    except (json.JSONDecodeError, ValueError):
+                        return None
+        return None
+
+    @staticmethod
+    def extract_working_hours(html: str) -> dict | None:
+        """Working hours of the first business — Yandex embeds a structured
+        `workingTime` array (index 0=Sunday … 6=Saturday, matching JS getDay)
+        plus a human `workingTimeText`. Returns {text, week} where week[d] is a
+        list of ["HH:MM","HH:MM"] ranges or None (closed)."""
+        if not html:
+            return None
+        arr = YandexMapsScraper._balanced_array(html, '"workingTime":')
+        text_m = re.search(r'"workingTimeText":"([^"]{0,160})"', html)
+        text = ""
+        if text_m:
+            try:
+                text = json.loads(f'"{text_m.group(1)}"').strip()
+            except json.JSONDecodeError:
+                text = text_m.group(1)
+        week: list | None = None
+        if isinstance(arr, list) and len(arr) == 7:
+            week = []
+            for day in arr:
+                if not isinstance(day, list) or not day:
+                    week.append(None)
+                    continue
+                ranges: list[list[str]] = []
+                for iv in day:
+                    if not isinstance(iv, dict):
+                        continue
+                    f, t = iv.get("from") or {}, iv.get("to") or {}
+                    fh, fm = f.get("hours"), f.get("minutes")
+                    th, tm = t.get("hours"), t.get("minutes")
+                    if fh is None or th is None:
+                        continue
+                    # Yandex closes a round-the-clock / past-midnight span at 0:00 → 24:00.
+                    if th == 0 and tm == 0 and not (fh == 0 and fm == 0):
+                        th = 24
+                    ranges.append([f"{fh:02d}:{fm or 0:02d}", f"{th:02d}:{tm or 0:02d}"])
+                week.append(ranges or None)
+        if not week and not text:
+            return None
+        return {"text": text, "week": week}
+
+    async def fetch_hours(self, query: str, city_hint: str | None = None) -> dict | None:
+        """Keyless working hours for a venue name → {hours:{text,week}, coords}.
+        Source-agnostic: any venue (any event source) resolves the same way."""
+        text = (query or "").strip()
+        if not text:
+            return None
+        params = {"text": f"{text} {city_hint}".strip() if city_hint else text}
+        headers = {"User-Agent": self.USER_AGENT, "Accept-Language": "ru,en;q=0.9"}
+        try:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+                for url in self.SEARCH_URLS:
+                    response = await client.get(url, params=params, headers=headers)
+                    if response.status_code >= 400 or not response.text or self._is_captcha_page(response.text):
+                        continue
+                    hours = self.extract_working_hours(response.text)
+                    if hours:
+                        return {"hours": hours, "coords": self.extract_first_business_coords(response.text)}
+        except httpx.HTTPError:
+            return None
+        return None
+
+    @staticmethod
     def _is_captcha_page(html: str) -> bool:
         lowered = html.casefold()
         return "are you not a robot?" in lowered or "checkcaptcha" in lowered or "smartcaptcha" in lowered

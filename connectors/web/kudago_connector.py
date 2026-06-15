@@ -28,9 +28,11 @@ class KudaGoConnector:
         place = row.get("place") if isinstance(row.get("place"), dict) else None
         if place:
             place = {
+                "id": place.get("id"),  # for fetching venue opening hours (/places/{id})
                 "title": place.get("title"),
                 "address": place.get("address"),
                 "coords": place.get("coords"),
+                "subway": place.get("subway"),  # nearest metro per the source
             }
 
         location = row.get("location") if isinstance(row.get("location"), dict) else None

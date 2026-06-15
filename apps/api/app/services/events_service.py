@@ -127,6 +127,7 @@ class EventQueryService:
                 EventOccurrence,
                 Venue.name.label("venue_name"),
                 Venue.address.label("venue_address"),
+                Venue.hours_json.label("venue_hours"),
                 func.ST_Y(cast(Venue.geom, Geometry)).label("lat"),
                 func.ST_X(cast(Venue.geom, Geometry)).label("lon"),
             )
@@ -145,10 +146,11 @@ class EventQueryService:
                 "source_best_url": occ.source_best_url,
                 "venue": venue_name,
                 "address": venue_address,
+                "venue_hours": venue_hours,
                 "lat": float(lat) if lat is not None else None,
                 "lon": float(lon) if lon is not None else None,
             }
-            for occ, venue_name, venue_address, lat, lon in rows
+            for occ, venue_name, venue_address, venue_hours, lat, lon in rows
         ]
         return {
             "event_id": event.event_id,

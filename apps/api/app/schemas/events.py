@@ -43,6 +43,7 @@ class EventDetailOccurrence(BaseModel):
     source_best_url: str
     venue: str | None
     address: str | None
+    venue_hours: dict | None = None
     lat: float | None
     lon: float | None
 

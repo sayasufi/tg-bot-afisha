@@ -27,9 +27,14 @@ export type EventOccurrence = {
   source_best_url: string;
   venue: string | null;
   address: string | null;
+  venue_hours: VenueHours | null;
   lat: number | null;
   lon: number | null;
 };
+
+// Opening hours: week[d] is a list of ["HH:MM","HH:MM"] ranges or null (closed),
+// index 0=Sunday (JS getDay). `text` is the human label.
+export type VenueHours = { text?: string; week?: (string[][] | null)[] };
 
 export type EventDetail = {
   event_id: string;

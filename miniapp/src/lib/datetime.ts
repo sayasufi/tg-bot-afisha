@@ -92,6 +92,24 @@ export function whenTimeNote(startIso?: string | null, endIso?: string | null, n
   return "время уточняйте"; // single/short or not-yet-started point, no time
 }
 
+// Today's opening hours from a venue's weekly schedule (index 0=Sunday):
+//   "сегодня 10:00–22:00"   "сегодня закрыто"   null (unknown)
+export function venueHoursToday(
+  hours: { week?: (string[][] | null)[] } | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  const week = hours?.week;
+  if (!Array.isArray(week) || week.length !== 7) return null;
+  const day = week[now.getDay()];
+  if (day === null) return "сегодня закрыто";
+  if (!Array.isArray(day) || day.length === 0) return null;
+  const ranges = day
+    .filter((r) => Array.isArray(r) && r.length === 2)
+    .map((r) => `${r[0]}–${r[1]}`)
+    .join(", ");
+  return ranges ? `сегодня ${ranges}` : null;
+}
+
 // Compact format for list rows / ticker (short months).
 export function formatWhenShort(startIso?: string | null, endIso?: string | null, now: Date = new Date()): string {
   const s = parse(startIso);

@@ -1,5 +1,5 @@
 from geoalchemy2 import Geography
-from sqlalchemy import Index, String, UniqueConstraint
+from sqlalchemy import Index, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db.base import Base
@@ -22,5 +22,9 @@ class Venue(Base, TimestampMixin):
     geom = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     geocode_provider: Mapped[str] = mapped_column(String(32), default="", nullable=False)
     geocode_confidence: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    # Opening hours, source-agnostic (resolved via Yandex Maps by name+coords):
+    # {"text": "пн-чт 09:00–18:00; …", "week": [day0..day6]} where day = list of
+    # ["HH:MM","HH:MM"] ranges or null (closed); index 0=Sunday (JS getDay).
+    hours_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     occurrences = relationship("EventOccurrence", back_populates="venue")
