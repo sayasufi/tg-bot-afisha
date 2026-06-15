@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # Classification is deterministic given (title, description, hints) + prompt, so we
 # cache results in Redis and skip the ~20s LLM round-trip for repeat/re-ingested
 # events. Bump the version tag whenever the classify prompt changes.
-_CACHE_PREFIX = "llm:classify:v3:"
+_CACHE_PREFIX = "llm:classify:v4:"
 _CACHE_TTL_SECONDS = 14 * 24 * 3600
 
 # A plain (sync) Redis client: not bound to an event loop, so it survives the
