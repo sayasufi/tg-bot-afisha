@@ -6,6 +6,7 @@ import httpx
 from connectors.telegram.telethon_connector import TelethonConnector
 from connectors.telegram.web_preview_connector import TelegramWebPreviewConnector
 from connectors.web.kudago_connector import KudaGoConnector
+from connectors.web.yandex_afisha_connector import YandexAfishaConnector
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
     create_source_run,
@@ -111,6 +112,73 @@ def fetch_kudago_full_scan(self):
             "stop_reason": stop_reason,
             "next_cursor": cursor,
         }
+        finish_source_run(db, run, "success", stats)
+        return stats
+    except Exception as exc:
+        finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise self.retry(exc=exc)
+    finally:
+        db.close()
+
+
+def _yandex_config(settings) -> dict:
+    return {"cursor": "0", "city": "moscow", "page_size": 100}
+
+
+@celery_app.task(bind=True, max_retries=3)
+def fetch_yandex_afisha(self):
+    """Incremental Yandex Afisha fetch: one page of the city feed per tick. The
+    paging offset advances and wraps back to 0 once the in-window catalogue is
+    exhausted, so repeated ticks keep the data fresh."""
+    settings = get_settings()
+    db = SessionLocal()
+    source = ensure_source(db, "yandex_afisha", "web", settings.yandex_afisha_base_url, _yandex_config(settings))
+    run = create_source_run(db, source.source_id)
+    try:
+        cursor = source.config_json.get("cursor", "0")
+        city = source.config_json.get("city", "moscow")
+        page_size = int(source.config_json.get("page_size", 100))
+        connector = YandexAfishaConnector(city=city, page_size=page_size)
+        records, next_cursor = asyncio.run(connector.fetch(cursor=cursor))
+        for rec in records:
+            upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)
+        # Stable cursor (== current) means we reached the end — wrap to restart.
+        stored_cursor = "0" if next_cursor == cursor else next_cursor
+        source.config_json = {**source.config_json, "cursor": stored_cursor}
+        db.add(source)
+        db.commit()
+        finish_source_run(db, run, "success", {"fetched": len(records)})
+        return {"fetched": len(records), "cursor": stored_cursor}
+    except Exception as exc:
+        finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise self.retry(exc=exc)
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, max_retries=3)
+def fetch_yandex_afisha_full_scan(self):
+    """Full sweep of the in-window Yandex Afisha catalogue: page through every
+    offset until the feed is exhausted (or max_pages), upserting each event."""
+    settings = get_settings()
+    db = SessionLocal()
+    source = ensure_source(db, "yandex_afisha", "web", settings.yandex_afisha_base_url, _yandex_config(settings))
+    run = create_source_run(db, source.source_id)
+    try:
+        city = source.config_json.get("city", "moscow")
+        page_size = int(source.config_json.get("page_size", 100))
+        max_pages = int(source.config_json.get("full_scan_max_pages", 40))
+        connector = YandexAfishaConnector(city=city, page_size=page_size)
+
+        # One session/handshake paginates the whole in-window catalogue.
+        records, pages_scanned, stop_reason = asyncio.run(connector.scan(max_pages=max_pages))
+        for rec in records:
+            upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)
+
+        source.config_json = {**source.config_json, "cursor": "0"}
+        db.add(source)
+        db.commit()
+        stats = {"fetched": len(records), "pages_scanned": pages_scanned, "stop_reason": stop_reason}
         finish_source_run(db, run, "success", stats)
         return stats
     except Exception as exc:

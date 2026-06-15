@@ -15,6 +15,7 @@ dependencies = [
   "celery[redis]==5.5.3",
   "redis==5.2.1",
   "httpx==0.28.1",
+  "curl-cffi==0.15.0",
   "python-dateutil==2.9.0.post0",
   "dateparser==1.2.2",
   "rapidfuzz==3.14.1",

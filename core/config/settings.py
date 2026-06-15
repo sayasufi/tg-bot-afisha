@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     telethon_session: str = Field(default="afisha_session", alias="TELETHON_SESSION")
 
     kudago_base_url: str = "https://kudago.com/public-api/v1.4"
+    yandex_afisha_base_url: str = "https://afisha.yandex.ru/api/graphql"
 
     default_city: str = Field(default="Moscow", alias="DEFAULT_CITY")
     default_country: str = Field(default="RU", alias="DEFAULT_COUNTRY")

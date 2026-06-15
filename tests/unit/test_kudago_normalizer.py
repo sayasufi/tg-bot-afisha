@@ -77,4 +77,7 @@ def test_kudago_uses_end_date_when_only_end_is_in_window() -> None:
     assert len(results) == 1
     item = results[0]
     assert item.date_start is not None
-    assert int(item.date_start.timestamp()) == in_window_end
+    # Ongoing run (started before the window, still active): keep the REAL start
+    # and end so the UI renders it as a run ("до X"), not a point at the end date.
+    assert int(item.date_start.timestamp()) == old_start
+    assert item.date_end is not None and int(item.date_end.timestamp()) == in_window_end
