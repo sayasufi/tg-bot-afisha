@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MapCluster, type MetroStation } from "../api/client";
 import { EMPTY_FILTERS, Filters, type FilterState } from "../features/filters/Filters";
@@ -33,6 +33,9 @@ export function App() {
   const [total, setTotal] = useState(0);
   const [clusters, setClusters] = useState<MapCluster[]>([]);
   const [zoom, setZoom] = useState<number | null>(null);
+  // Warmed cluster payloads keyed by request params (filters + zoom), so changing
+  // zoom swaps clusters synchronously from memory instead of waiting on the network.
+  const clusterCache = useRef<Map<string, MapCluster[]>>(new Map());
   const [metro, setMetro] = useState<MetroStation[]>([]);
   const [selected, setSelected] = useState<EventItem | null>(null);
   const [peek, setPeek] = useState<EventItem[] | null>(null);
@@ -151,21 +154,34 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, refreshNonce]);
 
-  // Low-zoom map markers: a small server-clustered payload aggregated over the
-  // WHOLE city, keyed on zoom + filters ONLY (not the viewport bbox). Panning at
-  // the same zoom must not refetch or redraw the clusters — only a zoom or filter
-  // change recomputes them (the grid cell size depends on zoom).
+  // Pull-to-refresh invalidates the warmed clusters so they refetch fresh.
+  useEffect(() => {
+    clusterCache.current.clear();
+  }, [refreshNonce]);
+
+  // Current zoom's clusters: served INSTANTLY from the in-memory cache when warm
+  // (a synchronous swap, no network/debounce), otherwise fetched once and cached.
+  // Keyed on zoom + filters only (not the panning bbox) — clusters are whole-city.
   useEffect(() => {
     if (zoom == null || !clusterMode || zoom >= DETAIL_ZOOM) {
       setClusters([]);
       return;
     }
+    const p = new URLSearchParams(query);
+    p.set("zoom", String(zoom));
+    const key = p.toString();
+    const warm = clusterCache.current.get(key);
+    if (warm) {
+      setClusters(warm);
+      return;
+    }
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      const p = new URLSearchParams(query);
-      p.set("zoom", String(zoom));
       fetchMapEvents(p, ctrl.signal)
-        .then((res) => setClusters(res.clusters))
+        .then((res) => {
+          clusterCache.current.set(key, res.clusters);
+          setClusters(res.clusters);
+        })
         .catch((e) => {
           if (e?.name !== "AbortError") setClusters([]);
         });
@@ -174,7 +190,31 @@ export function App() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [zoom, query, clusterMode]);
+  }, [zoom, query, clusterMode, refreshNonce]);
+
+  // Prefetch the whole cluster-zoom band for the current filters in the background,
+  // so the FIRST visit to any zoom is already warm → zooming feels instant. Tiny
+  // payloads (a few dozen points each), deduped against the cache, served from the
+  // server's short Redis cache.
+  useEffect(() => {
+    if (!clusterMode) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      for (let z = 7; z < DETAIL_ZOOM; z++) {
+        const p = new URLSearchParams(query);
+        p.set("zoom", String(z));
+        const key = p.toString();
+        if (clusterCache.current.has(key)) continue;
+        fetchMapEvents(p, ctrl.signal)
+          .then((res) => clusterCache.current.set(key, res.clusters))
+          .catch(() => undefined);
+      }
+    }, 700);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [query, clusterMode, refreshNonce]);
 
   // Telegram back button closes whatever is on top (sheet → panel → drawer).
   useEffect(() => {

@@ -1,13 +1,81 @@
+import hashlib
+import json
 import math
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+import redis.asyncio as aioredis
 from geoalchemy2 import Geography, Geometry
 from sqlalchemy import Select, and_, bindparam, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
+
+# Cluster responses depend only on (zoom, bbox, filters) and the dataset, which
+# changes only when the pipeline ingests — so cache them in Redis briefly. This
+# makes the frontend's prefetch of every zoom level (and repeat loads across
+# users) skip the DB entirely. Best-effort: any Redis hiccup falls back to a live
+# query. Async client, created once on the API's single event loop.
+_CLUSTER_CACHE_PREFIX = "map:clusters:v1:"
+_CLUSTER_CACHE_TTL = 45
+_redis: aioredis.Redis | None = None
+_redis_off = False
+
+
+def _redis_client() -> aioredis.Redis | None:
+    global _redis, _redis_off
+    if _redis_off:
+        return None
+    if _redis is None:
+        try:
+            _redis = aioredis.from_url(
+                get_settings().redis_url, decode_responses=True, socket_timeout=0.5, socket_connect_timeout=0.5
+            )
+        except Exception:  # pragma: no cover - cache is best-effort
+            _redis_off = True
+            return None
+    return _redis
+
+
+def _cluster_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q) -> str:
+    raw = json.dumps(
+        [
+            zoom,
+            list(bbox) if bbox else None,
+            date_from.isoformat() if date_from else None,
+            date_to.isoformat() if date_to else None,
+            sorted(categories) if categories else None,
+            price_min,
+            price_max,
+            q,
+        ],
+        default=str,
+        sort_keys=True,
+    )
+    return _CLUSTER_CACHE_PREFIX + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+async def _cluster_cache_get(key: str):
+    client = _redis_client()
+    if client is None:
+        return None
+    try:
+        hit = await client.get(key)
+        return json.loads(hit) if hit else None
+    except Exception:  # pragma: no cover - never let the cache break the request
+        return None
+
+
+async def _cluster_cache_set(key: str, value: dict) -> None:
+    client = _redis_client()
+    if client is None:
+        return
+    try:
+        await client.set(key, json.dumps(value, default=str), ex=_CLUSTER_CACHE_TTL)
+    except Exception:  # pragma: no cover
+        pass
 
 
 class EventQueryService:
@@ -80,13 +148,22 @@ class EventQueryService:
         offset: int,
         zoom: int | None = None,
     ):
-        # "Показать N" = filter-wide count of map-able events (stable while panning).
-        total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
         # Below detail zoom → clusters. bbox is optional: the client aggregates over
         # the WHOLE city (keyed on zoom only) so panning doesn't refetch/redraw.
+        # Served from a short Redis cache when warm (the frontend prefetches every
+        # zoom level), so a cache hit answers with zero DB queries.
         if zoom is not None and zoom < self._DETAIL_ZOOM:
+            key = _cluster_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q)
+            cached = await _cluster_cache_get(key)
+            if cached is not None:
+                return cached
+            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
             clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q)
-            return {"clusters": clusters, "items": [], "total": total}
+            result = {"clusters": clusters, "items": [], "total": total}
+            await _cluster_cache_set(key, result)
+            return result
+        # "Показать N" = filter-wide count of map-able events (stable while panning).
+        total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
         items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset)
         return {"clusters": [], "items": items, "total": total}
 
