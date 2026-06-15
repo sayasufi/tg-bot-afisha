@@ -321,18 +321,25 @@ html[data-theme="dark"] .vpin--active::before {
   }
 }
 
-/* Heading cone — a soft acid flashlight wedge fanning out the facing way. */
+/* Heading cone — a bright acid flashlight wedge fanning out the facing way.
+   Solid near the dot, fading at the tip; a dark edge keeps it legible even on
+   pale map tiles (where a faint amber beam used to disappear). */
 .vyou__cone {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 34px;
-  height: 24px;
+  width: 40px;
+  height: 34px;
   transform-origin: 50% 100%;
   transform: translate(-50%, -100%) rotate(var(--h, 0deg));
   clip-path: polygon(50% 100%, 0 0, 100% 0);
-  background: linear-gradient(to top, var(--acid), transparent);
-  opacity: 0.6;
+  background: linear-gradient(
+    to top,
+    var(--acid) 0%,
+    var(--acid) 45%,
+    rgba(255, 176, 46, 0.32) 100%
+  );
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.5));
 }
 
 @media (prefers-reduced-motion: reduce) {
