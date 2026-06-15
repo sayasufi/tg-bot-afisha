@@ -1,6 +1,7 @@
 import asyncio
 import html as html_lib
 import json
+import random
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -50,9 +51,14 @@ class AfishaRuConnector:
 
     source_name = "afisha_ru"
     _PAGE_SIZE = 24  # afisha's fixed listing page size
-    _PAGE_DELAY = 0.7  # polite pause between page fetches (afisha 429s on bursts)
+    # afisha's nginx rate-limits server IPs and penalises bursts, so the crawl is
+    # deliberately slow: a jittered multi-second gap between pages, and the daily
+    # full scan is the only multi-page caller. The 5-min incremental fetches a
+    # single page and just skips a tick if throttled.
+    _PAGE_DELAY = 2.5  # base pause between scan pages (+ jitter)
+    _PAGE_JITTER = 1.5
     _RETRY_ATTEMPTS = 3
-    _RETRY_BACKOFF = 4.0  # seconds, doubled each retry on 429/5xx
+    _RETRY_BACKOFF = 5.0  # seconds, doubled each retry on 429/5xx
 
     def __init__(self, city: str = "msk", rubrics: list[tuple[str, str]] | None = None) -> None:
         self.city = city
@@ -113,13 +119,15 @@ class AfishaRuConnector:
         except (ValueError, AttributeError):
             return {}
 
-    async def _get(self, session: AsyncSession, url: str):
-        """GET with backoff on 429 (afisha throttles bursts) and transient 5xx."""
+    async def _get(self, session: AsyncSession, url: str, attempts: int = 1):
+        """GET with backoff on 429 (afisha throttles bursts) and transient 5xx.
+        ``attempts=1`` (the incremental default) makes one try and raises on 429,
+        so a throttled tick fails fast instead of hammering; the scan retries."""
         backoff = self._RETRY_BACKOFF
-        for attempt in range(self._RETRY_ATTEMPTS):
+        for attempt in range(attempts):
             response = await session.get(url, headers=self._headers(), timeout=40)
             if response.status_code == 429 or response.status_code >= 500:
-                if attempt == self._RETRY_ATTEMPTS - 1:
+                if attempt == attempts - 1:
                     response.raise_for_status()
                 await asyncio.sleep(backoff)
                 backoff *= 2
@@ -128,13 +136,13 @@ class AfishaRuConnector:
             return response
         return response  # pragma: no cover
 
-    async def _fetch_page(self, session: AsyncSession, rubric_idx: int, page: int, today) -> tuple[list[RawRecord], int, int]:
+    async def _fetch_page(self, session: AsyncSession, rubric_idx: int, page: int, today, attempts: int = 1) -> tuple[list[RawRecord], int, int]:
         """One listing page -> (records, total_pages, raw_item_count). raw_item_count
         lets a sweep tell 'empty page' (stop) from 'items present but all out of
         window' (also stop, since pages are date-sorted ascending)."""
         path, category = self.rubrics[rubric_idx]
         url = self._page_url(path, page)
-        response = await self._get(session, url)
+        response = await self._get(session, url, attempts=attempts)
         model = self._extract_model(response.text)
         widget = model.get("ScheduleWidget") if isinstance(model.get("ScheduleWidget"), dict) else {}
         items = widget.get("Items") if isinstance(widget.get("Items"), list) else []
@@ -150,8 +158,14 @@ class AfishaRuConnector:
         covers the long tail. The cursor is the rubric index, cycling."""
         ri = int(cursor) % len(self.rubrics) if cursor and str(cursor).isdigit() else 0
         today = datetime.now(_MSK).date()
+        records: list[RawRecord] = []
         async with AsyncSession(impersonate=_IMPERSONATE) as session:
-            records, _, _ = await self._fetch_page(session, ri, 1, today)
+            try:
+                records, _, _ = await self._fetch_page(session, ri, 1, today)
+            except HTTPError:
+                # Throttled (or transient) — skip this tick gracefully; the cursor
+                # still advances so the next tick tries the next rubric.
+                records = []
         next_cursor = str((ri + 1) % len(self.rubrics))
         return records, next_cursor
 
@@ -170,7 +184,7 @@ class AfishaRuConnector:
                 page = 1
                 while page <= max_pages:
                     try:
-                        records, total_pages, raw_count = await self._fetch_page(session, ri, page, today)
+                        records, total_pages, raw_count = await self._fetch_page(session, ri, page, today, attempts=self._RETRY_ATTEMPTS)
                     except HTTPError as exc:
                         # Persistent throttle/outage — keep what we have rather than
                         # failing the whole scan, and stop early.
@@ -194,7 +208,7 @@ class AfishaRuConnector:
                         break
                     page += 1
                     stop_reason = "completed_iteration"
-                    await asyncio.sleep(self._PAGE_DELAY)
+                    await asyncio.sleep(self._PAGE_DELAY + random.random() * self._PAGE_JITTER)
         return all_records, pages, stop_reason
 
     # --- record building ---------------------------------------------------
