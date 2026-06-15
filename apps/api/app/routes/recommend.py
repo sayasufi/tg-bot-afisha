@@ -1,13 +1,18 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.schemas.recommend import RecommendationsResponse
 from apps.api.app.services.recommend import RecommendationService
+from apps.api.app.services.telegram_auth import validate_init_data
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["recommend"])
+
+# Cap the behavioural profile so a hostile client can't ship an unbounded list.
+_MAX_PROFILE = 30
 
 
 @router.get("/recommendations", response_model=RecommendationsResponse)
@@ -20,12 +25,36 @@ async def get_recommendations(
     db: AsyncSession = Depends(get_async_db),
 ):
     service = RecommendationService(db)
-    return await service.feed(lat, lon, interests, recent, per_rail)
+    return await service.feed(
+        lat, lon,
+        interests[:_MAX_PROFILE] if interests else interests,
+        recent[:_MAX_PROFILE] if recent else recent,
+        per_rail,
+    )
+
+
+class SeenRequest(BaseModel):
+    init_data: str | None = None
 
 
 @router.post("/recommendations/seen/{event_id}", status_code=204)
-async def log_event_seen(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
-    # Fire-and-forget engagement signal: increments the event's open-count, which
-    # feeds the "Популярное" rail and the popularity term in the score.
-    await RecommendationService(db).log_view(event_id)
+async def log_event_seen(
+    event_id: UUID,
+    payload: SeenRequest | None = None,
+    db: AsyncSession = Depends(get_async_db),
+):
+    # Engagement signal that feeds the "Популярное" rail and the popularity term
+    # in scoring — so it must be authenticated, else anyone could inflate any
+    # event's open-count. Require a valid Telegram initData and count each user
+    # at most once per event per day (dedupe lives in log_view).
+    if not payload or not payload.init_data:
+        return None  # unauthenticated → silently ignored (fire-and-forget)
+    try:
+        user = validate_init_data(payload.init_data)
+    except HTTPException:
+        return None
+    user_id = user.get("id")
+    if user_id is None:
+        return None
+    await RecommendationService(db).log_view(event_id, user_id)
     return None

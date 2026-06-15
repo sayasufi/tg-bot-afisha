@@ -77,8 +77,8 @@ class NearbyResponse(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    q: str = Field(min_length=1)
-    city: str | None = None
+    q: str = Field(min_length=1, max_length=200)
+    city: str | None = Field(default=None, max_length=120)
     limit: int = Field(default=20, ge=1, le=100)
 
 

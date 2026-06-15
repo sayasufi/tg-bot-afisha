@@ -27,10 +27,18 @@ export async function fetchRecommendations(
 }
 
 // Fire-and-forget engagement ping when an event is opened — feeds the
-// "Популярное" rail and the popularity term in the recommendation score.
+// "Популярное" rail and the popularity term in the recommendation score. Send
+// the signed Telegram initData so the server can authenticate + dedupe the
+// signal (an unauthenticated ping is silently ignored server-side).
 export function logEventSeen(eventId: string): void {
   try {
-    void fetch(`${API_BASE}/v1/recommendations/seen/${eventId}`, { method: "POST", keepalive: true }).catch(() => undefined);
+    const initData = (window as any)?.Telegram?.WebApp?.initData as string | undefined;
+    void fetch(`${API_BASE}/v1/recommendations/seen/${eventId}`, {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: initData ?? "" }),
+    }).catch(() => undefined);
   } catch {
     /* ignore */
   }

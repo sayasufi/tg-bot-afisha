@@ -161,7 +161,7 @@ def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: 
     # Otherwise fetch the source image — SSRF-guarded, it can come from a feed.
     if photo is None and image_url and is_public_http_url(image_url):
         try:
-            r = httpx.get(image_url, timeout=15, follow_redirects=False, headers={"User-Agent": "okrest-card/1.0"})
+            r = httpx.get(image_url, timeout=8, follow_redirects=False, headers={"User-Agent": "okrest-card/1.0"})
             r.raise_for_status()
             photo = r.content
         except Exception:

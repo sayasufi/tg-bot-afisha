@@ -323,7 +323,7 @@ class RecommendationService:
 
         return [r for r in rails if r]
 
-    async def log_view(self, event_id) -> None:
+    async def log_view(self, event_id, user_id=None) -> None:
         client = _redis_client()
         if client is None:
             return
@@ -333,6 +333,14 @@ class RecommendationService:
         if not exists:
             return
         try:
+            if user_id is not None:
+                # Count each user at most once per event per day, so a single
+                # user can't inflate the popularity signal by reopening.
+                seen_key = f"rec:seen:{event_id}"
+                added = await client.sadd(seen_key, str(user_id))
+                await client.expire(seen_key, 86400)
+                if not added:
+                    return
             await client.hincrby(_VIEWS_KEY, str(event_id), 1)
         except Exception:  # pragma: no cover
             pass

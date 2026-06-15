@@ -34,6 +34,9 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_webapp_url: str = Field(default="http://localhost:5173", alias="TELEGRAM_WEBAPP_URL")
+    # Comma-separated CORS allowlist. Empty → derived from telegram_webapp_url +
+    # known prod hosts + localhost dev (see apps/api/app/main.py).
+    cors_origins: str = Field(default="", alias="CORS_ORIGINS")
 
     telethon_api_id: int | None = Field(default=None, alias="TELETHON_API_ID")
     telethon_api_hash: str = Field(default="", alias="TELETHON_API_HASH")

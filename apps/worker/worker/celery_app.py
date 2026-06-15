@@ -76,6 +76,11 @@ celery_app.conf.beat_schedule = {
 
 celery_app.conf.task_default_retry_delay = 10
 celery_app.conf.task_acks_late = True
+# Bound every task so a hung upstream (geocoder / LLM / image fetch) can't hold a
+# worker slot forever and starve fetch/normalize/dedup. Soft limit raises
+# SoftTimeLimitExceeded (catchable for cleanup); hard limit kills the worker.
+celery_app.conf.task_soft_time_limit = 600
+celery_app.conf.task_time_limit = 900
 
 # RedBeat: store the beat schedule in Redis behind a distributed lock so the
 # scheduler is no longer a single hard-wired process — multiple beat replicas can

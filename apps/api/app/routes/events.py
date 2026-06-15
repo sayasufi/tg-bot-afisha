@@ -26,7 +26,7 @@ async def get_map_events(
     categories: list[str] | None = Query(default=None),
     price_min: float | None = None,
     price_max: float | None = None,
-    q: str | None = None,
+    q: str | None = Query(default=None, max_length=200),
     zoom: int | None = Query(default=None, ge=0, le=22),
     limit: int | None = Query(default=None, ge=1, le=20000),
     offset: int = Query(default=0, ge=0),
@@ -34,7 +34,12 @@ async def get_map_events(
 ):
     bbox_tuple = None
     if bbox:
-        parts = [float(x) for x in bbox.split(",")]
+        # Parse defensively — a malformed bbox must be a clean 400, not a 500
+        # that leaks a stack trace and never reaches PostGIS.
+        try:
+            parts = [float(x) for x in bbox.split(",")]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="bbox must be 4 comma-separated numbers")
         if len(parts) != 4:
             raise HTTPException(status_code=400, detail="bbox must have 4 comma-separated numbers")
         bbox_tuple = (parts[0], parts[1], parts[2], parts[3])
@@ -45,13 +50,13 @@ async def get_map_events(
 
 @router.get("/events/nearby", response_model=NearbyResponse)
 async def get_nearby_events(
-    lat: float,
-    lon: float,
+    lat: float = Query(ge=-90, le=90),
+    lon: float = Query(ge=-180, le=180),
     radius_m: int = Query(default=3000, ge=100, le=50000),
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     categories: list[str] | None = Query(default=None),
-    q: str | None = None,
+    q: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_async_db),
 ):

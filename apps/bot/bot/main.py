@@ -55,7 +55,22 @@ async def main() -> None:
     dp.include_router(fallback.router)  # catch-all — must stay last
 
     await _setup_bot(bot, settings.telegram_webapp_url)
-    await dp.start_polling(bot)
+
+    # Self-heal from transient Telegram/network faults: a bare start_polling that
+    # raises would exit the process and take the bot offline until Docker restarts
+    # it. Retry with capped exponential backoff instead.
+    log = logging.getLogger(__name__)
+    backoff = 2
+    while True:
+        try:
+            await dp.start_polling(bot)
+            break  # clean shutdown (signal) — don't loop
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("polling crashed; restarting in %ss", backoff)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60)
 
 
 if __name__ == "__main__":

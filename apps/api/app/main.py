@@ -26,11 +26,35 @@ if settings.sentry_dsn and sentry_sdk is not None:
 app = FastAPI(title="Afisha API", version="0.1.0")
 # Compress JSON responses (map/places payloads are tens of KB → a few KB).
 app.add_middleware(GZipMiddleware, minimum_size=256)
+
+
+def _cors_origins() -> list[str]:
+    """Explicit allowlist instead of '*'. '*' + allow_credentials is a CSRF/
+    credential-theft footgun; the mini-app calls the API same-origin in prod so
+    a tight list costs nothing."""
+    raw = settings.cors_origins.strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    origins = {
+        "https://okrestmap.ru",
+        "https://www.okrestmap.ru",
+        "https://tgbot-afisha.ru",
+        "https://www.tgbot-afisha.ru",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }
+    if settings.telegram_webapp_url:
+        origins.add(settings.telegram_webapp_url.rstrip("/"))
+    return sorted(origins)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=_cors_origins(),
+    # No cookie/credential auth (the mini-app sends Telegram initData explicitly),
+    # so credentials stay off — which is also what lets the allowlist be strict.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
