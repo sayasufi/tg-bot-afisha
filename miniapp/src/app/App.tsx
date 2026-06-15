@@ -9,6 +9,7 @@ import { ClusterPeek } from "../features/map/ClusterPeek";
 // The map pulls in maplibre-gl (~1 MB) + leaflet; lazy-load it so the app shell
 // and the instant splash render without waiting on that bundle to parse.
 const EventsMap = lazy(() => import("../features/map/EventsMap").then((m) => ({ default: m.EventsMap })));
+import { FocusBar } from "../features/map/FocusBar";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
 import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
@@ -313,6 +314,13 @@ export function App() {
 
   // Tap on the empty map clears the persistent highlight (no-op if nothing focused).
   const clearFocus = useCallback(() => setFocused((f) => (f ? null : f)), []);
+  const dismissFocus = useCallback(() => {
+    haptic("light");
+    setFocused(null);
+  }, []);
+  // The slim "marked exhibit" bar shows on the map when a marker is highlighted
+  // and no card is open.
+  const focusBarVisible = view === "map" && !!focused && !selected;
 
   const onRefresh = useCallback(() => {
     haptic("medium");
@@ -369,7 +377,7 @@ export function App() {
   }, [openEvent]);
 
   return (
-    <div className="app">
+    <div className={`app${focusBarVisible ? " app--focusbar" : ""}`}>
       <Filters
         value={filters}
         total={shownTotal}
@@ -429,6 +437,8 @@ export function App() {
       {view === "map" && !selected && !filtersOpen && !drawerOpen && !coachSeen && !userPos && (
         <Coach onDismiss={dismissCoach} />
       )}
+
+      {focusBarVisible && focused && <FocusBar event={focused} onOpen={openEvent} onClose={dismissFocus} />}
 
       <button
         type="button"
