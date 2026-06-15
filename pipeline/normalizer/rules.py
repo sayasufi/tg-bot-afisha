@@ -18,6 +18,14 @@ def _safe_ts_to_dt(value: object) -> datetime | None:
     return datetime.fromtimestamp(ts, tz=timezone.utc)
 
 
+def _has_clock(row: dict) -> bool:
+    """True if the KudaGo date row carries a real start time (not an all-day
+    placeholder). KudaGo emits a 00:00:00 / null `start_time` for all-day or
+    long-run rows, and a real one (e.g. 19:00:00) for actual sessions."""
+    st = row.get("start_time")
+    return bool(st) and str(st) != "00:00:00"
+
+
 def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None]:
     dates = payload.get("dates")
     if not isinstance(dates, list) or not dates:
@@ -25,20 +33,27 @@ def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None
 
     now = datetime.now(timezone.utc)
     until = now + timedelta(days=30)
-    ongoing: tuple[datetime, datetime] | None = None
+    upcoming: list[tuple[datetime, datetime | None, bool]] = []  # (start, end, has_clock)
+    ongoing: tuple[datetime, datetime | None] | None = None
     for row in dates:
         if not isinstance(row, dict):
             continue
         start_dt = _safe_ts_to_dt(row.get("start"))
         end_dt = _safe_ts_to_dt(row.get("end"))
-        # First upcoming occurrence within the window wins (events list rows oldest-first,
-        # so scanning all rows avoids picking a long-past start).
         if start_dt and now <= start_dt <= until:
-            return start_dt, end_dt
+            upcoming.append((start_dt, end_dt, _has_clock(row)))
         # Started before the window but still running (e.g. an exhibition): keep the REAL
         # start + end so the UI can show it as a run ("по 1 января"), not start==end.
-        if start_dt and end_dt and start_dt < now <= end_dt and ongoing is None:
+        elif start_dt and end_dt and start_dt < now <= end_dt and ongoing is None:
             ongoing = (start_dt, end_dt)
+
+    if upcoming:
+        # Prefer the soonest session that has a real clock time over an all-day /
+        # midnight placeholder row — many KudaGo events list both, and picking the
+        # placeholder is what made timed events look like they run 24/7.
+        timed = [u for u in upcoming if u[2]]
+        chosen = min(timed or upcoming, key=lambda u: u[0])
+        return chosen[0], chosen[1]
 
     if ongoing:
         return ongoing
