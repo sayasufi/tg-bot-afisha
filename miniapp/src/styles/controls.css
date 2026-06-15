@@ -252,8 +252,11 @@
   cursor: pointer;
 }
 
-/* ---------- FAB — square nameplate, acid on press ---------- */
-/* ---------- Map controls — spaced individual buttons that float ---------- */
+/* ---------- Map controls ---------- */
+/* Native-app pattern (Yandex / 2GIS / Google / Mapbox all do this): zoom +/-
+   is ONE connected unit — a single hairline frame split by an internal divider,
+   parked mid-right. The locate button is a SEPARATE control dropped to the
+   bottom-right corner. Solid fill, flat, square — no glass, no shadow. */
 .mapctl {
   position: absolute;
   right: 14px;
@@ -262,7 +265,8 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--plinth);
   animation: mapctlIn 0.34s var(--ease-cut) both;
 }
 
@@ -273,40 +277,73 @@
   }
 }
 
-.mapctl__btn {
-  width: 42px;
-  height: 42px;
+.mapctl__btn--zoom {
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
-  /* Slightly transparent, frosted over the map — no drop shadow. */
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(7px);
-  backdrop-filter: blur(7px);
+  border: 0;
+  background: transparent;
   color: var(--ink);
+  font-family: var(--grotesk);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.12s ease, transform 0.1s ease;
 }
 
-.mapctl__btn--zoom {
-  font-family: var(--grotesk);
-  font-size: 21px;
-  font-weight: 300;
-  line-height: 1;
+/* the one internal line — a hairline splitting + from − */
+.mapctl__btn--zoom + .mapctl__btn--zoom {
+  border-top: 1px solid var(--line);
 }
 
-.mapctl__btn:active:not(:disabled) {
+.mapctl__btn--zoom:active:not(:disabled) {
   background: var(--acid);
   color: var(--on-acid);
-  transform: scale(0.93);
+  transform: scale(0.94);
 }
 
-.mapctl__btn:disabled {
+.mapctl__btn--zoom:disabled {
   color: var(--ink-faint);
   cursor: default;
 }
 
-.mapctl__btn--busy {
+/* Locate — a detached control in the bottom-right corner; lifts to clear the
+   focus bar when one is showing. */
+.mapctl-locate {
+  position: absolute;
+  right: 14px;
+  bottom: calc(env(safe-area-inset-bottom) + 28px);
+  z-index: 1000;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  cursor: pointer;
+  animation: ctlFade 0.3s var(--ease-cut) both;
+  transition: background 0.12s ease, transform 0.26s var(--ease-cut);
+}
+
+@keyframes ctlFade {
+  from {
+    opacity: 0;
+  }
+}
+
+.app--focusbar .mapctl-locate {
+  transform: translateY(-74px);
+}
+
+.mapctl-locate:active {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.mapctl-locate--busy {
   animation: blink 1s steps(2) infinite;
 }
 

@@ -67,15 +67,17 @@ function MapClickClear({ onClear }: { onClear: () => void }) {
   return null;
 }
 
-// One compact control rail — zoom +/- and locate grouped into a single hairline
-// column (instead of separate bulky buttons).
+// Map controls in the native-app pattern (Yandex / 2GIS / Google): the zoom +/-
+// pair is one connected unit parked mid-right; the locate button is a separate
+// control dropped to the bottom-right corner.
 function MapControls({ onLocate, locating }: { onLocate: () => void; locating: boolean }) {
   const map = useMap();
-  const ref = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<HTMLDivElement>(null);
+  const locRef = useRef<HTMLButtonElement>(null);
   const [zoom, setZoom] = useState(map.getZoom());
   useEffect(() => {
-    const el = ref.current;
-    if (el) {
+    for (const el of [zoomRef.current, locRef.current]) {
+      if (!el) continue;
       L.DomEvent.disableClickPropagation(el);
       L.DomEvent.disableScrollPropagation(el);
     }
@@ -86,14 +88,16 @@ function MapControls({ onLocate, locating }: { onLocate: () => void; locating: b
     };
   }, [map]);
   return (
-    <div className="mapctl" ref={ref}>
-      <button type="button" className="mapctl__btn mapctl__btn--zoom" aria-label="Приблизить" disabled={zoom >= map.getMaxZoom()} onClick={() => map.zoomIn()}>
-        +
-      </button>
-      <button type="button" className="mapctl__btn mapctl__btn--zoom" aria-label="Отдалить" disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}>
-        −
-      </button>
-      <button type="button" className={`mapctl__btn mapctl__btn--locate${locating ? " mapctl__btn--busy" : ""}`} aria-label="Моё местоположение" onClick={onLocate}>
+    <>
+      <div className="mapctl" ref={zoomRef}>
+        <button type="button" className="mapctl__btn--zoom" aria-label="Приблизить" disabled={zoom >= map.getMaxZoom()} onClick={() => map.zoomIn()}>
+          +
+        </button>
+        <button type="button" className="mapctl__btn--zoom" aria-label="Отдалить" disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}>
+          −
+        </button>
+      </div>
+      <button ref={locRef} type="button" className={`mapctl-locate${locating ? " mapctl-locate--busy" : ""}`} aria-label="Моё местоположение" onClick={onLocate}>
         <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
           <circle cx="12" cy="12" r="3.6" fill="currentColor" />
           <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -103,7 +107,7 @@ function MapControls({ onLocate, locating }: { onLocate: () => void; locating: b
           <line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       </button>
-    </div>
+    </>
   );
 }
 
