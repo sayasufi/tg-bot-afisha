@@ -18,12 +18,9 @@ from core.db.repositories.ingestion import (
     unresolved_candidate_ids,
 )
 from core.db.session import SessionLocal, WorkerAsyncSessionLocal
-from core.tasklock import single_instance
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.geocoding.service import GeocodingService
 from pipeline.llm.service import LLMService
-
-from apps.worker.worker.celery_app import celery_app
 
 
 def _coords_sane(lat: float, lon: float) -> tuple[float, float] | None:
@@ -63,15 +60,6 @@ def _source_coords(payload: dict | None) -> tuple[float, float] | None:
             if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
                 return _coords_sane(float(lat), float(lon))
     return None
-
-
-@celery_app.task(bind=True, max_retries=3)
-@single_instance("enrich")
-def enrich_candidates(self):
-    try:
-        return asyncio.run(_enrich_impl())
-    except Exception as exc:
-        raise self.retry(exc=exc)
 
 
 async def _enrich_impl() -> dict:
@@ -158,15 +146,6 @@ async def _enrich_impl() -> dict:
         return {"enriched": enriched}
 
 
-@celery_app.task(bind=True, max_retries=3)
-@single_instance("backfill_venues_osm")
-def backfill_venues_osm(self):
-    try:
-        return asyncio.run(_backfill_venues_osm_impl())
-    except Exception as exc:
-        raise self.retry(exc=exc)
-
-
 async def _backfill_venues_osm_impl() -> dict:
     settings = get_settings()
     geocoder = GeocodingService()
@@ -246,12 +225,3 @@ def _resolve_venue_hours_impl():
         raise
     finally:
         db.close()
-
-
-@celery_app.task(bind=True, max_retries=2)
-@single_instance("resolve_venue_hours")
-def resolve_venue_hours(self):
-    try:
-        return _resolve_venue_hours_impl()
-    except Exception as exc:
-        raise self.retry(exc=exc)

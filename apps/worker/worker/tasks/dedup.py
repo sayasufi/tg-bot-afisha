@@ -5,19 +5,7 @@ from sqlalchemy import select
 from core.db.models import EventCandidate, EventSource, RawEvent, Source
 from core.db.repositories.ingestion import dedup_and_upsert_event, get_venue
 from core.db.session import WorkerAsyncSessionLocal
-from core.tasklock import single_instance
 from pipeline.llm.service import LLMService
-
-from apps.worker.worker.celery_app import celery_app
-
-
-@celery_app.task(bind=True, max_retries=3)
-@single_instance("dedup")
-def dedup_candidates(self):
-    try:
-        return asyncio.run(_dedup_impl())
-    except Exception as exc:
-        raise self.retry(exc=exc)
 
 
 async def _dedup_impl() -> dict:

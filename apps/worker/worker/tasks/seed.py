@@ -8,7 +8,6 @@ from core.db.repositories.places import upsert_map_place
 from core.db.repositories.users import get_or_create_city
 from core.db.session import SessionLocal
 
-from apps.worker.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +183,10 @@ def _seed_parks(db, city_id: int) -> int:
     return len(merged)
 
 
-@celery_app.task(bind=True, max_retries=2)
-def seed_map_places(self, city: str = "Moscow"):
-    """Populate ref.map_places (metro + parks) from Wikidata. Idempotent (upsert)."""
+def seed_map_places(city: str = "Moscow"):
+    """Populate ref.map_places (metro + parks) from Wikidata. Idempotent (upsert).
+    Manual/on-demand:
+    `python -c "from apps.worker.worker.tasks.seed import seed_map_places; seed_map_places()"`."""
     db = SessionLocal()
     try:
         city_row = get_or_create_city(db, city)
@@ -194,7 +194,5 @@ def seed_map_places(self, city: str = "Moscow"):
         parks = _seed_parks(db, city_row.city_id)
         logger.info("seed_map_places", extra={"metro": metro, "parks": parks})
         return {"metro": metro, "parks": parks}
-    except Exception as exc:
-        raise self.retry(exc=exc)
     finally:
         db.close()

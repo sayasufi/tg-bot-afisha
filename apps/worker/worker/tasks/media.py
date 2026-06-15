@@ -6,12 +6,10 @@ import httpx
 from PIL import Image
 from sqlalchemy import select
 
-from apps.worker.worker.celery_app import celery_app
 from core.db.models import Event
 from core.db.session import SessionLocal
 from core.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, public_url, put_image
-from core.tasklock import single_instance
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +73,3 @@ def _cache_event_images_impl() -> dict:
         raise
     finally:
         db.close()
-
-
-@celery_app.task(bind=True, max_retries=3, name="apps.worker.worker.tasks.media.cache_event_images")
-@single_instance("media")
-def cache_event_images(self) -> dict:
-    try:
-        return _cache_event_images_impl()
-    except Exception as exc:
-        raise self.retry(exc=exc)

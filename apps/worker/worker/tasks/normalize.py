@@ -6,11 +6,9 @@ from datetime import datetime, timedelta, timezone
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import get_raw, mark_raw_skipped, save_candidate, unprocessed_raw_ids
 from core.db.session import WorkerAsyncSessionLocal
-from core.tasklock import single_instance
 from pipeline.llm.extraction_service import LLMExtractionService
 from pipeline.normalizer.rules import RuleBasedNormalizer
 
-from apps.worker.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +47,6 @@ def _is_kudago_candidate_in_window(candidate) -> bool:
     # Ongoing events (exhibitions etc.): started in the past, still running.
     # The KudaGo connector admits these, so the normalizer must too.
     return bool(candidate.date_end and candidate.date_start <= now <= candidate.date_end)
-
-
-@celery_app.task(bind=True, max_retries=3)
-@single_instance("normalize")
-def normalize_raw_events(self):
-    try:
-        return asyncio.run(_normalize_impl())
-    except Exception as exc:
-        raise self.retry(exc=exc)
 
 
 async def _normalize_impl() -> dict:
