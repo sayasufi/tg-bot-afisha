@@ -185,10 +185,12 @@ class YandexMapsScraper:
                     th, tm = t.get("hours"), t.get("minutes")
                     if fh is None or th is None:
                         continue
-                    # Yandex closes a round-the-clock / past-midnight span at 0:00 → 24:00.
-                    if th == 0 and tm == 0 and not (fh == 0 and fm == 0):
-                        th = 24
-                    ranges.append([f"{fh:02d}:{fm or 0:02d}", f"{th:02d}:{tm or 0:02d}"])
+                    fm, tm = fm or 0, tm or 0
+                    if fh == th and fm == tm:
+                        fh, fm, th, tm = 0, 0, 24, 0  # from == to → round-the-clock
+                    elif th == 0 and tm == 0:
+                        th = 24  # closes at midnight → 24:00
+                    ranges.append([f"{fh:02d}:{fm:02d}", f"{th:02d}:{tm:02d}"])
                 week.append(ranges or None)
         if not week and not text:
             return None

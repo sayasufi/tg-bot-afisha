@@ -103,9 +103,12 @@ export function venueHoursToday(
   const day = week[now.getDay()];
   if (day === null) return "сегодня закрыто";
   if (!Array.isArray(day) || day.length === 0) return null;
+  // Round-the-clock: Yandex encodes 24/7 as 00:00→00:00 (or →24:00).
+  const is24 = (r: string[]) => r[0] === r[1] || (r[0] === "00:00" && (r[1] === "24:00" || r[1] === "00:00"));
+  if (day.length === 1 && Array.isArray(day[0]) && is24(day[0])) return "сегодня круглосуточно";
   const ranges = day
     .filter((r) => Array.isArray(r) && r.length === 2)
-    .map((r) => `${r[0]}–${r[1]}`)
+    .map((r) => `${r[0]}–${r[1] === "00:00" ? "24:00" : r[1]}`)
     .join(", ");
   return ranges ? `сегодня ${ranges}` : null;
 }
