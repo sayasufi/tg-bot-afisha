@@ -43,12 +43,10 @@ def _cache_one(db, event: Event) -> bool:
         return False
 
 
-@celery_app.task(bind=True, max_retries=3, name="apps.worker.worker.tasks.media.cache_event_images")
-@single_instance("media")
-def cache_event_images(self) -> dict:
+def _cache_event_images_impl() -> dict:
     """Cache a batch of not-yet-cached event images into MinIO. Per-image failures are
     logged and skipped (one bad URL must not fail the batch); infra failures (MinIO,
-    DB) propagate and retry."""
+    DB) propagate so the caller retries."""
     db = SessionLocal()
     cached = 0
     events: list[Event] = []
@@ -72,8 +70,17 @@ def cache_event_images(self) -> dict:
                 cached += 1
         db.commit()
         return {"scanned": len(events), "cached": cached}
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        raise self.retry(exc=exc)
+        raise
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, max_retries=3, name="apps.worker.worker.tasks.media.cache_event_images")
+@single_instance("media")
+def cache_event_images(self) -> dict:
+    try:
+        return _cache_event_images_impl()
+    except Exception as exc:
+        raise self.retry(exc=exc)

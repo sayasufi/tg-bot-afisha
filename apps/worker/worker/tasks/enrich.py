@@ -204,9 +204,7 @@ def _dist_m(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 2 * R * math.asin(math.sqrt(h))
 
 
-@celery_app.task(bind=True, max_retries=2)
-@single_instance("resolve_venue_hours")
-def resolve_venue_hours(self):
+def _resolve_venue_hours_impl():
     """Resolve opening hours for venues that don't have them yet, via Yandex
     Maps (source-agnostic, by name + coords). Cached in `venues.hours_json` so we
     hit Yandex AT MOST ONCE per venue — venues we couldn't resolve are stamped
@@ -244,7 +242,16 @@ def resolve_venue_hours(self):
             db.commit()
             time.sleep(1.2)
         return {"checked": len(rows), "stored": stored}
-    except Exception as exc:
-        raise self.retry(exc=exc)
+    except Exception:
+        raise
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, max_retries=2)
+@single_instance("resolve_venue_hours")
+def resolve_venue_hours(self):
+    try:
+        return _resolve_venue_hours_impl()
+    except Exception as exc:
+        raise self.retry(exc=exc)

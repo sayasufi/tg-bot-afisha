@@ -105,6 +105,49 @@ services:
       api:
         condition: service_healthy
 
+  # --- Prefect orchestration (replaces the celery worker + beat above) ---
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    restart: unless-stopped
+    command: prefect server start --host 0.0.0.0 --port 4200
+    environment:
+      PREFECT_HOME: /data
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+    ports:
+      - "4200:4200"
+    volumes:
+      - prefect_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+  prefect-serve:
+    build:
+      context: .
+      dockerfile: infra/docker/python.Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    # Schedules + runs every flow in one process (was: celery worker + beat).
+    command: python -m apps.worker.worker.prefect_serve
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
   bot:
     build:
       context: .
@@ -141,3 +184,4 @@ services:
 volumes:
   pg_data:
   minio_data:
+  prefect_data:
