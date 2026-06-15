@@ -180,21 +180,23 @@ def resolve_venue_hours(self):
     try:
         rows = db.execute(
             text(
-                "SELECT venue_id, name, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
+                "SELECT venue_id, name, address, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
                 "FROM events.venues WHERE geom IS NOT NULL AND name <> '' AND hours_json IS NULL "
                 "ORDER BY venue_id LIMIT 15"
             )
         ).all()
         stored = 0
-        for vid, name, lat, lon in rows:
+        for vid, name, address, lat, lon in rows:
+            # name + address disambiguates same-named venues across the city.
+            query = f"{name}, {address}".strip().strip(",").strip() if address else name
             try:
-                res = asyncio.run(scraper.fetch_hours(name, city))
+                res = asyncio.run(scraper.fetch_hours(query, city))
             except Exception:
                 res = None
             hours: dict = {}  # default: "checked, nothing usable" → never re-queried
             if res and res.get("hours"):
                 coords = res.get("coords")
-                if not (coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > 600):
+                if not (coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > 1500):
                     hours = res["hours"]
                     stored += 1
             db.execute(

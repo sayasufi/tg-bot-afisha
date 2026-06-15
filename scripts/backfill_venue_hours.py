@@ -1,12 +1,14 @@
 """One-off + periodic backfill: resolve venue opening hours via Yandex Maps.
 
 Source-agnostic: every venue (whatever event source it came from) is matched by
-its name + city on Yandex Maps, and the first business's structured working hours
-are stored on `venues.hours_json`. A coordinate proximity guard rejects a wrong
-match (the Yandex business must sit within ~600 m of our venue point).
+its name + address + city on Yandex Maps, and the first business's structured
+working hours are stored on `venues.hours_json`. Including the address fixes
+same-named venues elsewhere in the city; a coordinate proximity guard then
+rejects a wrong match.
 
-    python -m scripts.backfill_venue_hours
-    python -m scripts.backfill_venue_hours --limit 5 --sleep 2
+    python -m scripts.backfill_venue_hours                 # only venues with no hours yet
+    python -m scripts.backfill_venue_hours --refresh-empty  # also retry ones with empty {}/no week
+    python -m scripts.backfill_venue_hours --refresh        # everything
 """
 import argparse
 import asyncio
@@ -20,7 +22,7 @@ from core.db.session import SessionLocal
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 
 CITY = "Москва"
-MAX_MATCH_M = 600
+MAX_MATCH_M = 1500  # the address disambiguates, so allow a looser match (big parks/estates)
 
 
 def _dist_m(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -34,16 +36,23 @@ def _dist_m(a: tuple[float, float], b: tuple[float, float]) -> float:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--sleep", type=float, default=1.5)
-    ap.add_argument("--refresh", action="store_true", help="re-resolve venues that already have hours")
+    ap.add_argument("--sleep", type=float, default=1.4)
+    ap.add_argument("--refresh-empty", action="store_true", help="also retry venues stamped {} / without a week")
+    ap.add_argument("--refresh", action="store_true", help="re-resolve every venue")
     args = ap.parse_args()
+
+    if args.refresh:
+        cond = ""
+    elif args.refresh_empty:
+        cond = "AND (hours_json IS NULL OR hours_json::text NOT LIKE '%week%')"
+    else:
+        cond = "AND hours_json IS NULL"
 
     db = SessionLocal()
     scraper = YandexMapsScraper()
-    cond = "" if args.refresh else "AND hours_json IS NULL"
     rows = db.execute(
         text(
-            f"SELECT venue_id, name, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
+            f"SELECT venue_id, name, address, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
             f"FROM events.venues WHERE geom IS NOT NULL AND name <> '' {cond} ORDER BY venue_id"
         )
     ).all()
@@ -51,27 +60,28 @@ def main() -> None:
         rows = rows[: args.limit]
 
     stats = {"venues": len(rows), "found": 0, "stored": 0, "far_skip": 0, "none": 0}
-    for vid, name, lat, lon in rows:
+    for vid, name, address, lat, lon in rows:
+        query = f"{name}, {address}".strip().strip(",").strip() if address else name
         try:
-            res = asyncio.run(scraper.fetch_hours(name, CITY))
+            res = asyncio.run(scraper.fetch_hours(query, CITY))
         except Exception:
             res = None
-        if not res or not res.get("hours"):
+        hours: dict = {}  # default: checked, nothing usable → stamp {} so we don't re-query
+        if res and res.get("hours"):
+            stats["found"] += 1
+            coords = res.get("coords")
+            if coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > MAX_MATCH_M:
+                stats["far_skip"] += 1
+            else:
+                hours = res["hours"]
+                stats["stored"] += 1
+        else:
             stats["none"] += 1
-            time.sleep(args.sleep)
-            continue
-        stats["found"] += 1
-        coords = res.get("coords")
-        if coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > MAX_MATCH_M:
-            stats["far_skip"] += 1  # wrong business — don't store its hours
-            time.sleep(args.sleep)
-            continue
         db.execute(
             text("UPDATE events.venues SET hours_json = CAST(:h AS JSON) WHERE venue_id = :v"),
-            {"h": json.dumps(res["hours"], ensure_ascii=False), "v": vid},
+            {"h": json.dumps(hours, ensure_ascii=False), "v": vid},
         )
         db.commit()
-        stats["stored"] += 1
         time.sleep(args.sleep)
     print("VENUE HOURS BACKFILL DONE:", stats)
 
