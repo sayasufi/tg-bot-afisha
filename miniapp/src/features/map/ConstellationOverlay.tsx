@@ -33,11 +33,13 @@ export function ConstellationOverlay({ map, items, selected }: { map: L.Map | nu
     .sort((a, b) => a.d - b.d)
     .slice(0, MAX_LINKS);
 
+  if (neighbours.length === 0) return null;
+
   const p0 = map.latLngToContainerPoint(origin);
   const { x: w, y: h } = map.getSize();
 
   return (
-    <svg key={selected.event_id} className="constellation" data-n={neighbours.length} data-items={items.length} width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+    <svg key={selected.event_id} className="constellation" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
       {neighbours.map(({ i }) => {
         const p = map.latLngToContainerPoint([i.lat as number, i.lon as number]);
         return <line key={i.event_id} className="constellation__line" x1={p0.x} y1={p0.y} x2={p.x} y2={p.y} />;
