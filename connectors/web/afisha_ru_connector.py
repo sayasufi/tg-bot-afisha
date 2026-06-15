@@ -60,9 +60,14 @@ class AfishaRuConnector:
     _RETRY_ATTEMPTS = 3
     _RETRY_BACKOFF = 5.0  # seconds, doubled each retry on 429/5xx
 
-    def __init__(self, city: str = "msk", rubrics: list[tuple[str, str]] | None = None) -> None:
+    def __init__(self, city: str = "msk", rubrics: list[tuple[str, str]] | None = None, proxy: str | None = None) -> None:
         self.city = city
         self.rubrics = rubrics or _DEFAULT_RUBRICS
+        # afisha blocks cloud IPs; a residential proxy makes the crawl work in prod.
+        self._proxies = {"http": proxy, "https": proxy} if proxy else None
+
+    def _session(self) -> AsyncSession:
+        return AsyncSession(impersonate=_IMPERSONATE, proxies=self._proxies)
 
     # --- HTTP plumbing -----------------------------------------------------
 
@@ -159,7 +164,7 @@ class AfishaRuConnector:
         ri = int(cursor) % len(self.rubrics) if cursor and str(cursor).isdigit() else 0
         today = datetime.now(_MSK).date()
         records: list[RawRecord] = []
-        async with AsyncSession(impersonate=_IMPERSONATE) as session:
+        async with self._session() as session:
             try:
                 records, _, _ = await self._fetch_page(session, ri, 1, today)
             except HTTPError:
@@ -179,7 +184,7 @@ class AfishaRuConnector:
         seen: set[str] = set()
         pages = 0
         stop_reason = "max_pages"
-        async with AsyncSession(impersonate=_IMPERSONATE) as session:
+        async with self._session() as session:
             for ri in range(len(self.rubrics)):
                 page = 1
                 while page <= max_pages:

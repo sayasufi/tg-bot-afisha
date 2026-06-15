@@ -225,13 +225,17 @@ def fetch_afisha_ru(self):
 
 async def _fetch_afisha_impl() -> dict:
     settings = get_settings()
+    if not settings.afisha_proxy:
+        # afisha blocks cloud IPs (e.g. GCP); ingestion stays off until a
+        # residential proxy is set via AFISHA_PROXY. No-op rather than 429-spam.
+        return {"fetched": 0, "skipped": "no AFISHA_PROXY"}
     async with WorkerAsyncSessionLocal() as db:
         source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
         run = await create_source_run(db, source.source_id)
         try:
             cursor = source.config_json.get("cursor", "0")
             city = source.config_json.get("city", DEFAULT_CITY.afisha_city)
-            connector = AfishaRuConnector(city=city)
+            connector = AfishaRuConnector(city=city, proxy=settings.afisha_proxy)
             records, next_cursor = await connector.fetch(cursor=cursor)
             await bulk_upsert_raw_events(db, source.source_id, records)
             source.config_json = {**source.config_json, "cursor": next_cursor}
@@ -258,13 +262,15 @@ def fetch_afisha_ru_full_scan(self):
 
 async def _fetch_afisha_full_scan_impl() -> dict:
     settings = get_settings()
+    if not settings.afisha_proxy:
+        return {"fetched": 0, "skipped": "no AFISHA_PROXY"}
     async with WorkerAsyncSessionLocal() as db:
         source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
         run = await create_source_run(db, source.source_id)
         try:
             city = source.config_json.get("city", DEFAULT_CITY.afisha_city)
             max_pages = int(source.config_json.get("full_scan_max_pages", 80))
-            connector = AfishaRuConnector(city=city)
+            connector = AfishaRuConnector(city=city, proxy=settings.afisha_proxy)
             records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages)
             await bulk_upsert_raw_events(db, source.source_id, records)
             source.config_json = {**source.config_json, "cursor": "0"}

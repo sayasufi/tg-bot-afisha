@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     kudago_base_url: str = "https://kudago.com/public-api/v1.4"
     yandex_afisha_base_url: str = "https://afisha.yandex.ru/api/graphql"
     afisha_ru_base_url: str = "https://www.afisha.ru"
+    # afisha.ru blocks datacenter/cloud IP ranges (e.g. GCP) — every request 429s.
+    # Set a residential proxy URL (http://user:pass@host:port) to enable afisha
+    # ingestion; empty keeps it OFF (the fetch tasks no-op).
+    afisha_proxy: str = Field(default="", alias="AFISHA_PROXY")
 
     default_city: str = Field(default="Moscow", alias="DEFAULT_CITY")
     default_country: str = Field(default="RU", alias="DEFAULT_COUNTRY")
