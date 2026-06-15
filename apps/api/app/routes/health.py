@@ -1,11 +1,11 @@
 import redis
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.schemas.events import HealthResponse
 from core.config.settings import get_settings
-from core.db.session import get_db
+from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["health"])
 
@@ -16,11 +16,11 @@ def health() -> HealthResponse:
 
 
 @router.get("/ready", response_model=HealthResponse)
-def ready(db: Session = Depends(get_db)) -> HealthResponse:
+async def ready(db: AsyncSession = Depends(get_async_db)) -> HealthResponse:
     settings = get_settings()
     details: dict[str, str] = {"db": "ok", "redis": "ok"}
     try:
-        db.execute(text("SELECT 1"))
+        await db.execute(text("SELECT 1"))
     except Exception as exc:
         details["db"] = f"error: {exc}"
     try:

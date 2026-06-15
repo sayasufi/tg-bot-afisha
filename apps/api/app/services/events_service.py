@@ -4,13 +4,13 @@ from uuid import UUID
 
 from geoalchemy2 import Geography, Geometry
 from sqlalchemy import Select, and_, bindparam, cast, func, or_, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db.models import Event, EventOccurrence, Venue
 
 
 class EventQueryService:
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
     def _apply_filters(
@@ -49,7 +49,7 @@ class EventQueryService:
             stmt = stmt.where(and_(*filters))
         return stmt
 
-    def map_events(
+    async def map_events(
         self,
         bbox: tuple[float, float, float, float] | None,
         date_from: datetime | None,
@@ -91,9 +91,9 @@ class EventQueryService:
         # several showtimes (e.g. 16 & 23 June) shows a single pin, not one per date.
         stmt = stmt.distinct(Event.event_id).order_by(Event.event_id, EventOccurrence.date_start.asc())
 
-        total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        total = (await self.db.scalar(select(func.count()).select_from(stmt.subquery()))) or 0
 
-        rows = self.db.execute(stmt.limit(limit).offset(offset)).all()
+        rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
         items = [
             {
                 "event_id": event.event_id,
@@ -117,11 +117,11 @@ class EventQueryService:
         # cluster list is unused, so we skip that query entirely.
         return {"clusters": [], "items": items, "total": total}
 
-    def event_detail(self, event_id: UUID):
-        event = self.db.get(Event, event_id)
+    async def event_detail(self, event_id: UUID):
+        event = await self.db.get(Event, event_id)
         if not event:
             return None
-        rows = self.db.execute(
+        rows = (await self.db.execute(
             select(
                 EventOccurrence,
                 Venue.name.label("venue_name"),
@@ -133,7 +133,7 @@ class EventQueryService:
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(EventOccurrence.event_id == event_id)
             .order_by(EventOccurrence.date_start.asc())
-        ).all()
+        )).all()
         occurrences = [
             {
                 "occurrence_id": occ.occurrence_id,
@@ -162,7 +162,7 @@ class EventQueryService:
             "occurrences": occurrences,
         }
 
-    def nearby(
+    async def nearby(
         self,
         lat: float,
         lon: float,
@@ -192,7 +192,7 @@ class EventQueryService:
             .order_by(dist_col.asc())
             .limit(limit)
         )
-        rows = self.db.execute(stmt).all()
+        rows = (await self.db.execute(stmt)).all()
         result = [
             {
                 "event_id": event.event_id,
@@ -209,11 +209,11 @@ class EventQueryService:
         ]
         return {"items": result}
 
-    def categories(self):
-        rows = self.db.execute(select(Event.category).distinct().order_by(Event.category.asc())).scalars().all()
+    async def categories(self):
+        rows = (await self.db.execute(select(Event.category).distinct().order_by(Event.category.asc()))).scalars().all()
         return {"categories": rows}
 
-    def search(self, q: str, city: str | None, limit: int):
+    async def search(self, q: str, city: str | None, limit: int):
         score = func.similarity(Event.canonical_title, bindparam("q", q))
         stmt = (
             select(Event.event_id, Event.canonical_title, score.label("score"))
@@ -236,5 +236,5 @@ class EventQueryService:
                 .limit(limit)
             )
 
-        rows = self.db.execute(stmt).all()
+        rows = (await self.db.execute(stmt)).all()
         return {"items": [{"event_id": row[0], "title": row[1], "score": float(row[2] or 0)} for row in rows]}

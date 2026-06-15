@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.schemas.events import (
     CategoryResponse,
@@ -13,13 +13,13 @@ from apps.api.app.schemas.events import (
     SearchResponse,
 )
 from apps.api.app.services.events_service import EventQueryService
-from core.db.session import get_db
+from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["events"])
 
 
 @router.get("/events/map", response_model=EventMapResponse)
-def get_map_events(
+async def get_map_events(
     bbox: str | None = Query(default=None, description="min_lon,min_lat,max_lon,max_lat"),
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -29,7 +29,7 @@ def get_map_events(
     q: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     bbox_tuple = None
     if bbox:
@@ -39,11 +39,11 @@ def get_map_events(
         bbox_tuple = (parts[0], parts[1], parts[2], parts[3])
 
     service = EventQueryService(db)
-    return service.map_events(bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset)
+    return await service.map_events(bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset)
 
 
 @router.get("/events/nearby", response_model=NearbyResponse)
-def get_nearby_events(
+async def get_nearby_events(
     lat: float,
     lon: float,
     radius_m: int = Query(default=3000, ge=100, le=50000),
@@ -52,28 +52,28 @@ def get_nearby_events(
     categories: list[str] | None = Query(default=None),
     q: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     service = EventQueryService(db)
-    return service.nearby(lat, lon, radius_m, date_from, date_to, categories, q, limit)
+    return await service.nearby(lat, lon, radius_m, date_from, date_to, categories, q, limit)
 
 
 @router.get("/events/{event_id}", response_model=EventDetailResponse)
-def get_event_detail(event_id: UUID, db: Session = Depends(get_db)):
+async def get_event_detail(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
     service = EventQueryService(db)
-    result = service.event_detail(event_id)
+    result = await service.event_detail(event_id)
     if not result:
         raise HTTPException(status_code=404, detail="event not found")
     return result
 
 
 @router.get("/categories", response_model=CategoryResponse)
-def get_categories(db: Session = Depends(get_db)):
+async def get_categories(db: AsyncSession = Depends(get_async_db)):
     service = EventQueryService(db)
-    return service.categories()
+    return await service.categories()
 
 
 @router.post("/search", response_model=SearchResponse)
-def search(payload: SearchRequest, db: Session = Depends(get_db)):
+async def search(payload: SearchRequest, db: AsyncSession = Depends(get_async_db)):
     service = EventQueryService(db)
-    return service.search(payload.q, payload.city, payload.limit)
+    return await service.search(payload.q, payload.city, payload.limit)
