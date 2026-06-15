@@ -2,14 +2,13 @@ import type { EventItem } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
 import { IconClose, IconHeart } from "../../lib/icons";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
-import { EventRow } from "./EventRow";
+import { EventCard } from "./EventCard";
 import { PullHint } from "./PullHint";
 
-// Favourites you've hearted. Filtered from the loaded map set, soonest first.
+// Favourites you've hearted — shown as a card grid, soonest first.
 export function FavoritesPanel({
   items,
   favIds,
-  query,
   userPos,
   loading = false,
   onRefresh,
@@ -18,7 +17,6 @@ export function FavoritesPanel({
 }: {
   items: EventItem[];
   favIds: Set<string>;
-  query?: string;
   userPos?: LatLon | null;
   loading?: boolean;
   onRefresh?: () => void;
@@ -41,9 +39,11 @@ export function FavoritesPanel({
       <div className="panelview__scroll" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {favs.length > 0 ? (
-          favs.map((it, i) => (
-            <EventRow key={it.event_id} item={it} index={i} query={query} userPos={userPos} onSelect={onSelect} />
-          ))
+          <div className="card-grid">
+            {favs.map((it) => (
+              <EventCard key={it.event_id} item={it} userPos={userPos} onSelect={onSelect} />
+            ))}
+          </div>
         ) : (
           <div className="favempty">
             <IconHeart size={40} className="favempty__glyph" />

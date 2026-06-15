@@ -299,6 +299,14 @@ export function App() {
     setPeek(evs);
   }, []);
 
+  // "На карте" from the sheet: drop to the map (the camera already flew to the
+  // event when it was opened) and close the card so the pin is in view.
+  const showOnMap = useCallback(() => {
+    haptic("light");
+    setView("map");
+    setSelected(null);
+  }, []);
+
   const onRefresh = useCallback(() => {
     haptic("medium");
     setRefreshNonce((n) => n + 1);
@@ -441,6 +449,7 @@ export function App() {
         isFav={!!selected && fav.has(selected.event_id)}
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
         onSelect={openEvent}
+        onShowMap={showOnMap}
         onClose={() => setSelected(null)}
       />
 
@@ -448,7 +457,7 @@ export function App() {
         <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "favorites" && (
-        <FavoritesPanel items={items} favIds={fav.ids} query={filters.q} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
+        <FavoritesPanel items={items} favIds={fav.ids} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "profile" && (
         <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} onClose={() => setView("map")} />

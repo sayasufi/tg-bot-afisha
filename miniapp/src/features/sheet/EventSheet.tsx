@@ -22,10 +22,11 @@ type Props = {
   isFav: boolean;
   onToggleFav: () => void;
   onSelect: (i: EventItem) => void;
+  onShowMap?: () => void;
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, metro, isFav, onToggleFav, onSelect, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, metro, isFav, onToggleFav, onSelect, onShowMap, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -210,12 +211,24 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
 
         {description && <p className="sheet__desc">{description}</p>}
 
-        {(sourceUrl || routeUrl) && (
+        {(sourceUrl || routeUrl || (onShowMap && lat != null && lon != null)) && (
           <div className="sheet__actions">
             {sourceUrl && (
               <a className="btn btn--primary" href={sourceUrl} target="_blank" rel="noopener noreferrer">
                 Подробнее
               </a>
+            )}
+            {onShowMap && lat != null && lon != null && (
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => {
+                  haptic("light");
+                  onShowMap();
+                }}
+              >
+                На карте
+              </button>
             )}
             {routeUrl && (
               <a className="btn btn--ghost" href={routeUrl} target="_blank" rel="noopener noreferrer">

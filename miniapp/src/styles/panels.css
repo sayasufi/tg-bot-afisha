@@ -992,3 +992,15 @@ html[data-theme="dark"] .rcard__ph {
   animation: none;
 }
 
+/* Избранное — a 2-column card grid reusing the rail card. */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 10px;
+  padding-top: 12px;
+}
+
+.card-grid .rcard {
+  width: auto;
+}
+
