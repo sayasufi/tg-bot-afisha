@@ -4,14 +4,29 @@ import type { EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import { categorySvg } from "../../lib/icons";
 
-// User location — a surveyor's crosshair (the map-maker's instrument), with a
-// User location — a clean acid "you" dot with a soft live pulse and, when a
-// heading is known, a flashlight cone fanning out in the facing direction.
+// User location — a clean acid "you" dot with a soft live pulse. When a heading
+// is known (phone compass), dot + pointer are drawn as ONE SVG shape so a single
+// shared outline wraps the whole marker (no seam between dot and arrow).
 export function userIcon(heading: number | null): L.DivIcon {
-  const cone = heading == null ? "" : `<span class="vyou__cone" style="--h:${heading}deg"></span>`;
+  const pulse = `<span class="vyou__pulse"></span>`;
+  let inner: string;
+  if (heading == null) {
+    inner = `${pulse}<span class="vyou__dot"></span>`;
+  } else {
+    // Union of the dot (r=8 @ 23,23) and a slim pointer: apex up, base corners
+    // sitting on the circle, then the major arc around the bottom — one closed
+    // path, so the outline never cuts across where the two meet.
+    const d = "M23 8 L16.45 18.41 A8 8 0 1 0 29.55 18.41 Z";
+    inner =
+      `${pulse}` +
+      `<svg class="vyou__nav" viewBox="0 0 46 46" style="transform:rotate(${heading}deg)" aria-hidden="true">` +
+      `<path class="vyou__nav-edge" d="${d}"/>` +
+      `<path class="vyou__nav-face" d="${d}"/>` +
+      `</svg>`;
+  }
   return L.divIcon({
     className: "vyou-wrap",
-    html: `<div class="vyou">${cone}<span class="vyou__pulse"></span><span class="vyou__dot"></span></div>`,
+    html: `<div class="vyou">${inner}</div>`,
     iconSize: [46, 46],
     iconAnchor: [23, 23],
   });

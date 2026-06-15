@@ -321,26 +321,33 @@ html[data-theme="dark"] .vpin--active::before {
   }
 }
 
-/* Heading arrow — a bright acid wedge pointing the facing way. Its base is
-   narrower than the dot, so it tucks BEHIND the dot and only the tapering tip
-   emerges — dot + pointer read as one marker (no "wings" poking out the sides).
-   A dark edge keeps it legible on pale map tiles. */
-.vyou__cone {
+/* Heading marker — dot + pointer as ONE SVG shape with a single shared outline.
+   Two stacked copies of the same union path: a wide dark edge behind, then the
+   acid fill with a white border on top — so the dark line wraps the whole marker
+   continuously and there's no seam where the arrow meets the dot. */
+.vyou__nav {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 16px;
-  height: 22px;
-  transform-origin: 50% 100%;
-  transform: translate(-50%, -100%) rotate(var(--h, 0deg));
-  clip-path: polygon(50% 0, 0 100%, 100% 100%);
-  background: linear-gradient(
-    to top,
-    var(--acid) 0%,
-    var(--acid) 55%,
-    rgba(255, 176, 46, 0.62) 100%
-  );
-  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.5));
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  transform-origin: 50% 50%;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+
+.vyou__nav-edge {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+.vyou__nav-face {
+  fill: var(--acid);
+  stroke: var(--plinth);
+  stroke-width: 2.6;
+  stroke-linejoin: round;
 }
 
 @media (prefers-reduced-motion: reduce) {
