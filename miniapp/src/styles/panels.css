@@ -958,10 +958,14 @@ html[data-theme="dark"] .rcard__ph {
 }
 
 .rcard__title {
-  font-family: var(--grotesk);
-  font-size: 13px;
+  /* Editorial display type (lowercase), like the hero rail + the sheet title —
+     not a plain sans. */
+  font-family: var(--display);
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.24;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
   color: var(--ink);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -970,11 +974,8 @@ html[data-theme="dark"] .rcard__ph {
 }
 
 .rail--hero .rcard__title {
-  font-family: var(--display);
   font-weight: 700;
   font-size: 15px;
-  letter-spacing: -0.02em;
-  text-transform: lowercase;
 }
 
 .rcard__meta {

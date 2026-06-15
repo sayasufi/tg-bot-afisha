@@ -280,6 +280,51 @@
   transform: translateY(-56px);
 }
 
+/* ---------- Zoom +/- buttons (stacked above the FAB) ---------- */
+.zoombtns {
+  position: absolute;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.26s var(--ease-cut);
+}
+
+.app--focusbar .zoombtns {
+  transform: translateY(-56px);
+}
+
+.zoombtn {
+  width: 50px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-family: var(--grotesk);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.zoombtn:first-child {
+  border-bottom: none;
+}
+
+.zoombtn:active:not(:disabled) {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.zoombtn:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
 .fab__icon {
   display: block;
 }

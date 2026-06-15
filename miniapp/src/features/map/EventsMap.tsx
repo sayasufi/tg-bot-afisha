@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
 import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
@@ -62,6 +63,35 @@ function ViewportReporter({ onChange }: { onChange: (bbox: Bbox, zoom: number) =
 function MapClickClear({ onClear }: { onClear: () => void }) {
   useMapEvents({ click: () => onClear() });
   return null;
+}
+
+// Click-to-zoom +/- buttons (like every map app), styled to match the FAB.
+function ZoomButtons() {
+  const map = useMap();
+  const ref = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(map.getZoom());
+  useEffect(() => {
+    const el = ref.current;
+    if (el) {
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.disableScrollPropagation(el);
+    }
+    const on = () => setZoom(map.getZoom());
+    map.on("zoomend", on);
+    return () => {
+      map.off("zoomend", on);
+    };
+  }, [map]);
+  return (
+    <div className="zoombtns" ref={ref}>
+      <button type="button" className="zoombtn" aria-label="Приблизить" disabled={zoom >= map.getMaxZoom()} onClick={() => map.zoomIn()}>
+        +
+      </button>
+      <button type="button" className="zoombtn" aria-label="Отдалить" disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}>
+        −
+      </button>
+    </div>
+  );
 }
 
 // Server-aggregated clusters (low zoom): one tap drills in toward detail zoom,
@@ -276,6 +306,7 @@ export function EventsMap({
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />
         <MapClickClear onClear={onClearFocus} />
+        <ZoomButtons />
         {useServerClusters ? <ServerClusters clusters={clusters} /> : cluster}
         {focused && focused.lat != null && focused.lon != null && focusedIco && (
           <Marker
