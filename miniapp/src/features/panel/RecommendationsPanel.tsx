@@ -13,7 +13,7 @@ import { PullHint } from "./PullHint";
 function priceLabel(p: number | null | undefined): { text: string; free: boolean } | null {
   if (p == null) return null;
   if (p <= 0) return { text: "бесплатно", free: true };
-  return { text: `от ${Math.round(p)} ₽`, free: false };
+  return { text: `от ${Math.round(p).toLocaleString("ru-RU")} ₽`, free: false };
 }
 
 function RecCard({ item, userPos, onSelect }: { item: RailItem; userPos?: LatLon | null; onSelect: (i: RailItem) => void }) {

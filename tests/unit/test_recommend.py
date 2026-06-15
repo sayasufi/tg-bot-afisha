@@ -74,9 +74,9 @@ def test_for_you_is_diverse_across_categories_and_venues():
 def test_explore_rail_excludes_your_usual_categories():
     svc = _svc()
     pool = [_event("concert", lat=55.75, lon=37.62, title=f"c{i}") for i in range(6)]
-    pool += [_event("exhibition", lat=55.75, lon=37.62, title=f"e{i}") for i in range(6)]
-    scored = _score(svc, pool, {"concert": 1.0})
-    rails = svc._build_rails(scored, TODAY, True, {"concert": 1.0}, 12)
+    for cat in ("exhibition", "tour", "kids", "theatre"):  # varied non-usual space
+        pool += [_event(cat, lat=55.75, lon=37.62, title=f"{cat}{i}") for i in range(2)]
+    rails = svc._build_rails(_score(svc, pool, {"concert": 1.0}), TODAY, True, {"concert": 1.0}, 12)
     explore = next((r for r in rails if r["key"] == "explore"), None)
     assert explore is not None
     assert all(i["category"] != "concert" for i in explore["items"])

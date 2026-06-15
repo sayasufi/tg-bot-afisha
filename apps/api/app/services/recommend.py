@@ -113,9 +113,14 @@ class RecommendationService:
                 sort_keys=True,
             ).encode()
         ).hexdigest()
-        cached = await self._cache_get(key)
-        if cached is not None:
-            return cached
+        # A behavioural profile makes the request near-unique, so caching it would
+        # only bloat Redis with one-hit keys — cache only the shareable (no-recent)
+        # requests. Re-scoring a cache miss is just one pool query + an O(n) pass.
+        use_cache = not recent
+        if use_cache:
+            cached = await self._cache_get(key)
+            if cached is not None:
+                return cached
 
         pool = await self._load_pool(now)
         views = await self._views()
@@ -124,7 +129,8 @@ class RecommendationService:
             "rails": self._build_rails(scored, today, lat is not None, affinity, per_rail),
             "total": len(scored),
         }
-        await self._cache_set(key, result)
+        if use_cache:
+            await self._cache_set(key, result)
         return result
 
     @staticmethod
@@ -250,8 +256,10 @@ class RecommendationService:
     def _diverse(entries, per_rail, cap_per_cat=3, cap_per_venue=2):
         """Varied pick: cap items per category AND per venue so a rail is a real
         cross-section, not 12 of the same thing at the same place. The single
-        highest-scored event still leads; tops up with the next best to fill."""
-        out, ccat, cven, chosen = [], {}, {}, set()
+        highest-scored event still leads. In a normal feed the caps leave plenty
+        to fill the rail; an unusually homogeneous pool yields a shorter — but
+        honestly diverse — rail instead of a wall of duplicates."""
+        out, ccat, cven = [], {}, {}
         for e in entries:  # pre-sorted by score
             cat, ven = e["c"]["category"], e["c"]["venue"] or ""
             if ccat.get(cat, 0) >= cap_per_cat:
@@ -262,14 +270,8 @@ class RecommendationService:
             ccat[cat] = ccat.get(cat, 0) + 1
             if ven:
                 cven[ven] = cven.get(ven, 0) + 1
-            chosen.add(id(e))
             if len(out) >= per_rail:
-                return out
-        for e in entries:
-            if id(e) not in chosen:
-                out.append(e)
-                if len(out) >= per_rail:
-                    break
+                break
         return out
 
     def _build_rails(self, scored, today, has_loc, affinity, per_rail):
@@ -305,8 +307,9 @@ class RecommendationService:
         # "Бесплатно".
         rails.append(self._rail("free", "Бесплатно", None, [e for e in by_score if e["free"]], per_rail))
 
-        # "Откройте новое" — strong events OUTSIDE your usual categories (anti-bubble).
-        usual = {c for c, w in affinity.items() if w >= 0.5}
+        # "Откройте новое" — strong events OUTSIDE any category you've engaged with
+        # (favourited or opened) — genuinely new to you (anti-filter-bubble).
+        usual = set(affinity)
         if usual:
             rails.append(self._rail("explore", "Откройте новое", "Не из ваших привычных тем", self._diverse([e for e in by_score if e["c"]["category"] not in usual], per_rail), per_rail))
 

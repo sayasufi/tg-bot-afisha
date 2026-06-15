@@ -917,19 +917,21 @@ html[data-theme="dark"] .rcard__ph {
   animation: livePulse 1.9s var(--ease-cut) infinite;
 }
 
+/* Concrete rgba (not color-mix) so the pulse renders on older Telegram WebViews. */
 @keyframes livePulse {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cinnabar) 55%, transparent);
+    box-shadow: 0 0 0 0 rgba(255, 90, 60, 0.55);
   }
   70% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--cinnabar) 0%, transparent);
+    box-shadow: 0 0 0 6px rgba(255, 90, 60, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cinnabar) 0%, transparent);
+    box-shadow: 0 0 0 0 rgba(255, 90, 60, 0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .rcard,
   .rcard__livedot {
     animation: none;
   }
@@ -941,11 +943,12 @@ html[data-theme="dark"] .rcard__ph {
   right: 7px;
   bottom: 8px;
   padding: 1px 6px;
-  background: rgba(8, 7, 5, 0.62);
+  background: rgba(8, 7, 5, 0.74);
   color: #fff;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .rcard__price--free {
