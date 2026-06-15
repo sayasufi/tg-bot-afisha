@@ -6,16 +6,18 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.services.card import ensure_card
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
-from core.db.session import SessionLocal
+from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1/share", tags=["share"])
 
@@ -105,19 +107,17 @@ _PAGE = """<!doctype html>
 
 
 @router.get("/{event_id}", response_class=HTMLResponse)
-def share(event_id: UUID):
-    db = SessionLocal()
-    try:
-        row = db.execute(
+async def share(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
+    row = (
+        await db.execute(
             select(Event, EventOccurrence, Venue.name.label("venue"))
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.event_id == event_id)
             .order_by(EventOccurrence.date_start.asc())
             .limit(1)
-        ).first()
-    finally:
-        db.close()
+        )
+    ).first()
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
@@ -127,8 +127,12 @@ def share(event_id: UUID):
     base = get_settings().telegram_webapp_url.rstrip("/")
     parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
     desc = " · ".join(parts) + (" · " if parts else "") + "Окрест — события рядом"
-    # Branded VITRINE card for the link preview; raw photo for the page cover.
-    card = ensure_card(str(event_id), title, " · ".join(parts) or "Событие", event.category, image)
+    # Branded VITRINE card for the link preview; raw photo for the page cover. The
+    # render is blocking (image fetch + PIL + MinIO), so it runs in a worker thread
+    # rather than on the event loop.
+    card = await run_in_threadpool(
+        ensure_card, str(event_id), title, " · ".join(parts) or "Событие", event.category, image
+    )
     og_image = card or image
     cover_style = f"background-image:url('{image}')" if image else ""
 
@@ -149,27 +153,25 @@ class PrepareRequest(BaseModel):
 
 
 @router.post("/prepare")
-def prepare(payload: PrepareRequest):
+async def prepare(payload: PrepareRequest, db: AsyncSession = Depends(get_async_db)):
     """Prepare a photo inline-message for the user so the Mini App can share an
     actual image (not a link) into any chat via Telegram.WebApp.shareMessage."""
-    user = validate_init_data(payload.init_data)
+    user = validate_init_data(payload.init_data)  # HMAC check — fast, fine on the loop
     uid = user.get("id")
     settings = get_settings()
     if not uid or not settings.telegram_bot_token:
         raise HTTPException(status_code=400, detail="cannot prepare")
 
-    db = SessionLocal()
-    try:
-        row = db.execute(
+    row = (
+        await db.execute(
             select(Event, EventOccurrence, Venue.name.label("venue"))
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.event_id == payload.event_id)
             .order_by(EventOccurrence.date_start.asc())
             .limit(1)
-        ).first()
-    finally:
-        db.close()
+        )
+    ).first()
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
@@ -177,8 +179,14 @@ def prepare(payload: PrepareRequest):
     title = event.canonical_title or "Событие"
     image = _safe_image(event.cached_image_url or event.primary_image_url or "")
     parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
-    # Send the branded VITRINE card as the photo; fall back to the raw image.
-    photo_url = ensure_card(str(payload.event_id), title, " · ".join(parts) or "Событие", event.category, image) or image
+    # Send the branded VITRINE card as the photo; fall back to the raw image. The
+    # blocking render runs in a worker thread.
+    photo_url = (
+        await run_in_threadpool(
+            ensure_card, str(payload.event_id), title, " · ".join(parts) or "Событие", event.category, image
+        )
+        or image
+    )
     if not photo_url:
         return {"ok": False}  # nothing to send → caller falls back to a link share
 
@@ -197,17 +205,17 @@ def prepare(payload: PrepareRequest):
         "reply_markup": {"inline_keyboard": [[{"text": "Открыть в Окрест", "url": _open_url(payload.event_id)}]]},
     }
     try:
-        resp = httpx.post(
-            f"https://api.telegram.org/bot{settings.telegram_bot_token}/savePreparedInlineMessage",
-            json={
-                "user_id": int(uid),
-                "result": result,
-                "allow_user_chats": True,
-                "allow_group_chats": True,
-                "allow_channel_chats": True,
-            },
-            timeout=10,
-        )
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{settings.telegram_bot_token}/savePreparedInlineMessage",
+                json={
+                    "user_id": int(uid),
+                    "result": result,
+                    "allow_user_chats": True,
+                    "allow_group_chats": True,
+                    "allow_channel_chats": True,
+                },
+            )
         data = resp.json()
     except Exception:
         raise HTTPException(status_code=502, detail="telegram unreachable")
