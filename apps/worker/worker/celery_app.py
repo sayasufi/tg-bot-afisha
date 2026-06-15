@@ -56,6 +56,10 @@ celery_app.conf.beat_schedule = {
         "task": "apps.worker.worker.tasks.enrich.backfill_venues_osm",
         "schedule": 86400.0,
     },
+    "resolve-venue-hours": {
+        "task": "apps.worker.worker.tasks.enrich.resolve_venue_hours",
+        "schedule": 600.0,
+    },
     "cache-event-images": {
         "task": "apps.worker.worker.tasks.media.cache_event_images",
         "schedule": 120.0,

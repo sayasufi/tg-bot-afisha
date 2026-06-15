@@ -1,6 +1,9 @@
 import asyncio
+import json
+import math
+import time
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
@@ -13,6 +16,7 @@ from core.db.repositories.ingestion import (
     unresolved_candidate_ids,
 )
 from core.db.session import SessionLocal
+from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.geocoding.service import GeocodingService
 from pipeline.llm.service import LLMService
 
@@ -149,6 +153,57 @@ def backfill_venues_osm(self):
             db.commit()
             updated += 1
         return {"updated": updated}
+    except Exception as exc:
+        raise self.retry(exc=exc)
+    finally:
+        db.close()
+
+
+def _dist_m(a: tuple[float, float], b: tuple[float, float]) -> float:
+    R = 6371000
+    dlat = math.radians(b[0] - a[0])
+    dlon = math.radians(b[1] - a[1])
+    h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(a[0])) * math.cos(math.radians(b[0])) * math.sin(dlon / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(h))
+
+
+@celery_app.task(bind=True, max_retries=2)
+def resolve_venue_hours(self):
+    """Resolve opening hours for venues that don't have them yet, via Yandex
+    Maps (source-agnostic, by name + coords). Cached in `venues.hours_json` so we
+    hit Yandex AT MOST ONCE per venue — venues we couldn't resolve are stamped
+    with {} so they aren't re-queried. Small batch per run; new venues fill in
+    over the next cycles."""
+    db = SessionLocal()
+    scraper = YandexMapsScraper()
+    city = get_settings().default_city or "Москва"
+    try:
+        rows = db.execute(
+            text(
+                "SELECT venue_id, name, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
+                "FROM events.venues WHERE geom IS NOT NULL AND name <> '' AND hours_json IS NULL "
+                "ORDER BY venue_id LIMIT 15"
+            )
+        ).all()
+        stored = 0
+        for vid, name, lat, lon in rows:
+            try:
+                res = asyncio.run(scraper.fetch_hours(name, city))
+            except Exception:
+                res = None
+            hours: dict = {}  # default: "checked, nothing usable" → never re-queried
+            if res and res.get("hours"):
+                coords = res.get("coords")
+                if not (coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > 600):
+                    hours = res["hours"]
+                    stored += 1
+            db.execute(
+                text("UPDATE events.venues SET hours_json = CAST(:h AS JSON) WHERE venue_id = :v"),
+                {"h": json.dumps(hours, ensure_ascii=False), "v": vid},
+            )
+            db.commit()
+            time.sleep(1.2)
+        return {"checked": len(rows), "stored": stored}
     except Exception as exc:
         raise self.retry(exc=exc)
     finally:
