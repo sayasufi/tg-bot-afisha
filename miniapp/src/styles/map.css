@@ -330,7 +330,7 @@ html[data-theme="dark"] .vpin--active::before {
   left: 50%;
   top: 50%;
   width: 16px;
-  height: 30px;
+  height: 22px;
   transform-origin: 50% 100%;
   transform: translate(-50%, -100%) rotate(var(--h, 0deg));
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
