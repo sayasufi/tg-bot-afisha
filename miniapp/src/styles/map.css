@@ -159,6 +159,18 @@ html[data-theme="dark"] .vpin--active::before {
   transition: opacity 0.2s ease;
 }
 
+/* Dismissing the highlight: the marked pin fades + shrinks out. */
+.map-wrap--focus-out .vpin--active {
+  animation: pinOut 0.22s var(--ease-cut) forwards;
+}
+
+@keyframes pinOut {
+  to {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
 /* First-load reveal: markers fade in, staggered by distance from centre (the
    delay is set inline per marker). Opacity only — Leaflet owns the transform. */
 .leaflet-marker-icon.reveal {

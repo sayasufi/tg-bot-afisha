@@ -22,6 +22,7 @@ type Props = {
   clusterMode: boolean;
   selected: EventItem | null;
   focused: EventItem | null;
+  focusOut: boolean;
   userPos: [number, number] | null;
   heading: number | null;
   locateNonce: number;
@@ -104,6 +105,7 @@ export function EventsMap({
   clusterMode,
   selected,
   focused,
+  focusOut,
   userPos,
   heading,
   locateNonce,
@@ -268,7 +270,7 @@ export function EventsMap({
   const userIco = useMemo(() => userIcon(heading), [heading]);
 
   return (
-    <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
+    <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}${focusOut ? " map-wrap--focus-out" : ""}`}>
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />

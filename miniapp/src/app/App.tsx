@@ -42,8 +42,12 @@ export function App() {
   const [metro, setMetro] = useState<MetroStation[]>([]);
   const [selected, setSelected] = useState<EventItem | null>(null);
   // The marker that stays highlighted (acid) on the map — persists after the sheet
-  // closes and at any zoom, until you focus another event.
+  // closes and at any zoom, until you focus another event. `focusOut` plays the
+  // dismiss animation before it's actually cleared.
   const [focused, setFocused] = useState<EventItem | null>(null);
+  const [focusOut, setFocusOut] = useState(false);
+  const focusedRef = useRef<EventItem | null>(null);
+  focusedRef.current = focused;
   const [peek, setPeek] = useState<EventItem[] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -277,6 +281,7 @@ export function App() {
     setPeek(null);
     setSelected(i);
     setFocused(i); // keep this marker highlighted on the map even after closing
+    setFocusOut(false); // cancel any pending dismiss animation
     logEventSeen(i.event_id); // engagement signal for recommendations
     recordOpen(i.category); // behavioural profile for personalised ranking
   }, []);
@@ -312,12 +317,23 @@ export function App() {
     setSelected(null);
   }, []);
 
-  // Tap on the empty map clears the persistent highlight (no-op if nothing focused).
-  const clearFocus = useCallback(() => setFocused((f) => (f ? null : f)), []);
+  // Dismiss the highlight WITH an exit animation: flag it out, then clear after the
+  // animation. Tapping the empty map does the same (only when something is focused).
   const dismissFocus = useCallback(() => {
     haptic("light");
-    setFocused(null);
+    setFocusOut(true);
   }, []);
+  const clearFocus = useCallback(() => {
+    if (focusedRef.current) setFocusOut(true);
+  }, []);
+  useEffect(() => {
+    if (!focusOut) return;
+    const t = setTimeout(() => {
+      setFocused(null);
+      setFocusOut(false);
+    }, 230);
+    return () => clearTimeout(t);
+  }, [focusOut]);
   // The slim "marked exhibit" bar shows on the map when a marker is highlighted
   // and no card is open.
   const focusBarVisible = view === "map" && !!focused && !selected;
@@ -405,6 +421,7 @@ export function App() {
           clusterMode={clusterMode}
           selected={selected}
           focused={focused}
+          focusOut={focusOut}
           userPos={userPos}
           heading={heading}
           locateNonce={locateNonce}
@@ -438,7 +455,7 @@ export function App() {
         <Coach onDismiss={dismissCoach} />
       )}
 
-      {focusBarVisible && focused && <FocusBar event={focused} onOpen={openEvent} onClose={dismissFocus} />}
+      {focusBarVisible && focused && <FocusBar event={focused} out={focusOut} onOpen={openEvent} onClose={dismissFocus} />}
 
       <button
         type="button"
