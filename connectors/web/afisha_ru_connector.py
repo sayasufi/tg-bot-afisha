@@ -138,8 +138,9 @@ class AfishaRuConnector:
 
     async def scan(self, max_pages: int = 60) -> tuple[list[RawRecord], int, str]:
         """Full in-window sweep over every rubric and page, reusing ONE session.
-        Stops a rubric when a page yields no in-window records (date-sorted feed)
-        or the pager is exhausted. De-duplicates by external_id."""
+        ``max_pages`` is the per-rubric page cap (so a dense rubric can't starve
+        the others). Stops a rubric when a page yields no in-window records
+        (date-sorted feed) or the pager is exhausted. De-duplicates by external_id."""
         today = datetime.now(_MSK).date()
         all_records: list[RawRecord] = []
         seen: set[str] = set()
@@ -148,7 +149,7 @@ class AfishaRuConnector:
         async with AsyncSession(impersonate=_IMPERSONATE) as session:
             for ri in range(len(self.rubrics)):
                 page = 1
-                while pages < max_pages:
+                while page <= max_pages:
                     records, total_pages, raw_count = await self._fetch_page(session, ri, page, today)
                     pages += 1
                     for rec in records:
