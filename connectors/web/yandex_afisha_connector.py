@@ -60,12 +60,14 @@ class YandexAfishaConnector:
     source_name = "yandex_afisha"
     _DATES_CAP = 8
     _DESC_CHUNK = 25  # event ids per batched description request
+    _SCHED_CHUNK = 12  # event ids per batched schedule request
 
-    def __init__(self, city: str = "moscow", page_size: int = 100, with_descriptions: bool = True) -> None:
+    def __init__(self, city: str = "moscow", page_size: int = 100, with_descriptions: bool = True, with_schedules: bool = True) -> None:
         self.settings = get_settings()
         self.city = city
         self.page_size = page_size
         self.with_descriptions = with_descriptions
+        self.with_schedules = with_schedules
 
     # --- HTTP plumbing -----------------------------------------------------
 
@@ -121,8 +123,11 @@ class YandexAfishaConnector:
         total = int((block.get("paging") or {}).get("total") or 0)
         items = block.get("items") if isinstance(block.get("items"), list) else []
         records = self._build_records(items, today)
-        if self.with_descriptions and records:
-            await self._augment_descriptions(session, records)
+        if records:
+            if self.with_schedules:
+                await self._augment_schedules(session, records, today)
+            if self.with_descriptions:
+                await self._augment_descriptions(session, records)
         return records, total
 
     async def fetch(self, cursor: str | None = None) -> tuple[list[RawRecord], str | None]:
@@ -224,6 +229,102 @@ class YandexAfishaConnector:
             if full:
                 record.payload["description"] = self._strip_html(full)
                 record.raw_text = self._raw_text(record.payload)
+
+    async def _augment_schedules(self, session: AsyncSession, records: list[RawRecord], today) -> None:
+        """For events whose dates have no clock time (multi-session events, where
+        `regularity.singleShowtime` is null), fetch the real per-session datetimes via
+        `eventScheduleOther` and rebuild `dates` from them — so "16 июня, 21:00" shows
+        instead of "время уточняйте", and every session is captured."""
+        need = [r for r in records if self._needs_schedule(r.payload)]
+        if not need:
+            return
+        horizon = today + timedelta(days=_LOOKAHEAD_DAYS)
+        interval = f'{{date:"{today.isoformat()}",period:{_LOOKAHEAD_DAYS}}}'
+        ids = list({r.payload.get("id") for r in need if r.payload.get("id")})
+        sessions_by_id: dict[str, list] = {}
+        for start in range(0, len(ids), self._SCHED_CHUNK):
+            chunk = ids[start : start + self._SCHED_CHUNK]
+            aliases = " ".join(
+                f"e{i}: eventScheduleOther(id:{json.dumps(eid)},dates:{interval})"
+                "{byDate{sessions{session{datetime ticket{price{currency min max}}}}}}"
+                for i, eid in enumerate(chunk)
+            )
+            try:
+                data = await self._post(session, {"operationName": "Sched", "variables": {}, "query": f"query Sched{{{aliases}}}"})
+            except Exception:
+                continue
+            block = data.get("data") or {}
+            for i, eid in enumerate(chunk):
+                sessions_by_id[eid] = self._sessions_from_schedule(block.get(f"e{i}"))
+            await asyncio.sleep(0.2)
+
+        for record in need:
+            sessions = sessions_by_id.get(record.payload.get("id"))
+            if not sessions:
+                continue
+            rows = self._rows_from_sessions(sessions, today, horizon)
+            if not rows:
+                continue
+            record.payload["dates"] = rows
+            if not record.payload.get("price"):  # backfill price from session tickets
+                price_text, is_free = self._price_from_sessions(sessions)
+                if price_text:
+                    record.payload["price"], record.payload["is_free"] = price_text, is_free
+            record.raw_text = self._raw_text(record.payload)
+
+    @staticmethod
+    def _needs_schedule(payload: dict) -> bool:
+        rows = payload.get("dates") or []
+        if not rows or any(r.get("start_time") != "00:00:00" for r in rows):
+            return False  # no dates, or already carries a real clock time
+        # Only discrete single-day rows need a showtime; skip permanent / run spans
+        # (open-ended exhibitions) whose all-day end is far from the start.
+        for r in rows:
+            s, e = r.get("start"), r.get("end")
+            if isinstance(s, int) and isinstance(e, int) and 0 < (e - s) <= 25 * 3600:
+                return True
+        return False
+
+    @staticmethod
+    def _sessions_from_schedule(node: object) -> list[tuple]:
+        out: list[tuple] = []
+        if not isinstance(node, dict):
+            return out
+        for group in node.get("byDate") or []:
+            for item in (group or {}).get("sessions") or []:
+                session = (item or {}).get("session") or {}
+                dt = session.get("datetime")
+                if not dt:
+                    continue
+                price = (session.get("ticket") or {}).get("price") or {}
+                out.append((dt, price.get("min"), price.get("max")))
+        return out
+
+    def _rows_from_sessions(self, sessions: list[tuple], today, horizon) -> list[dict]:
+        rows: list[dict] = []
+        seen: set[int] = set()
+        for dt_str, _, _ in sorted(sessions, key=lambda x: str(x[0])):
+            dt = self._parse_dt(dt_str)
+            if not dt:
+                continue
+            day = dt.date()
+            if day < today or day > horizon:
+                continue
+            ts = int(dt.timestamp())
+            if ts in seen:
+                continue
+            seen.add(ts)
+            rows.append({"start": ts, "end": None, "start_date": day.isoformat(), "start_time": dt.strftime("%H:%M:%S")})
+            if len(rows) >= self._DATES_CAP:
+                break
+        return rows
+
+    def _price_from_sessions(self, sessions: list[tuple]) -> tuple[str, bool]:
+        mins = [m for _, m, _ in sessions if isinstance(m, (int, float))]
+        maxs = [x for _, _, x in sessions if isinstance(x, (int, float))]
+        if not mins and not maxs:
+            return "", False
+        return self._price([{"price": {"min": min(mins) if mins else None, "max": max(maxs) if maxs else None}}])
 
     # --- Field mappers -----------------------------------------------------
 

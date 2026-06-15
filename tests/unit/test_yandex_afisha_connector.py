@@ -152,6 +152,36 @@ def test_fetch_page_tolerates_non_dict_actual_events() -> None:
     assert records == [] and total == 0
 
 
+# --- schedule augmentation (real session times) ------------------------------
+
+
+def test_needs_schedule_only_for_all_day_discrete() -> None:
+    c = _conn()
+    # discrete all-day rows -> needs real showtimes
+    allday = {"dates": [{"start": 1781902800, "end": 1781989199, "start_time": "00:00:00"}]}
+    assert c._needs_schedule(allday) is True
+    # already has a clock -> no schedule fetch
+    timed = {"dates": [{"start": 1781902800, "end": None, "start_time": "21:00:00"}]}
+    assert c._needs_schedule(timed) is False
+    # open-ended permanent (far end) -> not a discrete session, skip
+    perm = {"dates": [{"start": 1577826000, "end": 4070908800, "start_time": "00:00:00"}]}
+    assert c._needs_schedule(perm) is False
+
+
+def test_rows_from_sessions_builds_real_times() -> None:
+    sessions = [("2026-06-23T21:00:00", 240000, 840000), ("2026-06-16T21:00:00", 240000, 840000)]
+    rows = _conn()._rows_from_sessions(sessions, TODAY, date(2026, 7, 15))
+    assert [r["start_date"] for r in rows] == ["2026-06-16", "2026-06-23"]  # sorted
+    assert all(r["start_time"] == "21:00:00" for r in rows)
+
+
+def test_sessions_from_schedule_parses_byDate() -> None:
+    node = {"byDate": [{"sessions": [{"session": {"datetime": "2026-06-16T21:00:00", "ticket": {"price": {"min": 240000, "max": 840000}}}}]}]}
+    sessions = _conn()._sessions_from_schedule(node)
+    assert sessions == [("2026-06-16T21:00:00", 240000, 840000)]
+    assert _conn()._price_from_sessions(sessions) == ("от 2400 до 8400 ₽", False)
+
+
 # --- html + full record mapping ---------------------------------------------
 
 

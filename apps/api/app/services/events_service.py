@@ -95,9 +95,13 @@ class EventQueryService:
                 )
             )
 
+        # One row per event — the soonest in-window occurrence — so an event with
+        # several showtimes (e.g. 16 & 23 June) shows a single pin, not one per date.
+        stmt = stmt.distinct(Event.event_id).order_by(Event.event_id, EventOccurrence.date_start.asc())
+
         total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
 
-        rows = self.db.execute(stmt.order_by(EventOccurrence.date_start.asc()).limit(limit).offset(offset)).all()
+        rows = self.db.execute(stmt.limit(limit).offset(offset)).all()
         items = [
             {
                 "event_id": event.event_id,
@@ -114,6 +118,8 @@ class EventQueryService:
             }
             for event, occ, venue_name, venue_hours, lat, lon in rows
         ]
+        # DISTINCT ON forces event_id ordering; present pins by soonest date instead.
+        items.sort(key=lambda it: it["date_start"])
 
         # The client clusters on the fly (react-leaflet-cluster); the server-side
         # cluster list is unused, so we skip that query entirely.

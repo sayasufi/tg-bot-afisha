@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -17,6 +17,48 @@ from core.db.models import (
 )
 from pipeline.dedup.scorer import MatchDecision, score_candidate
 from pipeline.normalizer.extractors import NormalizedCandidate
+
+_OCCURRENCE_LOOKAHEAD_DAYS = 30
+
+
+def _ts_to_dt(value: object) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        ts = int(value)
+    except (TypeError, ValueError):
+        return None
+    if ts <= 0:
+        return None
+    return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+
+def _payload_session_dates(payload: object, now: datetime, until: datetime) -> list[tuple[datetime, datetime | None]]:
+    """All in-window sessions from a source payload's ``dates`` rows (unix start/end),
+    so one source event with several showtimes becomes several occurrences. Returns
+    [] for payloads without ``dates`` (LLM/ldjson sources keep the single primary)."""
+    rows = payload.get("dates") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    out: list[tuple[datetime, datetime | None]] = []
+    seen: set[int] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        start = _ts_to_dt(row.get("start"))
+        if not start:
+            continue
+        end = _ts_to_dt(row.get("end"))
+        in_window = (now <= start <= until) or (end is not None and start < now <= end)
+        if not in_window:
+            continue
+        key = int(start.timestamp())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((start, end))
+    out.sort(key=lambda pair: pair[0])
+    return out[:8]
 
 
 def get_active_sources(db: Session) -> list[Source]:
@@ -268,38 +310,47 @@ def dedup_and_upsert_event(
         db.refresh(event)
         decision = MatchDecision(decision="new-event", score=0.0, matched_event_id=str(event.event_id))
 
-    # Upsert the occurrence on (event_id, date_start, venue_id) so re-ingesting
-    # the same event updates the row instead of creating a duplicate.
-    occ_start = candidate.date_start or datetime.utcnow()
+    # One occurrence per in-window session: an event with several showtimes (e.g.
+    # 16 & 23 June, 21:00) becomes several occurrences. Sources without a `dates`
+    # list keep the single primary date. Upsert on (event_id, date_start, venue_id)
+    # so re-ingesting updates instead of duplicating.
+    raw = get_raw(db, raw_id)
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(days=_OCCURRENCE_LOOKAHEAD_DAYS)
+    sessions = _payload_session_dates(raw.raw_payload_json if raw else None, now, until)
+    if not sessions:
+        sessions = [(candidate.date_start or datetime.utcnow(), candidate.date_end)]
     occ_venue_id = venue.venue_id if venue else None
     venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
-    occurrence = db.execute(
-        select(EventOccurrence).where(
-            and_(
-                EventOccurrence.event_id == event.event_id,
-                EventOccurrence.date_start == occ_start,
-                venue_filter,
+    for occ_start, occ_end in sessions:
+        occurrence = db.execute(
+            select(EventOccurrence).where(
+                and_(
+                    EventOccurrence.event_id == event.event_id,
+                    EventOccurrence.date_start == occ_start,
+                    venue_filter,
+                )
             )
-        )
-    ).scalars().first()
-    if occurrence:
-        occurrence.date_end = candidate.date_end
-        occurrence.price_min = candidate.price_min
-        occurrence.price_max = candidate.price_max
-        occurrence.currency = candidate.currency
-        occurrence.source_best_url = candidate.source_url
-    else:
-        occurrence = EventOccurrence(
-            event_id=event.event_id,
-            venue_id=occ_venue_id,
-            date_start=occ_start,
-            date_end=candidate.date_end,
-            price_min=candidate.price_min,
-            price_max=candidate.price_max,
-            currency=candidate.currency,
-            source_best_url=candidate.source_url,
-        )
-        db.add(occurrence)
+        ).scalars().first()
+        if occurrence:
+            occurrence.date_end = occ_end
+            occurrence.price_min = candidate.price_min
+            occurrence.price_max = candidate.price_max
+            occurrence.currency = candidate.currency
+            occurrence.source_best_url = candidate.source_url
+        else:
+            db.add(
+                EventOccurrence(
+                    event_id=event.event_id,
+                    venue_id=occ_venue_id,
+                    date_start=occ_start,
+                    date_end=occ_end,
+                    price_min=candidate.price_min,
+                    price_max=candidate.price_max,
+                    currency=candidate.currency,
+                    source_best_url=candidate.source_url,
+                )
+            )
     db.flush()
 
     db.add(
