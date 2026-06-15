@@ -114,22 +114,22 @@ class EventQueryService:
             .order_by(Event.event_id, EventOccurrence.date_start.asc())
             .subquery()
         )
-        cell = 90.0 / (2 ** zoom)  # grid cell in degrees (~one cluster per ~80 screen px)
-        grid = func.ST_SnapToGrid(inner.c.g, cell, cell)
-        stmt = (
-            select(
-                func.count().label("cnt"),
-                func.ST_Y(func.ST_Centroid(func.ST_Collect(inner.c.g))).label("lat"),
-                func.ST_X(func.ST_Centroid(func.ST_Collect(inner.c.g))).label("lon"),
-            )
-            .select_from(inner)
-            .group_by(grid)
-        )
+        # Place ONE marker AT the grid cell (the snap point) rather than at the
+        # events' centroid: a regular lattice guarantees clusters never overlap,
+        # whereas two adjacent cells' centroids can land right next to each other
+        # at a shared edge. Latitude is compressed by ~cos(Moscow) so the lattice
+        # reads as roughly square on the Web-Mercator map instead of stretched.
+        cell_x = 110.0 / (2 ** zoom)  # ~78 screen px between columns
+        cell_y = cell_x * 0.6
+        snapped = func.ST_SnapToGrid(inner.c.g, 0.0, 0.0, cell_x, cell_y)
+        lat = func.ST_Y(snapped).label("lat")
+        lon = func.ST_X(snapped).label("lon")
+        stmt = select(func.count().label("cnt"), lat, lon).select_from(inner).group_by(lat, lon)
         rows = (await self.db.execute(stmt)).all()
         return [
-            {"id": f"c{i}", "lat": float(lat), "lon": float(lon), "count": int(cnt)}
-            for i, (cnt, lat, lon) in enumerate(rows)
-            if lat is not None and lon is not None
+            {"id": f"c{i}", "lat": float(la), "lon": float(lo), "count": int(cnt)}
+            for i, (cnt, la, lo) in enumerate(rows)
+            if la is not None and lo is not None
         ]
 
     async def _detail(self, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset):
