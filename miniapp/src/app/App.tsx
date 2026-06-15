@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MapCluster, type MetroStation } from "../api/client";
+import { logEventSeen } from "../api/recommend";
 import { EMPTY_FILTERS, Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
 
@@ -269,6 +270,7 @@ export function App() {
     setView("map");
     setPeek(null);
     setSelected(i);
+    logEventSeen(i.event_id); // engagement signal for recommendations
   }, []);
 
   // Hold the event sheet back briefly after a selection so the pin→sheet spark,
@@ -434,7 +436,7 @@ export function App() {
       />
 
       {view === "recs" && (
-        <RecommendationsPanel items={shownItems} query={filters.q} userPos={userPos} favCategories={favCategories} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
+        <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "favorites" && (
         <FavoritesPanel items={items} favIds={fav.ids} query={filters.q} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />

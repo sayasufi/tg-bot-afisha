@@ -1,173 +1,140 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
-import type { EventItem } from "../../api/client";
-import { eventBucket } from "../../lib/datetime";
-import type { LatLon } from "../../lib/distance";
-import { IconClose, IconGrid, IconMenu } from "../../lib/icons";
-import { hapticSelection } from "../../lib/telegram";
+import { fetchRecommendations, type Rail, type RailItem } from "../../api/recommend";
+import { categoryMeta } from "../../lib/categories";
+import { formatWhenShort, isLiveNow } from "../../lib/datetime";
+import { distanceLabel, formatDistance, type LatLon } from "../../lib/distance";
+import { CategoryIcon, IconClose } from "../../lib/icons";
+import { safeHttpUrl } from "../../lib/url";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
-import { ContactCard } from "./ContactCard";
-import { EventRow } from "./EventRow";
 import { PullHint } from "./PullHint";
 
-function SkeletonRows() {
+function RecCard({ item, userPos, onSelect }: { item: RailItem; userPos?: LatLon | null; onSelect: (i: RailItem) => void }) {
+  const { color } = categoryMeta(item.category);
+  const live = isLiveNow(item.date_start, item.date_end, item.venue_hours);
+  const img = safeHttpUrl(item.primary_image_url);
+  const dist =
+    item.distance_m != null
+      ? formatDistance(item.distance_m)
+      : item.lat != null && item.lon != null
+        ? distanceLabel(userPos, [item.lat, item.lon])
+        : null;
+  return (
+    <button type="button" className="rcard" style={{ "--cat": color } as CSSProperties} onClick={() => onSelect(item)}>
+      <span className="rcard__img">
+        {img ? (
+          <img src={img} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span className="rcard__ph">
+            <CategoryIcon cat={item.category} size={30} />
+          </span>
+        )}
+        {live && <span className="rcard__live">идёт</span>}
+      </span>
+      <span className="rcard__title">{item.title}</span>
+      <span className="rcard__meta">
+        {formatWhenShort(item.date_start, item.date_end)}
+        {dist ? ` · ${dist}` : ""}
+      </span>
+    </button>
+  );
+}
+
+function RecRail({ rail, userPos, onSelect }: { rail: Rail; userPos?: LatLon | null; onSelect: (i: RailItem) => void }) {
+  return (
+    <section className={`rail${rail.key === "for_you" ? " rail--hero" : ""}`}>
+      <div className="rail__head">
+        <span className="rail__title">{rail.title}</span>
+        {rail.subtitle ? <span className="rail__sub">{rail.subtitle}</span> : null}
+      </div>
+      <div className="rail__track">
+        {rail.items.map((it) => (
+          <RecCard key={`${rail.key}-${it.event_id}`} item={it} userPos={userPos} onSelect={onSelect} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RailSkeleton() {
   return (
     <>
-      {Array.from({ length: 7 }).map((_, i) => (
-        <div key={i} className="erow erow--skel" style={{ "--i": i } as CSSProperties}>
-          <span className="erow__mark" />
-          <span className="erow__body">
-            <span className="skel skel--title" />
-            <span className="skel skel--meta" />
-          </span>
-        </div>
+      {Array.from({ length: 3 }).map((_, r) => (
+        <section className="rail" key={r}>
+          <div className="rail__head">
+            <span className="skel skel--meta" style={{ width: 120 }} />
+          </div>
+          <div className="rail__track">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <span key={i} className="rcard rcard--skel" style={{ "--i": i } as CSSProperties}>
+                <span className="rcard__img skel" />
+              </span>
+            ))}
+          </div>
+        </section>
       ))}
     </>
   );
 }
 
-type Seg = "today" | "week" | "all";
-const SEGMENTS: { key: Seg; label: string; maxOrder: number }[] = [
-  { key: "today", label: "Сегодня", maxOrder: 1 },
-  { key: "week", label: "Неделя", maxOrder: 2 },
-  { key: "all", label: "Всё", maxOrder: 99 },
-];
-
 export function RecommendationsPanel({
-  items,
-  query,
   userPos,
   favCategories = [],
-  loading = false,
-  onRefresh,
+  refreshNonce = 0,
   onSelect,
   onClose,
 }: {
-  items: EventItem[];
-  query?: string;
   userPos?: LatLon | null;
   favCategories?: string[];
-  loading?: boolean;
-  onRefresh?: () => void;
-  onSelect: (i: EventItem) => void;
+  refreshNonce?: number;
+  onSelect: (i: RailItem) => void;
   onClose: () => void;
 }) {
-  const ptr = usePullToRefresh(() => onRefresh?.());
-  const [seg, setSeg] = useState<Seg>("all");
-  const [grid, setGrid] = useState(false);
-  const maxOrder = SEGMENTS.find((s) => s.key === seg)!.maxOrder;
+  const [rails, setRails] = useState<Rail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [localNonce, setLocalNonce] = useState(0);
+  const ptr = usePullToRefresh(() => setLocalNonce((n) => n + 1));
 
-  const sorted = useMemo(
-    () => [...items].sort((a, b) => (a.date_start || "").localeCompare(b.date_start || "")),
-    [items],
-  );
+  // Re-fetch when location, interests, or a refresh signal changes. The string
+  // key avoids refetching on every render from the userPos array identity.
+  const lat = userPos?.[0] ?? null;
+  const lon = userPos?.[1] ?? null;
+  const interestsKey = useMemo(() => [...favCategories].sort().join(","), [favCategories]);
 
-  // Time buckets, filtered by the active segment (Сегодня / Неделя / Всё). The
-  // "ongoing"/"perm" buckets (order 4/5) only show under "Всё".
-  const ordered = useMemo(() => {
-    const groups = new Map<number, { label: string; items: EventItem[] }>();
-    for (const it of sorted) {
-      const b = eventBucket(it.date_start, it.date_end);
-      if (b.order > maxOrder) continue;
-      let g = groups.get(b.order);
-      if (!g) {
-        g = { label: b.label, items: [] };
-        groups.set(b.order, g);
-      }
-      g.items.push(it);
-    }
-    return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => g);
-  }, [sorted, maxOrder]);
+  useEffect(() => {
+    setLoading(true);
+    const ctrl = new AbortController();
+    fetchRecommendations({ lat, lon, interests: interestsKey ? interestsKey.split(",") : [] }, ctrl.signal)
+      .then((r) => {
+        setRails(r.rails);
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (e?.name !== "AbortError") {
+          setRails([]);
+          setLoading(false);
+        }
+      });
+    return () => ctrl.abort();
+  }, [lat, lon, interestsKey, refreshNonce, localNonce]);
 
-  // "Для тебя" — soonest events in your favourite categories, within the
-  // selected window. Pure boost of what you already like; capped to a peek.
-  const forYou = useMemo(() => {
-    if (favCategories.length === 0) return [];
-    const set = new Set(favCategories);
-    return sorted.filter((it) => set.has(it.category) && eventBucket(it.date_start, it.date_end).order <= maxOrder).slice(0, 6);
-  }, [sorted, favCategories, maxOrder]);
-
-  // Flat segment-filtered list for the contact-sheet grid view.
-  const flat = useMemo(
-    () => sorted.filter((it) => eventBucket(it.date_start, it.date_end).order <= maxOrder),
-    [sorted, maxOrder],
-  );
-
-  let idx = 0;
-  const empty = ordered.length === 0 && forYou.length === 0;
+  const empty = !loading && rails.length === 0;
 
   return (
     <div className="panelview">
       <header className="panelview__head">
-        <h2>Рекомендации</h2>
+        <h2>Подборка</h2>
         <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
           <IconClose size={18} />
         </button>
       </header>
-      <div className="seg-row">
-        <div className="seg">
-          {SEGMENTS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              className={`seg__btn${seg === s.key ? " seg__btn--active" : ""}`}
-              onClick={() => {
-                hapticSelection();
-                setSeg(s.key);
-              }}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="viewtoggle"
-          aria-label={grid ? "Списком" : "Сеткой"}
-          onClick={() => {
-            hapticSelection();
-            setGrid((g) => !g);
-          }}
-        >
-          {grid ? <IconMenu size={17} /> : <IconGrid size={17} />}
-        </button>
-      </div>
-      <div className="panelview__scroll" ref={ptr.ref}>
+      <div className="panelview__scroll panelview__scroll--rails" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
-        {empty && (loading ? <SkeletonRows /> : <p className="panelview__empty">Пока нечего показать</p>)}
-
-        {grid && !empty && (
-          <div className="contact">
-            {flat.map((it, i) => (
-              <ContactCard key={it.event_id} item={it} index={i} onSelect={onSelect} />
-            ))}
-          </div>
-        )}
-
-        {!grid && forYou.length > 0 && (
-          <section>
-            <div className="recs__section recs__section--you">
-              Для тебя
-              <span className="recs__n">{forYou.length}</span>
-            </div>
-            {forYou.map((it) => (
-              <EventRow key={`you-${it.event_id}`} item={it} index={idx++} query={query} userPos={userPos} onSelect={onSelect} />
-            ))}
-          </section>
-        )}
-
-        {!grid &&
-          ordered.map((g) => (
-            <section key={g.label}>
-              <div className="recs__section">
-                {g.label}
-                <span className="recs__n">{g.items.length}</span>
-              </div>
-              {g.items.map((it) => (
-                <EventRow key={it.event_id} item={it} index={idx++} query={query} userPos={userPos} onSelect={onSelect} />
-              ))}
-            </section>
-          ))}
+        {loading && rails.length === 0 && <RailSkeleton />}
+        {empty && <p className="panelview__empty">пока нечего показать</p>}
+        {rails.map((rail) => (
+          <RecRail key={rail.key} rail={rail} userPos={userPos} onSelect={onSelect} />
+        ))}
       </div>
     </div>
   );

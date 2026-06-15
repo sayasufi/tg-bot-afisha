@@ -730,3 +730,177 @@ mark.hl {
   color: var(--ink);
 }
 
+/* ---------- Рекомендации — horizontal discovery rails ---------- */
+.panelview__scroll--rails {
+  padding-top: 14px;
+}
+
+.rail {
+  margin-bottom: 24px;
+}
+
+.rail__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rail__title {
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.rail__sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* "Для тебя" — the personalised hero rail, marked with the one accent. */
+.rail--hero .rail__title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  background: var(--acid);
+  box-shadow: 1.4px 1.4px 0 var(--cinnabar);
+}
+
+/* The track bleeds to the screen edges so cards scroll past the 16px gutter. */
+.rail__track {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  margin: 0 -16px;
+  padding: 0 16px 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rail__track::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.rcard {
+  flex: 0 0 auto;
+  width: 152px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  animation: cardIn 0.3s var(--ease-cut) both;
+  animation-delay: calc(var(--i, 0) * 18ms);
+}
+
+.rail--hero .rcard {
+  width: 208px;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.rcard__img {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  background: var(--vitrine);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  display: block;
+}
+
+.rail--hero .rcard__img {
+  aspect-ratio: 16 / 10;
+}
+
+.rcard__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.rcard:active .rcard__img {
+  border-color: var(--acid);
+}
+
+.rcard__ph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--cat, var(--ink-faint));
+  opacity: 0.7;
+}
+
+.rcard__live {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 6px;
+  background: var(--cinnabar);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rcard__title {
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.24;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rail--hero .rcard__title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.rcard__meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rcard--skel {
+  cursor: default;
+  animation: none;
+}
+

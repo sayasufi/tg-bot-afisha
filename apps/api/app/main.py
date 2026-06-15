@@ -6,6 +6,7 @@ from apps.api.app.routes.events import router as events_router
 from apps.api.app.routes.health import router as health_router
 from apps.api.app.routes.media import router as media_router
 from apps.api.app.routes.places import router as places_router
+from apps.api.app.routes.recommend import router as recommend_router
 from apps.api.app.routes.share import router as share_router
 from apps.api.app.routes.telegram import router as telegram_router
 from apps.api.app.routes.users import router as users_router
@@ -43,6 +44,8 @@ async def cache_control(request: Request, call_next):
         path = request.url.path
         if path.startswith("/v1/places"):
             response.headers.setdefault("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+        elif path.startswith("/v1/recommendations"):
+            response.headers.setdefault("Cache-Control", "private, max-age=60, stale-while-revalidate=120")
         elif path.startswith("/v1/events/map"):
             response.headers.setdefault("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
         elif path.startswith("/v1/events/"):
@@ -57,3 +60,4 @@ app.include_router(telegram_router)
 app.include_router(users_router)
 app.include_router(media_router)
 app.include_router(share_router)
+app.include_router(recommend_router)
