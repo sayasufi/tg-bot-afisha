@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import L from "leaflet";
 import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -69,12 +69,22 @@ function MapClickClear({ onClear }: { onClear: () => void }) {
 
 // Map controls in the native-app pattern (Yandex / 2GIS / Google): the zoom +/-
 // pair is one connected unit parked mid-right; the locate button is a separate
-// control dropped to the bottom-right corner.
+// control dropped to the bottom-right corner. The +/- support press-and-hold to
+// auto-repeat the zoom, so you can run through several levels in one gesture.
 function MapControls({ onLocate, locating }: { onLocate: () => void; locating: boolean }) {
   const map = useMap();
   const zoomRef = useRef<HTMLDivElement>(null);
   const locRef = useRef<HTMLButtonElement>(null);
+  const holdRef = useRef<number | null>(null);
   const [zoom, setZoom] = useState(map.getZoom());
+
+  const stopHold = () => {
+    if (holdRef.current != null) {
+      clearTimeout(holdRef.current);
+      holdRef.current = null;
+    }
+  };
+
   useEffect(() => {
     for (const el of [zoomRef.current, locRef.current]) {
       if (!el) continue;
@@ -85,16 +95,53 @@ function MapControls({ onLocate, locating }: { onLocate: () => void; locating: b
     map.on("zoomend", on);
     return () => {
       map.off("zoomend", on);
+      stopHold();
     };
   }, [map]);
+
+  // One zoom step; returns false at the min/max so a running hold stops itself.
+  const step = (dir: 1 | -1) => {
+    const next = Math.round(map.getZoom()) + dir;
+    if (next < map.getMinZoom() || next > map.getMaxZoom()) return false;
+    map.setZoom(next);
+    return true;
+  };
+
+  // Zoom once immediately, then auto-repeat while the button stays pressed.
+  const startHold = (dir: 1 | -1) => (e: ReactPointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    stopHold();
+    if (!step(dir)) return;
+    const tick = () => {
+      if (step(dir)) holdRef.current = window.setTimeout(tick, 230);
+      else stopHold();
+    };
+    holdRef.current = window.setTimeout(tick, 340);
+    window.addEventListener("pointerup", stopHold, { once: true });
+    window.addEventListener("pointercancel", stopHold, { once: true });
+  };
+
+  const onKey = (dir: 1 | -1) => (e: ReactKeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      step(dir);
+    }
+  };
+
   return (
     <>
       <div className="mapctl" ref={zoomRef}>
-        <button type="button" className="mapctl__btn--zoom" aria-label="Приблизить" disabled={zoom >= map.getMaxZoom()} onClick={() => map.zoomIn()}>
-          +
+        <button type="button" className="mapctl__btn--zoom" aria-label="Приблизить" disabled={zoom >= map.getMaxZoom()} onPointerDown={startHold(1)} onKeyDown={onKey(1)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <line x1="12" y1="4.5" x2="12" y2="19.5" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+            <line x1="4.5" y1="12" x2="19.5" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+          </svg>
         </button>
-        <button type="button" className="mapctl__btn--zoom" aria-label="Отдалить" disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}>
-          −
+        <button type="button" className="mapctl__btn--zoom" aria-label="Отдалить" disabled={zoom <= map.getMinZoom()} onPointerDown={startHold(-1)} onKeyDown={onKey(-1)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <line x1="4.5" y1="12" x2="19.5" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+          </svg>
         </button>
       </div>
       <button ref={locRef} type="button" className={`mapctl-locate${locating ? " mapctl-locate--busy" : ""}`} aria-label="Моё местоположение" onClick={onLocate}>
