@@ -37,19 +37,21 @@ html[data-theme="dark"] .sheet-veil {
   padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
   /* Blooms out of the selected pin: the pin is centred on screen, which lands
      ~40% down the sheet, so we scale from there — the card feels pulled out of
-     the map at the marker. */
+     the map at the marker. GPU-promoted for a smooth bloom. */
   transform-origin: 50% 40%;
-  animation: sheetUp 0.5s var(--ease-cut) both;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  animation: sheetUp 0.55s var(--ease-cut) both;
   scrollbar-width: thin;
   scrollbar-color: var(--ink) transparent;
 }
 
 @keyframes sheetUp {
   from {
-    transform: scale(0.06);
+    transform: scale(0.14);
     opacity: 0;
   }
-  40% {
+  45% {
     opacity: 1;
   }
 }
