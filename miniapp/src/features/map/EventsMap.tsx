@@ -146,7 +146,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
   return (
     <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
       <ConstellationOverlay map={mapInst} items={items} selected={selected} />
-      <MapContainer ref={setMapInst} center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
+      <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} />
         {cluster}
@@ -154,7 +154,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
           <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />
         )}
         {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
-        <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
+        <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} onMap={setMapInst} />
       </MapContainer>
     </div>
   );
