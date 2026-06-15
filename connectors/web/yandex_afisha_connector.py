@@ -61,6 +61,7 @@ class YandexAfishaConnector:
     _DATES_CAP = 8
     _DESC_CHUNK = 25  # event ids per batched description request
     _SCHED_CHUNK = 12  # event ids per batched schedule request
+    _CONCURRENCY = 5  # max in-flight sub-query requests per page (politeness vs speed)
 
     def __init__(self, city: str = "moscow", page_size: int = 100, with_descriptions: bool = True, with_schedules: bool = True) -> None:
         self.settings = get_settings()
@@ -206,21 +207,25 @@ class YandexAfishaConnector:
         """Best-effort upgrade of `argument` to the full `Event.description`, batched
         via aliased `event(id)` queries. Failures keep the lightweight `argument`."""
         ids = list({r.payload.get("id") for r in records if r.payload.get("id")})
-        descriptions: dict[str, str] = {}
-        for start in range(0, len(ids), self._DESC_CHUNK):
-            chunk = ids[start : start + self._DESC_CHUNK]
+        chunks = [ids[i : i + self._DESC_CHUNK] for i in range(0, len(ids), self._DESC_CHUNK)]
+        sem = asyncio.Semaphore(self._CONCURRENCY)
+
+        async def _fetch(chunk: list) -> tuple[list, dict | None]:
             aliases = " ".join(f"e{i}: event(id:{json.dumps(eid)}){{description}}" for i, eid in enumerate(chunk))
-            try:
-                data = await self._post(session, {"operationName": "Desc", "variables": {}, "query": f"query Desc{{{aliases}}}"})
-            except Exception:
-                continue
-            block = data.get("data") or {}
+            async with sem:
+                try:
+                    return chunk, await self._post(session, {"operationName": "Desc", "variables": {}, "query": f"query Desc{{{aliases}}}"})
+                except Exception:
+                    return chunk, None
+
+        descriptions: dict[str, str] = {}
+        for chunk, data in await asyncio.gather(*[_fetch(c) for c in chunks]):
+            block = (data or {}).get("data") or {}
             for i, eid in enumerate(chunk):
                 node = block.get(f"e{i}") or {}
                 text = node.get("description")
                 if text:
                     descriptions[eid] = text
-            await asyncio.sleep(0.2)  # be gentle between detail batches
 
         if not descriptions:
             return
@@ -241,22 +246,26 @@ class YandexAfishaConnector:
         horizon = today + timedelta(days=_LOOKAHEAD_DAYS)
         interval = f'{{date:"{today.isoformat()}",period:{_LOOKAHEAD_DAYS}}}'
         ids = list({r.payload.get("id") for r in need if r.payload.get("id")})
-        sessions_by_id: dict[str, list] = {}
-        for start in range(0, len(ids), self._SCHED_CHUNK):
-            chunk = ids[start : start + self._SCHED_CHUNK]
+        chunks = [ids[i : i + self._SCHED_CHUNK] for i in range(0, len(ids), self._SCHED_CHUNK)]
+        sem = asyncio.Semaphore(self._CONCURRENCY)
+
+        async def _fetch(chunk: list) -> tuple[list, dict | None]:
             aliases = " ".join(
                 f"e{i}: eventScheduleOther(id:{json.dumps(eid)},dates:{interval})"
                 "{byDate{sessions{session{datetime ticket{price{currency min max}}}}}}"
                 for i, eid in enumerate(chunk)
             )
-            try:
-                data = await self._post(session, {"operationName": "Sched", "variables": {}, "query": f"query Sched{{{aliases}}}"})
-            except Exception:
-                continue
-            block = data.get("data") or {}
+            async with sem:
+                try:
+                    return chunk, await self._post(session, {"operationName": "Sched", "variables": {}, "query": f"query Sched{{{aliases}}}"})
+                except Exception:
+                    return chunk, None
+
+        sessions_by_id: dict[str, list] = {}
+        for chunk, data in await asyncio.gather(*[_fetch(c) for c in chunks]):
+            block = (data or {}).get("data") or {}
             for i, eid in enumerate(chunk):
                 sessions_by_id[eid] = self._sessions_from_schedule(block.get(f"e{i}"))
-            await asyncio.sleep(0.2)
 
         for record in need:
             sessions = sessions_by_id.get(record.payload.get("id"))

@@ -1,7 +1,8 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from core.db.models import (
@@ -19,6 +20,9 @@ from pipeline.dedup.scorer import MatchDecision, score_candidate
 from pipeline.normalizer.extractors import NormalizedCandidate
 
 _OCCURRENCE_LOOKAHEAD_DAYS = 30
+# Moscow is a fixed UTC+3 — "same day" for dedup must be a Moscow calendar day, not a
+# UTC one (an all-day MSK-midnight event is stored as the previous UTC day).
+_MSK = timezone(timedelta(hours=3))
 
 
 def _ts_to_dt(value: object) -> datetime | None:
@@ -86,7 +90,7 @@ def ensure_source(db: Session, name: str, kind: str, base_url: str, config_json:
 
 
 def create_source_run(db: Session, source_id: int) -> SourceRun:
-    run = SourceRun(source_id=source_id, status="running", started_at=datetime.utcnow())
+    run = SourceRun(source_id=source_id, status="running", started_at=datetime.now(timezone.utc))
     db.add(run)
     db.commit()
     db.refresh(run)
@@ -95,7 +99,7 @@ def create_source_run(db: Session, source_id: int) -> SourceRun:
 
 def finish_source_run(db: Session, run: SourceRun, status: str, stats: dict, error_text: str = "") -> None:
     run.status = status
-    run.finished_at = datetime.utcnow()
+    run.finished_at = datetime.now(timezone.utc)
     run.stats_json = stats
     run.error_text = error_text
     db.add(run)
@@ -103,33 +107,67 @@ def finish_source_run(db: Session, run: SourceRun, status: str, stats: dict, err
 
 
 def upsert_raw_event(db: Session, source_id: int, external_id: str, payload: dict, raw_text: str) -> RawEvent:
-    existing = db.execute(
-        select(RawEvent).where(and_(RawEvent.source_id == source_id, RawEvent.external_id == external_id))
-    ).scalar_one_or_none()
+    # Atomic INSERT ... ON CONFLICT DO UPDATE on (source_id, external_id): avoids the
+    # SELECT-then-INSERT race when several workers ingest the same event concurrently.
+    # skip_reason is reopened ('') only when the content actually changed.
     content_hash = hashlib.sha256(raw_text.encode("utf-8", errors="ignore")).hexdigest()
-    if existing:
-        if existing.content_hash != content_hash:
-            # Content changed since the raw was skipped — let normalize retry it.
-            existing.skip_reason = ""
-        existing.raw_payload_json = payload
-        existing.raw_text = raw_text
-        existing.content_hash = content_hash
-        db.add(existing)
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    row = RawEvent(
+    stmt = pg_insert(RawEvent).values(
         source_id=source_id,
         external_id=external_id,
         raw_payload_json=payload,
         raw_text=raw_text,
         content_hash=content_hash,
     )
-    db.add(row)
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_raw_source_external",
+        set_={
+            "raw_payload_json": stmt.excluded.raw_payload_json,
+            "raw_text": stmt.excluded.raw_text,
+            "content_hash": stmt.excluded.content_hash,
+            "skip_reason": case(
+                (RawEvent.content_hash != stmt.excluded.content_hash, ""),
+                else_=RawEvent.skip_reason,
+            ),
+        },
+    ).returning(RawEvent)
+    row = db.execute(stmt, execution_options={"populate_existing": True}).scalar_one()
     db.commit()
-    db.refresh(row)
     return row
+
+
+def bulk_upsert_raw_events(db: Session, source_id: int, records: list) -> int:
+    """Upsert many RawRecords in ONE statement + ONE commit (vs. a commit per row).
+    Each record has .external_id/.payload/.raw_text. Returns the number of rows sent."""
+    if not records:
+        return 0
+    # De-dup within the batch (Postgres rejects ON CONFLICT touching a row twice);
+    # the last occurrence of an external_id wins.
+    by_ext: dict[str, dict] = {}
+    for rec in records:
+        by_ext[str(rec.external_id)] = {
+            "source_id": source_id,
+            "external_id": str(rec.external_id),
+            "raw_payload_json": rec.payload,
+            "raw_text": rec.raw_text,
+            "content_hash": hashlib.sha256((rec.raw_text or "").encode("utf-8", "ignore")).hexdigest(),
+        }
+    rows = list(by_ext.values())
+    stmt = pg_insert(RawEvent).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_raw_source_external",
+        set_={
+            "raw_payload_json": stmt.excluded.raw_payload_json,
+            "raw_text": stmt.excluded.raw_text,
+            "content_hash": stmt.excluded.content_hash,
+            "skip_reason": case(
+                (RawEvent.content_hash != stmt.excluded.content_hash, ""),
+                else_=RawEvent.skip_reason,
+            ),
+        },
+    )
+    db.execute(stmt)
+    db.commit()
+    return len(rows)
 
 
 def save_candidate(db: Session, raw_id: int, candidate: NormalizedCandidate) -> EventCandidate:
@@ -270,21 +308,24 @@ def dedup_and_upsert_event(
         )
 
     stmt = select(Event, EventOccurrence).join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+    cand_msk_day = candidate.date_start.astimezone(_MSK).date() if candidate.date_start else None
     if candidate.date_start:
-        stmt = stmt.where(
-            and_(
-                EventOccurrence.date_start >= candidate.date_start.replace(hour=0, minute=0, second=0),
-                EventOccurrence.date_start <= candidate.date_start.replace(hour=23, minute=59, second=59),
-            )
-        )
-    matches = db.execute(stmt.limit(200)).all()
+        # Match within the candidate's Moscow calendar day. The window is widened by a
+        # day on each side (UTC bounds) and the exact MSK-day equality is enforced below,
+        # so MSK-midnight events (stored on the previous UTC day) aren't missed.
+        local = candidate.date_start.astimezone(_MSK)
+        lo = local.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        hi = local.replace(hour=23, minute=59, second=59, microsecond=0) + timedelta(days=1)
+        stmt = stmt.where(and_(EventOccurrence.date_start >= lo, EventOccurrence.date_start <= hi))
+    matches = db.execute(stmt.limit(400)).all()
 
     best: tuple[Event, float] | None = None
     for event, occurrence in matches:
+        same_day = bool(cand_msk_day and occurrence.date_start.astimezone(_MSK).date() == cand_msk_day)
         score = score_candidate(
             event.canonical_title,
             candidate.title,
-            same_day=(candidate.date_start.date() == occurrence.date_start.date()) if candidate.date_start else False,
+            same_day=same_day,
             geo_close=bool(venue and occurrence.venue_id == venue.venue_id),
         )
         if not best or score > best[1]:
@@ -319,7 +360,7 @@ def dedup_and_upsert_event(
     until = now + timedelta(days=_OCCURRENCE_LOOKAHEAD_DAYS)
     sessions = _payload_session_dates(raw.raw_payload_json if raw else None, now, until)
     if not sessions:
-        sessions = [(candidate.date_start or datetime.utcnow(), candidate.date_end)]
+        sessions = [(candidate.date_start or datetime.now(timezone.utc), candidate.date_end)]
     occ_venue_id = venue.venue_id if venue else None
     venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
     for occ_start, occ_end in sessions:

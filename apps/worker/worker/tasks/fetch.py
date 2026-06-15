@@ -9,13 +9,14 @@ from connectors.web.kudago_connector import KudaGoConnector
 from connectors.web.yandex_afisha_connector import YandexAfishaConnector
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
+    bulk_upsert_raw_events,
     create_source_run,
     ensure_source,
     finish_source_run,
     get_active_telegram_channels,
-    upsert_raw_event,
 )
 from core.db.session import SessionLocal
+from core.tasklock import single_instance
 
 from apps.worker.worker.celery_app import celery_app
 
@@ -32,6 +33,7 @@ def _fetch_kudago_page(connector: KudaGoConnector, cursor: str | None) -> tuple[
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("fetch_kudago")
 def fetch_kudago(self):
     settings = get_settings()
     db = SessionLocal()
@@ -49,8 +51,7 @@ def fetch_kudago(self):
         page_size = int(source.config_json.get("page_size", 100))
         connector = KudaGoConnector(location=location, page_size=page_size)
         records, next_cursor = _fetch_kudago_page(connector, cursor)
-        for rec in records:
-            upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)
+        bulk_upsert_raw_events(db, source.source_id, records)
         source.config_json = {**source.config_json, "cursor": next_cursor}
         db.add(source)
         db.commit()
@@ -64,6 +65,7 @@ def fetch_kudago(self):
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("fetch_kudago")
 def fetch_kudago_full_scan(self):
     settings = get_settings()
     db = SessionLocal()
@@ -88,8 +90,7 @@ def fetch_kudago_full_scan(self):
         while cursor and pages_scanned < max_pages:
             records, next_cursor = _fetch_kudago_page(connector, cursor)
             pages_scanned += 1
-            for rec in records:
-                upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)
+            bulk_upsert_raw_events(db, source.source_id, records)
             total_fetched += len(records)
 
             # Connector keeps only in-window events; empty page means we can stop the scan.
@@ -126,6 +127,7 @@ def _yandex_config(settings) -> dict:
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("fetch_yandex_afisha")
 def fetch_yandex_afisha(self):
     """Incremental Yandex Afisha fetch: one page of the city feed per tick. The
     paging offset advances and wraps back to 0 once the in-window catalogue is
@@ -140,8 +142,7 @@ def fetch_yandex_afisha(self):
         page_size = int(source.config_json.get("page_size", 100))
         connector = YandexAfishaConnector(city=city, page_size=page_size)
         records, next_cursor = asyncio.run(connector.fetch(cursor=cursor))
-        for rec in records:
-            upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)
+        bulk_upsert_raw_events(db, source.source_id, records)
         # Stable cursor (== current) means we reached the end — wrap to restart.
         stored_cursor = "0" if next_cursor == cursor else next_cursor
         source.config_json = {**source.config_json, "cursor": stored_cursor}
@@ -157,6 +158,7 @@ def fetch_yandex_afisha(self):
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("fetch_yandex_afisha")
 def fetch_yandex_afisha_full_scan(self):
     """Full sweep of the in-window Yandex Afisha catalogue: page through every
     offset until the feed is exhausted (or max_pages), upserting each event."""
@@ -172,8 +174,7 @@ def fetch_yandex_afisha_full_scan(self):
 
         # One session/handshake paginates the whole in-window catalogue.
         records, pages_scanned, stop_reason = asyncio.run(connector.scan(max_pages=max_pages))
-        for rec in records:
-            upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)
+        bulk_upsert_raw_events(db, source.source_id, records)
 
         source.config_json = {**source.config_json, "cursor": "0"}
         db.add(source)
@@ -189,6 +190,7 @@ def fetch_yandex_afisha_full_scan(self):
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("fetch_telegram")
 def fetch_telegram_public(self):
     settings = get_settings()
     db = SessionLocal()
@@ -224,8 +226,7 @@ def fetch_telegram_public(self):
                     # No MTProto credentials: scrape the public t.me/s/ preview instead.
                     connector = TelegramWebPreviewConnector(channel)
                 records, next_cursor = asyncio.run(connector.fetch(cursor=cursor))
-                for rec in records:
-                    upsert_raw_event(db, source.source_id, rec.external_id, rec.payload, rec.raw_text)
+                bulk_upsert_raw_events(db, source.source_id, records)
                 source.config_json = {
                     **source.config_json,
                     "channel": channel,

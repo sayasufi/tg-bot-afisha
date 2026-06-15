@@ -5,12 +5,14 @@ from sqlalchemy import select
 from core.db.models import EventCandidate, EventSource, RawEvent, Source
 from core.db.repositories.ingestion import dedup_and_upsert_event, get_venue
 from core.db.session import SessionLocal
+from core.tasklock import single_instance
 from pipeline.llm.service import LLMService
 
 from apps.worker.worker.celery_app import celery_app
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("dedup")
 def dedup_candidates(self):
     db = SessionLocal()
     llm = LLMService()

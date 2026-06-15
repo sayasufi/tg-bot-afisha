@@ -11,6 +11,7 @@ from core.db.models import Event
 from core.db.session import SessionLocal
 from core.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, public_url, put_image
+from core.tasklock import single_instance
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +43,17 @@ def _cache_one(db, event: Event) -> bool:
         return False
 
 
-@celery_app.task(name="apps.worker.worker.tasks.media.cache_event_images")
-def cache_event_images() -> dict:
-    """Cache a batch of not-yet-cached event images into MinIO."""
-    ensure_bucket()
+@celery_app.task(bind=True, max_retries=3, name="apps.worker.worker.tasks.media.cache_event_images")
+@single_instance("media")
+def cache_event_images(self) -> dict:
+    """Cache a batch of not-yet-cached event images into MinIO. Per-image failures are
+    logged and skipped (one bad URL must not fail the batch); infra failures (MinIO,
+    DB) propagate and retry."""
     db = SessionLocal()
     cached = 0
     events: list[Event] = []
     try:
+        ensure_bucket()
         events = (
             db.execute(
                 select(Event)
@@ -67,6 +71,9 @@ def cache_event_images() -> dict:
             if _cache_one(db, event):
                 cached += 1
         db.commit()
+        return {"scanned": len(events), "cached": cached}
+    except Exception as exc:
+        db.rollback()
+        raise self.retry(exc=exc)
     finally:
         db.close()
-    return {"scanned": len(events), "cached": cached}

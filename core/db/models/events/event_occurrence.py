@@ -11,6 +11,7 @@ class EventOccurrence(Base):
     __table_args__ = (
         Index("ix_occurrences_date_start", "date_start"),
         Index("ix_occurrences_event", "event_id"),
+        Index("ix_event_occurrences_venue_id", "venue_id"),
         {"schema": "events"},
     )
 

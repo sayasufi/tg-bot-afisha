@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import get_raw, mark_raw_skipped, save_candidate, unprocessed_raw_ids
 from core.db.session import SessionLocal
+from core.tasklock import single_instance
 from pipeline.llm.extraction_service import LLMExtractionService
 from pipeline.normalizer.rules import RuleBasedNormalizer
 
@@ -51,6 +52,7 @@ def _is_kudago_candidate_in_window(candidate) -> bool:
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("normalize")
 def normalize_raw_events(self):
     db = SessionLocal()
     settings = get_settings()

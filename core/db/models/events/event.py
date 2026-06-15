@@ -18,6 +18,7 @@ class Event(Base, TimestampMixin):
             postgresql_using="gin",
             postgresql_ops={"canonical_description": "gin_trgm_ops"},
         ),
+        Index("ix_events_status_category", "status", "category"),
         {"schema": "events"},
     )
 

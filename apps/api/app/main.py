@@ -24,7 +24,7 @@ if settings.sentry_dsn and sentry_sdk is not None:
 
 app = FastAPI(title="Afisha API", version="0.1.0")
 # Compress JSON responses (map/places payloads are tens of KB → a few KB).
-app.add_middleware(GZipMiddleware, minimum_size=600)
+app.add_middleware(GZipMiddleware, minimum_size=256)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

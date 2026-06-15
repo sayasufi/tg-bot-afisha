@@ -16,6 +16,7 @@ from core.db.repositories.ingestion import (
     unresolved_candidate_ids,
 )
 from core.db.session import SessionLocal
+from core.tasklock import single_instance
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.geocoding.service import GeocodingService
 from pipeline.llm.service import LLMService
@@ -43,6 +44,7 @@ def _source_coords(payload: dict | None) -> tuple[float, float] | None:
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("enrich")
 def enrich_candidates(self):
     db = SessionLocal()
     settings = get_settings()
@@ -125,6 +127,7 @@ def enrich_candidates(self):
 
 
 @celery_app.task(bind=True, max_retries=3)
+@single_instance("backfill_venues_osm")
 def backfill_venues_osm(self):
     db = SessionLocal()
     settings = get_settings()
@@ -168,6 +171,7 @@ def _dist_m(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 @celery_app.task(bind=True, max_retries=2)
+@single_instance("resolve_venue_hours")
 def resolve_venue_hours(self):
     """Resolve opening hours for venues that don't have them yet, via Yandex
     Maps (source-agnostic, by name + coords). Cached in `venues.hours_json` so we

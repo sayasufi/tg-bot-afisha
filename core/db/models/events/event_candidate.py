@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db.base import Base
@@ -8,7 +8,11 @@ from core.db.base import Base
 
 class EventCandidate(Base):
     __tablename__ = "event_candidates"
-    __table_args__ = {"schema": "events"}
+    __table_args__ = (
+        Index("ix_event_candidates_raw_id", "raw_id"),
+        Index("ix_event_candidates_venue_id", "venue_id"),
+        {"schema": "events"},
+    )
 
     candidate_id: Mapped[int] = mapped_column(primary_key=True)
     raw_id: Mapped[int] = mapped_column(ForeignKey("events.raw_events.raw_id", ondelete="CASCADE"), nullable=False)
