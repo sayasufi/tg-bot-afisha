@@ -26,15 +26,18 @@ const dayDiff = (a: Date, b: Date) => {
   return Math.round((B - A) / 86400000);
 };
 
-// True if the event is happening right now: started and not yet over. Point
-// events (no end) count as live for ~3h after start; the far-future sentinel
-// (year 9998) means a permanent/ongoing event → live once it has started.
+// True only for a TIMED session that is in progress right now — what the red
+// "идёт сейчас" pulse promises. Excludes exhibitions / runs / all-day rows:
+// they have no real start time (midnight) or span more than a day, so they are
+// "open until X", not "happening now" (and the venue may even be closed today).
+// Point events (no end) count as live for ~3h after start.
 export function isLiveNow(start?: string | null, end?: string | null): boolean {
   const s = parse(start);
-  if (!s) return false;
+  if (!s || isMidnight(s)) return false;
   const now = Date.now();
   const e = parse(end);
   const endMs = e ? e.getTime() : s.getTime() + 3 * 3600 * 1000;
+  if (endMs - s.getTime() > 24 * 3600 * 1000) return false; // a multi-day run, not a session
   return s.getTime() <= now && now <= endMs;
 }
 const dmy = (d: Date, withYear: boolean, short = false) =>
