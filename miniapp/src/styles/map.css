@@ -13,6 +13,35 @@
   display: none !important;
 }
 
+/* ---------- Constellation — links the open event to its neighbours ---------- */
+.constellation {
+  position: absolute;
+  inset: 0;
+  z-index: 450; /* above tiles (200), below markers (600) */
+  pointer-events: none;
+  animation: constIn 0.45s ease both;
+}
+
+.constellation__line {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 2 3.5;
+  opacity: 0.3;
+}
+
+.constellation__node {
+  fill: var(--acid);
+  stroke: var(--ink);
+  stroke-width: 0.8;
+  opacity: 0.85;
+}
+
+@keyframes constIn {
+  from {
+    opacity: 0;
+  }
+}
+
 /* ---------- Map pins — gallery nameplates ---------- */
 .vpin-wrap {
   background: none;

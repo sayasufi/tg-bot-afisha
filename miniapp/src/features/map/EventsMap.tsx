@@ -6,6 +6,7 @@ import type { EventItem } from "../../api/client";
 import { isLiveNow } from "../../lib/datetime";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
+import { ConstellationOverlay } from "./ConstellationOverlay";
 import { MapController } from "./MapController";
 import { clusterIcon, metroIcon, pinIcon, userIcon } from "./markers";
 
@@ -145,6 +146,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} />
+        <ConstellationOverlay items={items} selected={selected} />
         {cluster}
         {selected && metro && (
           <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />
