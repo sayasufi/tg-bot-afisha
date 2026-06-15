@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -114,23 +115,51 @@ class EventQueryService:
             .order_by(Event.event_id, EventOccurrence.date_start.asc())
             .subquery()
         )
-        # Place ONE marker AT the grid cell (the snap point) rather than at the
-        # events' centroid: a regular lattice guarantees clusters never overlap,
-        # whereas two adjacent cells' centroids can land right next to each other
-        # at a shared edge. Latitude is compressed by ~cos(Moscow) so the lattice
-        # reads as roughly square on the Web-Mercator map instead of stretched.
-        cell_x = 110.0 / (2 ** zoom)  # ~78 screen px between columns
-        cell_y = cell_x * 0.6
-        snapped = func.ST_SnapToGrid(inner.c.g, 0.0, 0.0, cell_x, cell_y)
-        lat = func.ST_Y(snapped).label("lat")
-        lon = func.ST_X(snapped).label("lon")
-        stmt = select(func.count().label("cnt"), lat, lon).select_from(inner).group_by(lat, lon)
+        # Aggregate to a FINE grid and place each cell's marker at the real centroid
+        # of its events (so a cluster sits where its events actually are, not on a
+        # lattice vertex that can drift far from the city). The fine grid keeps this
+        # cheap and the centroids local; collisions are then resolved by merging.
+        cell = 45.0 / (2 ** zoom)
+        grid = func.ST_SnapToGrid(inner.c.g, cell, cell)
+        centroid = func.ST_Centroid(func.ST_Collect(inner.c.g))
+        stmt = (
+            select(func.count().label("cnt"), func.ST_Y(centroid).label("lat"), func.ST_X(centroid).label("lon"))
+            .select_from(inner)
+            .group_by(grid)
+        )
         rows = (await self.db.execute(stmt)).all()
-        return [
-            {"id": f"c{i}", "lat": float(la), "lon": float(lo), "count": int(cnt)}
-            for i, (cnt, la, lo) in enumerate(rows)
+        cells = [
+            {"lat": float(la), "lon": float(lo), "count": int(cnt)}
+            for cnt, la, lo in rows
             if la is not None and lo is not None
         ]
+        return self._merge_clusters(cells, zoom)
+
+    @staticmethod
+    def _merge_clusters(cells: list[dict], zoom: int, sep_px: float = 72.0) -> list[dict]:
+        # Greedy proximity merge (a mini-supercluster): combine cells whose centres
+        # are within `sep_px` screen pixels so markers never overlap, while keeping
+        # each merged cluster at the count-weighted centroid of its events. Biggest
+        # clusters are placed first so dense areas anchor the merged centre.
+        # Web-Mercator: 256*2**zoom px span 360° of longitude; a latitude degree
+        # spans more px (÷cos φ), so we scale Δlat to longitude-equivalent units to
+        # compare distances as they look ON SCREEN at Moscow's latitude.
+        sep_lon = sep_px * 360.0 / (256.0 * (2 ** zoom))
+        lat_scale = math.cos(math.radians(55.75)) or 1.0
+        merged: list[dict] = []
+        for c in sorted(cells, key=lambda x: -x["count"]):
+            for m in merged:
+                dlon = c["lon"] - m["lon"]
+                dlat = (c["lat"] - m["lat"]) / lat_scale
+                if dlon * dlon + dlat * dlat <= sep_lon * sep_lon:
+                    total = m["count"] + c["count"]
+                    m["lat"] = (m["lat"] * m["count"] + c["lat"] * c["count"]) / total
+                    m["lon"] = (m["lon"] * m["count"] + c["lon"] * c["count"]) / total
+                    m["count"] = total
+                    break
+            else:
+                merged.append(dict(c))
+        return [{"id": f"c{i}", "lat": m["lat"], "lon": m["lon"], "count": m["count"]} for i, m in enumerate(merged)]
 
     async def _detail(self, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset):
         # Compute venue lat/lon in the main query (was an N+1 per-row subquery).
