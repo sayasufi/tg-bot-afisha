@@ -268,7 +268,8 @@ export function App() {
 
   const openEvent = useCallback((i: EventItem) => {
     haptic("light");
-    setView("map");
+    // Don't leave the current section: the sheet opens OVER it (recs/favorites/
+    // map), so closing the event returns you exactly where you were.
     setPeek(null);
     setSelected(i);
     logEventSeen(i.event_id); // engagement signal for recommendations
@@ -283,9 +284,15 @@ export function App() {
       setSheetReady(false);
       return;
     }
+    // Opened from a panel (recs/favorites) → no map choreography to wait for, so
+    // the sheet rises immediately over the panel.
+    if (view !== "map") {
+      setSheetReady(true);
+      return;
+    }
     const t = setTimeout(() => setSheetReady(true), 560);
     return () => clearTimeout(t);
-  }, [selected]);
+  }, [selected, view]);
 
   const onCluster = useCallback((evs: EventItem[]) => {
     haptic("light");
