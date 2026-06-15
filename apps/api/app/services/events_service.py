@@ -136,7 +136,7 @@ class EventQueryService:
         return self._merge_clusters(cells, zoom)
 
     @staticmethod
-    def _merge_clusters(cells: list[dict], zoom: int, sep_px: float = 72.0) -> list[dict]:
+    def _merge_clusters(cells: list[dict], zoom: int, sep_px: float = 84.0) -> list[dict]:
         # Greedy proximity merge (a mini-supercluster): combine cells whose centres
         # are within `sep_px` screen pixels so markers never overlap, while keeping
         # each merged cluster at the count-weighted centroid of its events. Biggest
