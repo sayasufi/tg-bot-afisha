@@ -1,0 +1,26 @@
+# Keep secrets and local cruft out of the image build context.
+.git
+.gitignore
+cookies.txt
+.env
+.env.*
+*.env
+
+# Python caches / virtualenvs
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Node / frontend build output (miniapp builds in its own image)
+node_modules/
+miniapp/node_modules/
+miniapp/dist/
+
+# Editor / agent / misc
+.claude/
+synergy_*.md
+*.log
