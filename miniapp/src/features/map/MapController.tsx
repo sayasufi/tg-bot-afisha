@@ -9,21 +9,13 @@ export function MapController({
   selected,
   locateNonce,
   userPos,
-  onMap,
 }: {
   selected: EventItem | null;
   locateNonce: number;
   userPos: [number, number] | null;
-  onMap?: (map: ReturnType<typeof useMap>) => void;
 }) {
   const map = useMap();
   const lastLocate = useRef(0);
-
-  // Lift the Leaflet map instance to the parent (for the constellation overlay,
-  // which must live outside MapContainer). useMap is the reliable source.
-  useEffect(() => {
-    onMap?.(map);
-  }, [map, onMap]);
 
   useEffect(() => {
     if (selected && selected.lat != null && selected.lon != null) {

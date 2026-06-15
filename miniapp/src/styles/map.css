@@ -13,63 +13,6 @@
   display: none !important;
 }
 
-/* Pin → sheet handoff spark — a category-coloured burst from the tapped pin. */
-.fly-spark {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  margin: -8px;
-  border-radius: 50%;
-  background: var(--c, var(--acid));
-  box-shadow: 0 0 0 2px var(--ink);
-  z-index: 1250;
-  pointer-events: none;
-  animation: flySpark 0.55s var(--ease-cut) forwards;
-}
-
-@keyframes flySpark {
-  0% {
-    transform: scale(0.4);
-    opacity: 0;
-  }
-  28% {
-    opacity: 1;
-  }
-  100% {
-    transform: scale(2.6) translateY(34px);
-    opacity: 0;
-  }
-}
-
-/* ---------- Constellation — links the open event to its neighbours ---------- */
-.constellation {
-  position: absolute;
-  inset: 0;
-  z-index: 450; /* above tiles (200), below markers (600) */
-  pointer-events: none;
-  animation: constIn 0.45s ease both;
-}
-
-.constellation__line {
-  stroke: var(--ink);
-  stroke-width: 1;
-  stroke-dasharray: 2 3.5;
-  opacity: 0.3;
-}
-
-.constellation__node {
-  fill: var(--acid);
-  stroke: var(--ink);
-  stroke-width: 0.8;
-  opacity: 0.85;
-}
-
-@keyframes constIn {
-  from {
-    opacity: 0;
-  }
-}
-
 /* ---------- Map pins — gallery nameplates ---------- */
 .vpin-wrap {
   background: none;

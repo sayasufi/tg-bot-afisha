@@ -1,14 +1,11 @@
-import type L from "leaflet";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AttributionControl, MapContainer, Marker } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { EventItem } from "../../api/client";
-import { categoryMeta } from "../../lib/categories";
 import { isLiveNow } from "../../lib/datetime";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
-import { ConstellationOverlay } from "./ConstellationOverlay";
 import { MapController } from "./MapController";
 import { clusterIcon, metroIcon, pinIcon, userIcon } from "./markers";
 
@@ -35,23 +32,6 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
   const metroIco = useMemo(() => metroIcon(), []);
-  const [mapInst, setMapInst] = useState<L.Map | null>(null);
-  const [spark, setSpark] = useState<{ x: number; y: number; c: string } | null>(null);
-
-  // Pin → sheet handoff: a category-coloured spark bursts from the tapped pin
-  // (at its on-screen point) and fades as the sheet rises — a shared moment
-  // linking the marker to the card without a brittle FLIP morph.
-  const handlePin = useCallback(
-    (item: EventItem) => {
-      if (mapInst && item.lat != null && item.lon != null) {
-        const p = mapInst.latLngToContainerPoint([item.lat, item.lon]);
-        setSpark({ x: p.x, y: p.y, c: categoryMeta(item.category).color });
-        window.setTimeout(() => setSpark(null), 600);
-      }
-      onSelect(item);
-    },
-    [mapInst, onSelect],
-  );
 
   // First-load reveal: once the first markers are in the DOM, stagger their
   // entrance by distance from the map centre — pins ripple outward from the
@@ -148,12 +128,12 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
             key={item.event_id}
             position={[item.lat as number, item.lon as number]}
             icon={pinIcon(item, item.event_id === selectedId, isLiveNow(item.date_start, item.date_end))}
-            eventHandlers={{ click: () => handlePin(item) }}
+            eventHandlers={{ click: () => onSelect(item) }}
           />
         ))}
       </MarkerClusterGroup>
     );
-  }, [items, selectedId, handlePin, clusterHandlers]);
+  }, [items, selectedId, onSelect, clusterHandlers]);
 
   // Rebuild the user icon only when the (throttled) heading changes, so the
   // user marker doesn't get a fresh divIcon — and replay its pulse — on every
@@ -162,8 +142,6 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
 
   return (
     <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
-      <ConstellationOverlay map={mapInst} items={items} selected={selected} />
-      {spark && <span className="fly-spark" style={{ left: spark.x, top: spark.y, ["--c" as string]: spark.c }} aria-hidden="true" />}
       <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} />
@@ -172,7 +150,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
           <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />
         )}
         {userPos && <Marker position={userPos} icon={userIco} zIndexOffset={1000} interactive={false} />}
-        <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} onMap={setMapInst} />
+        <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
       </MapContainer>
     </div>
   );
