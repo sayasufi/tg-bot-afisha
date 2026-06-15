@@ -17,7 +17,12 @@ from core.db.models import (
     TelegramChannel,
     Venue,
 )
-from pipeline.dedup.scorer import MatchDecision, score_candidate
+from pipeline.dedup.scorer import (
+    AUTO_MERGE_THRESHOLD,
+    REVIEW_THRESHOLD,
+    MatchDecision,
+    score_candidate,
+)
 from pipeline.normalizer.extractors import NormalizedCandidate
 
 _OCCURRENCE_LOOKAHEAD_DAYS = 30
@@ -340,10 +345,10 @@ async def dedup_and_upsert_event(
         if not best or score > best[1]:
             best = (event, score)
 
-    if best and best[1] >= 0.87:
+    if best and best[1] >= AUTO_MERGE_THRESHOLD:
         event = best[0]
         decision = MatchDecision(decision="auto-merge", score=best[1], matched_event_id=str(event.event_id))
-    elif best and best[1] >= 0.72:
+    elif best and best[1] >= REVIEW_THRESHOLD:
         event = best[0]
         decision = MatchDecision(decision="needs-review", score=best[1], matched_event_id=str(event.event_id))
     else:

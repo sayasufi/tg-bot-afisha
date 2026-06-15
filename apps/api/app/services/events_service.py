@@ -388,13 +388,11 @@ class EventQueryService:
 
     async def search(self, q: str, city: str | None, limit: int):
         score = func.similarity(Event.canonical_title, bindparam("q", q))
-        stmt = (
-            select(Event.event_id, Event.canonical_title, score.label("score"))
-            .where(Event.status == "active")
-            .where(or_(Event.canonical_title.ilike(f"%{q}%"), Event.canonical_description.ilike(f"%{q}%")))
-            .order_by(text("score DESC"))
-            .limit(limit)
-        )
+        match = or_(Event.canonical_title.ilike(f"%{q}%"), Event.canonical_description.ilike(f"%{q}%"))
+        # Tie-break on event_id so equal-score rows (and the many description-only
+        # matches that score ~0) come back in a stable, deterministic order rather
+        # than at the DB's whim — without it, the same query can re-shuffle.
+        order = (score.desc(), Event.event_id.asc())
 
         if city:
             stmt = (
@@ -403,9 +401,17 @@ class EventQueryService:
                 .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
                 .where(Event.status == "active")
                 .where(Venue.city.ilike(city))
-                .where(or_(Event.canonical_title.ilike(f"%{q}%"), Event.canonical_description.ilike(f"%{q}%")))
+                .where(match)
                 .distinct()
-                .order_by(text("score DESC"))
+                .order_by(*order)
+                .limit(limit)
+            )
+        else:
+            stmt = (
+                select(Event.event_id, Event.canonical_title, score.label("score"))
+                .where(Event.status == "active")
+                .where(match)
+                .order_by(*order)
                 .limit(limit)
             )
 
