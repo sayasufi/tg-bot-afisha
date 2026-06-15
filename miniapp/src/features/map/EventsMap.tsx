@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import type L from "leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AttributionControl, MapContainer, Marker } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
@@ -33,6 +34,7 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
   const metroIco = useMemo(() => metroIcon(), []);
+  const [mapInst, setMapInst] = useState<L.Map | null>(null);
 
   // First-load reveal: once the first markers are in the DOM, stagger their
   // entrance by distance from the map centre — pins ripple outward from the
@@ -143,10 +145,10 @@ export function EventsMap({ items, selected, userPos, heading, locateNonce, them
 
   return (
     <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}`}>
-      <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
+      <ConstellationOverlay map={mapInst} items={items} selected={selected} />
+      <MapContainer ref={setMapInst} center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} />
-        <ConstellationOverlay items={items} selected={selected} />
         {cluster}
         {selected && metro && (
           <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />

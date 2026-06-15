@@ -1,21 +1,21 @@
+import type L from "leaflet";
 import { useEffect, useReducer } from "react";
-import { useMap } from "react-leaflet";
 
 import type { EventItem } from "../../api/client";
 import { distanceMeters } from "../../lib/distance";
 
 // Hairline "constellation" — when an event is open, faint lines link it to its
 // nearest neighbours (variant.com network diagrams). Bounded to ~5 links so it
-// never clutters; redrawn on pan/zoom via container-pixel projection.
+// never clutters; redrawn on pan/zoom via container-pixel projection. Rendered
+// as a sibling SVG over the map (Leaflet won't host arbitrary child DOM).
 const MAX_LINKS = 5;
 const MAX_DIST_M = 4000;
 
-export function ConstellationOverlay({ items, selected }: { items: EventItem[]; selected: EventItem | null }) {
-  const map = useMap();
+export function ConstellationOverlay({ map, items, selected }: { map: L.Map | null; items: EventItem[]; selected: EventItem | null }) {
   const [, redraw] = useReducer((x) => x + 1, 0);
 
-  // Reproject on every map movement so the lines stay pinned to their points.
   useEffect(() => {
+    if (!map) return;
     const onMove = () => redraw();
     map.on("move zoom viewreset resize zoomanim", onMove);
     return () => {
@@ -23,7 +23,7 @@ export function ConstellationOverlay({ items, selected }: { items: EventItem[]; 
     };
   }, [map]);
 
-  if (!selected || selected.lat == null || selected.lon == null) return null;
+  if (!map || !selected || selected.lat == null || selected.lon == null) return null;
 
   const origin: [number, number] = [selected.lat, selected.lon];
   const neighbours = items
