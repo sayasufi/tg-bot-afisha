@@ -26,5 +26,5 @@ async def get_recommendations(
 async def log_event_seen(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
     # Fire-and-forget engagement signal: increments the event's open-count, which
     # feeds the "Популярное" rail and the popularity term in the score.
-    await RecommendationService(db).log_view(str(event_id))
+    await RecommendationService(db).log_view(event_id)
     return None

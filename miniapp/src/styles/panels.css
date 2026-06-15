@@ -737,6 +737,9 @@ mark.hl {
 
 .rail {
   margin-bottom: 24px;
+  /* Skip rendering/layout for rails scrolled off-screen (the feed has many). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 250px;
 }
 
 .rail__head {
@@ -782,8 +785,9 @@ mark.hl {
   gap: 10px;
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  margin: 0 -16px;
-  padding: 0 16px 4px;
+  /* Stay within the panel's 16px gutters (no edge-to-edge bleed); a small right
+     pad lets the last card breathe before the gutter. */
+  padding: 0 4px 6px 0;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -840,10 +844,27 @@ mark.hl {
   height: 100%;
   object-fit: cover;
   display: block;
+  /* Mute the photos so they sit inside the editorial palette instead of shouting. */
+  filter: saturate(0.62) brightness(0.9) contrast(1.02);
 }
 
-.rcard:active .rcard__img {
+.rcard:active .rcard__img,
+.rcard:focus-visible .rcard__img {
   border-color: var(--acid);
+}
+
+.rcard:focus-visible {
+  outline: none;
+}
+
+.rcard:focus-visible .rcard__img {
+  outline: 2px solid var(--acid);
+  outline-offset: 2px;
+}
+
+/* Lift the placeholder icon's contrast on the dark wall. */
+html[data-theme="dark"] .rcard__ph {
+  color: var(--ink-dim);
 }
 
 .rcard__ph {

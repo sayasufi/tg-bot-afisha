@@ -88,7 +88,8 @@ class RecommendationService:
         interests: list[str] | None,
         per_rail: int = _PER_RAIL,
     ) -> dict:
-        interests_set = {c for c in (interests or []) if c}
+        # Allowlist interests to known categories so junk can't pollute the cache key.
+        interests_set = {c for c in (interests or []) if c in _CATEGORY_LABELS}
         now = datetime.now(timezone.utc)
         today = now.astimezone(_MSK).date()
 
@@ -99,6 +100,7 @@ class RecommendationService:
                     round(lon, 2) if lon is not None else None,
                     sorted(interests_set),
                     today.isoformat(),
+                    per_rail,
                 ],
                 sort_keys=True,
             ).encode()
@@ -184,6 +186,8 @@ class RecommendationService:
             v = views.get(str(c["event_id"]), 0)
             pop = math.log1p(v) / pop_norm if max_views > 0 else 0.0
             created = c["created_at"]
+            if created is not None and created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
             age_days = (now - created).days if created else 30
             fresh = max(0.0, 1.0 - age_days / 14.0)
 
@@ -201,7 +205,8 @@ class RecommendationService:
         c = e["c"]
         return {
             "event_id": c["event_id"], "title": c["title"], "category": c["category"],
-            "date_start": c["date_start"], "date_end": c["date_end"], "price_min": c["price_min"],
+            "date_start": c["date_start"], "date_end": c["date_end"],
+            "price_min": float(c["price_min"]) if c["price_min"] is not None else None,
             "venue": c["venue"], "venue_hours": c["venue_hours"], "lat": c["lat"], "lon": c["lon"],
             "primary_image_url": c["cached_image_url"] or c["primary_image_url"] or None,
             "distance_m": round(e["dist_km"] * 1000) if e["dist_km"] is not None else None,
@@ -235,9 +240,10 @@ class RecommendationService:
         todays = [e for e in by_score if e["live"] or (e["ds"] <= today <= e["de"])]
         rails.append(self._rail("today", "Сегодня", None, todays, per_rail))
 
-        # "На выходных" — the upcoming Saturday/Sunday.
-        wd = today.weekday()
-        weekend = {today + timedelta(days=(5 - wd) % 7), today + timedelta(days=(6 - wd) % 7)}
+        # "На выходных" — the current-or-upcoming weekend as a contiguous Sat+Sun.
+        wd = today.weekday()  # Mon=0 … Sun=6
+        sat = today if wd == 5 else today - timedelta(days=1) if wd == 6 else today + timedelta(days=5 - wd)
+        weekend = {sat, sat + timedelta(days=1)}
         wkd = [e for e in by_score if (e["ds"] in weekend) or (min(weekend) <= e["de"] and e["ds"] <= max(weekend))]
         rails.append(self._rail("weekend", "На выходных", None, wkd, per_rail))
 
@@ -268,12 +274,19 @@ class RecommendationService:
 
         return [r for r in rails if r]
 
-    async def log_view(self, event_id: str) -> None:
+    async def log_view(self, event_id) -> None:
         client = _redis_client()
         if client is None:
             return
+        # Only count real, active events — so arbitrary UUIDs can't inflate the
+        # popularity hash (bounds its growth to the catalogue).
+        exists = await self.db.scalar(
+            select(Event.event_id).where(Event.event_id == event_id, Event.status == "active").limit(1)
+        )
+        if not exists:
+            return
         try:
-            await client.hincrby(_VIEWS_KEY, event_id, 1)
+            await client.hincrby(_VIEWS_KEY, str(event_id), 1)
         except Exception:  # pragma: no cover
             pass
 

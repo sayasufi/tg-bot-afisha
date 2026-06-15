@@ -19,11 +19,18 @@ function RecCard({ item, userPos, onSelect }: { item: RailItem; userPos?: LatLon
       : item.lat != null && item.lon != null
         ? distanceLabel(userPos, [item.lat, item.lon])
         : null;
+  const when = formatWhenShort(item.date_start, item.date_end);
   return (
-    <button type="button" className="rcard" style={{ "--cat": color } as CSSProperties} onClick={() => onSelect(item)}>
+    <button
+      type="button"
+      className="rcard"
+      style={{ "--cat": color } as CSSProperties}
+      aria-label={`${item.title}. ${when}${dist ? `. ${dist}` : ""}`}
+      onClick={() => onSelect(item)}
+    >
       <span className="rcard__img">
         {img ? (
-          <img src={img} alt="" loading="lazy" decoding="async" />
+          <img src={img} alt={item.title} loading="lazy" decoding="async" />
         ) : (
           <span className="rcard__ph">
             <CategoryIcon cat={item.category} size={30} />
@@ -33,7 +40,7 @@ function RecCard({ item, userPos, onSelect }: { item: RailItem; userPos?: LatLon
       </span>
       <span className="rcard__title">{item.title}</span>
       <span className="rcard__meta">
-        {formatWhenShort(item.date_start, item.date_end)}
+        {when}
         {dist ? ` · ${dist}` : ""}
       </span>
     </button>
