@@ -28,7 +28,7 @@ type Props = {
   metro: MetroPing | null;
   onSelect: (item: EventItem) => void;
   onCluster: (events: EventItem[]) => void;
-  onViewport: (bbox: Bbox, zoom: number) => void;
+  onZoom: (zoom: number) => void;
   onReady?: () => void;
 };
 
@@ -55,12 +55,14 @@ function ViewportReporter({ onChange }: { onChange: (bbox: Bbox, zoom: number) =
 }
 
 // Server-aggregated clusters (low zoom): one tap drills in toward detail zoom,
-// where the map switches to individual pins.
+// where the map switches to individual pins. Markers are memoised by the cluster
+// array so unrelated re-renders (pan, user-location ticks) never rebuild them —
+// rebuilding recreates each divIcon and makes the squares visibly flicker.
 function ServerClusters({ clusters }: { clusters: MapCluster[] }) {
   const map = useMap();
-  return (
-    <>
-      {clusters.map((c) => (
+  const markers = useMemo(
+    () =>
+      clusters.map((c) => (
         <Marker
           key={c.id}
           position={[c.lat, c.lon]}
@@ -72,9 +74,10 @@ function ServerClusters({ clusters }: { clusters: MapCluster[] }) {
               }),
           }}
         />
-      ))}
-    </>
+      )),
+    [clusters, map],
   );
+  return <>{markers}</>;
 }
 
 // Keep pins whose point falls in the viewport, padded by 30% so markers near the
@@ -98,7 +101,7 @@ export function EventsMap({
   metro,
   onSelect,
   onCluster,
-  onViewport,
+  onZoom,
   onReady,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -112,12 +115,15 @@ export function EventsMap({
   const detail = view != null && view.zoom >= DETAIL_ZOOM;
   const useServerClusters = clusterMode && !detail;
 
-  const onViewportRef = useRef(onViewport);
-  onViewportRef.current = onViewport;
+  const onZoomRef = useRef(onZoom);
+  onZoomRef.current = onZoom;
   const handleViewport = useMemo(
     () => (bbox: Bbox, zoom: number) => {
-      setView({ bbox, zoom });
-      onViewportRef.current(bbox, zoom);
+      onZoomRef.current(zoom);
+      // Skip the re-render when only the bbox changed at cluster zoom: clusters
+      // are whole-city, so panning needs no redraw. At detail zoom the bbox drives
+      // which pins render, so update there (and on any zoom change).
+      setView((prev) => (prev && prev.zoom === zoom && zoom < DETAIL_ZOOM ? prev : { bbox, zoom }));
     },
     [],
   );

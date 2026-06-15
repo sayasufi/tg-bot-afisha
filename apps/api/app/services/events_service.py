@@ -82,7 +82,9 @@ class EventQueryService:
     ):
         # "Показать N" = filter-wide count of map-able events (stable while panning).
         total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
-        if zoom is not None and bbox is not None and zoom < self._DETAIL_ZOOM:
+        # Below detail zoom → clusters. bbox is optional: the client aggregates over
+        # the WHOLE city (keyed on zoom only) so panning doesn't refetch/redraw.
+        if zoom is not None and zoom < self._DETAIL_ZOOM:
             clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q)
             return {"clusters": clusters, "items": [], "total": total}
         items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset)
@@ -109,9 +111,10 @@ class EventQueryService:
             .where(Event.status == "active", Venue.geom.is_not(None))
         )
         inner = self._apply_filters(inner, date_from, date_to, categories, price_min, price_max, q)
+        if bbox is not None:
+            inner = inner.where(self._bbox_clause(bbox))
         inner = (
-            inner.where(self._bbox_clause(bbox))
-            .distinct(Event.event_id)
+            inner.distinct(Event.event_id)
             .order_by(Event.event_id, EventOccurrence.date_start.asc())
             .subquery()
         )

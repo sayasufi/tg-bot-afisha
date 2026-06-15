@@ -23,7 +23,6 @@ const CITY = "Москва";
 // At/below this zoom the map shows server-aggregated clusters instead of pins.
 // Keep in sync with DETAIL_ZOOM in EventsMap / _DETAIL_ZOOM in the API service.
 const DETAIL_ZOOM = 14;
-type Viewport = { bbox: [number, number, number, number]; zoom: number };
 
 export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
@@ -33,7 +32,7 @@ export function App() {
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
   const [clusters, setClusters] = useState<MapCluster[]>([]);
-  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
   const [metro, setMetro] = useState<MetroStation[]>([]);
   const [selected, setSelected] = useState<EventItem | null>(null);
   const [peek, setPeek] = useState<EventItem[] | null>(null);
@@ -79,8 +78,10 @@ export function App() {
   // Server clustering is used unless the radius filter ("Рядом") is active — that
   // set is small and filtered client-side, so we pin it directly instead.
   const clusterMode = !(filters.radiusKm > 0 && !!userPos);
-  const onViewport = useCallback((bbox: [number, number, number, number], zoom: number) => {
-    setViewport({ bbox, zoom });
+  // Only the integer zoom drives clustering; the map reports it on zoomend.
+  // Reporting the same value is a no-op (React bails), so panning never refetches.
+  const onZoom = useCallback((z: number) => {
+    setZoom(z);
   }, []);
 
   // Favourite categories drive the "Для тебя" boost in recommendations.
@@ -150,19 +151,19 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, refreshNonce]);
 
-  // Low-zoom map markers: a tiny server-clustered payload (a few dozen points)
-  // keyed on the current viewport + filters. Re-runs as the map pans/zooms; at
-  // detail zoom (or with the radius filter on) we clear it and draw real pins.
+  // Low-zoom map markers: a small server-clustered payload aggregated over the
+  // WHOLE city, keyed on zoom + filters ONLY (not the viewport bbox). Panning at
+  // the same zoom must not refetch or redraw the clusters — only a zoom or filter
+  // change recomputes them (the grid cell size depends on zoom).
   useEffect(() => {
-    if (!viewport || !clusterMode || viewport.zoom >= DETAIL_ZOOM) {
+    if (zoom == null || !clusterMode || zoom >= DETAIL_ZOOM) {
       setClusters([]);
       return;
     }
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       const p = new URLSearchParams(query);
-      p.set("bbox", viewport.bbox.join(","));
-      p.set("zoom", String(viewport.zoom));
+      p.set("zoom", String(zoom));
       fetchMapEvents(p, ctrl.signal)
         .then((res) => setClusters(res.clusters))
         .catch((e) => {
@@ -173,7 +174,7 @@ export function App() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [viewport, query, clusterMode]);
+  }, [zoom, query, clusterMode]);
 
   // Telegram back button closes whatever is on top (sheet → panel → drawer).
   useEffect(() => {
@@ -336,7 +337,7 @@ export function App() {
           metro={nearMetro}
           onSelect={openEvent}
           onCluster={onCluster}
-          onViewport={onViewport}
+          onZoom={onZoom}
           onReady={handleMapReady}
         />
       </Suspense>
