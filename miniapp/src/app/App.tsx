@@ -214,10 +214,14 @@ export function App() {
   // user never sees a blank/initialising map (and no layout shift behind it).
   const handleMapReady = useCallback(() => {
     const splash = document.getElementById("splash");
-    if (splash) {
+    if (!splash || splash.dataset.lifting) return;
+    splash.dataset.lifting = "1";
+    // Let the first tiles + pins settle behind the splash, then lift — so the
+    // user sees a finished map, not the tail of its layout settling.
+    window.setTimeout(() => {
       splash.classList.add("hide");
       window.setTimeout(() => splash.remove(), 400);
-    }
+    }, 300);
   }, []);
 
   const toggleTheme = useCallback(() => {
