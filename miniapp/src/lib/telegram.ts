@@ -70,6 +70,11 @@ export function getSavedTheme(): ThemeName {
 // Apply a theme: set the document flag, match the Telegram chrome, and persist.
 export function applyTheme(theme: ThemeName): void {
   document.documentElement.dataset.theme = theme;
+  // Match the browser/OS chrome (status bar, address bar) to the theme. Inside
+  // Telegram setHeaderColor handles this; the <meta> covers plain-browser users,
+  // who otherwise got a hardcoded-light bar even in dark mode.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", CANVAS[theme]);
   const tg = getWebApp();
   try {
     tg?.setHeaderColor?.(CANVAS[theme]);
