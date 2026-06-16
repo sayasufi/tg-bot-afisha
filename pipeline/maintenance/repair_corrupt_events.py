@@ -54,11 +54,14 @@ def _find_corrupt(db):
         if rt and not same_event(ct, rt, level="fuzzy"):
             title_bad.add(k)
         rows = p.get("dates")
-        if isinstance(rows, list) and rows:
-            has_dates.add(k)
+        if isinstance(rows, list):
             for row in rows:
-                if isinstance(row, dict) and row.get("start"):
+                # Some payloads carry an unparseable session (epoch near 0 -> year
+                # 0001); the occurrence then legitimately comes from the candidate's
+                # own date, so such a "date" must not count as the source of truth.
+                if isinstance(row, dict) and row.get("start") and int(row["start"]) > 1577836800:
                     raw_starts[k].add(int(row["start"]))
+                    has_dates.add(k)
 
     occ_by_ev: dict = defaultdict(list)
     for eid, ts in db.execute(text(
