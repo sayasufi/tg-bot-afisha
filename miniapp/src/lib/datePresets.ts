@@ -8,7 +8,6 @@ export const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "tomorrow", label: "Завтра" },
   { key: "weekend", label: "Выходные" },
   { key: "week", label: "Неделя" },
-  { key: "month", label: "Месяц" },
 ];
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useMemo, useRef, type CSSProperties } from "react";
 
 import { CATEGORIES, categoryMeta } from "../../lib/categories";
 import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
@@ -29,7 +29,6 @@ type Props = {
 };
 
 export function Filters({ value, total, open, hasLocation, onOpenChange, onChange, onMenu }: Props) {
-  const [showCustomDates, setShowCustomDates] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0, value.goNow].filter(Boolean).length;
@@ -39,7 +38,6 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   };
   const shownTotal = useCountUp(total);
   const activePreset = matchPreset(value.dateFrom, value.dateTo);
-  const isCustomDates = (!!value.dateFrom || !!value.dateTo) && activePreset === null;
   const catLabel =
     value.categories.length === 0 ? "Все" : value.categories.length === 1 ? categoryMeta(value.categories[0]).label : `${value.categories.length} катег.`;
   const dateLabel = summarizeDate(value.dateFrom, value.dateTo);
@@ -55,12 +53,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   if (value.priceMax) activeChips.push({ key: "price", label: `до ${value.priceMax} ₽`, clear: () => onChange({ ...value, priceMax: "" }) });
   if (value.radiusKm > 0)
     activeChips.push({ key: "radius", label: `до ${String(value.radiusKm).replace(".", ",")} км`, clear: () => onChange({ ...value, radiusKm: 0 }) });
-  if (value.goNow) activeChips.push({ key: "gonow", label: "можно пойти", clear: () => onChange({ ...value, goNow: false }) });
-
-  // Reveal native date inputs when a custom range is already set.
-  useEffect(() => {
-    if (isCustomDates) setShowCustomDates(true);
-  }, [isCustomDates]);
+  if (value.goNow) activeChips.push({ key: "gonow", label: "сейчас", clear: () => onChange({ ...value, goNow: false }) });
 
   const openSheet = (focusSearch = false) => {
     haptic("light");
@@ -82,21 +75,21 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   const tapPreset = (key: PresetKey) => {
     hapticSelection();
     const next = activePreset === key ? { dateFrom: "", dateTo: "" } : rangeFor(key);
-    setShowCustomDates(false);
     onChange({ ...value, ...next });
   };
   const days = useMemo(() => nextDays(14), []);
   const activeDay = value.dateFrom && value.dateFrom === value.dateTo ? value.dateFrom : null;
   const tapDay = (iso: string) => {
     hapticSelection();
-    setShowCustomDates(false);
     onChange(activeDay === iso ? { ...value, dateFrom: "", dateTo: "" } : { ...value, dateFrom: iso, dateTo: iso });
   };
 
   return (
     <>
-      {/* Floating command pill — the only chrome over the map at rest. */}
-      <div className={`cmdpill${open ? " cmdpill--open" : ""}`}>
+      {/* Floating command pill — the only chrome over the map at rest. When the
+          "Сейчас" filter is on, the whole pill pulses cinnabar so it's unmistakable
+          the map is narrowed to catchable-now events. */}
+      <div className={`cmdpill${open ? " cmdpill--open" : ""}${value.goNow ? " cmdpill--live" : ""}`}>
         <button type="button" className="cmdpill__menu" aria-label="Меню" onClick={(e) => { e.stopPropagation(); onMenu(); }}>
           <IconMenu className="cmdpill__burger" size={18} />
           <span className="cmdpill__mark">
@@ -108,18 +101,6 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             {catLabel} · {dateLabel}
           </span>
           {advancedCount > 0 && <span className="cmdpill__badge">{advancedCount}</span>}
-        </button>
-        <button
-          type="button"
-          className={`cmdpill__live${value.goNow ? " cmdpill__live--on" : ""}`}
-          aria-label="Можно пойти сейчас"
-          aria-pressed={value.goNow}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleGoNow();
-          }}
-        >
-          <span className="cmdpill__live-dot" aria-hidden="true" />
         </button>
         <button type="button" className="cmdpill__search" aria-label="Поиск" onClick={() => openSheet(true)}>
           <IconSearch size={18} />
@@ -186,20 +167,13 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
               onClick={toggleGoNow}
             >
               <span className="chip__livedot" aria-hidden="true" />
-              Можно пойти
+              Сейчас
             </button>
             {PRESETS.map((p) => (
               <button key={p.key} type="button" className={`chip${activePreset === p.key ? " chip--active" : ""}`} onClick={() => tapPreset(p.key)}>
                 {p.label}
               </button>
             ))}
-            <button
-              type="button"
-              className={`chip${showCustomDates || isCustomDates ? " chip--active" : ""}`}
-              onClick={() => setShowCustomDates((v) => !v)}
-            >
-              Даты…
-            </button>
           </div>
 
           {/* Day-strip — pick a single day fast without the native picker. */}
@@ -217,19 +191,6 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
               </button>
             ))}
           </div>
-          {(showCustomDates || isCustomDates) && (
-            <div className="csheet__dates">
-              <label className="panel__field">
-                <span>С даты</span>
-                <input type="date" value={value.dateFrom} onChange={(e) => onChange({ ...value, dateFrom: e.target.value })} />
-              </label>
-              <label className="panel__field">
-                <span>По дату</span>
-                <input type="date" value={value.dateTo} onChange={(e) => onChange({ ...value, dateTo: e.target.value })} />
-              </label>
-            </div>
-          )}
-
           <span className="kicker">Категория</span>
           <div className="csheet__grid">
             <button type="button" className={`csheet__cat${value.categories.length === 0 ? " csheet__cat--active" : ""}`} onClick={() => pick("")}>
@@ -283,10 +244,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             <button
               type="button"
               className="csheet__reset"
-              onClick={() => {
-                onChange({ ...EMPTY_FILTERS });
-                setShowCustomDates(false);
-              }}
+              onClick={() => onChange({ ...EMPTY_FILTERS })}
             >
               Сбросить
             </button>
