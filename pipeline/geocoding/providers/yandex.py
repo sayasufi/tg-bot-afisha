@@ -37,13 +37,16 @@ class YandexGeocoder:
             first = members[0]["GeoObject"]
             pos = first["Point"]["pos"]
             lon, lat = [float(x) for x in pos.split(" ")]
+            meta = first.get("metaDataProperty", {}).get("GeocoderMetaData", {})
+            kind = meta.get("kind", "")
+            normalized_address = meta.get("text", "")
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             # Network error or an unexpected response shape — skip, never abort the
             # enrich batch on one bad geocode.
             return None
-        normalized_address = (
-            first.get("metaDataProperty", {})
-            .get("GeocoderMetaData", {})
-            .get("text", "")
-        )
+        # When Yandex can't resolve the query it returns the city/region itself (kind
+        # 'locality'/'area'/…) at the city centroid. Accepting that dumps every
+        # unresolved venue on one pin (the "Red Square pile"); treat it as no match.
+        if kind in {"locality", "area", "province", "country", "district"}:
+            return None
         return GeoResult(lat=lat, lon=lon, provider="yandex", confidence=0.9, normalized_address=normalized_address)
