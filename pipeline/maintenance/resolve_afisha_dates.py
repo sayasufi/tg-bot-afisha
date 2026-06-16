@@ -111,7 +111,11 @@ async def resolve(apply: bool, limit: int = _BATCH) -> dict:
                 # A leftover span, or an event stranded at the placeholder venue, must be
                 # rebuilt even if the date_starts already match (span range / wrong place).
                 has_span = any(o[6] is not None and (o[6] - o[1]) > 172800 for o in occs)
-                at_placeholder = any(o[0] in placeholder_ids for o in occs)
+                # Recover off the placeholder only if the schedule actually gives a real
+                # place to move to — otherwise rebuilding just re-pins it to the
+                # placeholder and it re-qualifies forever (oscillation).
+                recoverable = any((r.get("place_name") or "").strip() for r in rows)
+                at_placeholder = recoverable and any(o[0] in placeholder_ids for o in occs)
                 if not has_span and not at_placeholder and {int(o[1]) for o in occs} == {int(r["start"]) for r in rows}:
                     continue
                 # Fallback venue = the event's most common REAL (non-placeholder) venue,
