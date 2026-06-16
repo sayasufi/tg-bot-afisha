@@ -76,6 +76,15 @@ def merge_duplicate_events():
     return dedup._merge_events_impl()
 
 
+@flow(name="expire-past-events", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+def expire_past_events():
+    """Lifecycle: expire events whose last occurrence day has passed, revive any
+    that gained an upcoming one, so the app never shows what already happened."""
+    from scripts.expire_past_events import expire_past_events as _run
+
+    return _run(apply=True)
+
+
 @flow(name="self-heal-dedup", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
 def self_heal_dedup():
     """Runs frequently to close the small window where two sources put one event

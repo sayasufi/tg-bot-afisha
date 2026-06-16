@@ -27,6 +27,7 @@ _SCHEDULE = [
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.
     (flows.self_heal_dedup, 900),
+    (flows.expire_past_events, 3600),  # hourly — drop events whose day has passed
     (flows.backfill_venues_osm, 86400),
     (flows.resolve_venue_hours, 600),
     (flows.cache_event_images, 120),
