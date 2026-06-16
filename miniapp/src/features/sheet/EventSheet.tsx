@@ -136,9 +136,12 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
   const near = nearLabel(userPos, lat != null && lon != null ? [lat, lon] : null);
   const accession = `ОКР · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
-  // The soonest session drives the headline (`dates`); show every other upcoming
-  // session as a chip so a multi-date run isn't hidden behind its first date.
-  const moreDates = (detail?.occurrences ?? []).slice(1);
+  // The soonest session drives the headline (`dates`); show up to 3 more upcoming
+  // sessions as chips (4 dates total), then a compact "+N" for the rest, so a long
+  // recurring run isn't hidden behind its first date but doesn't flood the card.
+  const upcoming = detail?.occurrences ?? [];
+  const moreDates = upcoming.slice(1, 4);
+  const extraDates = Math.max(0, upcoming.length - 4);
   // When the event itself has no clock time, fall back to the venue's hours for
   // today ("сегодня 10:00–22:00") instead of implying it runs round the clock.
   const baseNote = whenTimeNote(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
@@ -230,12 +233,13 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
               {timeNote && <span className="dim"> · {timeNote}</span>}
             </span>
             {moreDates.length > 0 && (
-              <div className="sheet__dates" aria-label="Все даты">
+              <div className="sheet__dates" aria-label="Ближайшие даты">
                 {moreDates.map((o) => (
                   <span className="sheet__date-chip" key={o.occurrence_id}>
                     {formatDateChip(o.date_start)}
                   </span>
                 ))}
+                {extraDates > 0 && <span className="sheet__date-more">+{extraDates}</span>}
               </div>
             )}
           </div>

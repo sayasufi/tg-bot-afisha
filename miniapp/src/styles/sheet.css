@@ -223,18 +223,29 @@ html[data-theme="dark"] .sheet-veil {
 .sheet__dates {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 9px;
 }
 .sheet__date-chip {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: var(--ink-dim);
+  color: var(--ink);
   border: 1px solid var(--line-soft);
-  padding: 2px 7px;
+  padding: 3px 8px;
   white-space: nowrap;
+}
+/* "+N" tail when a recurring run has more than the 4 shown dates. */
+.sheet__date-more {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  padding: 0 2px;
 }
 
 /* legacy meta-row kept minimal in case of reuse */
