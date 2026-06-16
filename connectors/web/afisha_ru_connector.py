@@ -19,7 +19,7 @@ _IMPERSONATE = "chrome"
 # on tzdata being installed.
 _MSK = timezone(timedelta(hours=3))
 _LOOKAHEAD_DAYS = 365  # match the occurrence window; afisha lists ~a year ahead
-_DATES_CAP = 6
+_DATES_CAP = 12  # max discrete dates per event (a play's near-term run; not exhibitions)
 
 # afisha.ru serves no public JSON listing API (the web GraphQL is a persisted-
 # query allowlist; the mobile API signs requests). But every /<city>/schedule_*/
