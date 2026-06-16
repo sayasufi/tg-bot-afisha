@@ -28,7 +28,7 @@ export function MapController({
   useEffect(() => {
     if (locateNonce === 0 || locateNonce === lastLocate.current) return;
     lastLocate.current = locateNonce;
-    if (userPos) map.flyTo(userPos, Math.max(map.getZoom(), 15), { duration: 0.6 });
+    if (userPos) map.flyTo(userPos, Math.max(map.getZoom(), 16), { duration: 0.6 });
   }, [locateNonce, map, userPos]);
 
   return null;
