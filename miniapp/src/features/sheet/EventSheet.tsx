@@ -131,8 +131,8 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
       if (axis === "h") {
         sheet.style.transition = "transform 0.2s var(--ease-cut)";
         sheet.style.transform = "";
-        if (dx > 56) navRef.current(1); // swipe right → next
-        else if (dx < -56) navRef.current(-1); // swipe left → previous
+        if (dx > 56) navRef.current(-1); // swipe right → previous
+        else if (dx < -56) navRef.current(1); // swipe left → next
         window.setTimeout(() => (sheet.style.transition = ""), 210);
       } else if (axis === "v") {
         const dismiss = dy > 100;
