@@ -237,15 +237,16 @@ def _reverse_place(lat, lon) -> dict | None:
         return None
 
 
-def _match_hours(res, lat, lon, city_center, country):
+def _match_hours(res, lat, lon, city_center, country, region_radius_m):
     """(hours, relocate_to). ``hours`` = a real weekly schedule (not an all-week 24/7
     territory) or None. ``relocate_to`` = the matched org's coords when it's clearly
     the venue but the geocoder mis-pinned it near the FEED CITY — the real org sits
-    materially farther from the city centre and reverse-geocodes to the SAME country.
-    We then fix its coords. City-agnostic: anchored on the venue's OWN city centre
-    (``city_center``) and validated by reverse-geocode, so it works for any city. The
-    farther-from-centre + same-country guards mean a correctly placed venue is never
-    dragged onto a city namesake or a foreign one (the prior re-geocode incident)."""
+    materially farther from the city centre, INSIDE the city's region radius, and
+    reverse-geocodes to the SAME country. We then fix its coords. City-agnostic:
+    anchored on the venue's OWN city centre (``city_center``) and bounded by its
+    ``region_radius_m`` + same-country, so a venue is never dragged onto a same-name
+    org in ANOTHER city (e.g. a Moscow «Новодевичьи пруды» onto a St-Petersburg one)
+    or a foreign one (the prior re-geocode incident)."""
     if not res or not isinstance(res.get("hours"), dict):
         return None, None
     week = res["hours"].get("week")
@@ -262,12 +263,15 @@ def _match_hours(res, lat, lon, city_center, country):
     place = _reverse_place(coords[0], coords[1])
     if not place or (country and place.get("country_code") and place["country_code"] != country):
         return None, None  # far + foreign / unknown → wrong business, drop
-    if _dist_m(city_center, coords) - _dist_m(city_center, (lat, lon)) > 20000:
+    out_match = _dist_m(city_center, coords)
+    if out_match > region_radius_m:
+        return None, None  # outside the city's region → a same-name org elsewhere, drop
+    if out_match - _dist_m(city_center, (lat, lon)) > 20000:
         return hours, (float(coords[0]), float(coords[1]))  # real org ≥20 km farther out → fix pin
     return None, None  # far but toward the city → likely a namesake, drop
 
 
-def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city_hint, city_center, country):
+def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city_hint, city_center, country, region_radius_m):
     """Best real weekly hours for a venue + an optional coords fix. Tries the venue
     name (+address), then — if that only yields a 24/7 territory / wrong business —
     RETRIES with the event title prepended, which pulls the specific hall/museum.
@@ -287,7 +291,7 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city_hint, ci
             res = asyncio.run(scraper.fetch_hours(q, city_hint))
         except Exception:
             res = None
-        hours, relocate = _match_hours(res, lat, lon, city_center, country)
+        hours, relocate = _match_hours(res, lat, lon, city_center, country, region_radius_m)
         if hours:
             return hours, relocate
         time.sleep(0.8)  # polite between tries
@@ -326,7 +330,7 @@ def _resolve_venue_hours_impl(limit: int = 15):
             # hint, the centre the relocation guard anchors on, and the country.
             cc = city_by_name(vcity) or DEFAULT_CITY
             hours, relocate = _resolve_hours_for(
-                scraper, name, address, lat, lon, ev_title, vcity or cc.name, cc.center, cc.country
+                scraper, name, address, lat, lon, ev_title, vcity or cc.name, cc.center, cc.country, cc.region_radius_km * 1000
             )
             if hours:
                 stored += 1
