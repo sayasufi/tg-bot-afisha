@@ -1,17 +1,16 @@
-"""Fill in the exact session dates for afisha SPARSE events.
+"""Fill exact session dates for afisha events that are NOT on Yandex.
 
-The afisha listing carries only Min/Max + SessionsCount, so a sparse run (a few
-discrete shows across weeks) lands as a coarse occurrence. This job fetches the
-performance detail page ONCE per such event (`Schedule[].Sessions[].DateTime`) and
-rebuilds its occurrences to the real dates, keeping event_id/sources/venue.
+Yandex's GraphQL already returns every session date in bulk (one cheap paginated
+feed per city), so the vast majority of events get their full dates for free — see
+yandex_afisha_connector. The only gap is events that exist *only* on afisha.ru,
+whose listing carries just Min/Max + a count. For those — and only the multi-show,
+non-exhibition ones (a few hundred, not the whole feed) — we ask afisha's own
+GraphQL API (graph.afisha.ru, one light JSON call per event, no captcha, reachable
+straight from the server IP) for the discrete dates and rebuild the occurrences.
 
-Idempotent and bounded:
-  * only afisha events with a *sparse* session count (2..6) and fewer stored
-    occurrences than sessions (or a multi-day span) are candidates — once resolved
-    they match and are skipped, so steady-state cost is just new sparse events;
-  * dense runs (many sessions) keep the cheap listing span and are never fetched;
-  * at most ``_BATCH`` events per run, so the initial backlog drains over a few
-    runs and no single run hammers afisha.
+Strictly bounded and idempotent: only afisha-only multi-session shows, capped per
+run, a short polite delay between calls, and an event already matching its API
+dates is skipped. Any fetch failure just leaves the listing Min/Max in place.
 
 Run:  docker compose -p tg-bot-afisha exec -T prefect-serve python -m pipeline.maintenance.resolve_afisha_dates
 """
@@ -25,9 +24,12 @@ from sqlalchemy import text
 from connectors.web.afisha_ru_connector import AfishaRuConnector
 from core.db.session import SessionLocal
 
-_BATCH = 200
+_BATCH = 150  # events per run — the GraphQL API is light + captcha-free, so we can move faster
+_DELAY = 0.4  # polite gap between API calls (seconds)
 _MSK = timezone(timedelta(hours=3))
 
+# afisha-ONLY (no Yandex source) multi-session non-exhibition shows that have fewer
+# stored dates than the detail can give (capped at 12), or a leftover span.
 _CANDIDATES = """
 select e.event_id, max(es.source_event_url) as url
 from events.events e
@@ -35,16 +37,19 @@ join events.event_occurrences o on o.event_id = e.event_id
 join events.event_sources es on es.event_id = e.event_id
 join ref.sources s on s.source_id = es.source_id
 join events.raw_events r on r.raw_id = es.raw_id
-where e.status = 'active' and s.name = 'afisha_ru'
-  and e.category <> 'exhibition'  -- exhibitions stay a continuous span, not daily pins
+where e.status = 'active' and s.name = 'afisha_ru' and e.category <> 'exhibition'
   and es.source_event_url like '%afisha.ru/%'
+  and not exists (
+    select 1 from events.event_sources es2 join ref.sources s2 on s2.source_id = es2.source_id
+    where es2.event_id = e.event_id and s2.name = 'yandex_afisha'
+  )
 group by e.event_id
 having
-  -- a leftover [min,max] span renders as a misleading range -> always resolve it,
-  bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
-  -- or we have fewer discrete dates than the detail can give (capped at 12)
-  or ( coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0) >= 2
-       and count(distinct o.occurrence_id) < least(coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0), 12) )
+  coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0) > 2
+  and (
+    count(distinct o.occurrence_id) < least(coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0), 12)
+    or bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
+  )
 limit :lim
 """
 
@@ -62,17 +67,16 @@ async def resolve(apply: bool, limit: int = _BATCH) -> dict:
         cands = db.execute(text(_CANDIDATES), {"lim": limit}).all()
         async with conn._session() as session:
             for eid, url in cands:
-                rows = await conn._detail_sessions(session, url, today)
+                rows = await conn._graphql_schedule(session, url, today)
                 fetched += 1
-                await asyncio.sleep(conn._PAGE_DELAY * 0.4)
+                await asyncio.sleep(_DELAY)  # polite — never burst
                 if not rows:
                     continue
                 occs = db.execute(text(_OCCS), {"e": str(eid)}).all()
                 if not occs:
                     continue
-                new_starts = {int(r["start"]) for r in rows}
-                if {int(o[1]) for o in occs} == new_starts:
-                    continue  # already matches
+                if {int(o[1]) for o in occs} == {int(r["start"]) for r in rows}:
+                    continue
                 venue = Counter(o[0] for o in occs if o[0] is not None).most_common(1)
                 venue_id = venue[0][0] if venue else occs[0][0]
                 tmpl = next((o for o in occs if o[0] == venue_id), occs[0])
@@ -95,8 +99,7 @@ async def resolve(apply: bool, limit: int = _BATCH) -> dict:
 
 
 def main(apply: bool) -> None:
-    result = asyncio.run(resolve(apply))
-    print(("APPLIED" if apply else "DRY RUN (rolled back)") + ": " + str(result))
+    print(("APPLIED" if apply else "DRY RUN (rolled back)") + ": " + str(asyncio.run(resolve(apply))))
 
 
 if __name__ == "__main__":

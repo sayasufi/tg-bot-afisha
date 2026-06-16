@@ -3,6 +3,7 @@ import html as html_lib
 import json
 import random
 import re
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 from curl_cffi.requests import AsyncSession
@@ -34,6 +35,25 @@ _DEFAULT_RUBRICS: list[tuple[str, str]] = [
 ]
 
 _ROOT_RE = re.compile(r"\['root'\]\s*=\s*")
+
+# Exact session dates come from afisha's GraphQL API (graph.afisha.ru) — the SAME
+# data the detail page's schedule tab renders, but as light JSON (~1-2 KB), with no
+# anti-bot challenge, and reachable straight from a datacenter IP. www.afisha.ru
+# serves a captcha to cloud IPs (hence the listing crawl's TLS impersonation), but
+# the API does not. One call per event returns every session (date/time/place), so
+# a multi-show run or a touring concert comes back in full at once — no per-event
+# HTML fetch, no hammering. Operations are content-type specific; the persisted-
+# query hash is pinned per operation and matches the live site. If afisha
+# re-versions a query the hash 404s ("PersistedQueryNotFound") and we fall back to
+# the listing Min/Max — refresh the hash from the site's Network tab if that starts.
+_GRAPHQL_URL = "https://graph.afisha.ru/graphql"
+# url-path segment -> (operationName, persisted sha256, global-id type prefix, extra vars)
+_SCHED_OPS: dict[str, tuple[str, str, str, dict]] = {
+    "performance": ("PerformanceSchedule", "4618305c1597e017f91c42e11c827ec4b95e2a839b18b76854344445c0e6722e", "Performance", {}),
+    "concert": ("ConcertSchedule", "de158ba260e7085dea19ff9d62b14a2a1bea7c7fdb42ad6aa1d508c445fedfe7", "Concert", {"strategyType": "PREFER_CURRENT_CITY"}),
+}
+_AFISHA_CITY_ID = "2"  # Москва (City_2). Concert schedules span many cities; keep only this one.
+_URL_ID_RE = re.compile(r"afisha\.ru/([a-z_]+)/[^/?#]*?(\d+)/?(?:[?#]|$)")
 
 
 class AfishaRuConnector:
@@ -230,7 +250,7 @@ class AfishaRuConnector:
         # Fast: listing fields only (Min/Max + count). The listing has no discrete
         # dates, so a sparse run yields its first/last dates here; the exact middle
         # dates are filled later by the idempotent resolve_afisha_dates job (one
-        # detail fetch per event, once) — never a detail fetch on every scan.
+        # graph.afisha.ru call per event, once) — never an extra fetch on every scan.
         records: list[RawRecord] = []
         for item in items:
             if not isinstance(item, dict):
@@ -272,27 +292,55 @@ class AfishaRuConnector:
             records.append(RawRecord(external_id=str(event_id), payload=payload, raw_text=self._raw_text(payload)))
         return records
 
-    async def _detail_sessions(self, session: AsyncSession, url: str, today) -> list[dict] | None:
-        """The exact session dates from a performance's detail page (`Schedule[].
-        Sessions[].DateTime`). The listing only carries min/max + a count, so a
-        sparse run would otherwise show as a span. Returns None on any failure so
-        the caller keeps the listing dates."""
-        if not url:
+    def _schedule_url(self, kind: str, num: str, city_id: str) -> str | None:
+        """Build the graph.afisha.ru persisted-query URL for one event's schedule."""
+        op = _SCHED_OPS.get(kind)
+        if not op:
+            return None
+        operation, sha, prefix, extra = op
+        ext = json.dumps(
+            {"persistedQuery": {"version": 1, "sha256Hash": sha},
+             "headers": {"X-Platform": "Web", "X-Application": "Afisha", "X-Afisha-City-ID": city_id}},
+            separators=(",", ":"), ensure_ascii=False,
+        )
+        variables = json.dumps({"id": f"{prefix}_{num}", **extra}, separators=(",", ":"), ensure_ascii=False)
+        params = urllib.parse.urlencode({"extensions": ext, "operationName": operation, "variables": variables})
+        return f"{_GRAPHQL_URL}?{params}"
+
+    async def _graphql_schedule(self, session: AsyncSession, url: str, today, city_id: str = _AFISHA_CITY_ID) -> list[dict] | None:
+        """Every real session date for one event, from afisha's GraphQL API. Replaces
+        the listing's Min/Max span with the discrete dates (in ``city_id`` only, so a
+        touring concert keeps just its Moscow shows). Returns None on any failure —
+        unknown url shape, network error, re-versioned query — so the caller keeps the
+        listing dates rather than wiping them."""
+        m = _URL_ID_RE.search(url or "")
+        if not m:
+            return None
+        gurl = self._schedule_url(m.group(1), m.group(2), city_id)
+        if not gurl:
             return None
         try:
-            response = await self._get(session, url, attempts=self._RETRY_ATTEMPTS)
-            schedule = self._extract_model(response.text).get("Schedule")
-        except HTTPError:
+            response = await self._get(session, gurl, attempts=self._RETRY_ATTEMPTS)
+            data = response.json()
+        except (HTTPError, ValueError):
             return None
+        node = ((data or {}).get("data") or {}).get(m.group(1))
+        schedule = node.get("schedule") if isinstance(node, dict) else None
         if not isinstance(schedule, list):
             return None
+        want_city = f"City_{city_id}" if city_id else None
         horizon = today + timedelta(days=_LOOKAHEAD_DAYS)
         rows: list[dict] = []
         seen: set[int] = set()
         for grp in schedule:
-            sessions = grp.get("Sessions") if isinstance(grp, dict) else None
-            for sess in sessions if isinstance(sessions, list) else []:
-                dt = self._parse_dt(sess.get("DateTime")) if isinstance(sess, dict) else None
+            if not isinstance(grp, dict):
+                continue
+            place = grp.get("place") if isinstance(grp.get("place"), dict) else {}
+            pcity = (place.get("city") or {}).get("id") if isinstance(place.get("city"), dict) else None
+            if want_city and pcity and pcity != want_city:
+                continue  # touring show — drop sessions outside the target city
+            for sess in grp.get("sessions") or []:
+                dt = self._parse_dt(sess.get("dateTime")) if isinstance(sess, dict) else None
                 if not dt or dt.date() < today or dt.date() > horizon:
                     continue
                 ts = int(dt.timestamp())
@@ -322,7 +370,8 @@ class AfishaRuConnector:
 
         # Everything else (shows, concerts) is DISCRETE — never a span, which renders
         # as a misleading range ("14 июля — 27 сентября" for 3 performances). The
-        # listing only knows first/last; resolve_afisha_dates fills the middle ones.
+        # listing only knows first/last; resolve_afisha_dates fills the middle ones
+        # from the GraphQL API.
         rows: list[dict] = []
         for dt in (start_dt, end_dt):
             if not dt:

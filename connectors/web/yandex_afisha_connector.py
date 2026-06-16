@@ -17,7 +17,10 @@ _IMPERSONATE = "chrome"
 # Moscow is a fixed UTC+3 the whole year (no DST since 2014) — use a plain offset
 # so we don't depend on the tzdata package being present in every environment.
 _MSK = timezone(timedelta(hours=3))
-_LOOKAHEAD_DAYS = 30
+# A year — Yandex's scheduleInfo.dates already lists every session date in bulk; a
+# short window dropped the far ones (a play's September dates), which is exactly the
+# discrete-date data the afisha detail page was being hammered per-event for.
+_LOOKAHEAD_DAYS = 365
 # Open-ended sentinel for `permanent` events: an end far enough out that the UI's
 # ">now+5y" rule renders it as "постоянно" (mirrors KudaGo's open-ended handling).
 _FAR_FUTURE_TS = int(datetime(2099, 1, 1, tzinfo=timezone.utc).timestamp())
@@ -58,7 +61,7 @@ class YandexAfishaConnector:
     """
 
     source_name = "yandex_afisha"
-    _DATES_CAP = 8
+    _DATES_CAP = 12
     _DESC_CHUNK = 25  # event ids per batched description request
     _SCHED_CHUNK = 12  # event ids per batched schedule request
     _CONCURRENCY = 5  # max in-flight sub-query requests per page (politeness vs speed)

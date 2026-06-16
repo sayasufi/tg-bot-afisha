@@ -87,9 +87,8 @@ def expire_past_events():
 
 @flow(name="resolve-afisha-dates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
 async def resolve_afisha_dates():
-    """Fill exact session dates for sparse afisha events from their detail pages.
-    Idempotent + capped, so it touches only the backlog and new sparse events —
-    never a detail fetch on every listing scan."""
+    """Fill exact dates for afisha-ONLY multi-show events (Yandex covers the rest in
+    bulk). Small, polite, idempotent — only the few hundred events not on Yandex."""
     from pipeline.maintenance.resolve_afisha_dates import resolve
 
     return await resolve(apply=True)

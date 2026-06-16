@@ -16,3 +16,6 @@ celerybeat-schedule
 
 # Personal browser cookie export — never commit
 cookies.txt
+
+# Playwright MCP browser scratch
+.playwright-mcp/
