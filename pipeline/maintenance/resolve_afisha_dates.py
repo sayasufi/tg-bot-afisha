@@ -36,6 +36,7 @@ join events.event_sources es on es.event_id = e.event_id
 join ref.sources s on s.source_id = es.source_id
 join events.raw_events r on r.raw_id = es.raw_id
 where e.status = 'active' and s.name = 'afisha_ru'
+  and e.category <> 'exhibition'  -- exhibitions stay a continuous span, not daily pins
   and es.source_event_url like '%afisha.ru/%'
 group by e.event_id
 having

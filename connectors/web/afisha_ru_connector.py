@@ -241,7 +241,7 @@ class AfishaRuConnector:
             title = tile.get("Name")
             if not event_id or not title:
                 continue
-            dates = self._build_dates(tile.get("ScheduleInfo"), tile.get("Notice"), today)
+            dates = self._build_dates(tile.get("ScheduleInfo"), tile.get("Notice"), today, is_exhibition=(category == "exhibition"))
             if not dates:
                 continue  # nothing upcoming in the window
             sched = tile.get("ScheduleInfo") if isinstance(tile.get("ScheduleInfo"), dict) else {}
@@ -303,17 +303,26 @@ class AfishaRuConnector:
         rows.sort(key=lambda r: r["start"])
         return rows[:_DATES_CAP] or None
 
-    def _build_dates(self, schedule: object, notice: object, today) -> list[dict]:
+    def _build_dates(self, schedule: object, notice: object, today, is_exhibition: bool = False) -> list[dict]:
         sched = schedule if isinstance(schedule, dict) else {}
         horizon = today + timedelta(days=_LOOKAHEAD_DAYS)
         start_dt = self._parse_dt(sched.get("MinScheduleDate"))
         end_dt = self._parse_dt(sched.get("MaxScheduleDate"))
 
-        # NEVER emit a [min,max] span — a span renders as a misleading date range
-        # ("1 сентября — 30 сентября") in the card. The listing only knows the first
-        # and last dates, so emit those as discrete dates here; resolve_afisha_dates
-        # later fills the middle ones from the detail page. Better to show partial
-        # real dates than a range.
+        # A continuous EXHIBITION is one open-ended run — keep it as a single span
+        # ("до 30 сентября"), not a list of daily pins.
+        if is_exhibition and start_dt and end_dt and (end_dt.date() - start_dt.date()) > timedelta(days=1):
+            if end_dt.date() < today:
+                return []
+            run_start = start_dt if start_dt.date() >= today else datetime(today.year, today.month, today.day, tzinfo=_MSK)
+            return [{
+                "start": int(run_start.timestamp()), "end": int(end_dt.timestamp()),
+                "start_date": run_start.date().isoformat(), "start_time": "00:00:00",
+            }]
+
+        # Everything else (shows, concerts) is DISCRETE — never a span, which renders
+        # as a misleading range ("14 июля — 27 сентября" for 3 performances). The
+        # listing only knows first/last; resolve_afisha_dates fills the middle ones.
         rows: list[dict] = []
         for dt in (start_dt, end_dt):
             if not dt:
