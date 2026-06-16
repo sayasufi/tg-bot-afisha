@@ -148,6 +148,14 @@ export function venueHoursToday(
   return ranges ? `сегодня ${ranges}` : null;
 }
 
+// One session as a compact chip for the sheet's "all dates" list: "17 июн, 19:00"
+// (or just "17 июн" with no clock time). Year only when it isn't the current one.
+export function formatDateChip(startIso?: string | null, now: Date = new Date()): string {
+  const s = parse(startIso);
+  if (!s) return "";
+  return dmy(s, s.getFullYear() !== now.getFullYear(), true) + (isMidnight(s) ? "" : `, ${hm(s)}`);
+}
+
 // Compact format for list rows / ticker (short months).
 export function formatWhenShort(startIso?: string | null, endIso?: string | null, now: Date = new Date()): string {
   const s = parse(startIso);

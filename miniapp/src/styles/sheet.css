@@ -219,6 +219,24 @@ html[data-theme="dark"] .sheet-veil {
   flex-direction: column;
 }
 
+/* All other upcoming sessions, as mono chips under the headline date. */
+.sheet__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.sheet__date-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  border: 1px solid var(--line-soft);
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
 /* legacy meta-row kept minimal in case of reuse */
 .meta-row {
   display: flex;
