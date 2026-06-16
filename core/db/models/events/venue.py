@@ -1,5 +1,7 @@
+from datetime import datetime
+
 from geoalchemy2 import Geography
-from sqlalchemy import Index, JSON, String, UniqueConstraint
+from sqlalchemy import DateTime, Index, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db.base import Base
@@ -26,5 +28,8 @@ class Venue(Base, TimestampMixin):
     # {"text": "пн-чт 09:00–18:00; …", "week": [day0..day6]} where day = list of
     # ["HH:MM","HH:MM"] ranges or null (closed); index 0=Sunday (JS getDay).
     hours_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # When hours were last resolved (real or empty). Lets the flow re-check stale
+    # empty results, so resolver improvements / transient failures self-heal.
+    hours_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     occurrences = relationship("EventOccurrence", back_populates="venue")

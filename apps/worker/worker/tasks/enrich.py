@@ -271,13 +271,19 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city) -> dict
     return {}  # "checked, nothing usable" → stamped so we don't re-query
 
 
+# Process never-resolved venues (hours_json IS NULL) AND re-check stale EMPTY ones
+# ({} older than the staleness window) — so an improved resolver, a venue that
+# gained hours, or a transient Yandex failure all self-heal without manual work.
+# Never-checked first, then oldest. Venues WITH real hours are left alone.
 _VENUE_HOURS_QUERY = (
     "SELECT v.venue_id, v.name, v.address, ST_Y(v.geom::geometry) AS lat, ST_X(v.geom::geometry) AS lon, "
     "(SELECT e.canonical_title FROM events.event_occurrences o JOIN events.events e ON e.event_id = o.event_id "
     " WHERE o.venue_id = v.venue_id AND e.status = 'active' "
     " ORDER BY e.popularity_score DESC NULLS LAST, o.date_start LIMIT 1) AS ev_title "
-    "FROM events.venues v WHERE v.geom IS NOT NULL AND v.name <> '' AND v.hours_json IS NULL "
-    "ORDER BY v.venue_id LIMIT :lim"
+    "FROM events.venues v WHERE v.geom IS NOT NULL AND v.name <> '' AND ("
+    "  v.hours_json IS NULL"
+    "  OR (v.hours_json::text = '{}' AND (v.hours_checked_at IS NULL OR v.hours_checked_at < now() - interval '30 days'))"
+    ") ORDER BY v.hours_checked_at ASC NULLS FIRST, v.venue_id LIMIT :lim"
 )
 
 
@@ -298,7 +304,7 @@ def _resolve_venue_hours_impl(limit: int = 15):
             if hours:
                 stored += 1
             db.execute(
-                text("UPDATE events.venues SET hours_json = CAST(:h AS JSON) WHERE venue_id = :v"),
+                text("UPDATE events.venues SET hours_json = CAST(:h AS JSON), hours_checked_at = now() WHERE venue_id = :v"),
                 {"h": json.dumps(hours, ensure_ascii=False), "v": vid},
             )
             db.commit()
