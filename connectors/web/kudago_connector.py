@@ -17,7 +17,9 @@ class KudaGoConnector:
         "dates,place,location,site_url,images,price,age_restriction,categories,tags"
     )
     _BODY_TEXT_LIMIT = 12000
-    _LOOKAHEAD_DAYS = 30
+    # Match the other sources (Yandex/afisha list ~a year ahead). At 30 days KudaGo
+    # surfaced only a few hundred events vs thousands from the others.
+    _LOOKAHEAD_DAYS = 365
 
     def __init__(self, location: str = "msk", page_size: int = 100) -> None:
         self.settings = get_settings()
@@ -116,8 +118,8 @@ class KudaGoConnector:
                 continue
             start_dt = self._safe_ts_to_dt(item.get("start"))
             end_dt = self._safe_ts_to_dt(item.get("end"))
-            # Keep events relevant for the next 30 days:
-            # - normal case: known start within [now; now+30d]
+            # Keep events relevant within the lookahead window:
+            # - normal case: known start within [now; now+lookahead]
             # - ongoing case: started earlier but still active now/soon (end in window)
             # - sentinel case: invalid start but valid end in window
             if start_dt and now <= start_dt <= until:
