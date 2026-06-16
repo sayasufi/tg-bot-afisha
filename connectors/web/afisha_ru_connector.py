@@ -153,7 +153,7 @@ class AfishaRuConnector:
         items = widget.get("Items") if isinstance(widget.get("Items"), list) else []
         pager = widget.get("Pager") if isinstance(widget.get("Pager"), dict) else {}
         total_pages = int(pager.get("PagesCount") or 1)
-        records = self._build_records(items, category, today)
+        records = await self._build_records(session, items, category, today)
         return records, total_pages, len(items)
 
     async def fetch(self, cursor: str | None = None) -> tuple[list[RawRecord], str | None]:
@@ -226,7 +226,7 @@ class AfishaRuConnector:
 
     # --- record building ---------------------------------------------------
 
-    def _build_records(self, items: list, category: str, today) -> list[RawRecord]:
+    async def _build_records(self, session: AsyncSession, items: list, category: str, today) -> list[RawRecord]:
         records: list[RawRecord] = []
         for item in items:
             if not isinstance(item, dict):
@@ -237,9 +237,22 @@ class AfishaRuConnector:
             title = tile.get("Name")
             if not event_id or not title:
                 continue
-            dates = self._build_dates(tile.get("ScheduleInfo"), tile.get("Notice"), today)
+            sched = tile.get("ScheduleInfo") if isinstance(tile.get("ScheduleInfo"), dict) else {}
+            dates = self._build_dates(sched, tile.get("Notice"), today)
             if not dates:
                 continue  # nothing upcoming in the window
+            # A sparse run (a few shows across weeks) only carries min/max in the
+            # listing, which reads as a misleading span — fetch the detail page for
+            # the exact session dates. Bounded to sparse events to limit requests.
+            sessions = int(sched.get("SessionsCount") or 0)
+            s_dt = self._parse_dt(sched.get("MinScheduleDate"))
+            e_dt = self._parse_dt(sched.get("MaxScheduleDate"))
+            span = (e_dt.date() - s_dt.date()).days if (s_dt and e_dt) else 0
+            if span > 1 and 3 <= sessions < span * 0.5:
+                detail = await self._detail_sessions(session, self._abs_url(tile.get("Url")), today)
+                await asyncio.sleep(self._PAGE_DELAY * 0.4 + random.random() * self._PAGE_JITTER)
+                if detail:
+                    dates = detail
             price_text, is_free = self._price(tile.get("ScheduleInfo"))
             payload = {
                 "id": event_id,
@@ -262,6 +275,37 @@ class AfishaRuConnector:
             }
             records.append(RawRecord(external_id=str(event_id), payload=payload, raw_text=self._raw_text(payload)))
         return records
+
+    async def _detail_sessions(self, session: AsyncSession, url: str, today) -> list[dict] | None:
+        """The exact session dates from a performance's detail page (`Schedule[].
+        Sessions[].DateTime`). The listing only carries min/max + a count, so a
+        sparse run would otherwise show as a span. Returns None on any failure so
+        the caller keeps the listing dates."""
+        if not url:
+            return None
+        try:
+            response = await self._get(session, url, attempts=self._RETRY_ATTEMPTS)
+            schedule = self._extract_model(response.text).get("Schedule")
+        except HTTPError:
+            return None
+        if not isinstance(schedule, list):
+            return None
+        horizon = today + timedelta(days=_LOOKAHEAD_DAYS)
+        rows: list[dict] = []
+        seen: set[int] = set()
+        for grp in schedule:
+            sessions = grp.get("Sessions") if isinstance(grp, dict) else None
+            for sess in sessions if isinstance(sessions, list) else []:
+                dt = self._parse_dt(sess.get("DateTime")) if isinstance(sess, dict) else None
+                if not dt or dt.date() < today or dt.date() > horizon:
+                    continue
+                ts = int(dt.timestamp())
+                if ts in seen:
+                    continue
+                seen.add(ts)
+                rows.append({"start": ts, "end": None, "start_date": dt.date().isoformat(), "start_time": dt.strftime("%H:%M:%S")})
+        rows.sort(key=lambda r: r["start"])
+        return rows[:_DATES_CAP] or None
 
     def _build_dates(self, schedule: object, notice: object, today) -> list[dict]:
         sched = schedule if isinstance(schedule, dict) else {}
