@@ -81,10 +81,10 @@ async def _fetch_kudago_full_scan_impl() -> dict:
                 await bulk_upsert_raw_events(db, source.source_id, records)
                 total_fetched += len(records)
 
-                # Connector keeps only in-window events; empty page means we can stop the scan.
-                if not records:
-                    stop_reason = "no_in_window_records"
-                    break
+                # Don't stop just because THIS page had no in-window events — with
+                # -publication_date ordering a far-future event published long ago
+                # sits on a deep page behind pages of already-passed events. Page
+                # only until the API itself runs out (cursor stops advancing).
                 if next_cursor == cursor:
                     stop_reason = "cursor_stable"
                     break
