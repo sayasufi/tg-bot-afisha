@@ -102,7 +102,13 @@ def self_heal_dedup():
     near-instant when there is nothing to merge."""
     venues = dedup._merge_venues_impl()
     events = dedup._merge_events_impl()
-    return {"venues": venues, "events": events}
+    # Then split events that (now) span >1 physical place — the per-session venue
+    # assignment in resolve_afisha_dates makes a touring show one event with several
+    # venues, which must become one event per venue. Idempotent once split.
+    from pipeline.maintenance.resplit import resplit
+
+    split = resplit(apply=True)
+    return {"venues": venues, "events": events, "resplit": split}
 
 
 # --- enrichment side-jobs ----------------------------------------------------
