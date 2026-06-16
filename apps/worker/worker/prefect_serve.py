@@ -24,6 +24,7 @@ _SCHEDULE = [
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),
     (flows.merge_duplicate_venues, 21600),  # 6h — collapse near-dup venues
+    (flows.merge_duplicate_events, 21600),  # 6h — collapse cross-source dup events (safe tier)
     (flows.backfill_venues_osm, 86400),
     (flows.resolve_venue_hours, 600),
     (flows.cache_event_images, 120),

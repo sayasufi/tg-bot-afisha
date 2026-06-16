@@ -61,3 +61,14 @@ def _merge_venues_impl() -> dict:
     from scripts.merge_venues_fuzzy import merge_fuzzy_venues
 
     return merge_fuzzy_venues(apply=True)
+
+
+def _merge_events_impl() -> dict:
+    """Periodic self-heal for duplicate *events*: collapse cross-source records
+    that share a Moscow day + venue/title-key and are the same event by title
+    (safe tier only — exact / transliterated / punctuation-normalised; the fuzzy
+    subset tier is left to a reviewed one-off, never merged unattended). Idempotent.
+    """
+    from scripts.merge_duplicate_events import merge_duplicate_events
+
+    return merge_duplicate_events(apply=True, fuzzy=False)

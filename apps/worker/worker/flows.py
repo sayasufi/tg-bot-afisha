@@ -71,6 +71,11 @@ def merge_duplicate_venues():
     return dedup._merge_venues_impl()
 
 
+@flow(name="merge-duplicate-events", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+def merge_duplicate_events():
+    return dedup._merge_events_impl()
+
+
 # --- enrichment side-jobs ----------------------------------------------------
 
 @flow(name="backfill-venues-osm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
