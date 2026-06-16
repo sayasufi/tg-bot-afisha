@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import re
 import time
 
 from sqlalchemy import func, text
@@ -21,6 +22,26 @@ from core.db.session import SessionLocal, WorkerAsyncSessionLocal
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.geocoding.service import GeocodingService
 from pipeline.llm.service import LLMService
+
+
+_UNKNOWN_VENUE = "Unknown venue"  # placeholder when a source gives no venue name
+
+
+def _is_city_level_only(address: str, city: str, country: str) -> bool:
+    """True if the address has no street-level info — just the city and/or country
+    ("Москва", "Россия, Москва"). Geocoding such a string only ever returns the city
+    CENTROID, which dumps every venue-less event onto one fake pin in the centre (the
+    "Unknown venue on Red Square" cluster). We skip it and leave the venue
+    locationless instead, so it isn't shown at a wrong place."""
+    a = (address or "").strip().lower()
+    if not a:
+        return True
+    if any(ch.isdigit() for ch in a):
+        return False  # a house/street number → real street-level address
+    generic = {city.strip().lower(), country.strip().lower(),
+               "россия", "москва", "russia", "moscow", "рф", "г"}
+    toks = [t for t in re.split(r"[\s,.;]+", a) if t]
+    return bool(toks) and all(t in generic for t in toks)
 
 
 def _coords_sane(lat: float, lon: float) -> tuple[float, float] | None:
@@ -73,7 +94,7 @@ async def _enrich_impl() -> dict:
             if not candidate:
                 continue
 
-            venue_name = (candidate.venue or "").strip() or "Unknown venue"
+            venue_name = (candidate.venue or "").strip() or _UNKNOWN_VENUE
             address = (candidate.address or "").strip()
             geo = None
             venue = None
@@ -93,19 +114,20 @@ async def _enrich_impl() -> dict:
                 lat, lon = src
                 provider, confidence = "source", 0.95
             else:
-                # 1) Source address: geocode it (street/house level).
-                if address:
+                # 1) Source address: geocode it (street/house level) — but NOT a
+                # city/country-only address, which only yields the city centroid.
+                if address and not _is_city_level_only(address, city, country):
                     geo = await geocoder.geocode(address, city_hint=city)
 
                 # 2) Local venue cache: venue + city -> known address/coords.
-                if not geo and not address and venue_name != "Unknown venue":
+                if not geo and not address and venue_name != _UNKNOWN_VENUE:
                     cached_venue = await find_cached_venue(db, venue_name, city, country)
                     if cached_venue:
                         venue = cached_venue
                         address = cached_venue.address
 
                 # 3) OSM-first fallback for missing address.
-                if not geo and venue is None and not address and venue_name != "Unknown venue":
+                if not geo and venue is None and not address and venue_name != _UNKNOWN_VENUE:
                     geo = await geocoder.geocode_venue_osm_first(venue_name, city_hint=city)
                     if geo and geo.normalized_address:
                         address = geo.normalized_address
@@ -156,6 +178,8 @@ async def _backfill_venues_osm_impl() -> dict:
             venue = await get_venue(db, venue_id)
             if not venue:
                 continue
+            if venue.name == _UNKNOWN_VENUE:
+                continue  # placeholder — geocoding it only lands on the city centroid
             if venue.geom is not None and (venue.address or "").strip():
                 continue
             geo = await geocoder.geocode_venue_osm_first(venue.name, city_hint=venue.city or settings.default_city)

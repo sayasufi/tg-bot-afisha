@@ -78,6 +78,11 @@ async def _cluster_cache_set(key: str, value: dict) -> None:
         pass
 
 
+# Placeholder venue name for events whose source gave no venue (see worker enrich).
+# It has no real location, so it must never appear on the map / in clusters / counts.
+_PLACEHOLDER_VENUE = "Unknown venue"
+
+
 class EventQueryService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -182,6 +187,7 @@ class EventQueryService:
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active", Venue.geom.is_not(None))
+            .where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
             .where(self._region_clause())
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
@@ -195,6 +201,7 @@ class EventQueryService:
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active", Venue.geom.is_not(None))
+            .where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
             .where(self._region_clause())
         )
         inner = self._apply_filters(inner, date_from, date_to, categories, price_min, price_max, q)
@@ -264,6 +271,7 @@ class EventQueryService:
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
         # Only Moscow-region events with coordinates (implies geom is not null).
         stmt = stmt.where(self._region_clause())
+        stmt = stmt.where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
         if bbox:
             stmt = stmt.where(self._bbox_clause(bbox))
         # One row per event — the soonest in-window occurrence — so an event with
