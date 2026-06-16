@@ -23,6 +23,7 @@ from pipeline.dedup.scorer import (
     MatchDecision,
     score_candidate,
 )
+from pipeline.dedup.venue_match import name_match_score
 from pipeline.normalizer.extractors import NormalizedCandidate
 
 _OCCURRENCE_LOOKAHEAD_DAYS = 30
@@ -246,6 +247,7 @@ async def get_raw(db: AsyncSession, raw_id: int) -> RawEvent | None:
 # "Зелёный театр, ВДНХ" all collapse to one key.
 _VENUE_NKEY = "regexp_replace(translate(lower({col}), 'ё', 'е'), '[^0-9a-zа-я]', '', 'g')"
 _VENUE_FUZZY_M = 200  # metres — same-named venues this close are the same place
+_VENUE_TIGHT_M = 150  # metres — radius for the name-*variant* reuse below
 
 
 async def get_or_create_venue(db: AsyncSession, name: str, address: str, city: str, country: str, lat: float | None, lon: float | None, provider: str, confidence: float) -> Venue:
@@ -272,6 +274,29 @@ async def get_or_create_venue(db: AsyncSession, name: str, address: str, city: s
         )).scalar()
         if match_id is not None:
             return await db.get(Venue, match_id)
+        # Name-*variant* de-dup: the exact-key match above misses cross-source
+        # naming drift ("Космос" vs "Большой концертный зал «Космос»", "МХТ им.
+        # Чехова" vs "МХТ имени А. П. Чехова"). Score the few venues within ~150 m
+        # and reuse one whose name is a strong/structural match. Antonym-aware, so
+        # Большой/Малый зал of one building stay distinct. (See merge_venues_fuzzy
+        # for the one-off cleanup of pre-existing duplicates.)
+        nearby = (await db.execute(
+            text(
+                "SELECT venue_id, name FROM events.venues "
+                "WHERE geom IS NOT NULL AND name <> '' "
+                "  AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :m) "
+                "ORDER BY ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) "
+                "LIMIT 20"
+            ),
+            {"lat": lat, "lon": lon, "m": _VENUE_TIGHT_M},
+        )).all()
+        best_id, best_score = None, 0.0
+        for vid, vname in nearby:
+            score = name_match_score(name or "", vname or "")
+            if score is not None and score > best_score:
+                best_id, best_score = vid, score
+        if best_id is not None:
+            return await db.get(Venue, best_id)
     # Race-safe create: enrich and backfill_venues_osm can both reach the same
     # (name, address) concurrently. INSERT ... ON CONFLICT DO NOTHING + re-select
     # avoids the UniqueViolation on uq_venue_name_address.

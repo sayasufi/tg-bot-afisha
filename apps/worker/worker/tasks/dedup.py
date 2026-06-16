@@ -51,3 +51,13 @@ async def _dedup_impl() -> dict:
             )
             decisions[decision.decision] += 1
         return decisions
+
+
+def _merge_venues_impl() -> dict:
+    """Periodic self-heal: collapse near-duplicate venues that slipped past the
+    write-time reuse in ``get_or_create_venue`` (e.g. borderline name variants
+    that only become certain once both venues co-host the same event). Idempotent.
+    """
+    from scripts.merge_venues_fuzzy import merge_fuzzy_venues
+
+    return merge_fuzzy_venues(apply=True)

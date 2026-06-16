@@ -23,6 +23,7 @@ _SCHEDULE = [
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),
+    (flows.merge_duplicate_venues, 21600),  # 6h — collapse near-dup venues
     (flows.backfill_venues_osm, 86400),
     (flows.resolve_venue_hours, 600),
     (flows.cache_event_images, 120),

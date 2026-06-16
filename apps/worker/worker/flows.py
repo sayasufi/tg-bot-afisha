@@ -66,6 +66,11 @@ async def dedup_candidates():
     return await dedup._dedup_impl()
 
 
+@flow(name="merge-duplicate-venues", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+def merge_duplicate_venues():
+    return dedup._merge_venues_impl()
+
+
 # --- enrichment side-jobs ----------------------------------------------------
 
 @flow(name="backfill-venues-osm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
