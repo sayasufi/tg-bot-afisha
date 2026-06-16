@@ -36,7 +36,7 @@ join events.event_sources es on es.event_id = e.event_id
 join ref.sources s on s.source_id = es.source_id
 join events.raw_events r on r.raw_id = es.raw_id
 where e.status = 'active' and s.name = 'afisha_ru'
-  and es.source_event_url like '%afisha.ru/performance/%'
+  and es.source_event_url like '%afisha.ru/%'
 group by e.event_id
 having
   -- a leftover [min,max] span renders as a misleading range -> always resolve it,
