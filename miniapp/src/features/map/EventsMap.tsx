@@ -295,9 +295,13 @@ export function EventsMap({
         if (!cl?.getAllChildMarkers) return;
         const map = e.target?._map ?? cl._group?._map ?? cl._map;
         const bounds = cl.getBounds();
-        const stacked = bounds.getNorthEast().equals(bounds.getSouthWest());
+        // "One place": all pins sit within a venue-sized knot (~one building), where
+        // zooming in won't meaningfully separate them — so peek the list on the FIRST
+        // tap instead of making the user zoom to the max before it opens. The peek
+        // lists each event with its venue, so a few adjacent venues are fine too.
+        const tight = bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < 150;
         const maxed = map && map.getZoom() >= map.getMaxZoom();
-        if (stacked || maxed) {
+        if (tight || maxed) {
           const keys = new Set<string>(
             cl.getAllChildMarkers().map((m2: any) => {
               const ll = m2.getLatLng();
