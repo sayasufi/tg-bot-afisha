@@ -43,22 +43,25 @@ def main(apply: bool) -> None:
         pairs = db.execute(text(_PAIRS)).all()
         print("duplicate venues to merge:", len(pairs))
         repointed = 0
+        deduped = 0
         for dup_id, canon_id in pairs:
+            # The (event_id, date_start, venue_id) unique constraint means a dup
+            # occurrence can't just move onto the canonical venue if one is already
+            # there — drop those colliding dup rows first, then repoint the rest.
+            deduped += db.execute(text(
+                "delete from events.event_occurrences d "
+                "where d.venue_id = :dup and exists ("
+                "  select 1 from events.event_occurrences c "
+                "  where c.venue_id = :canon and c.event_id = d.event_id and c.date_start = d.date_start)"
+            ), {"dup": dup_id, "canon": canon_id}).rowcount
             repointed += db.execute(
-                text("update events.event_occurrences set venue_id = :c where venue_id = :d"),
-                {"c": canon_id, "d": dup_id},
+                text("update events.event_occurrences set venue_id = :canon where venue_id = :dup"),
+                {"canon": canon_id, "dup": dup_id},
             ).rowcount
             db.execute(
-                text("update events.event_candidates set venue_id = :c where venue_id = :d"),
-                {"c": canon_id, "d": dup_id},
+                text("update events.event_candidates set venue_id = :canon where venue_id = :dup"),
+                {"canon": canon_id, "dup": dup_id},
             )
-        # Collapse occurrences that landed on the same (event, date, venue) after
-        # repointing — keep the lowest occurrence_id.
-        deduped = db.execute(text(
-            "delete from events.event_occurrences o using events.event_occurrences k "
-            "where o.event_id = k.event_id and o.venue_id = k.venue_id and o.date_start = k.date_start "
-            "and o.occurrence_id > k.occurrence_id"
-        )).rowcount
         deleted = 0
         if pairs:
             deleted = db.execute(
