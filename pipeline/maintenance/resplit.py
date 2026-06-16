@@ -27,7 +27,7 @@ from collections import Counter, defaultdict
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.venue_match import name_match_score
+from pipeline.dedup.venue_match import contrasts, name_match_score
 
 THRESH_M = 200  # venues this close are treated as one physical place
 
@@ -57,6 +57,7 @@ def _cluster(vgeom: dict, vname: dict) -> list[list[int]]:
     single event, a shared name means a shared place."""
     ids = list(vgeom)
     parent = {i: i for i in ids}
+    comp = {i: {i} for i in ids}  # root -> members, for the contrast guard
 
     def find(x):
         while parent[x] != x:
@@ -66,11 +67,24 @@ def _cluster(vgeom: dict, vname: dict) -> list[list[int]]:
 
     for i in range(len(ids)):
         for j in range(i + 1, len(ids)):
-            ga, gb = vgeom[ids[i]], vgeom[ids[j]]
+            a, b = ids[i], ids[j]
+            ga, gb = vgeom[a], vgeom[b]
             close = bool(ga and gb and _haversine(ga, gb) <= THRESH_M)
-            named = name_match_score(vname.get(ids[i], ""), vname.get(ids[j], "")) is not None
-            if close or named:
-                parent[find(ids[i])] = find(ids[j])
+            named = name_match_score(vname.get(a, ""), vname.get(b, "")) is not None
+            if not (close or named):
+                continue
+            ra, rb = find(a), find(b)
+            if ra == rb:
+                continue
+            # Distinct halls of one building (Большой/Малый зал) sit <THRESH_M apart,
+            # so PROXIMITY would fuse them into "one place" and stop the split. Never
+            # union across a contrasting pair — even when close. Guard transitively so
+            # a generic bridge venue can't merge them either.
+            if any(contrasts(vname.get(x, ""), vname.get(y, "")) for x in comp[ra] for y in comp[rb]):
+                continue
+            parent[ra] = rb
+            comp[rb] |= comp[ra]
+            comp.pop(ra, None)
     out = defaultdict(list)
     for i in ids:
         out[find(i)].append(i)

@@ -26,7 +26,7 @@ import sys
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.venue_match import is_subset, name_match_score
+from pipeline.dedup.venue_match import contrasts, is_subset, name_match_score
 
 # Every venue pair within this radius is a *candidate*; name + co-host decide.
 _RADIUS_M = 150
@@ -77,13 +77,33 @@ def merge_fuzzy_venues(apply: bool, on_preview=None) -> dict:
         uf = _UF()
         occ: dict[int, int] = {}
         name: dict[int, str] = {}
+        comp: dict[int, set[int]] = {}  # uf-root -> member ids, for the contrast guard
         merges: list[tuple] = []  # (a_id, b_id, dist, ratio, co_host)
+
+        def _guarded_union(a: int, b: int) -> bool:
+            """Union a,b UNLESS it would put a contrasting pair (Большой vs Малый зал)
+            in one cluster — the pairwise contrasts() guard doesn't survive transitive
+            closure, so a generic bridge name ("Зал Консерватории") could otherwise
+            merge the two halls it sits between. Refuse if any cross-pair contrasts."""
+            ra, rb = uf.find(a), uf.find(b)
+            ma, mb = comp.setdefault(ra, {a}), comp.setdefault(rb, {b})
+            if ra == rb:
+                return True
+            if any(contrasts(name[x], name[y]) for x in ma for y in mb):
+                return False
+            uf.union(a, b)
+            r = uf.find(a)
+            comp[r] = ma | mb
+            for old in (ra, rb):
+                if old != r:
+                    comp.pop(old, None)
+            return True
+
         for a_id, a_name, a_noc, b_id, b_name, b_noc, dist, co_host in rows:
             occ[a_id], occ[b_id] = a_noc, b_noc
             name[a_id], name[b_id] = a_name, b_name
             ratio = name_match_score(a_name, b_name, co_host)
-            if ratio is not None:
-                uf.union(a_id, b_id)
+            if ratio is not None and _guarded_union(a_id, b_id):
                 merges.append((a_id, b_id, round(dist), round(ratio), co_host))
 
         # Per cluster, the canonical venue keeps the most occurrences.
