@@ -86,11 +86,17 @@ def merge_duplicate_events():
 
 @flow(name="expire-past-events", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
 def expire_past_events():
-    """Lifecycle: expire events whose last occurrence day has passed, revive any
-    that gained an upcoming one, so the app never shows what already happened."""
-    from pipeline.maintenance.lifecycle import expire_past_events as _run
+    """Lifecycle: first prune phantom future dates (a session a source no longer
+    lists — the add-only upsert never deletes them), THEN expire events whose last
+    live occurrence has passed and revive any that gained an upcoming one. Pruning
+    before expiry means an event left with only a cancelled future date expires now
+    instead of lingering until that phantom date passes."""
+    from pipeline.maintenance.lifecycle import expire_past_events as _expire
+    from pipeline.maintenance.prune_stale_occurrences import prune
 
-    return _run(apply=True)
+    pruned = prune(apply=True)
+    expired = _expire(apply=True)
+    return {"pruned": pruned, "expired": expired}
 
 
 @flow(name="resolve-afisha-dates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
