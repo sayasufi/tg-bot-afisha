@@ -224,31 +224,53 @@ def _is_territory_week(week) -> bool:
     return isinstance(week, list) and len(week) == 7 and all(_is_round_clock_day(d) for d in week)
 
 
-def _usable_hours(res: dict | None, lat, lon) -> dict | None:
-    """The scraper result's hours IF they're a real weekly schedule (not an all-week
-    24/7 territory) AND the matched place is near the venue (not a wrong business
-    across town). Returns the hours dict or None."""
+_MOSCOW_CENTER = (55.75582, 37.61764)
+
+
+def _in_moscow_region(lat, lon) -> bool:
+    """The generous Moscow-oblast envelope the map itself allows (lon 30..45, lat
+    50..60) — Tver/Kaluga day-trips included, transposed/foreign coords excluded."""
+    return 50.0 <= lat <= 60.0 and 30.0 <= lon <= 45.0
+
+
+def _match_hours(res: dict | None, lat, lon) -> tuple[dict | None, tuple[float, float] | None]:
+    """(hours, relocate_to). ``hours`` = a real weekly schedule (not an all-week 24/7
+    territory) or None. ``relocate_to`` = the matched org's coords when it's clearly
+    the venue but sits materially FARTHER from Moscow than the stored pin — i.e. an
+    oblast venue the geocoder mis-pinned near Moscow (Дом Озерова pinned in Moscow,
+    real one in Коломна). We then fix its coords instead of discarding the find. The
+    direction guard (farther-from-Moscow only, inside the region envelope) means a
+    correctly far-out venue is NEVER dragged toward a Moscow namesake."""
     if not res or not isinstance(res.get("hours"), dict):
-        return None
+        return None, None
     week = res["hours"].get("week")
     if not (isinstance(week, list) and len(week) == 7) or _is_territory_week(week):
-        return None
+        return None, None
+    hours = res["hours"]
     coords = res.get("coords")
     # The scraper often returns the CITY CENTROID as a non-answer for the location
-    # even when it found real hours; treat a centroid as "location unknown" so it
-    # doesn't false-reject via the distance guard.
+    # even when it found real hours; treat a centroid as "location unknown".
     if coords and abs(coords[0] - 55.75582) < 3e-4 and abs(coords[1] - 37.61764) < 5e-4:
         coords = None
-    if coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > 1500:
-        return None  # matched place is far from the venue → wrong business
-    return res["hours"]
+    if not coords or lat is None or lon is None:
+        return hours, None  # nothing to compare → accept the hours, don't move
+    if _dist_m((lat, lon), coords) <= 1500:
+        return hours, None  # match is at the venue → accept, no move
+    # Match is far. Accept + relocate ONLY when the real org is well outside Moscow
+    # relative to the stored pin (an oblast venue mis-geocoded into the city).
+    if _in_moscow_region(coords[0], coords[1]):
+        out_match = _dist_m(_MOSCOW_CENTER, coords)
+        out_stored = _dist_m(_MOSCOW_CENTER, (lat, lon))
+        if out_match - out_stored > 20000:  # real org ≥20 km farther out → fix the pin
+            return hours, (float(coords[0]), float(coords[1]))
+    return None, None  # far + wrong direction / outside region → wrong business, drop
 
 
-def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city) -> dict:
-    """Best real weekly hours for a venue. Tries the venue name (+address), then —
-    if that only yields a 24/7 territory / wrong business — RETRIES with the event
-    title prepended ("Музей Москвы в миниатюре ВДНХ"), which pulls the specific
-    hall/museum instead of the enclosing park. Returns the hours dict or {}."""
+def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city):
+    """Best real weekly hours for a venue + an optional coords fix. Tries the venue
+    name (+address), then — if that only yields a 24/7 territory / wrong business —
+    RETRIES with the event title prepended ("Музей Москвы в миниатюре ВДНХ"), which
+    pulls the specific hall/museum. Returns (hours_dict_or_{}, relocate_to_or_None)."""
     candidates: list[str] = []
     if address:
         candidates.append(f"{name}, {address}".strip().strip(",").strip())
@@ -264,11 +286,11 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city) -> dict
             res = asyncio.run(scraper.fetch_hours(q, city))
         except Exception:
             res = None
-        good = _usable_hours(res, lat, lon)
-        if good:
-            return good
+        hours, relocate = _match_hours(res, lat, lon)
+        if hours:
+            return hours, relocate
         time.sleep(0.8)  # polite between tries
-    return {}  # "checked, nothing usable" → stamped so we don't re-query
+    return {}, None  # "checked, nothing usable" → stamped so we don't re-query
 
 
 # Process never-resolved venues (hours_json IS NULL) AND re-check stale EMPTY ones
@@ -298,18 +320,28 @@ def _resolve_venue_hours_impl(limit: int = 15):
     city = get_settings().default_city or "Москва"
     try:
         rows = db.execute(text(_VENUE_HOURS_QUERY), {"lim": limit}).all()
-        stored = 0
+        stored = relocated = 0
         for vid, name, address, lat, lon, ev_title in rows:
-            hours = _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city)
+            hours, relocate = _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city)
             if hours:
                 stored += 1
+            if relocate:
+                # Fix an oblast venue the geocoder mis-pinned near Moscow, using the
+                # matched org's real coordinates (so it lands at its true place AND
+                # its hours stop being rejected by the distance guard next time).
+                db.execute(
+                    text("UPDATE events.venues SET geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, "
+                         "geocode_provider = 'yandex_hours', geocode_confidence = 0.8 WHERE venue_id = :v"),
+                    {"lat": relocate[0], "lon": relocate[1], "v": vid},
+                )
+                relocated += 1
             db.execute(
                 text("UPDATE events.venues SET hours_json = CAST(:h AS JSON), hours_checked_at = now() WHERE venue_id = :v"),
                 {"h": json.dumps(hours, ensure_ascii=False), "v": vid},
             )
             db.commit()
             time.sleep(1.0)
-        return {"checked": len(rows), "stored": stored}
+        return {"checked": len(rows), "stored": stored, "relocated": relocated}
     except Exception:
         raise
     finally:
