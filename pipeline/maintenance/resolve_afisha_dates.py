@@ -27,6 +27,27 @@ from core.db.session import SessionLocal
 _BATCH = 150  # events per run — the GraphQL API is light + captcha-free, so we can move faster
 _DELAY = 0.4  # polite gap between API calls (seconds)
 _MSK = timezone(timedelta(hours=3))
+_PLACEHOLDER_VENUE = "Unknown venue"  # see worker enrich: no venue from the source
+
+
+def _get_or_create_venue(db, name: str, address: str = "") -> int | None:
+    """Reuse an existing venue with this name (prefer a geocoded one) or create a
+    bare row (no coords — the scheduled backfill_venues_osm geocodes it by name).
+    Used to place an event at its real afisha hall instead of the 'Unknown venue'
+    centroid. Returns None for a blank name (caller keeps the fallback venue)."""
+    name = (name or "").strip()
+    if not name:
+        return None
+    row = db.execute(text(
+        "select venue_id from events.venues where lower(name) = lower(:n) "
+        "order by (geom is not null) desc, venue_id limit 1"
+    ), {"n": name[:255]}).first()
+    if row:
+        return row[0]
+    return db.execute(text(
+        "insert into events.venues (name, address, city, country, geocode_provider, geocode_confidence) "
+        "values (:n, :a, 'Москва', 'RU', '', 0) returning venue_id"
+    ), {"n": name[:255], "a": (address or "")[:500]}).scalar()
 
 # afisha-ONLY (no Yandex source) multi-session non-exhibition shows that have fewer
 # stored dates than the detail can give (capped at 12), or a leftover span.
@@ -37,6 +58,7 @@ join events.event_occurrences o on o.event_id = e.event_id
 join events.event_sources es on es.event_id = e.event_id
 join ref.sources s on s.source_id = es.source_id
 join events.raw_events r on r.raw_id = es.raw_id
+left join events.venues vv on vv.venue_id = o.venue_id
 where e.status = 'active' and s.name = 'afisha_ru' and e.category <> 'exhibition'
   -- only types with a GraphQL schedule op; /exhibition/ runs are open-ended spans by design
   and (es.source_event_url like '%afisha.ru/performance/%' or es.source_event_url like '%afisha.ru/concert/%')
@@ -55,6 +77,9 @@ having
   -- OR a leftover span (any session count, any source mix): a show must never render
   -- as a date range, and the GraphQL dates are authoritative
   or bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
+  -- OR the event is stuck at the 'Unknown venue' placeholder — the schedule's place
+  -- gives its real hall, so recover it off the city-centre pin
+  or bool_or(vv.name = '""" + _PLACEHOLDER_VENUE + """')
 limit :lim
 """
 
@@ -68,6 +93,9 @@ async def resolve(apply: bool, limit: int = _BATCH) -> dict:
     conn = AfishaRuConnector()
     today = datetime.now(_MSK).date()
     fetched = rebuilt = 0
+    placeholder_ids = {r[0] for r in db.execute(
+        text("select venue_id from events.venues where name = :n"), {"n": _PLACEHOLDER_VENUE}).all()}
+    venue_cache: dict[str, int | None] = {}  # place name -> venue_id, within this run
     try:
         cands = db.execute(text(_CANDIDATES), {"lim": limit}).all()
         async with conn._session() as session:
@@ -80,19 +108,29 @@ async def resolve(apply: bool, limit: int = _BATCH) -> dict:
                 occs = db.execute(text(_OCCS), {"e": str(eid)}).all()
                 if not occs:
                     continue
-                # A leftover span (date_end far past date_start) must be rebuilt even if
-                # the date_starts already match — else its misleading range survives.
+                # A leftover span, or an event stranded at the placeholder venue, must be
+                # rebuilt even if the date_starts already match (span range / wrong place).
                 has_span = any(o[6] is not None and (o[6] - o[1]) > 172800 for o in occs)
-                if not has_span and {int(o[1]) for o in occs} == {int(r["start"]) for r in rows}:
+                at_placeholder = any(o[0] in placeholder_ids for o in occs)
+                if not has_span and not at_placeholder and {int(o[1]) for o in occs} == {int(r["start"]) for r in rows}:
                     continue
-                venue = Counter(o[0] for o in occs if o[0] is not None).most_common(1)
-                venue_id = venue[0][0] if venue else occs[0][0]
-                tmpl = next((o for o in occs if o[0] == venue_id), occs[0])
+                # Fallback venue = the event's most common REAL (non-placeholder) venue,
+                # used for sessions whose GraphQL place is blank.
+                non_ph = [o[0] for o in occs if o[0] is not None and o[0] not in placeholder_ids]
+                fallback_vid = Counter(non_ph).most_common(1)[0][0] if non_ph else occs[0][0]
+                tmpl = next((o for o in occs if o[0] == fallback_vid), occs[0])
                 pmin, pmax, cur, surl = tmpl[2], tmpl[3], tmpl[4], tmpl[5]
                 db.execute(text("delete from events.event_occurrences where event_id = :e"), {"e": str(eid)})
                 for r in rows:
+                    pname = (r.get("place_name") or "").strip()
+                    if pname:
+                        if pname not in venue_cache:
+                            venue_cache[pname] = _get_or_create_venue(db, pname, r.get("place_address", ""))
+                        vid = venue_cache[pname] or fallback_vid
+                    else:
+                        vid = fallback_vid
                     db.execute(text(_INSERT), {
-                        "e": str(eid), "v": venue_id,
+                        "e": str(eid), "v": vid,
                         "ds": datetime.fromtimestamp(int(r["start"]), tz=timezone.utc),
                         "de": None, "pmin": pmin, "pmax": pmax, "cur": cur or "RUB", "url": surl or "",
                     })

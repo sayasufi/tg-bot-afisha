@@ -339,6 +339,12 @@ class AfishaRuConnector:
             pcity = (place.get("city") or {}).get("id") if isinstance(place.get("city"), dict) else None
             if want_city and pcity and pcity != want_city:
                 continue  # touring show — drop sessions outside the target city
+            # The schedule also carries the real venue per session, which the listing
+            # often omits (→ "Unknown venue"). Surface it so the caller can place the
+            # event at its actual hall instead of the city centre.
+            pname = (place.get("name") or "").strip()
+            paddr = ((place.get("address") or "") if isinstance(place.get("address"), str) else "").strip()
+            purl = place.get("url") or ""
             for sess in grp.get("sessions") or []:
                 dt = self._parse_dt(sess.get("dateTime")) if isinstance(sess, dict) else None
                 if not dt or dt.date() < today or dt.date() > horizon:
@@ -347,7 +353,9 @@ class AfishaRuConnector:
                 if ts in seen:
                     continue
                 seen.add(ts)
-                rows.append({"start": ts, "end": None, "start_date": dt.date().isoformat(), "start_time": dt.strftime("%H:%M:%S")})
+                rows.append({"start": ts, "end": None, "start_date": dt.date().isoformat(),
+                             "start_time": dt.strftime("%H:%M:%S"),
+                             "place_name": pname, "place_address": paddr, "place_url": purl})
         rows.sort(key=lambda r: r["start"])
         return rows[:_DATES_CAP] or None
 
