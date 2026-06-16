@@ -238,6 +238,12 @@ def _resolve_venue_hours_impl():
             hours: dict = {}  # default: "checked, nothing usable" → never re-queried
             if res and res.get("hours"):
                 coords = res.get("coords")
+                # The scraper often returns the CITY CENTROID as a non-answer for the
+                # location even when it found the org's real hours; don't let that
+                # false-reject valid hours via the distance guard (it was rejecting
+                # ~95% of matches). Treat a centroid result as "location unknown".
+                if coords and abs(coords[0] - 55.75582) < 3e-4 and abs(coords[1] - 37.61764) < 5e-4:
+                    coords = None
                 if not (coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > 1500):
                     hours = res["hours"]
                     stored += 1

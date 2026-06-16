@@ -148,6 +148,23 @@ class EventQueryService:
     def _region_clause():
         return text("ST_Intersects(venues.geom::geometry, ST_MakeEnvelope(30.0, 50.0, 45.0, 60.0, 4326))")
 
+    @staticmethod
+    def _concrete_time_clause():
+        # Drop events that would render only "в часы работы": an all-day, already-
+        # started, open-ended / long-run occurrence whose venue has NO resolved opening
+        # hours. There's no concrete time to show, so we hide the card rather than
+        # surface a vague one (venues WITH hours still show "сегодня 10:00–21:00").
+        return text(
+            "not ("
+            "  (event_occurrences.date_start at time zone 'Europe/Moscow')::time = time '00:00'"
+            "  and event_occurrences.date_start <= now()"
+            "  and (event_occurrences.date_end > now() + interval '5 years'"
+            "       or (event_occurrences.date_end is not null"
+            "           and (event_occurrences.date_end - event_occurrences.date_start) > interval '2 days'))"
+            "  and (venues.hours_json is null or venues.hours_json::text = '{}')"
+            ")"
+        )
+
     async def map_events(
         self,
         bbox: tuple[float, float, float, float] | None,
@@ -189,6 +206,7 @@ class EventQueryService:
             .where(Event.status == "active", Venue.geom.is_not(None))
             .where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
             .where(self._region_clause())
+            .where(self._concrete_time_clause())
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
         return int(await self.db.scalar(stmt) or 0)
@@ -203,6 +221,7 @@ class EventQueryService:
             .where(Event.status == "active", Venue.geom.is_not(None))
             .where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
             .where(self._region_clause())
+            .where(self._concrete_time_clause())
         )
         inner = self._apply_filters(inner, date_from, date_to, categories, price_min, price_max, q)
         if bbox is not None:
@@ -272,6 +291,7 @@ class EventQueryService:
         # Only Moscow-region events with coordinates (implies geom is not null).
         stmt = stmt.where(self._region_clause())
         stmt = stmt.where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
+        stmt = stmt.where(self._concrete_time_clause())
         if bbox:
             stmt = stmt.where(self._bbox_clause(bbox))
         # One row per event — the soonest in-window occurrence — so an event with
