@@ -31,7 +31,7 @@ where e.status = 'active' and e.canonical_title <> ''
 """
 
 _OCCS = f"""
-select e.event_id, occ.venue_id, {_MSK_DAY} as d
+select e.event_id, occ.venue_id, {_MSK_DAY} as d, occ.date_start
 from events.events e
 join events.event_occurrences occ on occ.event_id = e.event_id
 where e.status = 'active' and e.canonical_title <> ''
@@ -68,15 +68,33 @@ def find_pairs(db) -> tuple[dict, dict, list, list]:
     # by (title-key, day).
     by_venue_day: dict[tuple, set] = defaultdict(set)
     by_placeless_day: dict[tuple, set] = defaultdict(set)
-    for eid, venue_id, d in db.execute(text(_OCCS)).all():
+    by_venue_time: dict[tuple, set] = defaultdict(set)
+    for eid, venue_id, d, ds in db.execute(text(_OCCS)).all():
         if venue_id is not None:
             by_venue_day[(venue_id, d)].add(eid)
+            by_venue_time[(venue_id, ds)].add(eid)
         else:
             by_placeless_day[(title_nkey(title.get(eid, "")), d)].add(eid)
 
     safe_pairs: list[tuple[str, str]] = []
     fuzzy_pairs: list[tuple[str, str]] = []
     seen_pairs: set[tuple[str, str]] = set()
+
+    # Exact-time collision: a venue can't run two shows at the same instant, so two
+    # events sharing a venue + exact start with related titles are one event — even
+    # when one only adds a subtitle ("…на крыше" vs "…на крыше «Маска», «Мулен Руж»").
+    # Promote those (otherwise fuzzy) pairs to the safe tier.
+    for bucket in by_venue_time.values():
+        ids = sorted(bucket)
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                a, b = ids[i], ids[j]
+                if (a, b) in seen_pairs:
+                    continue
+                if same_event(title[a], title[b], level="fuzzy"):
+                    seen_pairs.add((a, b))
+                    safe_pairs.append((a, b))
+
     for bucket in list(by_venue_day.values()) + list(by_placeless_day.values()):
         ids = sorted(bucket)
         for i in range(len(ids)):

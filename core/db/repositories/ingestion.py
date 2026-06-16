@@ -401,11 +401,19 @@ async def dedup_and_upsert_event(
     matches = (await db.execute(stmt.order_by(EventOccurrence.date_start).limit(600))).all() if stmt is not None else []
 
     # Same place (guaranteed by the anchor) + same Moscow day + same event by title
-    # (exact / transliterated / subset) → merge. Nothing else auto-merges.
+    # (exact / transliterated / subset) → merge. Plus an exact-time collision: a
+    # venue can't run two shows at the same instant, so the same venue + identical
+    # start + a merely *fuzzy*-similar title (one source added a subtitle) is also
+    # the same event. Nothing else auto-merges.
     strong: Event | None = None
     for event, occurrence in matches:
         same_day = bool(cand_msk_day and occurrence.date_start.astimezone(_MSK).date() == cand_msk_day)
-        if same_day and same_event(event.canonical_title, candidate.title):
+        if not same_day:
+            continue
+        exact_time = candidate.date_start is not None and occurrence.date_start == candidate.date_start
+        if same_event(event.canonical_title, candidate.title) or (
+            exact_time and same_event(event.canonical_title, candidate.title, level="fuzzy")
+        ):
             strong = event
             break
 
