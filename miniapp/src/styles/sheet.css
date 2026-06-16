@@ -88,6 +88,52 @@ html[data-theme="dark"] .sheet-veil {
   background: var(--ink);
 }
 
+/* Prev/next among events stacked on one point — a small counter with chevrons over
+   the cover; the sheet also swipes left/right between them. */
+.sheet__sibs {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 2px;
+  background: var(--plinth);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.sheet__sib-count {
+  padding: 0 5px;
+  letter-spacing: 0.04em;
+}
+
+.sheet__sib-nav {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sheet__sib-nav:disabled {
+  opacity: 0.28;
+}
+
+.sheet__sib-nav:active:not(:disabled) {
+  background: var(--acid);
+}
+
 .sheet__close {
   position: absolute;
   top: 12px;

@@ -18,6 +18,7 @@ type Props = {
   query?: string;
   userPos?: LatLon | null;
   items: EventItem[];
+  siblings?: EventItem[]; // the other events at this same point (cluster) — swipe to flip
   metro?: MetroPing | null;
   isFav: boolean;
   onToggleFav: () => void;
@@ -26,12 +27,27 @@ type Props = {
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, metro, isFav, onToggleFav, onSelect, onShowMap, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, onSelect, onShowMap, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  // Prev/next event AT THE SAME POINT — the cluster the sheet was opened from.
+  const sibIndex = siblings && selected ? siblings.findIndex((s) => s.event_id === selected.event_id) : -1;
+  const hasSiblings = !!siblings && siblings.length > 1 && sibIndex >= 0;
+  const nav = (dir: number) => {
+    if (!hasSiblings || !siblings) return;
+    const next = sibIndex + dir;
+    if (next < 0 || next >= siblings.length) return; // no wrap — stop at the ends
+    haptic("light");
+    onSelect(siblings[next]);
+  };
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  const hasSiblingsRef = useRef(hasSiblings);
+  hasSiblingsRef.current = hasSiblings;
 
   useEffect(() => {
     setDetail(null);
@@ -63,44 +79,72 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
     };
   }, [selected]);
 
-  // Swipe the sheet DOWN to dismiss (only when it's scrolled to the top, so it
-  // never fights the inner scroll). The sheet follows the finger, then snaps shut
-  // past a threshold or springs back.
+  // Gestures: swipe DOWN (from the top) to dismiss; swipe LEFT/RIGHT to flip to the
+  // prev/next event at the SAME point. The axis locks on the first movement so the
+  // two never fight, vertical dismiss only engages at the top (never steals the inner
+  // scroll), and a swipe that begins on the horizontal "similar" strip is left to
+  // scroll it natively.
   useEffect(() => {
     const sheet = sheetRef.current;
     if (!sheet) return;
+    let startX = 0;
     let startY = 0;
+    let dx = 0;
     let dy = 0;
-    let active = false;
+    let axis: "" | "v" | "h" | "skip" = "";
+    let onStrip = false;
     const onStart = (e: TouchEvent) => {
-      if (sheet.scrollTop > 0 || e.touches.length !== 1) return;
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
-      dy = 0;
-      active = true;
+      dx = dy = 0;
+      axis = "";
+      onStrip = e.target instanceof Element && !!e.target.closest(".simstrip");
       sheet.style.transition = "";
     };
     const onMove = (e: TouchEvent) => {
-      if (!active) return;
+      if (e.touches.length !== 1) return;
+      dx = e.touches[0].clientX - startX;
       dy = e.touches[0].clientY - startY;
-      if (dy <= 0 || sheet.scrollTop > 0) {
-        active = false;
-        sheet.style.transform = "";
-        return;
+      if (!axis) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; // too small to decide
+        if (Math.abs(dx) > Math.abs(dy) * 1.3 && hasSiblingsRef.current && !onStrip) axis = "h";
+        else if (dy > 0 && sheet.scrollTop <= 0) axis = "v";
+        else {
+          axis = "skip"; // let the inner content scroll
+          return;
+        }
       }
-      sheet.style.transform = `translateY(${Math.min(dy, 600)}px)`;
-      e.preventDefault();
+      if (axis === "h") {
+        sheet.style.transform = `translateX(${dx * 0.35}px)`;
+        e.preventDefault();
+      } else if (axis === "v") {
+        if (dy <= 0 || sheet.scrollTop > 0) {
+          sheet.style.transform = "";
+          return;
+        }
+        sheet.style.transform = `translateY(${Math.min(dy, 600)}px)`;
+        e.preventDefault();
+      }
     };
     const onEnd = () => {
-      if (!active) return;
-      active = false;
-      const dismiss = dy > 100;
-      sheet.style.transition = "transform 0.22s var(--ease-cut)";
-      sheet.style.transform = dismiss ? "translateY(105%)" : "";
-      if (dismiss) window.setTimeout(() => onCloseRef.current(), 190);
-      window.setTimeout(() => {
-        sheet.style.transition = "";
-        if (!dismiss) sheet.style.transform = "";
-      }, 240);
+      if (axis === "h") {
+        sheet.style.transition = "transform 0.2s var(--ease-cut)";
+        sheet.style.transform = "";
+        if (dx > 56) navRef.current(1); // swipe right → next
+        else if (dx < -56) navRef.current(-1); // swipe left → previous
+        window.setTimeout(() => (sheet.style.transition = ""), 210);
+      } else if (axis === "v") {
+        const dismiss = dy > 100;
+        sheet.style.transition = "transform 0.22s var(--ease-cut)";
+        sheet.style.transform = dismiss ? "translateY(105%)" : "";
+        if (dismiss) window.setTimeout(() => onCloseRef.current(), 190);
+        window.setTimeout(() => {
+          sheet.style.transition = "";
+          if (!dismiss) sheet.style.transform = "";
+        }, 240);
+      }
+      axis = "";
     };
     sheet.addEventListener("touchstart", onStart, { passive: true });
     sheet.addEventListener("touchmove", onMove, { passive: false });
@@ -178,6 +222,19 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
       <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
         <div className="sheet__sticky">
           <span className="sheet__grip" />
+          {hasSiblings && siblings && (
+            <div className="sheet__sibs" aria-label="События в этой точке">
+              <button type="button" className="sheet__sib-nav" aria-label="Предыдущее" disabled={sibIndex <= 0} onClick={() => nav(-1)}>
+                ‹
+              </button>
+              <span className="sheet__sib-count">
+                {sibIndex + 1} / {siblings.length}
+              </span>
+              <button type="button" className="sheet__sib-nav" aria-label="Следующее" disabled={sibIndex >= siblings.length - 1} onClick={() => nav(1)}>
+                ›
+              </button>
+            </div>
+          )}
         <button
           type="button"
           className={`sheet__icon sheet__icon--fav${isFav ? " sheet__icon--on" : ""}`}

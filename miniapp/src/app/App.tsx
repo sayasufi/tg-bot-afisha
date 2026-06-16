@@ -307,15 +307,21 @@ export function App() {
 
   const openEvent = useCallback((i: EventItem) => {
     haptic("light");
-    // Don't leave the current section: the sheet opens OVER it (recs/favorites/
-    // map), so closing the event returns you exactly where you were.
-    setPeek(null);
+    // Keep the cluster peek (if any) behind the sheet — closing the event returns
+    // you to the SAME list of events at that point, not to a bare map. The peek is
+    // hidden while the sheet is up and reappears on close (see the render below).
     setSelected(i);
     setFocused(i); // keep this marker highlighted on the map even after closing
     setFocusOut(false); // cancel any pending dismiss animation
     logEventSeen(i.event_id); // engagement signal for recommendations
     recordOpen(i.category); // behavioural profile for personalised ranking
   }, []);
+
+  // The peek is a map-only overlay: drop it when leaving the map (recs/favorites/
+  // profile) so it never lingers behind a panel.
+  useEffect(() => {
+    if (view !== "map") setPeek(null);
+  }, [view]);
 
   // Hold the event sheet back briefly after a selection so the pin→sheet spark,
   // the camera fly and the constellation play out on the open map before the
@@ -346,6 +352,7 @@ export function App() {
     haptic("light");
     setView("map");
     setSelected(null);
+    setPeek(null); // "На карте" wants the pin in view, not the peek list over it
   }, []);
 
   // Dismiss the highlight WITH an exit animation: flag it out, then clear after the
@@ -372,7 +379,7 @@ export function App() {
   }, [dismissCoach, onLocate]);
   // The slim "marked exhibit" bar shows on the map when a marker is highlighted
   // and no card is open.
-  const focusBarVisible = view === "map" && !!focused && !selected;
+  const focusBarVisible = view === "map" && !!focused && !selected && !peek;
 
   const onRefresh = useCallback(() => {
     haptic("medium");
@@ -502,6 +509,7 @@ export function App() {
         query={filters.q}
         userPos={userPos}
         items={shownItems}
+        siblings={peek ?? undefined}
         metro={nearMetro}
         isFav={!!selected && fav.has(selected.event_id)}
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
