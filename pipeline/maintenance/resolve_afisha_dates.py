@@ -38,7 +38,8 @@ join events.event_sources es on es.event_id = e.event_id
 join ref.sources s on s.source_id = es.source_id
 join events.raw_events r on r.raw_id = es.raw_id
 where e.status = 'active' and s.name = 'afisha_ru' and e.category <> 'exhibition'
-  and es.source_event_url like '%afisha.ru/%'
+  -- only types with a GraphQL schedule op; /exhibition/ runs are open-ended spans by design
+  and (es.source_event_url like '%afisha.ru/performance/%' or es.source_event_url like '%afisha.ru/concert/%')
   and not exists (
     select 1 from events.event_sources es2 join ref.sources s2 on s2.source_id = es2.source_id
     where es2.event_id = e.event_id and s2.name = 'yandex_afisha'
@@ -55,7 +56,7 @@ having
 limit :lim
 """
 
-_OCCS = "select venue_id, extract(epoch from date_start)::bigint, price_min, price_max, currency, source_best_url from events.event_occurrences where event_id = :e"
+_OCCS = "select venue_id, extract(epoch from date_start)::bigint, price_min, price_max, currency, source_best_url, extract(epoch from date_end)::bigint from events.event_occurrences where event_id = :e"
 _INSERT = ("insert into events.event_occurrences (event_id, venue_id, date_start, date_end, price_min, price_max, currency, source_best_url) "
            "values (:e, :v, :ds, :de, :pmin, :pmax, :cur, :url)")
 
@@ -77,7 +78,10 @@ async def resolve(apply: bool, limit: int = _BATCH) -> dict:
                 occs = db.execute(text(_OCCS), {"e": str(eid)}).all()
                 if not occs:
                     continue
-                if {int(o[1]) for o in occs} == {int(r["start"]) for r in rows}:
+                # A leftover span (date_end far past date_start) must be rebuilt even if
+                # the date_starts already match — else its misleading range survives.
+                has_span = any(o[6] is not None and (o[6] - o[1]) > 172800 for o in occs)
+                if not has_span and {int(o[1]) for o in occs} == {int(r["start"]) for r in rows}:
                     continue
                 venue = Counter(o[0] for o in occs if o[0] is not None).most_common(1)
                 venue_id = venue[0][0] if venue else occs[0][0]
