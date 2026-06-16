@@ -144,7 +144,9 @@ export function goNowState(
   const { end: realEnd, open } = endInfo(s, end, now);
   if (s.getTime() > now.getTime()) return { eligible: false }; // hasn't started yet
   if (!open && realEnd && now.getTime() > realEnd.getTime()) return { eligible: false }; // run is over
-  if (venueOpenNow(hours, now) === false) return { eligible: false }; // venue shut right now
+  // Only "идёт сейчас" when we KNOW the venue is open right now (real hours). If the
+  // hours are unknown ("время уточняйте"), we can't claim it's on — so it's never red.
+  if (venueOpenNow(hours, now) !== true) return { eligible: false };
   return { eligible: true, kind: "now", label: "идёт сейчас" };
 }
 const dmy = (d: Date, withYear: boolean, short = false) =>

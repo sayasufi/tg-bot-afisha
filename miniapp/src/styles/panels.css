@@ -586,6 +586,36 @@ mark.hl {
   place-items: center;
   color: var(--ink);
   border-right: 1px solid var(--line);
+  position: relative; /* anchors the can-go-now spark */
+}
+
+/* "Можно пойти сейчас" огонёк — a pulsing cinnabar spark on the row's mark, plus a
+   cinnabar edge, so a peeked/list view shows at a glance WHICH event is the red one
+   on the map. Matches the map pin / card "live" language. */
+.erow__spark {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  animation: livePulse 1.9s var(--ease-cut) infinite;
+}
+
+.erow--live {
+  box-shadow: inset 3px 0 0 var(--cinnabar);
+}
+
+.erow__live {
+  color: var(--cinnabar);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .erow__spark {
+    animation: none;
+  }
 }
 
 .erow__body {

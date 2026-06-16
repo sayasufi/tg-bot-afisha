@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
-import { formatWhenShort } from "../../lib/datetime";
+import { formatWhenShort, goNowState } from "../../lib/datetime";
 import { distanceLabel, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon } from "../../lib/icons";
@@ -21,22 +21,28 @@ export function EventRow({
 }) {
   const dist =
     item.lat != null && item.lon != null ? distanceLabel(userPos, [item.lat, item.lon]) : null;
+  // The "можно пойти сейчас" spark — same predicate that reddens the map pin, so a
+  // peeked list makes it obvious WHICH event is the red one (огонёк + кикер).
+  const go = goNowState(item.date_start, item.date_end, item.venue_hours);
 
   return (
     <button
       type="button"
-      className="erow"
+      className={`erow${go.eligible ? " erow--live" : ""}`}
       style={{ "--i": index } as CSSProperties}
       onClick={() => onSelect(item)}
     >
       <span className="erow__mark">
         <CategoryIcon cat={item.category} size={22} />
+        {go.eligible && <i className="erow__spark" aria-hidden="true" />}
       </span>
       <span className="erow__body">
         <span className="erow__title">
           <Highlight text={item.title} query={query} />
         </span>
         <span className="erow__meta">
+          {go.eligible && <span className="erow__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}
+          {go.eligible ? " · " : ""}
           {formatWhenShort(item.date_start, item.date_end)}
           {item.venue ? ` · ${item.venue}` : ""}
         </span>
