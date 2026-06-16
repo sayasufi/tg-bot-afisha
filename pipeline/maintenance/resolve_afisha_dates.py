@@ -38,8 +38,12 @@ def _get_or_create_venue(db, name: str, address: str = "") -> int | None:
     name = (name or "").strip()
     if not name:
         return None
+    # Match ё/е-insensitively (and prefer a geocoded row) so "Зелёный театр ВДНХ"
+    # and "Зеленый театр ВДНХ" reuse ONE venue instead of spawning a duplicate that
+    # then gets its own (often wrong) geocode and splits the event list.
     row = db.execute(text(
-        "select venue_id from events.venues where lower(name) = lower(:n) "
+        "select venue_id from events.venues "
+        "where translate(lower(name), 'ё', 'е') = translate(lower(:n), 'ё', 'е') "
         "order by (geom is not null) desc, venue_id limit 1"
     ), {"n": name[:255]}).first()
     if row:

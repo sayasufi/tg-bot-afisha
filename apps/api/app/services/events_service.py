@@ -81,9 +81,6 @@ async def _cluster_cache_set(key: str, value: dict) -> None:
 # Placeholder venue name for events whose source gave no venue (see worker enrich).
 # It has no real location, so it must never appear on the map / in clusters / counts.
 _PLACEHOLDER_VENUE = "Unknown venue"
-# Hard cap on map-detail rows when the caller passes no limit — without it a
-# zoomed-out detail request could serialise every pin in the city in one response.
-_MAX_MAP_ITEMS = 2000
 
 
 class EventQueryService:
@@ -280,7 +277,12 @@ class EventQueryService:
         # One row per event — the soonest in-window occurrence — so an event with
         # several showtimes (e.g. 16 & 23 June) shows a single pin, not one per date.
         stmt = stmt.distinct(Event.event_id).order_by(Event.event_id, EventOccurrence.date_start.asc())
-        rows = (await self.db.execute(stmt.limit(limit or _MAX_MAP_ITEMS).offset(offset))).all()
+        # No default cap: the map client fetches the WHOLE filtered set with no bbox
+        # and clusters it client-side (and derives the "Показать N" count + radius
+        # filter from it), so capping here silently drops pins. Callers that want a
+        # page pass an explicit limit. (At city scale this is tens of KB gzipped; a
+        # viewport-bbox fetch is the lever if the dataset ever grows past that.)
+        rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
         items = [
             {
                 "event_id": event.event_id,
