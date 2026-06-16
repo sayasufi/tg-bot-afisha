@@ -62,19 +62,22 @@ def find_pairs(db) -> tuple[dict, dict, list, list]:
         title[eid] = t
         rank[eid] = (n_src, n_occ)
 
-    # Group event ids by (venue, day) and (title-key, day); a true duplicate
-    # shares at least one such bucket with its twin.
+    # Group event ids by (venue, day) — a duplicate must share the same physical
+    # place + day (matching on title across venues collapses different stagings of
+    # one play at different theatres). Placeless events (no venue) can only group
+    # by (title-key, day).
     by_venue_day: dict[tuple, set] = defaultdict(set)
-    by_key_day: dict[tuple, set] = defaultdict(set)
+    by_placeless_day: dict[tuple, set] = defaultdict(set)
     for eid, venue_id, d in db.execute(text(_OCCS)).all():
         if venue_id is not None:
             by_venue_day[(venue_id, d)].add(eid)
-        by_key_day[(title_nkey(title.get(eid, "")), d)].add(eid)
+        else:
+            by_placeless_day[(title_nkey(title.get(eid, "")), d)].add(eid)
 
     safe_pairs: list[tuple[str, str]] = []
     fuzzy_pairs: list[tuple[str, str]] = []
     seen_pairs: set[tuple[str, str]] = set()
-    for bucket in list(by_venue_day.values()) + list(by_key_day.values()):
+    for bucket in list(by_venue_day.values()) + list(by_placeless_day.values()):
         ids = sorted(bucket)
         for i in range(len(ids)):
             for j in range(i + 1, len(ids)):

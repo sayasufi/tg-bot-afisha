@@ -17,12 +17,7 @@ from core.db.models import (
     TelegramChannel,
     Venue,
 )
-from pipeline.dedup.scorer import (
-    AUTO_MERGE_THRESHOLD,
-    REVIEW_THRESHOLD,
-    MatchDecision,
-    score_candidate,
-)
+from pipeline.dedup.scorer import MatchDecision
 from pipeline.dedup.title_match import same_event, title_nkey
 from pipeline.dedup.venue_match import name_match_score
 from pipeline.normalizer.extractors import NormalizedCandidate
@@ -374,61 +369,46 @@ async def dedup_and_upsert_event(
             matched_event_id=str(existing_event.event_id) if existing_event else "",
         )
 
-    # Candidate set is anchored on the things a true duplicate must share — the
-    # same venue, or an identical title key — both inside the candidate's Moscow
-    # day (±1 UTC day, exact MSK-day enforced below). This replaces an unordered
-    # ``LIMIT 400`` over the whole day window, which on busy dates randomly failed
-    # to sample the existing event and spawned a cross-source duplicate.
+    # An event lives at one physical PLACE, so a duplicate must share the
+    # candidate's venue (the same Moscow day is enforced below). Anchoring on the
+    # venue — not on title alone — is what keeps two different stagings of the same
+    # play at two theatres ("Безымянная звезда" at four venues) from collapsing
+    # into one event. Cross-source records that resolved to *different* venue rows
+    # for one place are reunited by venue dedup first, then matched here. A
+    # placeless candidate (no venue) can only fall back to an identical title key
+    # among other placeless events. This also replaces an unordered ``LIMIT 400``
+    # over the whole day window that randomly missed the existing event.
     cand_msk_day = candidate.date_start.astimezone(_MSK).date() if candidate.date_start else None
     cand_nkey = title_nkey(candidate.title)
     title_nkey_sql = func.regexp_replace(
         func.translate(func.lower(Event.canonical_title), "ё", "е"), "[^0-9a-zа-я]", "", "g"
     )
-    anchors = [title_nkey_sql == cand_nkey] if cand_nkey else []
-    if venue is not None:
-        anchors.append(EventOccurrence.venue_id == venue.venue_id)
     stmt = select(Event, EventOccurrence).join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
     if candidate.date_start:
         local = candidate.date_start.astimezone(_MSK)
         lo = local.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
         hi = local.replace(hour=23, minute=59, second=59, microsecond=0) + timedelta(days=1)
         stmt = stmt.where(and_(EventOccurrence.date_start >= lo, EventOccurrence.date_start <= hi))
-    if anchors:
-        stmt = stmt.where(or_(*anchors)).order_by(EventOccurrence.date_start).limit(600)
-        matches = (await db.execute(stmt)).all()
+    if venue is not None:
+        stmt = stmt.where(EventOccurrence.venue_id == venue.venue_id)
+    elif cand_nkey:
+        stmt = stmt.where(and_(title_nkey_sql == cand_nkey, EventOccurrence.venue_id.is_(None)))
     else:  # no title and no venue — nothing to match on
-        matches = []
+        stmt = None
+    matches = (await db.execute(stmt.order_by(EventOccurrence.date_start).limit(600))).all() if stmt is not None else []
 
-    # Deterministic merge: same Moscow day + the titles are the same event (exact,
-    # transliterated, or token-subset) + same place (same venue, or an identical
-    # title key when the venue is unknown/different). score_candidate is kept as a
-    # softer fallback for near-matches that don't clear the strict rule.
+    # Same place (guaranteed by the anchor) + same Moscow day + same event by title
+    # (exact / transliterated / subset) → merge. Nothing else auto-merges.
     strong: Event | None = None
-    best: tuple[Event, float] | None = None
     for event, occurrence in matches:
         same_day = bool(cand_msk_day and occurrence.date_start.astimezone(_MSK).date() == cand_msk_day)
-        same_venue = bool(venue and occurrence.venue_id == venue.venue_id)
-        same_key = bool(cand_nkey and title_nkey(event.canonical_title) == cand_nkey)
-        if strong is None and same_day and (same_venue or same_key) and same_event(event.canonical_title, candidate.title):
+        if same_day and same_event(event.canonical_title, candidate.title):
             strong = event
-        score = score_candidate(
-            event.canonical_title,
-            candidate.title,
-            same_day=same_day,
-            geo_close=same_venue,
-        )
-        if not best or score > best[1]:
-            best = (event, score)
+            break
 
     if strong is not None:
         decision = MatchDecision(decision="auto-merge", score=1.0, matched_event_id=str(strong.event_id))
         event = strong
-    elif best and best[1] >= AUTO_MERGE_THRESHOLD:
-        event = best[0]
-        decision = MatchDecision(decision="auto-merge", score=best[1], matched_event_id=str(event.event_id))
-    elif best and best[1] >= REVIEW_THRESHOLD:
-        event = best[0]
-        decision = MatchDecision(decision="needs-review", score=best[1], matched_event_id=str(event.event_id))
     else:
         event = Event(
             canonical_title=candidate.title,
