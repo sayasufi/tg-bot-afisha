@@ -53,10 +53,56 @@ _SYSTEM_PROMPT = (
 )
 
 
+# Dedup judge: two events already proven to share a venue AND an exact start time
+# (the blocking the caller does). The only question is whether the two TITLES name
+# the same event — so the prior is "same", and the model just rules out genuinely
+# different works/programmes that happen to collide on the same stage+minute.
+_SAME_EVENT_PROMPT = (
+    "Два анонса проходят на ОДНОЙ площадке в ОДНО И ТО ЖЕ время. Реши, одно ли это "
+    "и то же событие (на оба названия — один и тот же показ/билет) или РАЗНЫЕ события.\n"
+    "ОДНО И ТО ЖЕ, если названия отличаются лишь: сокращением/инициалами "
+    "(«В.С. Локтева» = «Локтева»), склонением («Ансамбль» = «Ансамбля»), "
+    "транслитерацией/переводом, регистром, пунктуацией, словом-обёрткой («Концерт …», "
+    "«… сольный концерт», «… шоу»), названием площадки/города в заголовке, "
+    "подзаголовком или приставкой с именем артиста.\n"
+    "РАЗНЫЕ, если это разные произведения, программы, артисты или составы — даже в "
+    "одном жанре («Лебединое озеро» ≠ «Щелкунчик»; «Большой стендап» ≠ «Женский стендап»).\n"
+    'Верни ТОЛЬКО JSON, без пояснений: {"same": true|false, "confidence": 0..1}.'
+)
+
+
 class HTTPChatAdapter(LLMAdapter):
     def __init__(self, base_url: str, timeout_seconds: float = 20.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+
+    async def judge_same_event(self, title_a: str, title_b: str) -> tuple[bool, float]:
+        """Ask whether two same-venue+same-time titles are one event. Returns
+        (same, confidence). Raises on transport error (caller decides the fallback)."""
+        payload = {
+            "messages": [
+                {"role": "system", "content": _SAME_EVENT_PROMPT},
+                {"role": "user", "content": f"A: {title_a}\nB: {title_b}"},
+            ],
+            "stream": False,
+            "temperature": 0.0,
+            "max_tokens": 60,
+        }
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.post(f"{self.base_url}/api/chat", json=payload)
+            response.raise_for_status()
+            data = response.json()
+        try:
+            parsed = parse_llm_json(data.get("response") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            parsed = {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        try:
+            conf = float(parsed.get("confidence", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            conf = 0.0
+        return bool(parsed.get("same")), conf
 
     async def classify(self, title: str, description: str, hints: list[str] | None = None) -> CategoryResult:
         # Drop our own internal markers from the hints; keep raw source labels.

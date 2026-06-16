@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 # events. Bump the version tag whenever the classify prompt changes.
 _CACHE_PREFIX = "llm:classify:v4:"
 _CACHE_TTL_SECONDS = 14 * 24 * 3600
+# Same-event dedup judgments. Cached BOTH ways (incl. "different") so a non-matching
+# same-slot pair isn't re-asked every self-heal run. Bump v when the prompt changes.
+_SAME_EVENT_PREFIX = "llm:samevent:v1:"
+_SAME_EVENT_TTL_SECONDS = 30 * 24 * 3600
 
 # A plain (sync) Redis client: not bound to an event loop, so it survives the
 # per-candidate asyncio.run() calls in the worker, and a local round-trip (~ms) is
@@ -83,3 +87,31 @@ class LLMService:
             except Exception:
                 logger.debug("llm_cache_write_failed", exc_info=True)
         return result
+
+    async def same_event(self, title_a: str, title_b: str) -> dict:
+        """Judge whether two same-venue+same-time titles are one event. Returns
+        {"same": bool, "confidence": float}. Order-independent + Redis-cached. Any
+        transport/parse failure is a safe no-match (never merge on a bad call)."""
+        a, b = (title_a or "").strip(), (title_b or "").strip()
+        lo, hi = sorted((a, b))
+        key = _SAME_EVENT_PREFIX + hashlib.sha256(f"{lo}\x1f{hi}".encode("utf-8", "ignore")).hexdigest()
+        cache = _get_redis(self._redis_url)
+        if cache is not None:
+            try:
+                hit = cache.get(key)
+                if hit:
+                    return json.loads(hit)
+            except Exception:
+                logger.debug("llm_dedup_cache_read_failed", exc_info=True)
+        try:
+            same, conf = await self.adapter.judge_same_event(a, b)
+            verdict = {"same": bool(same), "confidence": float(conf)}
+        except Exception:
+            logger.warning("llm_same_event_failed", extra={"a": a[:60], "b": b[:60]}, exc_info=True)
+            return {"same": False, "confidence": 0.0}
+        if cache is not None:
+            try:
+                cache.set(key, json.dumps(verdict), ex=_SAME_EVENT_TTL_SECONDS)
+            except Exception:
+                logger.debug("llm_dedup_cache_write_failed", exc_info=True)
+        return verdict

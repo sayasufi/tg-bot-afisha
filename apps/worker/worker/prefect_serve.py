@@ -27,6 +27,7 @@ _SCHEDULE = [
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.
     (flows.self_heal_dedup, 900),
+    (flows.dedup_llm, 3600),  # hourly — LLM-judge the same-venue+time pairs rules miss
     (flows.expire_past_events, 3600),  # hourly — drop events whose day has passed
     (flows.resolve_afisha_dates, 21600),  # 6h — dates for the few afisha-only multi-show events
     (flows.backfill_venues_osm, 86400),

@@ -72,3 +72,48 @@ def _merge_events_impl() -> dict:
     from pipeline.maintenance.events import merge_duplicate_events
 
     return merge_duplicate_events(apply=True, fuzzy=False)
+
+
+_LLM_DEDUP_CAP = 200  # pairs judged per run (cached, so this is mostly a first-run bound)
+_LLM_DEDUP_CONCURRENCY = 4
+_LLM_DEDUP_MIN_CONFIDENCE = 0.7
+
+
+async def _dedup_llm_impl(apply: bool = True, cap: int = _LLM_DEDUP_CAP) -> dict:
+    """LLM-assisted dedup for the residual the rules can't crack: two events at the
+    SAME venue + EXACT same time whose titles differ only by declension, initials,
+    a wrapper word, etc. ("Концерт Ансамбля … им. В.С. Локтева" vs "Ансамбль … им.
+    Локтева"). Blocking (venue+time) + a distinctive-shared-word pre-filter keep the
+    judged set tiny; verdicts are Redis-cached (incl. negatives) so it's near-free
+    in steady state. Only high-confidence "same" verdicts are merged."""
+    from pipeline.maintenance.events import _cluster_to_canon, _commit_event_merges, llm_candidate_pairs
+    from core.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        _title, rank, candidates = llm_candidate_pairs(db)
+    finally:
+        db.close()
+    candidates = candidates[:cap]
+    if not candidates:
+        return {"candidates": 0, "judged": 0, "confirmed": 0, "clusters": 0, "dup_events": 0, "applied": apply}
+
+    llm = LLMService()
+    sem = asyncio.Semaphore(_LLM_DEDUP_CONCURRENCY)
+
+    async def judge(a, b, ta, tb):
+        async with sem:
+            v = await llm.same_event(ta, tb)
+        return (a, b) if (v.get("same") and float(v.get("confidence", 0)) >= _LLM_DEDUP_MIN_CONFIDENCE) else None
+
+    verdicts = await asyncio.gather(*[judge(*c) for c in candidates])
+    confirmed = [p for p in verdicts if p]
+
+    db = SessionLocal()
+    try:
+        n_clusters, canon_pairs = _cluster_to_canon(confirmed, rank)
+        res = _commit_event_merges(db, canon_pairs, apply)
+    finally:
+        db.close()
+    res.update({"candidates": len(candidates), "judged": len(candidates), "confirmed": len(confirmed), "clusters": n_clusters})
+    return res

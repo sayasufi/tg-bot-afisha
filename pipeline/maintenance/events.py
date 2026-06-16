@@ -18,7 +18,7 @@ from collections import defaultdict
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey
+from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey, translit_tokens
 
 _MSK_DAY = "(occ.date_start at time zone 'UTC' at time zone 'Europe/Moscow')::date"
 
@@ -113,6 +113,57 @@ def find_pairs(db) -> tuple[dict, dict, list, list]:
     return title, rank, safe_pairs, fuzzy_pairs
 
 
+def _cluster_to_canon(union_pairs: list[tuple[str, str]], rank: dict) -> tuple[int, list[tuple[str, str]]]:
+    """Union the pairs and reduce each cluster to (dup, canon) merges — canonical
+    event is the one with the most sources, then occurrences."""
+    uf = _UF()
+    for a, b in union_pairs:
+        uf.union(a, b)
+    members_of = {v for pair in union_pairs for v in pair}
+    clusters: dict[str, list[str]] = defaultdict(list)
+    for eid in members_of:
+        clusters[uf.find(eid)].append(eid)
+    canon_pairs: list[tuple[str, str]] = []
+    for cmembers in clusters.values():
+        canon = max(cmembers, key=lambda e: (rank.get(e, (0, 0)), e))
+        canon_pairs.extend((d, canon) for d in cmembers if d != canon)
+    return len(clusters), canon_pairs
+
+
+def _commit_event_merges(db, canon_pairs: list[tuple[str, str]], apply: bool) -> dict:
+    """Repoint a duplicate event's occurrences + sources onto the canonical event
+    (dropping occurrences that would collide on date+venue), then delete the dup."""
+    repointed = deduped = 0
+    for dup_id, canon_id in canon_pairs:
+        deduped += db.execute(text(
+            "delete from events.event_occurrences d "
+            "where d.event_id = :dup and exists ("
+            "  select 1 from events.event_occurrences c "
+            "  where c.event_id = :canon and c.date_start = d.date_start "
+            "    and c.venue_id is not distinct from d.venue_id)"
+        ), {"dup": dup_id, "canon": canon_id}).rowcount
+        repointed += db.execute(
+            text("update events.event_occurrences set event_id = :canon where event_id = :dup"),
+            {"canon": canon_id, "dup": dup_id},
+        ).rowcount
+        db.execute(
+            text("update events.event_sources set event_id = :canon where event_id = :dup"),
+            {"canon": canon_id, "dup": dup_id},
+        )
+    deleted = 0
+    if canon_pairs:
+        deleted = db.execute(
+            text("delete from events.events where event_id = any(:ids)"),
+            {"ids": [d for d, _ in canon_pairs]},
+        ).rowcount
+    if apply:
+        db.commit()
+    else:
+        db.rollback()
+    return {"dup_events": len(canon_pairs), "repointed_occ": repointed,
+            "deduped_occ": deduped, "events_deleted": deleted, "applied": apply}
+
+
 def merge_duplicate_events(apply: bool, fuzzy: bool = False, allowed_fuzzy=None, on_preview=None) -> dict:
     """Merge duplicate events. ``fuzzy=False`` merges only the safe key/translit
     tier (used by the periodic flow). ``fuzzy=True`` also merges subset/ratio
@@ -121,67 +172,59 @@ def merge_duplicate_events(apply: bool, fuzzy: bool = False, allowed_fuzzy=None,
     db = SessionLocal()
     try:
         title, rank, safe_pairs, fuzzy_pairs = find_pairs(db)
-
-        uf = _UF()
-        for a, b in safe_pairs:
-            uf.union(a, b)
+        union_pairs = list(safe_pairs)
         # allowed_fuzzy is a set of frozenset({str(id), str(id)}); ids here may be
         # UUID objects, so compare on their string form.
         allow = None if allowed_fuzzy is None else {frozenset(map(str, fs)) for fs in allowed_fuzzy}
-        applied_fuzzy: list[tuple[str, str]] = []
         if fuzzy:
             for a, b in fuzzy_pairs:
                 if allow is None or frozenset((str(a), str(b))) in allow:
-                    uf.union(a, b)
-                    applied_fuzzy.append((a, b))
-
-        members_of = {v for pair in safe_pairs + applied_fuzzy for v in pair}
-        clusters: dict[str, list[str]] = defaultdict(list)
-        for eid in members_of:
-            clusters[uf.find(eid)].append(eid)
-        pairs: list[tuple[str, str]] = []  # (dup_id, canon_id)
-        for cmembers in clusters.values():
-            canon = max(cmembers, key=lambda e: (rank.get(e, (0, 0)), e))
-            pairs.extend((d, canon) for d in cmembers if d != canon)
-
+                    union_pairs.append((a, b))
+        n_clusters, canon_pairs = _cluster_to_canon(union_pairs, rank)
         if on_preview is not None:
-            on_preview(title, safe_pairs, fuzzy_pairs, len(clusters), len(pairs))
-
-        repointed = deduped = 0
-        for dup_id, canon_id in pairs:
-            deduped += db.execute(text(
-                "delete from events.event_occurrences d "
-                "where d.event_id = :dup and exists ("
-                "  select 1 from events.event_occurrences c "
-                "  where c.event_id = :canon and c.date_start = d.date_start "
-                "    and c.venue_id is not distinct from d.venue_id)"
-            ), {"dup": dup_id, "canon": canon_id}).rowcount
-            repointed += db.execute(
-                text("update events.event_occurrences set event_id = :canon where event_id = :dup"),
-                {"canon": canon_id, "dup": dup_id},
-            ).rowcount
-            db.execute(
-                text("update events.event_sources set event_id = :canon where event_id = :dup"),
-                {"canon": canon_id, "dup": dup_id},
-            )
-        deleted = 0
-        if pairs:
-            deleted = db.execute(
-                text("delete from events.events where event_id = any(:ids)"),
-                {"ids": [d for d, _ in pairs]},
-            ).rowcount
-        if apply:
-            db.commit()
-        else:
-            db.rollback()
-        return {
-            "clusters": len(clusters), "dup_events": len(pairs),
-            "repointed_occ": repointed, "deduped_occ": deduped,
-            "events_deleted": deleted, "applied": apply,
-            "safe_pairs": len(safe_pairs), "fuzzy_pairs": len(fuzzy_pairs),
-        }
+            on_preview(title, safe_pairs, fuzzy_pairs, n_clusters, len(canon_pairs))
+        res = _commit_event_merges(db, canon_pairs, apply)
+        res.update({"clusters": n_clusters, "safe_pairs": len(safe_pairs), "fuzzy_pairs": len(fuzzy_pairs)})
+        return res
     finally:
         db.close()
+
+
+def llm_candidate_pairs(db) -> tuple[dict, dict, list[tuple[str, str, str, str]]]:
+    """Same-venue + EXACT-time pairs the deterministic matcher left unresolved — the
+    blocks an LLM judge should review. Returns (title, rank, candidates) where each
+    candidate is (event_a, event_b, title_a, title_b). Pre-filtered to pairs that
+    share a distinctive (>=4-char) word, so a venue full of different shows at one
+    time (e.g. a multiplex at 19:00) doesn't trigger an O(n^2) burst of pointless
+    judgments — only plausibly-same titles ("…Локтева" / "Ансамбль…Локтева") pass."""
+    title, rank, safe_pairs, fuzzy_pairs = find_pairs(db)
+    resolved = {frozenset((str(a), str(b))) for a, b in safe_pairs + fuzzy_pairs}
+    tok_cache: dict[str, set[str]] = {}
+
+    def distinctive(eid: str) -> set[str]:
+        if eid not in tok_cache:
+            tok_cache[eid] = {t for t in translit_tokens(title.get(eid, "")) if len(t) >= 4}
+        return tok_cache[eid]
+
+    by_venue_time: dict[tuple, set] = defaultdict(set)
+    for eid, venue_id, _d, ds in db.execute(text(_OCCS)).all():
+        if venue_id is not None:
+            by_venue_time[(venue_id, ds)].add(eid)
+
+    candidates: list[tuple[str, str, str, str]] = []
+    seen: set[frozenset] = set()
+    for bucket in by_venue_time.values():
+        ids = sorted(bucket)
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                a, b = ids[i], ids[j]
+                key = frozenset((str(a), str(b)))
+                if key in resolved or key in seen:
+                    continue
+                seen.add(key)
+                if distinctive(a) & distinctive(b):  # share a real word → worth asking
+                    candidates.append((a, b, title.get(a, ""), title.get(b, "")))
+    return title, rank, candidates
 
 
 def dump_fuzzy_pairs() -> list[dict]:

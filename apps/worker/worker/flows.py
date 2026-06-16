@@ -66,6 +66,14 @@ async def dedup_candidates():
     return await dedup._dedup_impl()
 
 
+@flow(name="dedup-llm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+async def dedup_llm():
+    """LLM-assisted dedup of same-venue+same-time pairs the rules can't resolve
+    (declension/initials/wrapper-word variants). Cached + blocked, so cheap in
+    steady state."""
+    return await dedup._dedup_llm_impl(apply=True)
+
+
 @flow(name="merge-duplicate-venues", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
 def merge_duplicate_venues():
     return dedup._merge_venues_impl()
