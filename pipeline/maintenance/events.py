@@ -20,7 +20,12 @@ from sqlalchemy import text
 from core.db.session import SessionLocal
 from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey, translit_tokens
 
-_MSK_DAY = "(occ.date_start at time zone 'UTC' at time zone 'Europe/Moscow')::date"
+# date_start is timestamptz; one conversion to Moscow gives the true MSK calendar
+# day. The old double-hop ("…'UTC' at time zone 'Europe/Moscow'") shifted a
+# 00:00-MSK occurrence onto the PREVIOUS day under a UTC session, so a date-only
+# (midnight placeholder) occurrence never bucketed with its timed twin the same
+# day — the dedup silently missed every "afisha 00:00 + Yandex 19:00" pair.
+_MSK_DAY = "(occ.date_start at time zone 'Europe/Moscow')::date"
 
 _EVENTS = """
 select e.event_id, e.canonical_title,
@@ -150,6 +155,25 @@ def _commit_event_merges(db, canon_pairs: list[tuple[str, str]], apply: bool) ->
             text("update events.event_sources set event_id = :canon where event_id = :dup"),
             {"canon": canon_id, "dup": dup_id},
         )
+    # Drop redundant midnight placeholders: when a merge unites a date-only "time
+    # unknown" occurrence (afisha/kudago store 00:00 MSK) with a real timed one for
+    # the SAME canonical event, venue and Moscow day, the 00:00 row is just a
+    # placeholder — remove it so the event shows the real start ("19:00"), not the
+    # midnight stand-in that reads as an all-day run.
+    placeholders = 0
+    canons = list({c for _, c in canon_pairs})
+    if canons:
+        placeholders = db.execute(text(
+            "delete from events.event_occurrences d "
+            "where d.event_id = any(:canons) "
+            "  and (d.date_start at time zone 'Europe/Moscow')::time = time '00:00' "
+            "  and exists (select 1 from events.event_occurrences t "
+            "     where t.event_id = d.event_id "
+            "       and t.venue_id is not distinct from d.venue_id "
+            "       and (t.date_start at time zone 'Europe/Moscow')::date "
+            "           = (d.date_start at time zone 'Europe/Moscow')::date "
+            "       and (t.date_start at time zone 'Europe/Moscow')::time <> time '00:00')"
+        ), {"canons": canons}).rowcount
     deleted = 0
     if canon_pairs:
         deleted = db.execute(
@@ -161,7 +185,8 @@ def _commit_event_merges(db, canon_pairs: list[tuple[str, str]], apply: bool) ->
     else:
         db.rollback()
     return {"dup_events": len(canon_pairs), "repointed_occ": repointed,
-            "deduped_occ": deduped, "events_deleted": deleted, "applied": apply}
+            "deduped_occ": deduped, "placeholders_dropped": placeholders,
+            "events_deleted": deleted, "applied": apply}
 
 
 def merge_duplicate_events(apply: bool, fuzzy: bool = False, allowed_fuzzy=None, on_preview=None) -> dict:
