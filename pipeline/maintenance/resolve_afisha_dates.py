@@ -38,11 +38,12 @@ join events.raw_events r on r.raw_id = es.raw_id
 where e.status = 'active' and s.name = 'afisha_ru'
   and es.source_event_url like '%afisha.ru/performance/%'
 group by e.event_id
-having coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0) between 2 and 12
-   and (
-     count(distinct o.occurrence_id) < coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0)
-     or bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
-   )
+having
+  -- a leftover [min,max] span renders as a misleading range -> always resolve it,
+  bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
+  -- or we have fewer discrete dates than the detail can give (capped at 12)
+  or ( coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0) >= 2
+       and count(distinct o.occurrence_id) < least(coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0), 12) )
 limit :lim
 """
 

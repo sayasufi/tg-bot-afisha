@@ -308,25 +308,12 @@ class AfishaRuConnector:
         horizon = today + timedelta(days=_LOOKAHEAD_DAYS)
         start_dt = self._parse_dt(sched.get("MinScheduleDate"))
         end_dt = self._parse_dt(sched.get("MaxScheduleDate"))
-        sessions = int(sched.get("SessionsCount") or 0)
-        span_days = (end_dt.date() - start_dt.date()).days if (start_dt and end_dt) else 0
 
-        # Treat as a continuous run (one "до …" span) only when the sessions are
-        # DENSE (roughly daily) — e.g. an exhibition. A handful of sessions across
-        # weeks are discrete show dates, and a span there is misleading ("14 июля —
-        # 27 сентября" for what is really 3 performances); fall through and emit the
-        # known first/last dates instead.
-        if span_days > 1 and sessions >= span_days * 0.5:
-            run_start = start_dt if start_dt.date() >= today else datetime(today.year, today.month, today.day, tzinfo=_MSK)
-            if end_dt.date() < today:
-                return []
-            return [{
-                "start": int(run_start.timestamp()),
-                "end": int(end_dt.timestamp()),
-                "start_date": run_start.date().isoformat(),
-                "start_time": "00:00:00",
-            }]
-
+        # NEVER emit a [min,max] span — a span renders as a misleading date range
+        # ("1 сентября — 30 сентября") in the card. The listing only knows the first
+        # and last dates, so emit those as discrete dates here; resolve_afisha_dates
+        # later fills the middle ones from the detail page. Better to show partial
+        # real dates than a range.
         rows: list[dict] = []
         for dt in (start_dt, end_dt):
             if not dt:
