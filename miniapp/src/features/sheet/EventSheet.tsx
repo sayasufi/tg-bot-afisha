@@ -134,7 +134,10 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
         : `https://yandex.ru/maps/?rtext=~${lat},${lon}&rtt=pd&z=16`
       : null;
   const near = nearLabel(userPos, lat != null && lon != null ? [lat, lon] : null);
-  const accession = `ОКР · ${accessionNo(selected.event_id)} / ${CAT_CODE[selected.category] || CAT_CODE.other}`;
+  // Public catalogue code "MSK-04PN" (unique, stable, URL-ready) + category tag.
+  // Falls back to the legacy hashed number only if a cached item predates `code`.
+  const code = selected.code || detail?.code || `ОКР·${accessionNo(selected.event_id)}`;
+  const accession = `${code} · ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
   // The soonest session drives the headline (`dates`); show up to 3 more upcoming
   // sessions as chips (4 dates total), then a compact "+N" for the rest, so a long

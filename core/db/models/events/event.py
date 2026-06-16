@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Float, Index, String, Text
+from sqlalchemy import BigInteger, Float, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,11 @@ class Event(Base, TimestampMixin):
     )
 
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Stable public number behind the "MSK-04PN" code (see core/codes.py). Assigned
+    # once from a DB sequence (migration 0009) and never reused — unique by design.
+    display_no: Mapped[int | None] = mapped_column(
+        BigInteger, server_default=text("nextval('events.events_display_no_seq')"), unique=True, nullable=True
+    )
     canonical_title: Mapped[str] = mapped_column(String(500), nullable=False)
     canonical_description: Mapped[str] = mapped_column(Text, default="", nullable=False)
     category: Mapped[str] = mapped_column(String(64), default="other", nullable=False)

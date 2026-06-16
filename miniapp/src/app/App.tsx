@@ -414,6 +414,7 @@ export function App() {
         const occ = d.occurrences?.[0];
         openEvent({
           event_id: d.event_id,
+          code: d.code,
           title: d.canonical_title,
           category: d.category,
           date_start: occ?.date_start ?? "",

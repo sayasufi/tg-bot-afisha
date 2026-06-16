@@ -10,6 +10,7 @@ from geoalchemy2 import Geography, Geometry
 from sqlalchemy import Select, and_, bindparam, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.codes import event_code
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
 
@@ -282,7 +283,11 @@ class EventQueryService:
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
         stmt = (
-            select(Event, EventOccurrence, Venue.name.label("venue_name"), Venue.hours_json.label("venue_hours"), lat_col, lon_col)
+            select(
+                Event, EventOccurrence,
+                Venue.name.label("venue_name"), Venue.hours_json.label("venue_hours"),
+                Venue.city.label("venue_city"), lat_col, lon_col,
+            )
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active")
@@ -314,6 +319,7 @@ class EventQueryService:
         items = [
             {
                 "event_id": event.event_id,
+                "code": event_code(event.display_no, venue_city),
                 "title": event.canonical_title,
                 "category": event.category,
                 "date_start": occ.date_start,
@@ -325,7 +331,7 @@ class EventQueryService:
                 "lon": float(lon) if lon is not None else None,
                 "primary_image_url": event.cached_image_url or event.primary_image_url,
             }
-            for event, occ, venue_name, venue_hours, lat, lon in rows
+            for event, occ, venue_name, venue_hours, venue_city, lat, lon in rows
         ]
         # DISTINCT ON forces event_id ordering; present pins by soonest date instead.
         items.sort(key=lambda it: it["date_start"])
@@ -341,6 +347,7 @@ class EventQueryService:
                 Venue.name.label("venue_name"),
                 Venue.address.label("venue_address"),
                 Venue.hours_json.label("venue_hours"),
+                Venue.city.label("venue_city"),
                 func.ST_Y(cast(Venue.geom, Geometry)).label("lat"),
                 func.ST_X(cast(Venue.geom, Geometry)).label("lon"),
             )
@@ -368,10 +375,12 @@ class EventQueryService:
                 "lat": float(lat) if lat is not None else None,
                 "lon": float(lon) if lon is not None else None,
             }
-            for occ, venue_name, venue_address, venue_hours, lat, lon in rows
+            for occ, venue_name, venue_address, venue_hours, venue_city, lat, lon in rows
         ]
+        detail_city = rows[0].venue_city if rows else None
         return {
             "event_id": event.event_id,
+            "code": event_code(event.display_no, detail_city),
             "canonical_title": event.canonical_title,
             "canonical_description": event.canonical_description,
             "category": event.category,

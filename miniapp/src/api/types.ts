@@ -1,5 +1,6 @@
 export type EventItem = {
   event_id: string;
+  code?: string | null; // public "MSK-04PN" accession code
   title: string;
   category: string;
   date_start: string;
@@ -44,6 +45,7 @@ export type VenueHours = { text?: string; week?: (string[][] | null)[] };
 
 export type EventDetail = {
   event_id: string;
+  code?: string | null; // public "MSK-04PN" accession code
   canonical_title: string;
   canonical_description: string;
   category: string;
