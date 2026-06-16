@@ -111,39 +111,53 @@
 .daycell {
   flex: 0 0 auto;
   width: 46px;
-  height: 54px;
+  height: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  border: 1px solid var(--line);
+  gap: 5px;
+  /* Soft hairline borders keep the rail light; today/selected get the strong ink
+     frame so they still read at a glance. */
+  border: 1px solid var(--line-soft);
   background: var(--plinth);
   color: var(--ink);
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .daycell__dow {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
 
+/* Day number in Martian Mono (tabular) at a medium weight — the display font at
+   700 read as chunky here; this matches the wall-label numerals and sits quiet. */
 .daycell__num {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 17px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 16px;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
+/* Today: a solid ink frame instead of a doubled inset ring. */
 .daycell--today {
-  box-shadow: inset 0 0 0 1px var(--ink);
+  border-color: var(--ink);
 }
 
+.daycell--today .daycell__dow {
+  color: var(--ink);
+}
+
+/* Selected day: the single acid fill, framed in ink. */
 .daycell--active {
   background: var(--acid);
+  border-color: var(--ink);
   color: var(--on-acid);
 }
 
