@@ -155,7 +155,9 @@ class RecommendationService:
         floor = now.replace(hour=0, minute=0, second=0, microsecond=0)
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
-        stmt = (
+        # One row per event = its soonest upcoming occurrence (DISTINCT ON requires
+        # the event_id lead in ORDER BY).
+        inner = (
             select(
                 Event.event_id, Event.canonical_title.label("title"), Event.category,
                 Event.created_at, Event.cached_image_url, Event.primary_image_url,
@@ -169,8 +171,11 @@ class RecommendationService:
             .where(func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= floor)
             .distinct(Event.event_id)
             .order_by(Event.event_id, EventOccurrence.date_start.asc())
-            .limit(_POOL_CAP)
+            .subquery()
         )
+        # Then keep the SOONEST events across the whole city — not a slice ordered by
+        # event_id (UUID), which silently dropped half the calendar from every rail.
+        stmt = select(inner).order_by(inner.c.date_start.asc()).limit(_POOL_CAP)
         rows = (await self.db.execute(stmt)).mappings().all()
         return [dict(r) for r in rows]
 

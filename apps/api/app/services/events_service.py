@@ -81,6 +81,9 @@ async def _cluster_cache_set(key: str, value: dict) -> None:
 # Placeholder venue name for events whose source gave no venue (see worker enrich).
 # It has no real location, so it must never appear on the map / in clusters / counts.
 _PLACEHOLDER_VENUE = "Unknown venue"
+# Hard cap on map-detail rows when the caller passes no limit — without it a
+# zoomed-out detail request could serialise every pin in the city in one response.
+_MAX_MAP_ITEMS = 2000
 
 
 class EventQueryService:
@@ -277,7 +280,7 @@ class EventQueryService:
         # One row per event — the soonest in-window occurrence — so an event with
         # several showtimes (e.g. 16 & 23 June) shows a single pin, not one per date.
         stmt = stmt.distinct(Event.event_id).order_by(Event.event_id, EventOccurrence.date_start.asc())
-        rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
+        rows = (await self.db.execute(stmt.limit(limit or _MAX_MAP_ITEMS).offset(offset))).all()
         items = [
             {
                 "event_id": event.event_id,

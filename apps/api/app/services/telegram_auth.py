@@ -2,11 +2,17 @@
 import hashlib
 import hmac
 import json
+import time
 from urllib.parse import parse_qsl
 
 from fastapi import HTTPException
 
 from core.config.settings import get_settings
+
+# Max age of initData. A valid signature lasts forever otherwise, so a captured
+# initData string would be replayable indefinitely; Telegram stamps auth_date for
+# exactly this freshness check. 24h covers a normal mini-app session.
+_INIT_DATA_MAX_AGE_SECONDS = 24 * 3600
 
 
 def validate_init_data(init_data: str) -> dict:
@@ -29,5 +35,14 @@ def validate_init_data(init_data: str) -> dict:
     calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(calculated_hash, provided_hash):
         raise HTTPException(status_code=401, detail="invalid init data")
+
+    # Only trust auth_date AFTER the signature checks out — then reject stale data
+    # so a leaked initData can't be replayed forever.
+    try:
+        auth_date = int(data.get("auth_date", "0"))
+    except (TypeError, ValueError):
+        auth_date = 0
+    if auth_date <= 0 or time.time() - auth_date > _INIT_DATA_MAX_AGE_SECONDS:
+        raise HTTPException(status_code=401, detail="init data expired")
 
     return json.loads(data.get("user") or "{}")
