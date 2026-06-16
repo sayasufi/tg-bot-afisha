@@ -23,8 +23,10 @@ _SCHEDULE = [
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),
-    (flows.merge_duplicate_venues, 21600),  # 6h — collapse near-dup venues
-    (flows.merge_duplicate_events, 21600),  # 6h — collapse cross-source dup events (safe tier)
+    # Self-heal venue+event dups every 15 min (ordered: venues then events) so the
+    # cross-venue-row case can't linger. Write-time dedup already handles the
+    # common same-venue case immediately.
+    (flows.self_heal_dedup, 900),
     (flows.backfill_venues_osm, 86400),
     (flows.resolve_venue_hours, 600),
     (flows.cache_event_images, 120),

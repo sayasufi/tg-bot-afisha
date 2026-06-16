@@ -76,6 +76,17 @@ def merge_duplicate_events():
     return dedup._merge_events_impl()
 
 
+@flow(name="self-heal-dedup", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+def self_heal_dedup():
+    """Runs frequently to close the small window where two sources put one event
+    at two not-yet-merged venue rows. Order matters: collapse the duplicate
+    venues first, then the events now sitting at the shared venue. Idempotent and
+    near-instant when there is nothing to merge."""
+    venues = dedup._merge_venues_impl()
+    events = dedup._merge_events_impl()
+    return {"venues": venues, "events": events}
+
+
 # --- enrichment side-jobs ----------------------------------------------------
 
 @flow(name="backfill-venues-osm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
