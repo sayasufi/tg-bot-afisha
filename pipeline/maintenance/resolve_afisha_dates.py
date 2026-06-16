@@ -45,11 +45,13 @@ where e.status = 'active' and s.name = 'afisha_ru' and e.category <> 'exhibition
   )
 group by e.event_id
 having
-  coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0) > 2
-  and (
-    count(distinct o.occurrence_id) < least(coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0), 12)
-    or bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
+  -- a multi-show event whose stored dates are still sparse (missing the middle ones)
+  (
+    coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0) > 2
+    and count(distinct o.occurrence_id) < least(coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0), 12)
   )
+  -- OR a leftover span (any session count): a show must never render as a date range
+  or bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
 limit :lim
 """
 
