@@ -17,8 +17,8 @@ one place):
 Sources are re-pointed to the split they came from (matched by URL); the map
 renders from occurrences, so a source that can't be matched simply stays put.
 
-Run:      docker compose -p tg-bot-afisha exec -T prefect-serve python -m scripts.resplit_multivenue_events
-Preview:  ... python -m scripts.resplit_multivenue_events --dry-run
+Run:      docker compose -p tg-bot-afisha exec -T prefect-serve python -m pipeline.maintenance.resplit
+Preview:  ... python -m pipeline.maintenance.resplit --dry-run
 """
 import math
 import sys

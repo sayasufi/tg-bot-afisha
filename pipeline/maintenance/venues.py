@@ -18,8 +18,8 @@ different places that merely share a fallback geocode apart ("Управа Ба�
 района" / "Театр на Басманной", both pinned to the district centroid).
 Canonical venue = the one with the most occurrences. Idempotent.
 
-Run:      docker compose -p tg-bot-afisha exec -T prefect-serve python -m scripts.merge_venues_fuzzy
-Preview:  ... python -m scripts.merge_venues_fuzzy --dry-run
+Run:      docker compose -p tg-bot-afisha exec -T prefect-serve python -m pipeline.maintenance.venues
+Preview:  ... python -m pipeline.maintenance.venues --dry-run
 """
 import sys
 

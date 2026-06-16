@@ -80,7 +80,7 @@ def merge_duplicate_events():
 def expire_past_events():
     """Lifecycle: expire events whose last occurrence day has passed, revive any
     that gained an upcoming one, so the app never shows what already happened."""
-    from scripts.expire_past_events import expire_past_events as _run
+    from pipeline.maintenance.lifecycle import expire_past_events as _run
 
     return _run(apply=True)
 

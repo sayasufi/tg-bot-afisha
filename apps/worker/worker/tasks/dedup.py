@@ -58,7 +58,7 @@ def _merge_venues_impl() -> dict:
     write-time reuse in ``get_or_create_venue`` (e.g. borderline name variants
     that only become certain once both venues co-host the same event). Idempotent.
     """
-    from scripts.merge_venues_fuzzy import merge_fuzzy_venues
+    from pipeline.maintenance.venues import merge_fuzzy_venues
 
     return merge_fuzzy_venues(apply=True)
 
@@ -69,6 +69,6 @@ def _merge_events_impl() -> dict:
     (safe tier only — exact / transliterated / punctuation-normalised; the fuzzy
     subset tier is left to a reviewed one-off, never merged unattended). Idempotent.
     """
-    from scripts.merge_duplicate_events import merge_duplicate_events
+    from pipeline.maintenance.events import merge_duplicate_events
 
     return merge_duplicate_events(apply=True, fuzzy=False)

@@ -11,15 +11,15 @@ Invariants (each must be 0):
 Fuzzy review candidates (a distinctive-subset pair like "Женитьба" / "Женитьба
 Фигаро") are reported for information — they are intentionally not auto-merged.
 
-Run:  docker compose -p tg-bot-afisha exec -T prefect-serve python -m scripts.dedup_healthcheck
+Run:  docker compose -p tg-bot-afisha exec -T prefect-serve python -m pipeline.maintenance.healthcheck
 """
 import sys
 
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from scripts.merge_duplicate_events import find_pairs
-from scripts.resplit_multivenue_events import resplit
+from pipeline.maintenance.events import find_pairs
+from pipeline.maintenance.resplit import resplit
 
 _NEAR_DUP_VENUES = """
 with v as (

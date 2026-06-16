@@ -9,8 +9,8 @@ event by ``title_match.same_event`` (exact / transliterated / token-subset, with
 number-and-generic guards). The canonical event is the one with the most sources
 (then occurrences); the rest are repointed onto it and deleted.
 
-Run:      docker compose -p tg-bot-afisha exec -T prefect-serve python -m scripts.merge_duplicate_events
-Preview:  ... python -m scripts.merge_duplicate_events --dry-run
+Run:      docker compose -p tg-bot-afisha exec -T prefect-serve python -m pipeline.maintenance.events
+Preview:  ... python -m pipeline.maintenance.events --dry-run
 """
 import sys
 from collections import defaultdict
