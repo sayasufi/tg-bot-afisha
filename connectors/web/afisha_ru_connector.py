@@ -153,7 +153,7 @@ class AfishaRuConnector:
         items = widget.get("Items") if isinstance(widget.get("Items"), list) else []
         pager = widget.get("Pager") if isinstance(widget.get("Pager"), dict) else {}
         total_pages = int(pager.get("PagesCount") or 1)
-        records = await self._build_records(session, items, category, today)
+        records = self._build_records(items, category, today)
         return records, total_pages, len(items)
 
     async def fetch(self, cursor: str | None = None) -> tuple[list[RawRecord], str | None]:
@@ -226,7 +226,11 @@ class AfishaRuConnector:
 
     # --- record building ---------------------------------------------------
 
-    async def _build_records(self, session: AsyncSession, items: list, category: str, today) -> list[RawRecord]:
+    def _build_records(self, items: list, category: str, today) -> list[RawRecord]:
+        # Fast: listing fields only (Min/Max + count). The listing has no discrete
+        # dates, so a sparse run yields its first/last dates here; the exact middle
+        # dates are filled later by the idempotent resolve_afisha_dates job (one
+        # detail fetch per event, once) — never a detail fetch on every scan.
         records: list[RawRecord] = []
         for item in items:
             if not isinstance(item, dict):
@@ -237,28 +241,20 @@ class AfishaRuConnector:
             title = tile.get("Name")
             if not event_id or not title:
                 continue
-            sched = tile.get("ScheduleInfo") if isinstance(tile.get("ScheduleInfo"), dict) else {}
-            dates = self._build_dates(sched, tile.get("Notice"), today)
+            dates = self._build_dates(tile.get("ScheduleInfo"), tile.get("Notice"), today)
             if not dates:
                 continue  # nothing upcoming in the window
-            # A sparse run (a few shows across weeks) only carries min/max in the
-            # listing, which reads as a misleading span — fetch the detail page for
-            # the exact session dates. Bounded to sparse events to limit requests.
-            sessions = int(sched.get("SessionsCount") or 0)
-            s_dt = self._parse_dt(sched.get("MinScheduleDate"))
-            e_dt = self._parse_dt(sched.get("MaxScheduleDate"))
-            span = (e_dt.date() - s_dt.date()).days if (s_dt and e_dt) else 0
-            if span > 1 and 3 <= sessions < span * 0.5:
-                detail = await self._detail_sessions(session, self._abs_url(tile.get("Url")), today)
-                await asyncio.sleep(self._PAGE_DELAY * 0.4 + random.random() * self._PAGE_JITTER)
-                if detail:
-                    dates = detail
+            sched = tile.get("ScheduleInfo") if isinstance(tile.get("ScheduleInfo"), dict) else {}
             price_text, is_free = self._price(tile.get("ScheduleInfo"))
             payload = {
                 "id": event_id,
                 "title": title,
                 "description": self._strip_html(tile.get("Description")),
                 "dates": dates,
+                # How many sessions the listing reports — lets the resolve job tell a
+                # sparse run (few discrete dates worth fetching from the detail page)
+                # from a dense run (keep the listing span); 0 if unknown.
+                "sessions_count": int(sched.get("SessionsCount") or 0),
                 "site_url": self._abs_url(tile.get("Url")),
                 "images": self._images(tile),
                 # The rubric we fetched IS the category — the single authoritative

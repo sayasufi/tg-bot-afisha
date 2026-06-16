@@ -85,6 +85,16 @@ def expire_past_events():
     return _run(apply=True)
 
 
+@flow(name="resolve-afisha-dates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+async def resolve_afisha_dates():
+    """Fill exact session dates for sparse afisha events from their detail pages.
+    Idempotent + capped, so it touches only the backlog and new sparse events —
+    never a detail fetch on every listing scan."""
+    from pipeline.maintenance.resolve_afisha_dates import resolve
+
+    return await resolve(apply=True)
+
+
 @flow(name="self-heal-dedup", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
 def self_heal_dedup():
     """Runs frequently to close the small window where two sources put one event
