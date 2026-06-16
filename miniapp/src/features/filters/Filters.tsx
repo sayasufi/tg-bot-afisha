@@ -39,6 +39,18 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
     value.categories.length === 0 ? "Все" : value.categories.length === 1 ? categoryMeta(value.categories[0]).label : `${value.categories.length} катег.`;
   const dateLabel = summarizeDate(value.dateFrom, value.dateTo);
 
+  // Active filters as dismissible chips — see everything that's narrowing the list
+  // at a glance, and clear any one in a single tap.
+  const activeChips: { key: string; label: string; clear: () => void }[] = [];
+  if (value.q.trim()) activeChips.push({ key: "q", label: `«${value.q.trim()}»`, clear: () => onChange({ ...value, q: "" }) });
+  if (value.dateFrom || value.dateTo)
+    activeChips.push({ key: "date", label: summarizeDate(value.dateFrom, value.dateTo), clear: () => onChange({ ...value, dateFrom: "", dateTo: "" }) });
+  for (const c of value.categories)
+    activeChips.push({ key: `c:${c}`, label: categoryMeta(c).label, clear: () => onChange({ ...value, categories: value.categories.filter((x) => x !== c) }) });
+  if (value.priceMax) activeChips.push({ key: "price", label: `до ${value.priceMax} ₽`, clear: () => onChange({ ...value, priceMax: "" }) });
+  if (value.radiusKm > 0)
+    activeChips.push({ key: "radius", label: `до ${String(value.radiusKm).replace(".", ",")} км`, clear: () => onChange({ ...value, radiusKm: 0 }) });
+
   // Reveal native date inputs when a custom range is already set.
   useEffect(() => {
     if (isCustomDates) setShowCustomDates(true);
@@ -127,6 +139,26 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             )}
           </div>
 
+          {activeChips.length > 0 && (
+            <div className="csheet__active">
+              {activeChips.map((ch) => (
+                <button
+                  key={ch.key}
+                  type="button"
+                  className="activechip"
+                  aria-label={`Убрать фильтр: ${ch.label}`}
+                  onClick={() => {
+                    hapticSelection();
+                    ch.clear();
+                  }}
+                >
+                  <span>{ch.label}</span>
+                  <IconClose size={12} />
+                </button>
+              ))}
+            </div>
+          )}
+
           <span className="kicker">Когда</span>
           <div className="chips csheet__presets">
             {PRESETS.map((p) => (
@@ -152,6 +184,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
                 className={`daycell${activeDay === d.iso ? " daycell--active" : ""}${d.today ? " daycell--today" : ""}`}
                 onClick={() => tapDay(d.iso)}
               >
+                <span className="daycell__mon">{d.monLabel}</span>
                 <span className="daycell__dow">{d.today ? "сег" : d.tomorrow ? "зав" : d.dow}</span>
                 <span className="daycell__num">{d.day}</span>
               </button>

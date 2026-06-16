@@ -111,12 +111,12 @@
 .daycell {
   flex: 0 0 auto;
   width: 46px;
-  height: 56px;
+  height: 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 3px;
   /* Soft hairline borders keep the rail light; today/selected get the strong ink
      frame so they still read at a glance. */
   border: 1px solid var(--line-soft);
@@ -124,6 +124,18 @@
   color: var(--ink);
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+/* Month marker — shown on the first cell and at each month boundary so a number
+   near month-end isn't ambiguous; empty cells reserve the line so the rail aligns. */
+.daycell__mon {
+  height: 10px;
+  line-height: 10px;
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
 }
 
 .daycell__dow {
@@ -161,8 +173,62 @@
   color: var(--on-acid);
 }
 
-.daycell--active .daycell__dow {
+.daycell--active .daycell__dow,
+.daycell--active .daycell__mon {
   color: var(--on-acid);
+}
+
+.daycell--today .daycell__mon {
+  color: var(--ink);
+}
+
+/* ---------- Active-filter chips — current selections, tap × to drop ---------- */
+.csheet__active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.activechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 11px;
+  border: 1px solid var(--line);
+  background: var(--vitrine);
+  color: var(--ink);
+  font-family: var(--grotesk);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.activechip svg {
+  flex: 0 0 auto;
+  color: var(--ink-dim);
+}
+
+.activechip:active {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.activechip:active svg {
+  color: var(--on-acid);
+}
+
+/* ---------- Catalogue section rules — hairline under each section title ---------- */
+.csheet__panel > .kicker {
+  display: block;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.csheet__radius-head {
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 

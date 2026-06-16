@@ -59,20 +59,25 @@ export function matchPreset(dateFrom: string, dateTo: string, now: Date = new Da
 }
 
 const RU_DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+const RU_MON = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
-export type DayCell = { iso: string; dow: string; day: number; today: boolean; tomorrow: boolean };
+export type DayCell = { iso: string; dow: string; day: number; today: boolean; tomorrow: boolean; monLabel: string };
 
 // The next `count` days as cells for the day-strip selector. The first two are
-// flagged so the UI can label them "Сегодня" / "Завтра".
+// flagged so the UI can label them "Сегодня" / "Завтра". `monLabel` carries the
+// (uppercase) month on the first cell and whenever the strip crosses into a new
+// month, so a number near the month boundary isn't ambiguous; "" otherwise.
 export function nextDays(count = 14, now: Date = new Date()): DayCell[] {
   const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let prevMonth = -1;
   return Array.from({ length: count }, (_, i) => {
     const d = addDays(t, i);
-    return { iso: iso(d), dow: RU_DOW[d.getDay()], day: d.getDate(), today: i === 0, tomorrow: i === 1 };
+    const m = d.getMonth();
+    const monLabel = i === 0 || m !== prevMonth ? RU_MON[m].toUpperCase() : "";
+    prevMonth = m;
+    return { iso: iso(d), dow: RU_DOW[d.getDay()], day: d.getDate(), today: i === 0, tomorrow: i === 1, monLabel };
   });
 }
-
-const RU_MON = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 // Compact pill summary token, e.g. "СЕГОДНЯ" / "12–18 ИЮН" / "ВСЕ ДАТЫ".
 export function summarizeDate(dateFrom: string, dateTo: string, now: Date = new Date()): string {
