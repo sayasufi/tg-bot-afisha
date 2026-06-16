@@ -173,9 +173,11 @@ class RecommendationService:
             .order_by(Event.event_id, EventOccurrence.date_start.asc())
             .subquery()
         )
-        # Then keep the SOONEST events across the whole city — not a slice ordered by
-        # event_id (UUID), which silently dropped half the calendar from every rail.
-        stmt = select(inner).order_by(inner.c.date_start.asc()).limit(_POOL_CAP)
+        # Then keep the SOONEST-happening events across the whole city — not a slice
+        # ordered by event_id (UUID), which silently dropped half the calendar from
+        # every rail. Clamp past starts to today so ongoing/permanent runs (old
+        # date_start, far-future end) sort as "now", not ahead of upcoming events.
+        stmt = select(inner).order_by(func.greatest(inner.c.date_start, floor).asc()).limit(_POOL_CAP)
         rows = (await self.db.execute(stmt)).mappings().all()
         return [dict(r) for r in rows]
 
