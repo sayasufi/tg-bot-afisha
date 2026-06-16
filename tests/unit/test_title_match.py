@@ -39,11 +39,20 @@ def test_safe_tier_merges_at_every_level(a, b):
     ("Мэйти", "Мэйти. Концерт на крыше"),
     ("Стас Старовойтов", "Стас Старовойтов Сольный концерт"),
     ("Расул Чабдаров", "Расул Чабдаров. Сольный концерт"),
+    # genitive case: one source names the artist, another says "концерт <gen>"
+    ("Владимир Пресняков", "концерт Владимира Преснякова"),
+    ("Расул Чабдаров", "концерт Расула Чабдарова"),
 ])
 def test_filler_subset_is_auto_not_safe(a, b):
     assert same_event(a, b, level="safe") is False
     assert same_event(a, b, level="auto") is True
     assert same_event(a, b, level="fuzzy") is True
+
+
+def test_declension_does_not_overmerge_short_words():
+    # внутреннее изменение (не суффикс) и короткие слова не должны схлопываться
+    assert same_event("Кошка", "Кошки", level="fuzzy") is False
+    assert same_event("Лев", "Льва", level="fuzzy") is False
 
 
 # --- fuzzy tier only: distinctive extra word => review, never auto-merge --------

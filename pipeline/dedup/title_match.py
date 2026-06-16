@@ -112,6 +112,29 @@ def _numbers(s: str) -> set[str]:
     return set(_NUM.findall(s or ""))
 
 
+def _stem_eq(s: str, t: str) -> bool:
+    """Two cyrillic tokens are the same word modulo a short declension suffix —
+    "пресняков"/"преснякова", "владимир"/"владимира" (one source names the artist,
+    another puts it in the genitive: "концерт Владимира Преснякова")."""
+    if s == t:
+        return True
+    short, lng = (s, t) if len(s) <= len(t) else (t, s)
+    return len(short) >= 4 and lng.startswith(short) and len(lng) - len(short) <= 2
+
+
+def _subset_extra(small: set[str], big: set[str]):
+    """If every token in ``small`` has a stem-equivalent in ``big``, return the
+    unmatched ``big`` tokens (the "extra" words); else None. Stem-aware so case
+    differences don't defeat the subset."""
+    matched: set[str] = set()
+    for s in small:
+        m = next((u for u in big if u not in matched and _stem_eq(s, u)), None)
+        if m is None:
+            return None
+        matched.add(m)
+    return big - matched
+
+
 def same_event(a: str, b: str, level: str = "auto", strict_numbers: bool = True) -> bool:
     """True if the two titles denote the same event (caller has already checked
     venue/day proximity). ``level`` is the confidence demanded:
@@ -140,9 +163,10 @@ def same_event(a: str, b: str, level: str = "auto", strict_numbers: bool = True)
 
     ca, cb = _cyr_tokens(a), _cyr_tokens(b)
     small, big = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
-    # Token-subset anchored by a distinctive (>=4-char, non-generic) shared word.
-    if small and small <= big and any(len(t) >= 4 and t not in _GENERIC for t in small):
-        extra = big - small
+    # Token-subset (stem-aware) anchored by a distinctive (>=4-char, non-generic)
+    # shared word; the *extra* words decide auto vs fuzzy.
+    extra = _subset_extra(small, big) if small else None
+    if extra is not None and any(len(t) >= 4 and t not in _GENERIC for t in small):
         extra_is_filler = all(t in _FILLER or len(t) <= 2 for t in extra)
         if level == "auto":
             if extra_is_filler:
