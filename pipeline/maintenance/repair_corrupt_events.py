@@ -39,10 +39,12 @@ def _find_corrupt(db):
     raw_starts: dict = defaultdict(set)
     has_dates: set = set()
     titles: dict = {}
+    # All statuses: a date-corrupt event is often already 'expired' (its bogus
+    # now()-date passed), which only hides the real future event — we still rebuild it.
     for eid, ct, payload in db.execute(text("""
         select es.event_id, e.canonical_title, r.raw_payload_json
         from events.event_sources es
-        join events.events e on e.event_id = es.event_id and e.status = 'active'
+        join events.events e on e.event_id = es.event_id
         join events.raw_events r on r.raw_id = es.raw_id
     """)).all():
         k = str(eid)
@@ -61,8 +63,7 @@ def _find_corrupt(db):
     occ_by_ev: dict = defaultdict(list)
     for eid, ts in db.execute(text(
         "select o.event_id, extract(epoch from o.date_start)::bigint "
-        "from events.event_occurrences o join events.events e "
-        "on e.event_id = o.event_id and e.status = 'active'"
+        "from events.event_occurrences o"
     )).all():
         occ_by_ev[str(eid)].append(int(ts))
 
