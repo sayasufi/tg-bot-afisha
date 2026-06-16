@@ -121,8 +121,12 @@ export function goNowState(
     return { eligible: true, kind: "soon", minutesUntilStart, label: untilLabel(minutesUntilStart) };
   }
 
-  // Ongoing / all-day / permanent: still within its run, and the venue open now.
+  // Ongoing / all-day / permanent: must have BEGUN, still be running, venue open.
+  // The "has it started?" guard is critical — without it a future all-day or
+  // multi-day event (a lecture dated 28 June stored as 00:00, or a 2-day festival)
+  // in a round-the-clock venue would falsely read "идёт сейчас".
   const { end: realEnd, open } = endInfo(s, end, now);
+  if (s.getTime() > now.getTime()) return { eligible: false }; // hasn't started yet
   if (!open && realEnd && now.getTime() > realEnd.getTime()) return { eligible: false }; // run is over
   if (venueOpenNow(hours, now) === false) return { eligible: false }; // venue shut right now
   return { eligible: true, kind: "now", label: "идёт сейчас" };
