@@ -40,18 +40,20 @@ join events.raw_events r on r.raw_id = es.raw_id
 where e.status = 'active' and s.name = 'afisha_ru' and e.category <> 'exhibition'
   -- only types with a GraphQL schedule op; /exhibition/ runs are open-ended spans by design
   and (es.source_event_url like '%afisha.ru/performance/%' or es.source_event_url like '%afisha.ru/concert/%')
-  and not exists (
-    select 1 from events.event_sources es2 join ref.sources s2 on s2.source_id = es2.source_id
-    where es2.event_id = e.event_id and s2.name = 'yandex_afisha'
-  )
 group by e.event_id
 having
   -- a multi-show event whose stored dates are still sparse (missing the middle ones)
+  -- AND that Yandex doesn't already cover in bulk
   (
     coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0) > 2
     and count(distinct o.occurrence_id) < least(coalesce(max((r.raw_payload_json->>'sessions_count')::int), 0), 12)
+    and not exists (
+      select 1 from events.event_sources es2 join ref.sources s2 on s2.source_id = es2.source_id
+      where es2.event_id = e.event_id and s2.name = 'yandex_afisha'
+    )
   )
-  -- OR a leftover span (any session count): a show must never render as a date range
+  -- OR a leftover span (any session count, any source mix): a show must never render
+  -- as a date range, and the GraphQL dates are authoritative
   or bool_or(o.date_end is not null and (o.date_end - o.date_start) > interval '2 days')
 limit :lim
 """
