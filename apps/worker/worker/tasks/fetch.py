@@ -69,7 +69,9 @@ async def _fetch_kudago_full_scan_impl() -> dict:
             location = source.config_json.get("location", DEFAULT_CITY.kudago_location)
             page_size = int(source.config_json.get("page_size", 100))
             max_pages = int(source.config_json.get("full_scan_max_pages", 50))
-            connector = KudaGoConnector(location=location, page_size=page_size)
+            # Date order so pagination walks the window soonest-first and ends when
+            # it runs past it (instead of trawling years of -publication_date pages).
+            connector = KudaGoConnector(location=location, page_size=page_size, order_by="dates")
 
             cursor: str | None = "1"
             pages_scanned = 0

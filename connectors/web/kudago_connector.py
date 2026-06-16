@@ -21,10 +21,13 @@ class KudaGoConnector:
     # surfaced only a few hundred events vs thousands from the others.
     _LOOKAHEAD_DAYS = 365
 
-    def __init__(self, location: str = "msk", page_size: int = 100) -> None:
+    def __init__(self, location: str = "msk", page_size: int = 100, order_by: str = "-publication_date,-id") -> None:
         self.settings = get_settings()
         self.location = location
         self.page_size = page_size
+        # Incremental fetch wants newest-published first; the full scan passes
+        # order_by="dates" so it pages soonest-first and the window naturally ends.
+        self.order_by = order_by
 
     def _trim_payload(self, row: dict) -> dict:
         place = row.get("place") if isinstance(row.get("place"), dict) else None
@@ -140,7 +143,7 @@ class KudaGoConnector:
             "location": self.location,
             "page": page,
             "page_size": self.page_size,
-            "order_by": "-publication_date,-id",
+            "order_by": self.order_by,
             "actual_since": int(now.timestamp()),
             "actual_until": int(until.timestamp()),
             "expand": "place,location,dates",
