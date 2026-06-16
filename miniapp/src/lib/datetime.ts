@@ -72,6 +72,61 @@ export function isLiveNow(start?: string | null, end?: string | null, hours?: { 
   if (e && !farFuture && now > e.getTime()) return false; // run already over
   return venueOpenNow(hours, new Date()) !== false; // closed now → not live
 }
+
+// ── "Можно пойти сейчас" ─────────────────────────────────────────────────────
+// Whether you can REALISTICALLY still get to an event — the smart successor to
+// the blunt red pulse. Two shapes, mirroring the timed/ongoing split used across
+// this file:
+//   • TIMED (cinema/concert/theatre — a real start time, run ≤24h): catchable
+//     while it HASN'T started yet and starts within the "soon" window (3 hours).
+//     A session already in progress is NEVER catchable — you can't walk into a
+//     film that began (the whole point of the feature).
+//   • ONGOING (museum/exhibition/permanent — midnight start or a multi-day run):
+//     catchable while its run is live AND the venue is open at this very moment.
+// `now` is injectable so a single tick can drive the whole UI consistently.
+export const SOON_MAX_MIN = 180; // surface timed events starting within 3 hours
+
+export type GoNow =
+  | { eligible: false }
+  | { eligible: true; kind: "soon"; minutesUntilStart: number; label: string }
+  | { eligible: true; kind: "now"; label: string };
+
+// "через 25 мин" / "через 1 ч 20 мин"; "вот-вот" under 2 min so a stale
+// "через 1 мин" never lingers past the start between minute ticks.
+function untilLabel(m: number): string {
+  if (m < 2) return "вот-вот";
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h === 0) return `через ${mm} мин`;
+  if (mm === 0) return `через ${h} ч`;
+  return `через ${h} ч ${mm} мин`;
+}
+
+export function goNowState(
+  start?: string | null,
+  end?: string | null,
+  hours?: { week?: (string[][] | null)[] } | null,
+  now: Date = new Date(),
+): GoNow {
+  const s = parse(start);
+  if (!s) return { eligible: false };
+  const e = parse(end);
+  const endMs = e ? e.getTime() : s.getTime() + 3 * 3600 * 1000;
+  const timed = !isMidnight(s) && endMs - s.getTime() <= 24 * 3600 * 1000;
+
+  if (timed) {
+    const minutesUntilStart = Math.round((s.getTime() - now.getTime()) / 60000);
+    if (minutesUntilStart < 0) return { eligible: false }; // already started — can't go
+    if (minutesUntilStart > SOON_MAX_MIN) return { eligible: false }; // not soon enough
+    return { eligible: true, kind: "soon", minutesUntilStart, label: untilLabel(minutesUntilStart) };
+  }
+
+  // Ongoing / all-day / permanent: still within its run, and the venue open now.
+  const { end: realEnd, open } = endInfo(s, end, now);
+  if (!open && realEnd && now.getTime() > realEnd.getTime()) return { eligible: false }; // run is over
+  if (venueOpenNow(hours, now) === false) return { eligible: false }; // venue shut right now
+  return { eligible: true, kind: "now", label: "идёт сейчас" };
+}
 const dmy = (d: Date, withYear: boolean, short = false) =>
   `${d.getDate()} ${(short ? MONTHS_SHORT : MONTHS)[d.getMonth()]}${withYear ? ` ${d.getFullYear()}` : ""}`;
 

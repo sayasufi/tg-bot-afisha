@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
-import { formatDateChip, formatWhen, venueHoursToday, whenTimeNote } from "../../lib/datetime";
+import { formatDateChip, formatWhen, goNowState, venueHoursToday, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
@@ -146,6 +146,9 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
   // today ("сегодня 10:00–22:00") instead of implying it runs round the clock.
   const baseNote = whenTimeNote(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
   const timeNote = baseNote ? venueHoursToday(occ?.venue_hours) ?? baseNote : "";
+  // "Можно пойти сейчас" badge for the headline session — the soonest you can
+  // still get to (occurrences are future-first): timed within 3 h, or open now.
+  const go = goNowState(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end, occ?.venue_hours);
 
   const onShare = async () => {
     haptic("light");
@@ -228,6 +231,7 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
         <div className="sheet__meta">
           <div className="wall-label">
             <span className="wall-label__cap">Когда</span>
+            {go.eligible && <span className="sheet__gonow">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}
             <span className="wall-label__val">
               {dates || "—"}
               {timeNote && <span className="dim"> · {timeNote}</span>}

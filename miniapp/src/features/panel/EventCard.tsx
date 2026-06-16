@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
-import { formatWhenShort, isLiveNow } from "../../lib/datetime";
+import { formatWhenShort, goNowState } from "../../lib/datetime";
 import { distanceLabel, formatDistance, type LatLon } from "../../lib/distance";
 import { CategoryIcon } from "../../lib/icons";
 import { safeHttpUrl } from "../../lib/url";
@@ -20,7 +20,7 @@ function priceLabel(p: number | null | undefined): { text: string; free: boolean
 // tag, then title + when/distance.
 export function EventCard({ item, userPos, onSelect }: { item: CardItem; userPos?: LatLon | null; onSelect: (i: EventItem) => void }) {
   const meta = categoryMeta(item.category);
-  const live = isLiveNow(item.date_start, item.date_end, item.venue_hours);
+  const go = goNowState(item.date_start, item.date_end, item.venue_hours);
   const img = safeHttpUrl(item.primary_image_url);
   const dist =
     item.distance_m != null
@@ -47,10 +47,10 @@ export function EventCard({ item, userPos, onSelect }: { item: CardItem; userPos
           </span>
         )}
         <span className="rcard__scrim" aria-hidden="true" />
-        {live && (
+        {go.eligible && (
           <span className="rcard__live">
             <i className="rcard__livedot" aria-hidden="true" />
-            сейчас
+            {go.kind === "soon" ? go.label : "идёт сейчас"}
           </span>
         )}
         {price && <span className={`rcard__price${price.free ? " rcard__price--free" : ""}`}>{price.text}</span>}

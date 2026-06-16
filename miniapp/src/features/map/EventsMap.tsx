@@ -4,7 +4,6 @@ import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { EventItem, MapCluster } from "../../api/client";
-import { isLiveNow } from "../../lib/datetime";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
@@ -21,6 +20,7 @@ type Props = {
   items: EventItem[];
   clusters: MapCluster[];
   clusterMode: boolean;
+  goNowIds: Set<string>;
   selected: EventItem | null;
   focused: EventItem | null;
   focusOut: boolean;
@@ -197,6 +197,7 @@ export function EventsMap({
   items,
   clusters,
   clusterMode,
+  goNowIds,
   selected,
   focused,
   focusOut,
@@ -216,6 +217,12 @@ export function EventsMap({
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
   const metroIco = useMemo(() => metroIcon(), []);
+  // Catchable-now ids, read at pin-build time (kept in a ref so the minute-ticking
+  // Set doesn't rebuild every marker each minute — that recreates each divIcon and
+  // replays its entrance animation, the old "blinking pins" bug). The highlight
+  // refreshes exactly when pins rebuild (pan/zoom/data), same cadence as before.
+  const goNowRef = useRef(goNowIds);
+  goNowRef.current = goNowIds;
   const [view, setView] = useState<{ bbox: Bbox; zoom: number } | null>(null);
 
   // At/above detail zoom we draw real pins; below it (when clustering is allowed)
@@ -344,7 +351,7 @@ export function EventsMap({
           <Marker
             key={item.event_id}
             position={[item.lat as number, item.lon as number]}
-            icon={pinIcon(item, false, isLiveNow(item.date_start, item.date_end, item.venue_hours))}
+            icon={pinIcon(item, false, goNowRef.current.has(item.event_id))}
             eventHandlers={{ click: () => onSelect(item) }}
           />
         ))}
@@ -359,7 +366,7 @@ export function EventsMap({
   const focusedIco = useMemo(
     () =>
       focused && focused.lat != null && focused.lon != null
-        ? pinIcon(focused, true, isLiveNow(focused.date_start, focused.date_end, focused.venue_hours))
+        ? pinIcon(focused, true, goNowRef.current.has(focused.event_id))
         : null,
     [focused],
   );

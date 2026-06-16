@@ -294,9 +294,17 @@ class EventQueryService:
         stmt = stmt.where(self._concrete_time_clause())
         if bbox:
             stmt = stmt.where(self._bbox_clause(bbox))
-        # One row per event — the soonest in-window occurrence — so an event with
-        # several showtimes (e.g. 16 & 23 June) shows a single pin, not one per date.
-        stmt = stmt.distinct(Event.event_id).order_by(Event.event_id, EventOccurrence.date_start.asc())
+        # One row per event — the soonest occurrence you can still ACT on — so an
+        # event with several showtimes (e.g. 16 & 23 June) shows a single pin, not
+        # one per date. Future-first: a venue with sessions at 14:00 & 21:00 viewed
+        # at 18:00 ships the catchable 21:00, not the already-started 14:00 (this is
+        # what makes the "можно пойти сейчас" highlight correct). Ongoing runs, whose
+        # only occurrence began in the past, still fall through to that occurrence.
+        stmt = stmt.distinct(Event.event_id).order_by(
+            Event.event_id,
+            (EventOccurrence.date_start < func.now()).asc(),
+            EventOccurrence.date_start.asc(),
+        )
         # No default cap: the map client fetches the WHOLE filtered set with no bbox
         # and clusters it client-side (and derives the "Показать N" count + radius
         # filter from it), so capping here silently drops pins. Callers that want a
@@ -341,7 +349,9 @@ class EventQueryService:
             # Only upcoming sessions (3h grace, matching the lifecycle "live" rule) —
             # the map pin already filters, so the sheet must not surface a past date.
             .where(func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= text("now() - interval '3 hours'"))
-            .order_by(EventOccurrence.date_start.asc())
+            # Future-first (then by time), matching the map pin: the headline session
+            # is the soonest you can still go to, not an earlier one already past.
+            .order_by((EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
         )).all()
         occurrences = [
             {

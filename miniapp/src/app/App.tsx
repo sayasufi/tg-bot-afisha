@@ -15,7 +15,7 @@ import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View 
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
-import { isLiveNow } from "../lib/datetime";
+import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { useFavorites } from "../lib/favorites";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
@@ -65,6 +65,16 @@ export function App() {
   });
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
 
+  // A coarse clock that ticks once a minute — drives the "можно пойти сейчас"
+  // set (countdowns, which events are still catchable) without re-rendering the
+  // map on every frame. One minute is plenty: the window is hours, labels are in
+  // minutes.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
   const query = useMemo(() => {
     const params = new URLSearchParams();
     // No limit: fetch every event matching the filters so the map shows exactly the
@@ -81,16 +91,36 @@ export function App() {
 
   // Distance filter ("Рядом") is applied client-side over the fetched set, so
   // the radius slider responds instantly without a round-trip.
-  const shownItems = useMemo(() => {
+  const radiusItems = useMemo(() => {
     if (!filters.radiusKm || !userPos) return items;
     const limit = filters.radiusKm * 1000;
     return items.filter((i) => i.lat != null && i.lon != null && distanceMeters(userPos, [i.lat, i.lon]) <= limit);
   }, [items, filters.radiusKm, userPos]);
-  const shownTotal = filters.radiusKm && userPos ? shownItems.length : total;
 
-  // Server clustering is used unless the radius filter ("Рядом") is active — that
-  // set is small and filtered client-side, so we pin it directly instead.
-  const clusterMode = !(filters.radiusKm > 0 && !!userPos);
+  // "Можно пойти сейчас": the event_ids you can realistically still go to right
+  // now — timed events starting within the next 3 hours (not yet begun), plus
+  // ongoing venues open at this moment. Computed ONCE here and reused by the
+  // filter, the ticker count and the map highlight, so the three can never
+  // disagree at a minute boundary.
+  const goNowIds = useMemo(() => {
+    const at = new Date(now);
+    const ids = new Set<string>();
+    for (const i of radiusItems) {
+      if (goNowState(i.date_start, i.date_end, i.venue_hours, at).eligible) ids.add(i.event_id);
+    }
+    return ids;
+  }, [radiusItems, now]);
+
+  const shownItems = useMemo(
+    () => (filters.goNow ? radiusItems.filter((i) => goNowIds.has(i.event_id)) : radiusItems),
+    [radiusItems, filters.goNow, goNowIds],
+  );
+  const shownTotal = (filters.radiusKm && userPos) || filters.goNow ? shownItems.length : total;
+
+  // Server clustering is used unless a client-side set is in play (radius or
+  // "можно пойти") — those sets are small and filtered client-side, so we pin
+  // them directly instead of asking the server to grid them.
+  const clusterMode = !((filters.radiusKm > 0 && !!userPos) || filters.goNow);
   // Only the integer zoom drives clustering; the map reports it on zoomend.
   // Reporting the same value is a no-op (React bails), so panning never refetches.
   const onZoom = useCallback((z: number) => {
@@ -111,13 +141,14 @@ export function App() {
     return hit ? { ...hit.item, meters: hit.meters } : null;
   }, [selected, metro]);
 
-  // Count events happening right now — drives a "live" pulse on the ticker.
-  const liveCount = useMemo(() => shownItems.filter((i) => isLiveNow(i.date_start, i.date_end, i.venue_hours)).length, [shownItems]);
+  // How many events you can still get to right now — drives the ticker's pulse.
+  // Same Set the filter and the map highlight use, so the counts never diverge.
+  const liveCount = goNowIds.size;
 
-  // Gallery ticker line: total + city + live-now + the busiest categories.
+  // Gallery ticker line: total + city + can-go-now + the busiest categories.
   const tickerText = useMemo(() => {
     const segs = [`${shownTotal} СОБЫТИЙ`, "МОСКВА", "ОКРЕСТ"];
-    if (liveCount > 0) segs.push(`ИДЁТ СЕЙЧАС ${liveCount}`);
+    if (liveCount > 0) segs.push(`МОЖНО ПОЙТИ ${liveCount}`);
     const counts: Record<string, number> = {};
     for (const it of shownItems) counts[it.category] = (counts[it.category] || 0) + 1;
     Object.entries(counts)
@@ -424,6 +455,7 @@ export function App() {
           items={shownItems}
           clusters={clusters}
           clusterMode={clusterMode}
+          goNowIds={goNowIds}
           selected={selected}
           focused={focused}
           focusOut={focusOut}
@@ -454,7 +486,7 @@ export function App() {
           filters={filters}
           radiusActive={!!filters.radiusKm && !!userPos}
           onReset={() => setFilters(EMPTY_FILTERS)}
-          onWiden={() => setFilters({ ...filters, radiusKm: 0, categories: [], priceMax: "" })}
+          onWiden={() => setFilters({ ...filters, radiusKm: 0, categories: [], priceMax: "", goNow: false })}
         />
       )}
 
@@ -462,7 +494,7 @@ export function App() {
         <Coach onDismiss={dismissCoach} />
       )}
 
-      {focusBarVisible && focused && <FocusBar event={focused} out={focusOut} onOpen={openEvent} onClose={dismissFocus} />}
+      {focusBarVisible && focused && <FocusBar event={focused} out={focusOut} now={now} onOpen={openEvent} onClose={dismissFocus} />}
 
       <EventSheet
         selected={sheetReady ? selected : null}

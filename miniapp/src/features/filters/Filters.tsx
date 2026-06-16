@@ -13,9 +13,10 @@ export type FilterState = {
   dateTo: string;
   priceMax: string;
   radiusKm: number; // 0 = no distance limit
+  goNow: boolean; // "можно пойти сейчас" — only events you can still get to
 };
 
-export const EMPTY_FILTERS: FilterState = { q: "", categories: [], dateFrom: "", dateTo: "", priceMax: "", radiusKm: 0 };
+export const EMPTY_FILTERS: FilterState = { q: "", categories: [], dateFrom: "", dateTo: "", priceMax: "", radiusKm: 0, goNow: false };
 
 type Props = {
   value: FilterState;
@@ -31,7 +32,11 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   const [showCustomDates, setShowCustomDates] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0].filter(Boolean).length;
+  const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0, value.goNow].filter(Boolean).length;
+  const toggleGoNow = () => {
+    hapticSelection();
+    onChange({ ...value, goNow: !value.goNow });
+  };
   const shownTotal = useCountUp(total);
   const activePreset = matchPreset(value.dateFrom, value.dateTo);
   const isCustomDates = (!!value.dateFrom || !!value.dateTo) && activePreset === null;
@@ -50,6 +55,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   if (value.priceMax) activeChips.push({ key: "price", label: `до ${value.priceMax} ₽`, clear: () => onChange({ ...value, priceMax: "" }) });
   if (value.radiusKm > 0)
     activeChips.push({ key: "radius", label: `до ${String(value.radiusKm).replace(".", ",")} км`, clear: () => onChange({ ...value, radiusKm: 0 }) });
+  if (value.goNow) activeChips.push({ key: "gonow", label: "можно пойти", clear: () => onChange({ ...value, goNow: false }) });
 
   // Reveal native date inputs when a custom range is already set.
   useEffect(() => {
@@ -102,6 +108,18 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             {catLabel} · {dateLabel}
           </span>
           {advancedCount > 0 && <span className="cmdpill__badge">{advancedCount}</span>}
+        </button>
+        <button
+          type="button"
+          className={`cmdpill__live${value.goNow ? " cmdpill__live--on" : ""}`}
+          aria-label="Можно пойти сейчас"
+          aria-pressed={value.goNow}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleGoNow();
+          }}
+        >
+          <span className="cmdpill__live-dot" aria-hidden="true" />
         </button>
         <button type="button" className="cmdpill__search" aria-label="Поиск" onClick={() => openSheet(true)}>
           <IconSearch size={18} />
@@ -161,6 +179,15 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
 
           <span className="kicker">Когда</span>
           <div className="chips csheet__presets">
+            <button
+              type="button"
+              className={`chip chip--live${value.goNow ? " chip--live-on" : ""}`}
+              aria-pressed={value.goNow}
+              onClick={toggleGoNow}
+            >
+              <span className="chip__livedot" aria-hidden="true" />
+              Можно пойти
+            </button>
             {PRESETS.map((p) => (
               <button key={p.key} type="button" className={`chip${activePreset === p.key ? " chip--active" : ""}`} onClick={() => tapPreset(p.key)}>
                 {p.label}

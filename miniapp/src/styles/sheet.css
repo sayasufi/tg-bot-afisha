@@ -238,6 +238,24 @@ html[data-theme="dark"] .sheet-veil {
   padding: 3px 8px;
   white-space: nowrap;
 }
+/* "Можно пойти сейчас" badge on the headline session — the one cinnabar accent
+   in the meta block, so "ты ещё успеешь" jumps out above the date. */
+.sheet__gonow {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 0 4px;
+  padding: 2px 8px;
+  background: var(--cinnabar);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  text-transform: lowercase;
+}
+
 /* "+N" tail when a recurring run has more than the 4 shown dates. */
 .sheet__date-more {
   font-family: var(--mono);

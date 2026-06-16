@@ -206,6 +206,24 @@
   color: var(--on-acid);
 }
 
+/* "Можно пойти" — the one cinnabar toggle in the date row (a different promise
+   from the acid date presets, so it reads as its own thing). */
+.chip--live .chip__livedot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  flex: 0 0 auto;
+}
+.chip--live-on {
+  background: var(--cinnabar);
+  border-color: var(--cinnabar);
+  color: #fff;
+}
+.chip--live-on .chip__livedot {
+  background: #fff;
+}
+
 /* ---------- Filter panel ---------- */
 .panel {
   display: grid;
@@ -413,6 +431,17 @@
   height: 8px;
   background: var(--acid);
   box-shadow: 1.4px 1.4px 0 var(--cinnabar);
+}
+
+/* Catchable-now: the tag flips to a solid cinnabar dot and the kicker leads with
+   a cinnabar countdown, so a marked pin you can still reach reads at a glance. */
+.focusbar__tag--live {
+  background: var(--cinnabar);
+  box-shadow: 1.4px 1.4px 0 var(--ink);
+}
+.focusbar__live {
+  color: var(--cinnabar);
+  font-weight: 700;
 }
 
 .focusbar__text {

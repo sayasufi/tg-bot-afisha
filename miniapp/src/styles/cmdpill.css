@@ -123,9 +123,77 @@
   cursor: pointer;
 }
 
+/* "Можно пойти сейчас" quick-action — a cinnabar pulse you can flip without
+   opening the sheet (the most-wanted path: tap, see where you can go now). */
+.cmdpill__live {
+  width: 46px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  cursor: pointer;
+}
+
+.cmdpill__live-dot {
+  position: relative;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  box-shadow: 0 0 0 1px var(--plinth);
+}
+
+.cmdpill__live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cinnabar);
+  animation: pillPulse 1.7s var(--ease-cut) infinite;
+}
+
+@keyframes pillPulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmdpill__live-dot::after {
+    animation: none;
+  }
+}
+
+/* Resting (off): dimmed to a hint; turns full cinnabar + boxed when on. */
+.cmdpill__live:not(.cmdpill__live--on) .cmdpill__live-dot {
+  background: var(--ink-faint);
+}
+.cmdpill__live:not(.cmdpill__live--on) .cmdpill__live-dot::after {
+  display: none;
+}
+
+.cmdpill__live--on {
+  background: var(--cinnabar);
+}
+.cmdpill__live--on .cmdpill__live-dot {
+  background: var(--plinth);
+  box-shadow: 0 0 0 1px var(--cinnabar);
+}
+.cmdpill__live--on .cmdpill__live-dot::after {
+  border-color: var(--plinth);
+}
+
 .cmdpill__menu:active,
 .cmdpill__body:active,
-.cmdpill__search:active {
+.cmdpill__search:active,
+.cmdpill__live:active {
   background: var(--vitrine);
 }
 
