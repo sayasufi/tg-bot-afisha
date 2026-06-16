@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class EventMapItem(BaseModel):
     event_id: UUID
+    code: str | None = None
     title: str
     category: str
     date_start: datetime
@@ -51,6 +52,7 @@ class EventDetailOccurrence(BaseModel):
 
 class EventDetailResponse(BaseModel):
     event_id: UUID
+    code: str | None = None
     canonical_title: str
     canonical_description: str
     category: str
