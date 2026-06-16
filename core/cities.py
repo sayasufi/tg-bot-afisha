@@ -18,6 +18,8 @@ class CityConfig:
     yandex_city: str  # Yandex Afisha city slug (afisha.yandex.ru/<slug>)
     afisha_city: str  # afisha.ru city slug (afisha.ru/<slug>/schedule_*)
     active: bool  # whether the pipeline currently ingests this city
+    center: tuple[float, float]  # (lat, lon) city centre — anchors geo heuristics
+    region_radius_km: float = 250.0  # how far the city's "oblast" reaches (day-trips)
 
 
 CITIES: dict[str, CityConfig] = {
@@ -30,6 +32,7 @@ CITIES: dict[str, CityConfig] = {
         yandex_city="moscow",
         afisha_city="msk",
         active=True,
+        center=(55.75582, 37.61764),
     ),
     # Defined and ready — flip active=True and add beat tasks for it to ingest SPb.
     "spb": CityConfig(
@@ -41,10 +44,12 @@ CITIES: dict[str, CityConfig] = {
         yandex_city="saint-petersburg",
         afisha_city="spb",
         active=False,
+        center=(59.93863, 30.31413),
     ),
 }
 
 DEFAULT_CITY = CITIES["moscow"]
+_BY_NAME = {c.name.strip().lower(): c for c in CITIES.values()}
 
 
 def active_cities() -> list[CityConfig]:
@@ -53,6 +58,11 @@ def active_cities() -> list[CityConfig]:
 
 def city_by_slug(slug: str | None) -> CityConfig:
     return CITIES.get(slug or "", DEFAULT_CITY)
+
+
+def city_by_name(name: str | None) -> CityConfig | None:
+    """The city whose display name matches (e.g. a venue's stored city), or None."""
+    return _BY_NAME.get((name or "").strip().lower())
 
 
 def city_for_source_config(config: dict | None) -> CityConfig:

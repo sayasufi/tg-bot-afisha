@@ -7,7 +7,7 @@ import time
 from sqlalchemy import func, text
 
 from core.categorization import map_source_category
-from core.cities import city_for_source_config
+from core.cities import DEFAULT_CITY, city_by_name, city_for_source_config
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
     find_cached_venue,
@@ -224,23 +224,28 @@ def _is_territory_week(week) -> bool:
     return isinstance(week, list) and len(week) == 7 and all(_is_round_clock_day(d) for d in week)
 
 
-_MOSCOW_CENTER = (55.75582, 37.61764)
+def _reverse_place(lat, lon) -> dict | None:
+    """Offline coords → {city, state, country_code, …} via reverse_geocode (a bundled
+    GeoNames dataset, no network). Gives the city / oblast / country for ANY point —
+    the seam that makes the geo logic work for every city, not just Moscow."""
+    if lat is None or lon is None:
+        return None
+    try:
+        import reverse_geocode
+        return reverse_geocode.get((float(lat), float(lon)))
+    except Exception:
+        return None
 
 
-def _in_moscow_region(lat, lon) -> bool:
-    """The generous Moscow-oblast envelope the map itself allows (lon 30..45, lat
-    50..60) — Tver/Kaluga day-trips included, transposed/foreign coords excluded."""
-    return 50.0 <= lat <= 60.0 and 30.0 <= lon <= 45.0
-
-
-def _match_hours(res: dict | None, lat, lon) -> tuple[dict | None, tuple[float, float] | None]:
+def _match_hours(res, lat, lon, city_center, country):
     """(hours, relocate_to). ``hours`` = a real weekly schedule (not an all-week 24/7
     territory) or None. ``relocate_to`` = the matched org's coords when it's clearly
-    the venue but sits materially FARTHER from Moscow than the stored pin — i.e. an
-    oblast venue the geocoder mis-pinned near Moscow (Дом Озерова pinned in Moscow,
-    real one in Коломна). We then fix its coords instead of discarding the find. The
-    direction guard (farther-from-Moscow only, inside the region envelope) means a
-    correctly far-out venue is NEVER dragged toward a Moscow namesake."""
+    the venue but the geocoder mis-pinned it near the FEED CITY — the real org sits
+    materially farther from the city centre and reverse-geocodes to the SAME country.
+    We then fix its coords. City-agnostic: anchored on the venue's OWN city centre
+    (``city_center``) and validated by reverse-geocode, so it works for any city. The
+    farther-from-centre + same-country guards mean a correctly placed venue is never
+    dragged onto a city namesake or a foreign one (the prior re-geocode incident)."""
     if not res or not isinstance(res.get("hours"), dict):
         return None, None
     week = res["hours"].get("week")
@@ -248,29 +253,25 @@ def _match_hours(res: dict | None, lat, lon) -> tuple[dict | None, tuple[float, 
         return None, None
     hours = res["hours"]
     coords = res.get("coords")
-    # The scraper often returns the CITY CENTROID as a non-answer for the location
-    # even when it found real hours; treat a centroid as "location unknown".
-    if coords and abs(coords[0] - 55.75582) < 3e-4 and abs(coords[1] - 37.61764) < 5e-4:
-        coords = None
-    if not coords or lat is None or lon is None:
+    if coords and city_center and _dist_m(coords, city_center) < 600:
+        coords = None  # the scraper returned the city centre itself → a non-answer
+    if not coords or lat is None or lon is None or not city_center:
         return hours, None  # nothing to compare → accept the hours, don't move
     if _dist_m((lat, lon), coords) <= 1500:
         return hours, None  # match is at the venue → accept, no move
-    # Match is far. Accept + relocate ONLY when the real org is well outside Moscow
-    # relative to the stored pin (an oblast venue mis-geocoded into the city).
-    if _in_moscow_region(coords[0], coords[1]):
-        out_match = _dist_m(_MOSCOW_CENTER, coords)
-        out_stored = _dist_m(_MOSCOW_CENTER, (lat, lon))
-        if out_match - out_stored > 20000:  # real org ≥20 km farther out → fix the pin
-            return hours, (float(coords[0]), float(coords[1]))
-    return None, None  # far + wrong direction / outside region → wrong business, drop
+    place = _reverse_place(coords[0], coords[1])
+    if not place or (country and place.get("country_code") and place["country_code"] != country):
+        return None, None  # far + foreign / unknown → wrong business, drop
+    if _dist_m(city_center, coords) - _dist_m(city_center, (lat, lon)) > 20000:
+        return hours, (float(coords[0]), float(coords[1]))  # real org ≥20 km farther out → fix pin
+    return None, None  # far but toward the city → likely a namesake, drop
 
 
-def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city):
+def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city_hint, city_center, country):
     """Best real weekly hours for a venue + an optional coords fix. Tries the venue
     name (+address), then — if that only yields a 24/7 territory / wrong business —
-    RETRIES with the event title prepended ("Музей Москвы в миниатюре ВДНХ"), which
-    pulls the specific hall/museum. Returns (hours_dict_or_{}, relocate_to_or_None)."""
+    RETRIES with the event title prepended, which pulls the specific hall/museum.
+    Returns (hours_dict_or_{}, relocate_to_or_None)."""
     candidates: list[str] = []
     if address:
         candidates.append(f"{name}, {address}".strip().strip(",").strip())
@@ -283,10 +284,10 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city):
             continue
         seen.add(q)
         try:
-            res = asyncio.run(scraper.fetch_hours(q, city))
+            res = asyncio.run(scraper.fetch_hours(q, city_hint))
         except Exception:
             res = None
-        hours, relocate = _match_hours(res, lat, lon)
+        hours, relocate = _match_hours(res, lat, lon, city_center, country)
         if hours:
             return hours, relocate
         time.sleep(0.8)  # polite between tries
@@ -298,7 +299,7 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city):
 # gained hours, or a transient Yandex failure all self-heal without manual work.
 # Never-checked first, then oldest. Venues WITH real hours are left alone.
 _VENUE_HOURS_QUERY = (
-    "SELECT v.venue_id, v.name, v.address, ST_Y(v.geom::geometry) AS lat, ST_X(v.geom::geometry) AS lon, "
+    "SELECT v.venue_id, v.name, v.address, ST_Y(v.geom::geometry) AS lat, ST_X(v.geom::geometry) AS lon, v.city, "
     "(SELECT e.canonical_title FROM events.event_occurrences o JOIN events.events e ON e.event_id = o.event_id "
     " WHERE o.venue_id = v.venue_id AND e.status = 'active' "
     " ORDER BY e.popularity_score DESC NULLS LAST, o.date_start LIMIT 1) AS ev_title "
@@ -317,12 +318,16 @@ def _resolve_venue_hours_impl(limit: int = 15):
     territory match and retried with the event title to find the real hall."""
     db = SessionLocal()
     scraper = YandexMapsScraper()
-    city = get_settings().default_city or "Москва"
     try:
         rows = db.execute(text(_VENUE_HOURS_QUERY), {"lim": limit}).all()
         stored = relocated = 0
-        for vid, name, address, lat, lon, ev_title in rows:
-            hours, relocate = _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city)
+        for vid, name, address, lat, lon, vcity, ev_title in rows:
+            # Per-venue city (NOT a global "Москва") — works for any city: the search
+            # hint, the centre the relocation guard anchors on, and the country.
+            cc = city_by_name(vcity) or DEFAULT_CITY
+            hours, relocate = _resolve_hours_for(
+                scraper, name, address, lat, lon, ev_title, vcity or cc.name, cc.center, cc.country
+            )
             if hours:
                 stored += 1
             if relocate:
