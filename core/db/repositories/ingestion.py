@@ -1,7 +1,7 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -241,10 +241,37 @@ async def get_raw(db: AsyncSession, raw_id: int) -> RawEvent | None:
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+# Normalise a venue name to a comparison key: lowercase, ё→е, strip everything
+# but letters/digits. So "Зелёный театр ВДНХ", "Зеленый театр ВДНХ" and
+# "Зелёный театр, ВДНХ" all collapse to one key.
+_VENUE_NKEY = "regexp_replace(translate(lower({col}), 'ё', 'е'), '[^0-9a-zа-я]', '', 'g')"
+_VENUE_FUZZY_M = 200  # metres — same-named venues this close are the same place
+
+
 async def get_or_create_venue(db: AsyncSession, name: str, address: str, city: str, country: str, lat: float | None, lon: float | None, provider: str, confidence: float) -> Venue:
     venue = (await db.execute(select(Venue).where(and_(Venue.name == name, Venue.address == address)))).scalar_one_or_none()
     if venue:
         return venue
+    # Fuzzy de-dup: an existing geocoded venue with the SAME normalised name within
+    # ~200 m is the same physical place — reuse it. Without this, cross-source
+    # name/address/coord drift (KudaGo vs Yandex vs Afisha all geocode "Зелёный
+    # театр ВДНХ" slightly differently) spawns a venue per source, which then
+    # splits one event into a pin per venue. Exact (name,address) is the fast path
+    # above; this catches the near-misses.
+    if lat is not None and lon is not None:
+        match_id = (await db.execute(
+            text(
+                "SELECT venue_id FROM events.venues "
+                "WHERE geom IS NOT NULL "
+                "  AND " + _VENUE_NKEY.format(col="name") + " = " + _VENUE_NKEY.format(col=":name") + " "
+                "  AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :m) "
+                "ORDER BY ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) "
+                "LIMIT 1"
+            ),
+            {"name": name or "", "lat": lat, "lon": lon, "m": _VENUE_FUZZY_M},
+        )).scalar()
+        if match_id is not None:
+            return await db.get(Venue, match_id)
     # Race-safe create: enrich and backfill_venues_osm can both reach the same
     # (name, address) concurrently. INSERT ... ON CONFLICT DO NOTHING + re-select
     # avoids the UniqueViolation on uq_venue_name_address.
