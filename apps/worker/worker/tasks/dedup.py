@@ -48,6 +48,7 @@ async def _dedup_impl() -> dict:
                 subcategory=subcategory,
                 tags=tags,
                 venue=venue,
+                llm=llm,  # write-time LLM judge for same-venue+time look-alikes
             )
             decisions[decision.decision] += 1
         return decisions

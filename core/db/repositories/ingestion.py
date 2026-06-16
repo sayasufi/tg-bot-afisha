@@ -18,7 +18,7 @@ from core.db.models import (
     Venue,
 )
 from pipeline.dedup.scorer import MatchDecision
-from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey
+from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey, translit_tokens
 from pipeline.dedup.venue_match import name_match_score
 from pipeline.normalizer.extractors import NormalizedCandidate
 
@@ -366,6 +366,7 @@ async def dedup_and_upsert_event(
     subcategory: str,
     tags: list[str],
     venue: Venue | None,
+    llm=None,
 ) -> MatchDecision:
     existing_source_link = (await db.execute(select(EventSource).where(EventSource.raw_id == raw_id))).scalar_one_or_none()
     if existing_source_link:
@@ -423,6 +424,24 @@ async def dedup_and_upsert_event(
         ):
             strong = event
             break
+
+    # The rules can't crack declension/initials/wrapper-word variants ("Концерт
+    # Ансамбля … им. В.С. Локтева" vs "Ансамбль … им. Локтева"). When a new event
+    # collides on the SAME venue + EXACT instant with one that shares a distinctive
+    # word, ask the LLM right here at write time — no waiting on a cron. Cached, so a
+    # repeat pair is free; the venue+time block keeps this to a handful of calls.
+    cand_venue_id = venue.venue_id if venue else None
+    if strong is None and llm is not None and candidate.date_start is not None and cand_venue_id is not None:
+        cand_tok = {t for t in translit_tokens(candidate.title) if len(t) >= 4}
+        for event, occurrence in matches:
+            if occurrence.venue_id != cand_venue_id or occurrence.date_start != candidate.date_start:
+                continue
+            if not (cand_tok & {t for t in translit_tokens(event.canonical_title) if len(t) >= 4}):
+                continue
+            verdict = await llm.same_event(event.canonical_title, candidate.title)
+            if verdict.get("same") and float(verdict.get("confidence", 0)) >= 0.7:
+                strong = event
+                break
 
     if strong is not None:
         decision = MatchDecision(decision="auto-merge", score=1.0, matched_event_id=str(strong.event_id))
