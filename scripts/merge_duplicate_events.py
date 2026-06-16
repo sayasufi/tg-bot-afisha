@@ -85,9 +85,9 @@ def find_pairs(db) -> tuple[dict, dict, list, list]:
                 if (a, b) in seen_pairs:
                     continue
                 seen_pairs.add((a, b))
-                if same_event(title[a], title[b], fuzzy=False):
+                if same_event(title[a], title[b], level="auto"):
                     safe_pairs.append((a, b))
-                elif same_event(title[a], title[b], fuzzy=True):
+                elif same_event(title[a], title[b], level="fuzzy"):
                     fuzzy_pairs.append((a, b))
     return title, rank, safe_pairs, fuzzy_pairs
 

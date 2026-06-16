@@ -31,7 +31,8 @@ except Exception:  # pragma: no cover
 
     fuzz = _FuzzFallback()
 
-RATIO_SAME = 90  # transliterated token_set_ratio at/above which titles are one event
+RATIO_AUTO = 92  # ratio safe enough to auto-merge
+RATIO_FUZZY = 85  # ratio worth reviewing
 
 # Cyrillic → Latin (BGN-ish; ё→e, ъ/ь dropped). Lets "Полналюбви" == "Polnalyubvi".
 _CYR2LAT = str.maketrans({
@@ -46,12 +47,26 @@ _LAT_TOKEN = re.compile(r"[0-9a-z]+")
 _CYR_TOKEN = re.compile(r"[0-9a-zа-я]+")
 _NUM = re.compile(r"\d+")
 
-# Words too generic to anchor a subset merge on their own.
-_GENERIC = {
-    "концерт", "концерты", "спектакль", "шоу", "экскурсия", "лекция", "выставка",
-    "мастеркласс", "мастер", "класс", "вечер", "программа", "фестиваль", "квест",
-    "show", "concert", "tour", "тур", "стендап", "standup", "комедия", "опера",
-    "балет", "мюзикл", "премьера", "гастроли", "спектакли",
+# "Filler" words: too generic to anchor a subset merge on their own, and — when
+# they are the only *extra* words on the longer title — descriptive enough that
+# the two titles are still one event ("Света" vs "Света. Большой сольный концерт").
+# A non-filler extra word (e.g. "Фигаро" in "Женитьба Фигаро") means a different
+# work, so that subset is only a *review* candidate, never an auto-merge.
+_FILLER = {
+    # formats / event nouns
+    "концерт", "концерты", "концертный", "концертная", "спектакль", "спектакли",
+    "шоу", "экскурсия", "лекция", "выставка", "мастеркласс", "мастер", "класс",
+    "вечер", "программа", "фестиваль", "квест", "комедия", "опера", "балет",
+    "мюзикл", "премьера", "гастроли", "выступление", "вечеринка", "презентация",
+    "show", "concert", "tour", "live", "лайв",
+    # descriptors
+    "большой", "большая", "большое", "сольный", "сольная", "сольное",
+    "мультимедийный", "музыкальный", "авторский", "авторская", "юбилейный",
+    "праздничный", "новогодний", "рождественский", "гала", "специальный",
+    "творческий", "творческая", "тур", "стендап", "standup", "версия",
+    "крыша", "крыше", "открытие", "закрытие", "бенефис",
+    # prepositions / conjunctions
+    "на", "в", "с", "по", "за", "до", "от", "для", "или", "и", "о", "об", "к", "у",
 }
 
 
@@ -82,17 +97,19 @@ def _numbers(s: str) -> set[str]:
     return set(_NUM.findall(s or ""))
 
 
-def same_event(a: str, b: str, fuzzy: bool = True) -> bool:
+def same_event(a: str, b: str, level: str = "auto") -> bool:
     """True if the two titles denote the same event (caller has already checked
-    venue/day proximity).
+    venue/day proximity). ``level`` is the confidence demanded:
 
-    With ``fuzzy=False`` only the *safe* tier counts: an identical transliterated
-    key — same title modulo alphabet, ё/е, punctuation and word order of the same
-    words ("Селеба"/"Селеба", "Polnalyubvi"/"Полналюбви"). With ``fuzzy=True`` the
-    token-subset and high-ratio tiers are added ("Света" ⊂ "Света. Большой сольный
-    концерт") — higher recall, but a subset can be a *different* work ("Женитьба"
-    ⊂ "Женитьба Фигаро"), so fuzzy matches are meant to be reviewed, not trusted
-    blindly for an irreversible bulk merge."""
+    - ``"safe"``  — identical transliterated key only: same title modulo alphabet,
+      ё/е, punctuation, word order ("Селеба"/"Селеба", "Polnalyubvi"/"Полналюбви").
+    - ``"auto"``  — also a token-subset whose *extra* words are pure filler
+      ("Света" ⊂ "Света. Большой сольный концерт") or a very high ratio. Safe to
+      merge automatically (write time + unattended self-heal).
+    - ``"fuzzy"`` — also a subset with a distinctive extra word ("Женитьба" ⊂
+      "Женитьба Фигаро") or a merely-high ratio. Higher recall but can be a
+      different work, so these are surfaced for review, never auto-merged.
+    """
     ka, kb = translit_key(a), translit_key(b)
     if not ka or not kb:
         return False
@@ -101,18 +118,20 @@ def same_event(a: str, b: str, fuzzy: bool = True) -> bool:
         return False
     if ka == kb:
         return True
-    if not fuzzy:
+    if level == "safe":
         return False
 
-    ta, tb = set(translit_tokens(a)), set(translit_tokens(b))
-    small_lat, big_lat = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
-    # Token-subset: one title's words are wholly inside the other's, anchored by a
-    # distinctive (>=4-char) shared word, and the shorter title is not purely
-    # generic ("Света" inside "Света. Большой сольный концерт" — yes; "Концерт"
-    # inside "Концерт Баха" — no).
-    if small_lat <= big_lat and any(len(t) >= 4 for t in small_lat):
-        shorter = a if len(ta) <= len(tb) else b
-        if any(t not in _GENERIC for t in _cyr_tokens(shorter)):
+    ca, cb = _cyr_tokens(a), _cyr_tokens(b)
+    small, big = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
+    # Token-subset anchored by a distinctive (>=4-char, non-filler) shared word.
+    if small and small <= big and any(len(t) >= 4 and t not in _FILLER for t in small):
+        extra = big - small
+        extra_is_filler = all(t in _FILLER or len(t) <= 2 for t in extra)
+        if level == "auto":
+            if extra_is_filler:
+                return True
+        else:  # fuzzy: any distinctive subset is a review candidate
             return True
 
-    return fuzz.token_set_ratio(_translit(a), _translit(b)) >= RATIO_SAME
+    ratio = fuzz.token_set_ratio(_translit(a), _translit(b))
+    return ratio >= (RATIO_AUTO if level == "auto" else RATIO_FUZZY)
