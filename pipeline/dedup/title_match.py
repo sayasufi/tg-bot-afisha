@@ -29,6 +29,12 @@ except Exception:  # pragma: no cover
         def token_set_ratio(a: str, b: str) -> float:
             return SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100
 
+        @staticmethod
+        def token_sort_ratio(a: str, b: str) -> float:
+            sa = " ".join(sorted(a.lower().split()))
+            sb = " ".join(sorted(b.lower().split()))
+            return SequenceMatcher(None, sa, sb).ratio() * 100
+
     fuzz = _FuzzFallback()
 
 RATIO_AUTO = 92  # ratio safe enough to auto-merge
@@ -52,22 +58,31 @@ _NUM = re.compile(r"\d+")
 # the two titles are still one event ("Света" vs "Света. Большой сольный концерт").
 # A non-filler extra word (e.g. "Фигаро" in "Женитьба Фигаро") means a different
 # work, so that subset is only a *review* candidate, never an auto-merge.
+# _FILLER — words describing HOW an event is presented; safe as the *extra* part
+# of a subset auto-merge ("Света" → "Света. Большой сольный концерт").
 _FILLER = {
-    # formats / event nouns
-    "концерт", "концерты", "концертный", "концертная", "спектакль", "спектакли",
-    "шоу", "экскурсия", "лекция", "выставка", "мастеркласс", "мастер", "класс",
-    "вечер", "программа", "фестиваль", "квест", "комедия", "опера", "балет",
-    "мюзикл", "премьера", "гастроли", "выступление", "вечеринка", "презентация",
-    "show", "concert", "tour", "live", "лайв",
+    # presentation-format words
+    "концерт", "концерты", "концертный", "концертная", "шоу", "вечер",
+    "программа", "выступление", "вечеринка", "презентация", "премьера",
+    "show", "concert", "live", "лайв",
     # descriptors
     "большой", "большая", "большое", "сольный", "сольная", "сольное",
     "мультимедийный", "музыкальный", "авторский", "авторская", "юбилейный",
     "праздничный", "новогодний", "рождественский", "гала", "специальный",
-    "творческий", "творческая", "тур", "стендап", "standup", "версия",
-    "крыша", "крыше", "открытие", "закрытие", "бенефис",
+    "творческий", "творческая", "версия", "крыша", "крыше", "бенефис",
     # prepositions / conjunctions
     "на", "в", "с", "по", "за", "до", "от", "для", "или", "и", "о", "об", "к", "у",
 }
+# _ACTIVITY — distinct activities/genres. Too generic to ANCHOR a subset on their
+# own ("Спектакль" ⊄ "Спектакль для детей"), and NOT filler — as an extra word
+# they change the event ("Экскурсия и два мастер-класса" ≠ "Два мастер-класса").
+_ACTIVITY = {
+    "экскурсия", "лекция", "выставка", "квест", "спектакль", "спектакли",
+    "опера", "балет", "мюзикл", "комедия", "стендап", "standup", "мастеркласс",
+    "мастер", "класс", "класса", "фестиваль", "гастроли", "тур", "выпечка",
+    "роспись", "дегустация", "интенсив", "тренинг", "семинар", "воркшоп",
+}
+_GENERIC = _FILLER | _ACTIVITY  # may not anchor a subset on their own
 
 
 def _translit(s: str) -> str:
@@ -123,8 +138,8 @@ def same_event(a: str, b: str, level: str = "auto") -> bool:
 
     ca, cb = _cyr_tokens(a), _cyr_tokens(b)
     small, big = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
-    # Token-subset anchored by a distinctive (>=4-char, non-filler) shared word.
-    if small and small <= big and any(len(t) >= 4 and t not in _FILLER for t in small):
+    # Token-subset anchored by a distinctive (>=4-char, non-generic) shared word.
+    if small and small <= big and any(len(t) >= 4 and t not in _GENERIC for t in small):
         extra = big - small
         extra_is_filler = all(t in _FILLER or len(t) <= 2 for t in extra)
         if level == "auto":
@@ -133,5 +148,7 @@ def same_event(a: str, b: str, level: str = "auto") -> bool:
         else:  # fuzzy: any distinctive subset is a review candidate
             return True
 
-    ratio = fuzz.token_set_ratio(_translit(a), _translit(b))
+    # token_SORT_ratio (not token_SET_ratio) — set-ratio scores any subset ~100,
+    # which would defeat the filler guard above; sort-ratio stays length-sensitive.
+    ratio = fuzz.token_sort_ratio(_translit(a), _translit(b))
     return ratio >= (RATIO_AUTO if level == "auto" else RATIO_FUZZY)
