@@ -22,7 +22,10 @@ from pipeline.dedup.title_match import same_event, title_nkey
 from pipeline.dedup.venue_match import name_match_score
 from pipeline.normalizer.extractors import NormalizedCandidate
 
-_OCCURRENCE_LOOKAHEAD_DAYS = 30
+# Sources list events up to ~a year ahead; a short window dropped every session of
+# a far-future event, after which the dedup used to fall back to "now" and the
+# event surfaced as happening today (see dedup_and_upsert_event).
+_OCCURRENCE_LOOKAHEAD_DAYS = 365
 # Moscow is a fixed UTC+3 — "same day" for dedup must be a Moscow calendar day, not a
 # UTC one (an all-day MSK-midnight event is stored as the previous UTC day).
 _MSK = timezone(timedelta(hours=3))
@@ -431,8 +434,12 @@ async def dedup_and_upsert_event(
     now = datetime.now(timezone.utc)
     until = now + timedelta(days=_OCCURRENCE_LOOKAHEAD_DAYS)
     sessions = _payload_session_dates(raw.raw_payload_json if raw else None, now, until)
-    if not sessions:
-        sessions = [(candidate.date_start or datetime.now(timezone.utc), candidate.date_end)]
+    if not sessions and candidate.date_start:
+        # Sources without a `dates` list (LLM/ldjson) keep their single primary date.
+        # NEVER fall back to now() — that stamps a real future event as "happening
+        # today" with a bogus time. No date at all → no occurrence (the event simply
+        # isn't placed on the map until a dated session is seen).
+        sessions = [(candidate.date_start, candidate.date_end)]
     occ_venue_id = venue.venue_id if venue else None
     venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
     for occ_start, occ_end in sessions:
