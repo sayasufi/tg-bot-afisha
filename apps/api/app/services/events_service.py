@@ -151,20 +151,12 @@ class EventQueryService:
 
     @staticmethod
     def _concrete_time_clause():
-        # Drop events that would render only "в часы работы": an all-day, already-
-        # started, open-ended / long-run occurrence whose venue has NO resolved opening
-        # hours. There's no concrete time to show, so we hide the card rather than
-        # surface a vague one (venues WITH hours still show "сегодня 10:00–21:00").
-        return text(
-            "not ("
-            "  (event_occurrences.date_start at time zone 'Europe/Moscow')::time = time '00:00'"
-            "  and event_occurrences.date_start <= now()"
-            "  and (event_occurrences.date_end > now() + interval '5 years'"
-            "       or (event_occurrences.date_end is not null"
-            "           and (event_occurrences.date_end - event_occurrences.date_start) > interval '2 days'))"
-            "  and (venues.hours_json is null or venues.hours_json::text = '{}')"
-            ")"
-        )
+        # Previously HID all-day, hours-less ongoing events (nothing but "в часы
+        # работы" to show). We now keep them visible with an honest "время уточняйте"
+        # (the frontend never shows the misleading "в часы работы"/24-7 "круглосуточно"
+        # anymore, and the hours resolver recovers real museum/hall hours where it can),
+        # so this is a no-op. Kept as a single seam in case we want to re-gate later.
+        return text("true")
 
     async def map_events(
         self,

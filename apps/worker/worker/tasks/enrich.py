@@ -210,49 +210,99 @@ def _dist_m(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 2 * R * math.asin(math.sqrt(h))
 
 
-def _resolve_venue_hours_impl():
-    """Resolve opening hours for venues that don't have them yet, via Yandex
-    Maps (source-agnostic, by name + coords). Cached in `venues.hours_json` so we
-    hit Yandex AT MOST ONCE per venue — venues we couldn't resolve are stamped
-    with {} so they aren't re-queried. Small batch per run; new venues fill in
-    over the next cycles."""
+def _is_round_clock_day(d) -> bool:
+    if not (isinstance(d, list) and len(d) == 1 and isinstance(d[0], list) and len(d[0]) == 2):
+        return False
+    a, b = d[0]
+    return a == b or (a == "00:00" and b in ("24:00", "00:00"))
+
+
+def _is_territory_week(week) -> bool:
+    """Every day round-the-clock → the scraper matched an always-open TERRITORY (a
+    park, an embankment) or a 24/7 building that shares the venue's name, NOT the
+    event's hall. A real event venue is ~never genuinely 24/7, so this is garbage."""
+    return isinstance(week, list) and len(week) == 7 and all(_is_round_clock_day(d) for d in week)
+
+
+def _usable_hours(res: dict | None, lat, lon) -> dict | None:
+    """The scraper result's hours IF they're a real weekly schedule (not an all-week
+    24/7 territory) AND the matched place is near the venue (not a wrong business
+    across town). Returns the hours dict or None."""
+    if not res or not isinstance(res.get("hours"), dict):
+        return None
+    week = res["hours"].get("week")
+    if not (isinstance(week, list) and len(week) == 7) or _is_territory_week(week):
+        return None
+    coords = res.get("coords")
+    # The scraper often returns the CITY CENTROID as a non-answer for the location
+    # even when it found real hours; treat a centroid as "location unknown" so it
+    # doesn't false-reject via the distance guard.
+    if coords and abs(coords[0] - 55.75582) < 3e-4 and abs(coords[1] - 37.61764) < 5e-4:
+        coords = None
+    if coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > 1500:
+        return None  # matched place is far from the venue → wrong business
+    return res["hours"]
+
+
+def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city) -> dict:
+    """Best real weekly hours for a venue. Tries the venue name (+address), then —
+    if that only yields a 24/7 territory / wrong business — RETRIES with the event
+    title prepended ("Музей Москвы в миниатюре ВДНХ"), which pulls the specific
+    hall/museum instead of the enclosing park. Returns the hours dict or {}."""
+    candidates: list[str] = []
+    if address:
+        candidates.append(f"{name}, {address}".strip().strip(",").strip())
+    candidates.append(name)
+    if ev_title and ev_title.strip():
+        candidates.append(f"{ev_title.strip()} {name}".strip())
+    seen: set[str] = set()
+    for q in candidates:
+        if not q or q in seen:
+            continue
+        seen.add(q)
+        try:
+            res = asyncio.run(scraper.fetch_hours(q, city))
+        except Exception:
+            res = None
+        good = _usable_hours(res, lat, lon)
+        if good:
+            return good
+        time.sleep(0.8)  # polite between tries
+    return {}  # "checked, nothing usable" → stamped so we don't re-query
+
+
+_VENUE_HOURS_QUERY = (
+    "SELECT v.venue_id, v.name, v.address, ST_Y(v.geom::geometry) AS lat, ST_X(v.geom::geometry) AS lon, "
+    "(SELECT e.canonical_title FROM events.event_occurrences o JOIN events.events e ON e.event_id = o.event_id "
+    " WHERE o.venue_id = v.venue_id AND e.status = 'active' "
+    " ORDER BY e.popularity_score DESC NULLS LAST, o.date_start LIMIT 1) AS ev_title "
+    "FROM events.venues v WHERE v.geom IS NOT NULL AND v.name <> '' AND v.hours_json IS NULL "
+    "ORDER BY v.venue_id LIMIT :lim"
+)
+
+
+def _resolve_venue_hours_impl(limit: int = 15):
+    """Resolve opening hours for venues that don't have them yet, via Yandex Maps
+    (source-agnostic, by name + coords + a representative event title). Cached in
+    `venues.hours_json` so we hit Yandex AT MOST ONCE per venue — venues we couldn't
+    resolve are stamped {} so they aren't re-queried. All-week-24/7 is rejected as a
+    territory match and retried with the event title to find the real hall."""
     db = SessionLocal()
     scraper = YandexMapsScraper()
     city = get_settings().default_city or "Москва"
     try:
-        rows = db.execute(
-            text(
-                "SELECT venue_id, name, address, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
-                "FROM events.venues WHERE geom IS NOT NULL AND name <> '' AND hours_json IS NULL "
-                "ORDER BY venue_id LIMIT 15"
-            )
-        ).all()
+        rows = db.execute(text(_VENUE_HOURS_QUERY), {"lim": limit}).all()
         stored = 0
-        for vid, name, address, lat, lon in rows:
-            # name + address disambiguates same-named venues across the city.
-            query = f"{name}, {address}".strip().strip(",").strip() if address else name
-            try:
-                res = asyncio.run(scraper.fetch_hours(query, city))
-            except Exception:
-                res = None
-            hours: dict = {}  # default: "checked, nothing usable" → never re-queried
-            if res and res.get("hours"):
-                coords = res.get("coords")
-                # The scraper often returns the CITY CENTROID as a non-answer for the
-                # location even when it found the org's real hours; don't let that
-                # false-reject valid hours via the distance guard (it was rejecting
-                # ~95% of matches). Treat a centroid result as "location unknown".
-                if coords and abs(coords[0] - 55.75582) < 3e-4 and abs(coords[1] - 37.61764) < 5e-4:
-                    coords = None
-                if not (coords and lat is not None and lon is not None and _dist_m((lat, lon), coords) > 1500):
-                    hours = res["hours"]
-                    stored += 1
+        for vid, name, address, lat, lon, ev_title in rows:
+            hours = _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city)
+            if hours:
+                stored += 1
             db.execute(
                 text("UPDATE events.venues SET hours_json = CAST(:h AS JSON) WHERE venue_id = :v"),
                 {"h": json.dumps(hours, ensure_ascii=False), "v": vid},
             )
             db.commit()
-            time.sleep(1.2)
+            time.sleep(1.0)
         return {"checked": len(rows), "stored": stored}
     except Exception:
         raise

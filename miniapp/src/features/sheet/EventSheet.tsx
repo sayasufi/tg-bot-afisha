@@ -145,13 +145,12 @@ export function EventSheet({ selected, query, userPos, items, metro, isFav, onTo
   const upcoming = detail?.occurrences ?? [];
   const moreDates = upcoming.slice(1, 4);
   const extraDates = Math.max(0, upcoming.length - 4);
-  // When the event itself has no clock time, fall back to the venue's hours for
-  // today ("сегодня 10:00–22:00") — but ONLY for a run that's happening today
-  // ("в часы работы"). A FUTURE-dated all-day event must not borrow today's venue
-  // hours (that's the "28 июня · сегодня круглосуточно" nonsense); it stays
-  // "время уточняйте".
+  // For an all-day event, show the venue's REAL hours today ("сегодня 10:00–20:00")
+  // when we have them; otherwise an honest "время уточняйте". Never a misleading
+  // "в часы работы" or a 24/7 "круглосуточно" (that's a matched-territory artefact —
+  // venueHoursToday returns null for it).
   const baseNote = whenTimeNote(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
-  const timeNote = baseNote === "в часы работы" ? venueHoursToday(occ?.venue_hours) ?? baseNote : baseNote;
+  const timeNote = baseNote ? venueHoursToday(occ?.venue_hours) ?? baseNote : "";
   // "Можно пойти сейчас" badge for the headline session — the soonest you can
   // still get to (occurrences are future-first): timed within 3 h, or open now.
   const go = goNowState(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end, occ?.venue_hours);

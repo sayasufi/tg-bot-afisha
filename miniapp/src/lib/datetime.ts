@@ -31,6 +31,21 @@ const hmToMin = (hm: string): number => {
   return (Number(h) || 0) * 60 + (Number(m) || 0);
 };
 
+// All-week round-the-clock almost always means the hours scraper matched an
+// always-open TERRITORY (a park, an embankment) or a 24/7 building (a hotel that
+// shares the venue's name), not the event's actual hall — a real event venue is
+// ~never genuinely 24/7. So we treat "every day 00:00–24:00" as UNKNOWN hours
+// rather than asserting круглосуточно for the event.
+function isRoundTheClockDay(day: (string[] | null)[] | null): boolean {
+  if (!Array.isArray(day) || day.length !== 1) return false;
+  const r = day[0];
+  return Array.isArray(r) && r.length === 2 && (r[0] === r[1] || (r[0] === "00:00" && (r[1] === "24:00" || r[1] === "00:00")));
+}
+export function isTerritoryHours(hours: { week?: (string[][] | null)[] } | null | undefined): boolean {
+  const week = hours?.week;
+  return Array.isArray(week) && week.length === 7 && week.every(isRoundTheClockDay);
+}
+
 // Is the venue open at `now` per its weekly hours? true / false / null (unknown).
 export function venueOpenNow(
   hours: { week?: (string[][] | null)[] } | null | undefined,
@@ -38,6 +53,7 @@ export function venueOpenNow(
 ): boolean | null {
   const week = hours?.week;
   if (!Array.isArray(week) || week.length !== 7) return null;
+  if (isTerritoryHours(hours)) return null; // 24/7 territory → we don't know the event's hours
   const day = week[now.getDay()];
   if (day === null) return false; // closed today
   if (!Array.isArray(day) || day.length === 0) return null; // unknown
@@ -176,14 +192,13 @@ export function formatWhen(startIso?: string | null, endIso?: string | null, now
 //   ""               — has a real time, nothing to add
 //   "в часы работы"  — an ongoing run / permanent exhibit (open during venue hours)
 //   "время уточняйте" — a one-off without a known time (check before you go)
-export function whenTimeNote(startIso?: string | null, endIso?: string | null, now: Date = new Date()): string {
+export function whenTimeNote(startIso?: string | null, _endIso?: string | null, _now: Date = new Date()): string {
   const s = parse(startIso);
-  if (!s || !isMidnight(s)) return ""; // missing start, or has a real time
-  const { end: e, open } = endInfo(s, endIso, now);
-  const started = s.getTime() <= now.getTime();
-  // Ongoing run / permanent exhibit → "постоянно" / "по X" in formatWhen.
-  if ((open && started) || (e && dayDiff(s, e) > 2 && started)) return "в часы работы";
-  return "время уточняйте"; // single/short or not-yet-started point, no time
+  if (!s || !isMidnight(s)) return ""; // has a real clock time → nothing to add
+  // All-day / ongoing with no event time: honest "время уточняйте" by default. The
+  // sheet upgrades this to the venue's real hours ("сегодня 10:00–20:00") when we
+  // have them — but never to a misleading "в часы работы" / 24-7 "круглосуточно".
+  return "время уточняйте";
 }
 
 // Today's opening hours from a venue's weekly schedule (index 0=Sunday):
@@ -194,10 +209,11 @@ export function venueHoursToday(
 ): string | null {
   const week = hours?.week;
   if (!Array.isArray(week) || week.length !== 7) return null;
+  if (isTerritoryHours(hours)) return null; // all-week 24/7 = matched a territory, not the hall
   const day = week[now.getDay()];
   if (day === null) return "сегодня закрыто";
   if (!Array.isArray(day) || day.length === 0) return null;
-  // Round-the-clock: Yandex encodes 24/7 as 00:00→00:00 (or →24:00).
+  // Round-the-clock for a single day (a genuine 24h spot, not an all-week territory).
   const is24 = (r: string[]) => r[0] === r[1] || (r[0] === "00:00" && (r[1] === "24:00" || r[1] === "00:00"));
   if (day.length === 1 && Array.isArray(day[0]) && is24(day[0])) return "сегодня круглосуточно";
   const ranges = day
