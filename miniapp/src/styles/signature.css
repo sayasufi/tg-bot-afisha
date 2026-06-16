@@ -176,8 +176,7 @@
   }
 }
 
-/* Two-ink misregistration: a cinnabar offset ghost behind acid blocks. */
-.csheet__apply,
+/* Two-ink misregistration: a cinnabar offset ghost behind the acid badge. */
 .cmdpill__badge {
   box-shadow: 1.6px 1.6px 0 var(--cinnabar);
 }

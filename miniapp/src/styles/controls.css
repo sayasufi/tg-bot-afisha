@@ -215,9 +215,9 @@
   background: var(--cinnabar);
   flex: 0 0 auto;
 }
+/* Active "Сейчас": fill cinnabar but keep the default black chip outline (--line). */
 .chip--live-on {
   background: var(--cinnabar);
-  border-color: var(--cinnabar);
   color: #fff;
 }
 .chip--live-on .chip__livedot {
