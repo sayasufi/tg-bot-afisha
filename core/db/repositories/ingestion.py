@@ -412,7 +412,7 @@ async def dedup_and_upsert_event(
             continue
         exact_time = candidate.date_start is not None and occurrence.date_start == candidate.date_start
         if same_event(event.canonical_title, candidate.title) or (
-            exact_time and same_event(event.canonical_title, candidate.title, level="fuzzy")
+            exact_time and same_event(event.canonical_title, candidate.title, level="fuzzy", strict_numbers=False)
         ):
             strong = event
             break

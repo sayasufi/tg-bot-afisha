@@ -112,7 +112,7 @@ def _numbers(s: str) -> set[str]:
     return set(_NUM.findall(s or ""))
 
 
-def same_event(a: str, b: str, level: str = "auto") -> bool:
+def same_event(a: str, b: str, level: str = "auto", strict_numbers: bool = True) -> bool:
     """True if the two titles denote the same event (caller has already checked
     venue/day proximity). ``level`` is the confidence demanded:
 
@@ -129,7 +129,9 @@ def same_event(a: str, b: str, level: str = "auto") -> bool:
     if not ka or not kb:
         return False
     # Sequels/parts: "Часть 1" vs "Часть 2", "День 1" vs "День 2" — never merge.
-    if _numbers(a) != _numbers(b):
+    # Skipped for exact-time collisions, where a number is an incidental detail
+    # (a film title "«1+1»"), not a sequence — two parts can't run at one instant.
+    if strict_numbers and _numbers(a) != _numbers(b):
         return False
     if ka == kb:
         return True

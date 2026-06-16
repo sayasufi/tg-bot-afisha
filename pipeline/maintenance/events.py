@@ -91,7 +91,7 @@ def find_pairs(db) -> tuple[dict, dict, list, list]:
                 a, b = ids[i], ids[j]
                 if (a, b) in seen_pairs:
                     continue
-                if same_event(title[a], title[b], level="fuzzy"):
+                if same_event(title[a], title[b], level="fuzzy", strict_numbers=False):
                     seen_pairs.add((a, b))
                     safe_pairs.append((a, b))
 
