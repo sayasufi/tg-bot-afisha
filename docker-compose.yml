@@ -68,44 +68,7 @@ services:
       retries: 20
       start_period: 20s
 
-  worker:
-    build:
-      context: .
-      dockerfile: infra/docker/python.Dockerfile
-    env_file: .env
-    restart: unless-stopped
-    command: celery -A apps.worker.worker.celery_app.celery_app worker -l info -Q fetch,normalize,enrich,dedup
-    # Lets the worker reach services published on the docker host (e.g. a local LLM).
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - .:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      api:
-        condition: service_healthy
-
-  beat:
-    build:
-      context: .
-      dockerfile: infra/docker/python.Dockerfile
-    env_file: .env
-    restart: unless-stopped
-    command: celery -A apps.worker.worker.celery_app.celery_app beat -l info
-    volumes:
-      - .:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      api:
-        condition: service_healthy
-
-  # --- Prefect orchestration (replaces the celery worker + beat above) ---
+  # --- Prefect orchestration (schedules + runs every flow) ---
   prefect-server:
     image: prefecthq/prefect:3-latest
     restart: unless-stopped

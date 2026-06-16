@@ -21,9 +21,6 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
 
-    celery_broker_url: str = Field(default="redis://redis:6379/1", alias="CELERY_BROKER_URL")
-    celery_result_backend: str = Field(default="redis://redis:6379/2", alias="CELERY_RESULT_BACKEND")
-
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
 
     llm_api_base_url: str = Field(default="http://176.109.82.96:5000", alias="LLM_API_BASE_URL")
