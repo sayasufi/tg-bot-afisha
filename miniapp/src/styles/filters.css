@@ -192,22 +192,27 @@
 .activechip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 8px 0 11px;
+  gap: 7px;
+  height: 28px;
+  padding: 0 8px 0 10px;
   border: 1px solid var(--line);
-  background: var(--vitrine);
+  border-radius: 0;
+  /* Transparent + mono uppercase = a catalogue tag, not a filled Material pill. */
+  background: transparent;
   color: var(--ink);
-  font-family: var(--grotesk);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
 }
 
 .activechip svg {
   flex: 0 0 auto;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
 }
 
 .activechip:active {
