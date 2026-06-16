@@ -159,7 +159,10 @@ async def _enrich_impl() -> dict:
                 classify = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
                 category = classify.category
                 candidate.tags_json = list(set(candidate.tags_json + classify.tags))
-            if category and category != "other":
+            # Tag the resolved category — INCLUDING "other" — so dedup treats the
+            # candidate as already classified and doesn't pay for a second LLM
+            # classify of the same event.
+            if category:
                 candidate.tags_json.append(f"category:{category}")
             db.add(candidate)
             db.add(venue)
