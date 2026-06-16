@@ -18,7 +18,7 @@ from collections import defaultdict
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.title_match import same_event, title_nkey
+from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey
 
 _MSK_DAY = "(occ.date_start at time zone 'UTC' at time zone 'Europe/Moscow')::date"
 
@@ -82,8 +82,11 @@ def find_pairs(db) -> tuple[dict, dict, list, list]:
 
     # Exact-time collision: a venue can't run two shows at the same instant, so two
     # events sharing a venue + exact start with related titles are one event — even
-    # when one only adds a subtitle ("…на крыше" vs "…на крыше «Маска», «Мулен Руж»").
-    # Promote those (otherwise fuzzy) pairs to the safe tier.
+    # when one only adds a subtitle ("…на крыше" vs "…на крыше «Маска», «Мулен Руж»")
+    # or a location suffix on an all-generic title ("Большой стендап" vs "Большой
+    # стендап на Сретенке"). same_slot_title accepts the plain token-subset the slot
+    # makes conclusive; same_event covers the high-ratio non-subset case. Promote
+    # both (otherwise fuzzy) to the safe tier.
     for bucket in by_venue_time.values():
         ids = sorted(bucket)
         for i in range(len(ids)):
@@ -91,7 +94,7 @@ def find_pairs(db) -> tuple[dict, dict, list, list]:
                 a, b = ids[i], ids[j]
                 if (a, b) in seen_pairs:
                     continue
-                if same_event(title[a], title[b], level="fuzzy", strict_numbers=False):
+                if same_slot_title(title[a], title[b]) or same_event(title[a], title[b], level="fuzzy", strict_numbers=False):
                     seen_pairs.add((a, b))
                     safe_pairs.append((a, b))
 

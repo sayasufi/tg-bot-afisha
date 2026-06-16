@@ -18,7 +18,7 @@ from core.db.models import (
     Venue,
 )
 from pipeline.dedup.scorer import MatchDecision
-from pipeline.dedup.title_match import same_event, title_nkey
+from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey
 from pipeline.dedup.venue_match import name_match_score
 from pipeline.normalizer.extractors import NormalizedCandidate
 
@@ -26,6 +26,10 @@ from pipeline.normalizer.extractors import NormalizedCandidate
 # a far-future event, after which the dedup used to fall back to "now" and the
 # event surfaced as happening today (see dedup_and_upsert_event).
 _OCCURRENCE_LOOKAHEAD_DAYS = 365
+# Max discrete sessions stored per event. MUST match the connectors' _DATES_CAP and
+# resolve_afisha_dates' cap (all 12) — otherwise the write path silently drops the
+# tail dates a source took care to fetch (e.g. a play's 12 dates collapse to 8).
+_OCCURRENCE_CAP = 12
 # Moscow is a fixed UTC+3 — "same day" for dedup must be a Moscow calendar day, not a
 # UTC one (an all-day MSK-midnight event is stored as the previous UTC day).
 _MSK = timezone(timedelta(hours=3))
@@ -68,7 +72,7 @@ def _payload_session_dates(payload: object, now: datetime, until: datetime) -> l
         seen.add(key)
         out.append((start, end))
     out.sort(key=lambda pair: pair[0])
-    return out[:8]
+    return out[:_OCCURRENCE_CAP]
 
 
 async def get_active_sources(db: AsyncSession) -> list[Source]:
@@ -412,7 +416,10 @@ async def dedup_and_upsert_event(
             continue
         exact_time = candidate.date_start is not None and occurrence.date_start == candidate.date_start
         if same_event(event.canonical_title, candidate.title) or (
-            exact_time and same_event(event.canonical_title, candidate.title, level="fuzzy", strict_numbers=False)
+            exact_time and (
+                same_slot_title(event.canonical_title, candidate.title)
+                or same_event(event.canonical_title, candidate.title, level="fuzzy", strict_numbers=False)
+            )
         ):
             strong = event
             break

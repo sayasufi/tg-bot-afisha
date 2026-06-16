@@ -15,18 +15,22 @@ class NominatimGeocoder:
         query = f"{city_hint}, {address}" if city_hint else address
         params = {"q": query, "format": "json", "limit": 1}
         headers = {"User-Agent": "tg-bot-afisha/0.1"}
-        async with httpx.AsyncClient(timeout=8) as client:
-            response = await client.get(f"{self.base_url}/search", params=params, headers=headers)
-            if response.status_code >= 400:
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                response = await client.get(f"{self.base_url}/search", params=params, headers=headers)
+                if response.status_code >= 400:
+                    return None
+                rows = response.json()
+            if not rows:
                 return None
-            rows = response.json()
-        if not rows:
+            first = rows[0]
+            return GeoResult(
+                lat=float(first["lat"]),
+                lon=float(first["lon"]),
+                provider="nominatim",
+                confidence=0.65,
+                normalized_address=str(first.get("display_name") or ""),
+            )
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+            # Network error or unexpected response shape — skip, never abort the batch.
             return None
-        first = rows[0]
-        return GeoResult(
-            lat=float(first["lat"]),
-            lon=float(first["lon"]),
-            provider="nominatim",
-            confidence=0.65,
-            normalized_address=str(first.get("display_name") or ""),
-        )

@@ -21,22 +21,26 @@ class YandexGeocoder:
             return None
         query = f"{city_hint}, {address}" if city_hint else address
         params = {"apikey": self.api_key, "format": "json", "geocode": query}
-        async with httpx.AsyncClient(timeout=8) as client:
-            response = await client.get("https://geocode-maps.yandex.ru/1.x/", params=params)
-            if response.status_code >= 400:
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                response = await client.get("https://geocode-maps.yandex.ru/1.x/", params=params)
+                if response.status_code >= 400:
+                    return None
+                data = response.json()
+            members = (
+                data.get("response", {})
+                .get("GeoObjectCollection", {})
+                .get("featureMember", [])
+            )
+            if not members:
                 return None
-            data = response.json()
-
-        members = (
-            data.get("response", {})
-            .get("GeoObjectCollection", {})
-            .get("featureMember", [])
-        )
-        if not members:
+            first = members[0]["GeoObject"]
+            pos = first["Point"]["pos"]
+            lon, lat = [float(x) for x in pos.split(" ")]
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+            # Network error or an unexpected response shape — skip, never abort the
+            # enrich batch on one bad geocode.
             return None
-        first = members[0]["GeoObject"]
-        pos = first["Point"]["pos"]
-        lon, lat = [float(x) for x in pos.split(" ")]
         normalized_address = (
             first.get("metaDataProperty", {})
             .get("GeocoderMetaData", {})

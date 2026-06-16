@@ -7,7 +7,7 @@ unattended) and "fuzzy" (+ distinctive subsets, review only).
 """
 import pytest
 
-from pipeline.dedup.title_match import same_event, title_nkey, translit_key
+from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey, translit_key
 
 try:
     import rapidfuzz  # noqa: F401
@@ -15,6 +15,29 @@ try:
     HAS_RAPIDFUZZ = True
 except Exception:  # pragma: no cover
     HAS_RAPIDFUZZ = False
+
+
+# --- same-slot tier: token-subset at one venue + exact instant (no anchor word) --
+
+@pytest.mark.parametrize("a,b", [
+    # all-generic titles same_event rejects, but they are one show at one slot
+    ("Большой стендап", "Большой стендап на Сретенке."),
+    ("Стендап", "Стендап концерт"),
+    ("Концерт", "Концерт Баха"),
+    ("Polnalyubvi", "Полналюбви"),                          # cross-alphabet exact
+])
+def test_same_slot_merges_token_subset(a, b):
+    assert same_slot_title(a, b) is True
+    assert same_slot_title(b, a) is True
+
+
+@pytest.mark.parametrize("a,b", [
+    ("Большой стендап", "Женский стендап"),                 # different show, not subset
+    ("Стендап 1", "Стендап 2"),                             # numbered, different tokens
+    ("Лебединое озеро", "Щелкунчик"),                       # unrelated
+])
+def test_same_slot_rejects_non_subset(a, b):
+    assert same_slot_title(a, b) is False
 
 
 # --- safe tier: exact / transliterated / punctuation / order -------------------

@@ -19,3 +19,6 @@ cookies.txt
 
 # Playwright MCP browser scratch
 .playwright-mcp/
+
+# local audit scratch
+audit_digest.txt

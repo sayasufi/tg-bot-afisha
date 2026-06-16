@@ -135,6 +135,26 @@ def _subset_extra(small: set[str], big: set[str]):
     return big - matched
 
 
+def same_slot_title(a: str, b: str) -> bool:
+    """Lenient title match for two events PROVEN to share a venue at the EXACT same
+    instant (the caller checks that). One stage can't run two shows at one minute, so
+    the slot itself is the anchor: a plain token-subset is enough, WITHOUT the
+    distinctive-shared-word requirement same_event() imposes. This is what catches
+    all-generic titles like "Большой стендап" ⊂ "Большой стендап на Сретенке" (both
+    shared tokens are generic, so same_event rejects them, but they are one show).
+    Different numbers/parts fall out naturally — they aren't a token-subset."""
+    ka, kb = translit_key(a), translit_key(b)
+    if not ka or not kb:
+        return False
+    if ka == kb:
+        return True
+    ta, tb = _cyr_tokens(a), _cyr_tokens(b)
+    if not ta or not tb:
+        return False
+    small, big = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    return _subset_extra(small, big) is not None
+
+
 def same_event(a: str, b: str, level: str = "auto", strict_numbers: bool = True) -> bool:
     """True if the two titles denote the same event (caller has already checked
     venue/day proximity). ``level`` is the confidence demanded:

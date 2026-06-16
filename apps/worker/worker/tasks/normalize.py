@@ -41,7 +41,10 @@ def _is_kudago_candidate_in_window(candidate) -> bool:
     if candidate.date_start is None:
         return False
     now = datetime.now(timezone.utc)
-    until = now + timedelta(days=30)
+    # Must match the KudaGo connector's _LOOKAHEAD_DAYS (365) and the occurrence
+    # window — a 30-day gate here silently dropped events the connector fetched
+    # 31..365 days out (a play's autumn run never reached the map).
+    until = now + timedelta(days=365)
     if now <= candidate.date_start <= until:
         return True
     # Ongoing events (exhibitions etc.): started in the past, still running.

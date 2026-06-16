@@ -69,10 +69,14 @@ class LLMExtractionService:
             "max_tokens": 500,
         }
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(f"{self.base_url}/api/chat", json=payload)
-            response.raise_for_status()
-            data = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.post(f"{self.base_url}/api/chat", json=payload)
+                response.raise_for_status()
+                data = response.json()
+        except (httpx.HTTPError, ValueError):
+            # Network/timeout/5xx/non-JSON — skip this one raw, never abort the batch.
+            return None, "llm_error"
 
         raw = data.get("response") or "{}"
         try:
@@ -101,7 +105,10 @@ class LLMExtractionService:
         price_text = str(parsed.get("price_text") or "").strip()
         age_limit = str(parsed.get("age_limit") or "").strip()
         tags = [str(tag).strip().lower() for tag in (parsed.get("tags") or []) if str(tag).strip()]
-        confidence = float(parsed.get("confidence") or 0.0)
+        try:
+            confidence = float(parsed.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
 
         if not title:
             return None, "missing_title"

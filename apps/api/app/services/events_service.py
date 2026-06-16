@@ -305,6 +305,9 @@ class EventQueryService:
             )
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(EventOccurrence.event_id == event_id)
+            # Only upcoming sessions (3h grace, matching the lifecycle "live" rule) —
+            # the map pin already filters, so the sheet must not surface a past date.
+            .where(func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= text("now() - interval '3 hours'"))
             .order_by(EventOccurrence.date_start.asc())
         )).all()
         occurrences = [
