@@ -18,7 +18,7 @@ _IMPERSONATE = "chrome"
 # Moscow is a fixed UTC+3 (no DST since 2014) — a plain offset avoids depending
 # on tzdata being installed.
 _MSK = timezone(timedelta(hours=3))
-_LOOKAHEAD_DAYS = 30
+_LOOKAHEAD_DAYS = 365  # match the occurrence window; afisha lists ~a year ahead
 _DATES_CAP = 6
 
 # afisha.ru serves no public JSON listing API (the web GraphQL is a persisted-
@@ -268,9 +268,15 @@ class AfishaRuConnector:
         horizon = today + timedelta(days=_LOOKAHEAD_DAYS)
         start_dt = self._parse_dt(sched.get("MinScheduleDate"))
         end_dt = self._parse_dt(sched.get("MaxScheduleDate"))
+        sessions = int(sched.get("SessionsCount") or 0)
+        span_days = (end_dt.date() - start_dt.date()).days if (start_dt and end_dt) else 0
 
-        # Ongoing run (an exhibition spans many days) -> one span row, UI "до …".
-        if start_dt and end_dt and (end_dt.date() - start_dt.date()) > timedelta(days=1):
+        # Treat as a continuous run (one "до …" span) only when the sessions are
+        # DENSE (roughly daily) — e.g. an exhibition. A handful of sessions across
+        # weeks are discrete show dates, and a span there is misleading ("14 июля —
+        # 27 сентября" for what is really 3 performances); fall through and emit the
+        # known first/last dates instead.
+        if span_days > 1 and sessions >= span_days * 0.5:
             run_start = start_dt if start_dt.date() >= today else datetime(today.year, today.month, today.day, tzinfo=_MSK)
             if end_dt.date() < today:
                 return []
