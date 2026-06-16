@@ -126,8 +126,10 @@
 /* "Сейчас" filter active → a constant cinnabar outline whose soft outer glow gently
    breathes (a subtle animated highlight, never a blink — it never goes off), so it's
    clear the map is narrowed to events you can get to right now. */
+/* No position override here — .cmdpill is already position:absolute (left+right
+   anchored), which both keeps it on-screen AND is the containing block for ::after.
+   Setting position:relative would drop the `right` anchor and stretch it off-screen. */
 .cmdpill--live {
-  position: relative;
   box-shadow: inset 0 0 0 1px var(--cinnabar);
 }
 
