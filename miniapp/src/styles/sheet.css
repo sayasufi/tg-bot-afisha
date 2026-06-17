@@ -1,5 +1,5 @@
-/* Focus pull: the strip of map above the open sheet softly blurs + dims, so the
-   exhibit is the only thing in focus (variant.com "silence is a luxury"). */
+/* Focus pull: the strip of map above the open sheet dims (a flat scrim, no blur), so
+   the exhibit is the only thing in focus. */
 .sheet-veil {
   position: fixed;
   inset: 0;

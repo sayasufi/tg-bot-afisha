@@ -25,64 +25,7 @@
   opacity: 0.08;
 }
 
-.proof__crop {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-}
-
-.proof__crop::before,
-.proof__crop::after {
-  content: "";
-  position: absolute;
-  background: var(--ink);
-}
-
-.proof__crop::before {
-  width: 16px;
-  height: 1.5px;
-}
-
-.proof__crop::after {
-  width: 1.5px;
-  height: 16px;
-}
-
-.proof__crop--tl {
-  top: 7px;
-  left: 7px;
-}
-
-.proof__crop--tr {
-  top: 7px;
-  right: 7px;
-}
-
-.proof__crop--tr::before,
-.proof__crop--tr::after {
-  right: 0;
-}
-
-.proof__crop--bl {
-  bottom: 7px;
-  left: 7px;
-}
-
-.proof__crop--bl::before,
-.proof__crop--bl::after {
-  bottom: 0;
-}
-
-.proof__crop--br {
-  bottom: 7px;
-  right: 7px;
-}
-
-.proof__crop--br::before,
-.proof__crop--br::after {
-  bottom: 0;
-  right: 0;
-}
+/* (Corner crop marks removed at the owner's request — they read as stray black L's.) */
 
 
 /* Running gallery ticker, under the command pill (map view only). Tap → list. */

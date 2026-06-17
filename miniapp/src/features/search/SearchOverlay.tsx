@@ -124,7 +124,7 @@ export function SearchOverlay({
         </div>
 
         {(items.length > 0 || showEmpty || error) && (
-          <div className="searchov__results" role="listbox" aria-label="Результаты поиска">
+          <div className="searchov__results">
             {items.map((it, i) => (
               <EventRow
                 key={it.event_id}

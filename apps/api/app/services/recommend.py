@@ -322,10 +322,13 @@ class RecommendationService:
         # genuinely new content, not the same ~12 events relabelled. Rails are tried in
         # priority order; one renders only if it still adds ≥_MIN_RAIL UNSEEN events.
 
-        def add(key, title, subtitle, entries, *, diverse=False, min_items=_MIN_RAIL):
+        def add(key, title, subtitle, entries, *, diverse=False, min_items=_MIN_RAIL, filter_seen=True):
             if len(rails) >= _MAX_RAILS:
                 return
-            pool = [e for e in entries if e["c"]["event_id"] not in seen]
+            # filter_seen=False lets a distinct-axis rail (e.g. "Рядом") show its TRUE best
+            # even if an item also leads "Для тебя" — but it still marks them seen so the
+            # big overlapping rails below don't repeat it.
+            pool = [e for e in entries if e["c"]["event_id"] not in seen] if filter_seen else list(entries)
             if diverse:
                 pool = self._diverse(pool, per_rail)
             rail = self._rail(key, title, subtitle, pool, per_rail, min_items=min_items)
@@ -337,10 +340,12 @@ class RecommendationService:
         # first; min 1 so it always leads.
         add("for_you", "Для тебя", "Собрано лично для вас", by_score, diverse=True, min_items=1)
 
-        # "Рядом" — closest to you (a distinct proximity axis).
+        # "Рядом" — closest to you. A spatial lens must show the actual nearest, so it is
+        # NOT filtered by the seen-set (a 1-2 event overlap with "Для тебя" is fine); it
+        # still marks its items seen so the rails below stay fresh.
         if has_loc:
             near = sorted([e for e in scored if e["dist_km"] is not None and e["dist_km"] <= _NEAR_KM], key=lambda e: e["dist_km"])
-            add("near", "Рядом с вами", "В пешей доступности и около", near)
+            add("near", "Рядом с вами", "В пешей доступности и около", near, filter_seen=False)
 
         # "Сегодня" — today's events (incl. ongoing covering today). The old standalone
         # "Идёт сейчас" rail was a strict subset of this AND every card already shows a

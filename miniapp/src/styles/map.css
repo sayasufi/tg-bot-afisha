@@ -105,9 +105,12 @@ html[data-theme="dark"] .vpin--active::before {
 
 .vpin--active .vpin__plate {
   background: var(--acid);
+  /* Flat two-ink misregistration ghost (acid plate + cinnabar offset) instead of a soft
+     drop-shadow — the lift reads through the scale + the signature two-ink cast, on-brand
+     and FLAT. */
   box-shadow:
     inset 0 0 0 1px var(--ink),
-    0 5px 12px rgba(11, 11, 11, 0.25); /* lift the chosen pin off the wall */
+    1.6px 1.6px 0 var(--cinnabar);
   transform: scale(1.24);
 }
 
@@ -335,7 +338,8 @@ html[data-theme="dark"] .vpin--active::before {
   height: 46px;
   transform-origin: 50% 50%;
   overflow: visible;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  /* No soft shadow (FLAT) — the continuous ink stroke (.vyou__nav-edge) already
+     separates the marker from the map. */
 }
 
 .vyou__nav-edge {
