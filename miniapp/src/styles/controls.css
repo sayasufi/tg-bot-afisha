@@ -290,11 +290,11 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  /* White "passe-partout": the control's own ink hairline + a white mat + a thin ink
-     frame — a framed control, distinct from the single-hairline pins AND the black
-     clusters, with NO shadow / black fill / acid. Pure ink + plinth, flat. */
+  /* White control + 1px ink hairline + a soft NEUTRAL elevation shadow, so it lifts off
+     the map and never blends with the (flat) white pins or black clusters — reliable on
+     any map background, unlike a flat mat that vanishes over white areas. */
   background: var(--plinth);
-  box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px var(--plinth), 0 0 0 4px var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink), 0 2px 8px rgba(11, 11, 11, 0.22);
   animation: mapctlIn 0.34s var(--ease-cut) both;
 }
 
@@ -353,7 +353,7 @@
   display: grid;
   place-items: center;
   background: var(--plinth);
-  box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px var(--plinth), 0 0 0 4px var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink), 0 2px 8px rgba(11, 11, 11, 0.22);
   color: var(--ink);
   cursor: pointer;
   animation: ctlFade 0.3s var(--ease-cut) both;
