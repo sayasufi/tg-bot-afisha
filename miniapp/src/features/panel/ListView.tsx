@@ -71,6 +71,9 @@ export function ListView({
     if (!open || !bbox) return;
     setLoading(true);
     setError(false);
+    // Switching sort (or filters/bbox) reloads from page 0 — jump back to the top so the
+    // user sees the new first results, not their old scroll position.
+    scrollRef.current?.scrollTo({ top: 0 });
     const ctrl = new AbortController();
     fetchEventsList(build(0), ctrl.signal)
       .then((r) => {
