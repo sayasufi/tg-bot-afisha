@@ -92,6 +92,40 @@ async def get_map_events(
     return Response(content=gzip.decompress(gz_body), media_type="application/json", headers=headers)
 
 
+@router.get("/events/list")
+async def list_events(
+    bbox: str | None = Query(default=None, description="min_lon,min_lat,max_lon,max_lat"),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    categories: list[str] | None = Query(default=None),
+    price_max: float | None = None,
+    q: str | None = Query(default=None, max_length=200),
+    sort: str = Query(default="date", pattern="^(date|distance|popularity|price)$"),
+    lat: float | None = Query(default=None, ge=-90, le=90),
+    lon: float | None = Query(default=None, ge=-180, le=180),
+    radius_km: float | None = Query(default=None, ge=0, le=200),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    city: str | None = Query(default=None, max_length=120, description="city slug or name to scope to"),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Flat, paginated, sortable list of the events in the current map bbox — the list
+    view that mirrors the pins (same filters)."""
+    bbox_tuple = None
+    if bbox:
+        try:
+            parts = [float(x) for x in bbox.split(",")]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="bbox must be 4 comma-separated numbers")
+        if len(parts) != 4:
+            raise HTTPException(status_code=400, detail="bbox must have 4 comma-separated numbers")
+        bbox_tuple = (parts[0], parts[1], parts[2], parts[3])
+    service = EventQueryService(db)
+    return await service.list_events(
+        bbox_tuple, date_from, date_to, categories, price_max, q, sort, lat, lon, radius_km, limit, offset, city_by_name(city)
+    )
+
+
 @router.get("/cities")
 async def get_cities():
     """Active cities the app serves — for the frontend's city picker / auto-detect and

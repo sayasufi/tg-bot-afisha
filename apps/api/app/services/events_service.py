@@ -8,7 +8,7 @@ from uuid import UUID
 
 import redis.asyncio as aioredis
 from geoalchemy2 import Geography, Geometry
-from sqlalchemy import Select, and_, bindparam, cast, func, or_, select, text
+from sqlalchemy import Select, and_, bindparam, cast, func, nullslast, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.codes import event_code, parse_event_code
@@ -484,6 +484,84 @@ class EventQueryService:
         # DISTINCT ON forces event_id ordering; present pins by soonest date instead.
         items.sort(key=lambda it: it["date_start"])
         return items
+
+    async def list_events(
+        self, bbox, date_from, date_to, categories, price_max, q, sort, lat, lon, radius_km, limit, offset, city=None
+    ):
+        """Paginated, sortable flat list of events in the bbox — the 'list view' of the
+        map. Reuses the SAME filters as map_events, so the list matches the pins; adds a
+        chosen sort + LIMIT/OFFSET + a total count."""
+        lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
+        lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
+        has_pt = lat is not None and lon is not None
+        pt = func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326) if has_pt else None
+        cols = [
+            Event.event_id.label("event_id"),
+            Event.display_no.label("display_no"),
+            Event.canonical_title.label("title"),
+            Event.category.label("category"),
+            Event.cached_image_url.label("cached_image_url"),
+            Event.primary_image_url.label("primary_image_url"),
+            Event.popularity_score.label("popularity_score"),
+            EventOccurrence.date_start.label("date_start"),
+            EventOccurrence.date_end.label("date_end"),
+            EventOccurrence.price_min.label("price_min"),
+            Venue.name.label("venue_name"),
+            Venue.hours_json.label("venue_hours"),
+            Venue.city.label("venue_city"),
+            lat_col,
+            lon_col,
+        ]
+        if has_pt:
+            cols.append(func.ST_DistanceSphere(cast(Venue.geom, Geometry), pt).label("dist_m"))
+        base = (
+            select(*cols)
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
+            .where(Event.status == "active")
+        )
+        base = self._apply_filters(base, date_from, date_to, categories, None, price_max, q)
+        base = base.where(self._region_clause(city)).where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE)).where(self._concrete_time_clause())
+        if bbox:
+            base = base.where(self._bbox_clause(bbox))
+        if radius_km and has_pt:
+            base = base.where(func.ST_DistanceSphere(cast(Venue.geom, Geometry), pt) <= radius_km * 1000.0)
+        # One row per event — the soonest actionable occurrence — exactly like the map pin.
+        inner = (
+            base.distinct(Event.event_id)
+            .order_by(Event.event_id, (EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
+            .subquery()
+        )
+        total = await self.db.scalar(select(func.count()).select_from(inner)) or 0
+        rows_q = select(inner)
+        if sort == "distance" and has_pt:
+            rows_q = rows_q.order_by(nullslast(inner.c.dist_m.asc()))
+        elif sort == "popularity":
+            rows_q = rows_q.order_by(nullslast(inner.c.popularity_score.desc()), inner.c.date_start.asc())
+        elif sort == "price":
+            rows_q = rows_q.order_by(nullslast(inner.c.price_min.asc()), inner.c.date_start.asc())
+        else:  # "date" (default) — soonest first
+            rows_q = rows_q.order_by(inner.c.date_start.asc())
+        rows = (await self.db.execute(rows_q.limit(limit).offset(offset))).all()
+        now_msk = datetime.now(_MSK)
+        items = [
+            {
+                "event_id": r.event_id,
+                "code": event_code(r.display_no, r.venue_city),
+                "title": r.title,
+                "category": r.category,
+                "date_start": r.date_start,
+                "date_end": r.date_end,
+                "price_min": float(r.price_min) if r.price_min is not None else None,
+                "venue": r.venue_name,
+                "open_now": _venue_open_now(r.venue_hours, now_msk),
+                "lat": float(r.lat) if r.lat is not None else None,
+                "lon": float(r.lon) if r.lon is not None else None,
+                "primary_image_url": r.cached_image_url or r.primary_image_url,
+            }
+            for r in rows
+        ]
+        return {"items": items, "total": int(total)}
 
     async def event_detail(self, event_id: UUID):
         event = await self.db.get(Event, event_id)
