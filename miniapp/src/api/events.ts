@@ -7,6 +7,15 @@ export async function fetchCities(signal?: AbortSignal): Promise<City[]> {
   return data.cities ?? [];
 }
 
+// Typeahead search by code / title / venue → ranked EventItem rows (already shaped to
+// open the sheet with no extra fetch). city scopes to the active city.
+export async function searchEvents(q: string, city?: string | null, signal?: AbortSignal): Promise<EventItem[]> {
+  const p = new URLSearchParams({ q });
+  if (city) p.set("city", city);
+  const data = await getJson<{ items: EventItem[] }>(`/v1/search?${p.toString()}`, signal);
+  return (data.items ?? []).map((x: any) => ({ ...x, price_min: toNum(x.price_min) }));
+}
+
 // The API returns one row per occurrence, so an event with several dates repeats.
 // For map pins we want one marker per event.
 function dedupeByEvent(items: EventItem[]): EventItem[] {

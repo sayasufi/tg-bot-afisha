@@ -26,9 +26,10 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   onChange: (value: FilterState) => void;
   onMenu: () => void;
+  onOpenSearch: () => void;
 };
 
-export function Filters({ value, total, open, hasLocation, onOpenChange, onChange, onMenu }: Props) {
+export function Filters({ value, total, open, hasLocation, onOpenChange, onChange, onMenu, onOpenSearch }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0, value.goNow].filter(Boolean).length;
@@ -104,7 +105,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
           </span>
           {advancedCount > 0 && <span className="cmdpill__badge">{advancedCount}</span>}
         </button>
-        <button type="button" className="cmdpill__search" aria-label="Поиск" onClick={() => openSheet(true)}>
+        <button type="button" className="cmdpill__search" aria-label="Поиск" onClick={onOpenSearch}>
           <IconSearch size={18} />
         </button>
       </div>

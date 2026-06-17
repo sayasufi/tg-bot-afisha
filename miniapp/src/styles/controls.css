@@ -21,6 +21,12 @@
   }
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
 .topbar__row {
   display: flex;
   align-items: center;
@@ -563,4 +569,52 @@
   background: var(--acid);
   color: var(--on-acid);
   font-weight: 600;
+}
+
+/* ---------- Search overlay (typeahead over the map) ---------- */
+.searchov {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  animation: fadeIn 0.16s ease both;
+}
+.searchov__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 11, 11, 0.5);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  border: 0;
+  cursor: pointer;
+}
+.searchov__panel {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: dropIn 0.28s var(--ease-cut) both;
+}
+.searchov__results {
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--plinth);
+  box-shadow: inset 0 0 0 1px var(--line);
+  scrollbar-width: none;
+}
+.searchov__results::-webkit-scrollbar {
+  display: none;
+}
+.searchov__results.is-loading {
+  opacity: 0.6;
+}
+.searchov__empty {
+  padding: 22px 16px;
+  text-align: center;
+  font-family: var(--grotesk);
+  font-size: 13px;
+  color: var(--ink-dim);
 }

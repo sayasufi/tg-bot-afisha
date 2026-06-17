@@ -20,6 +20,7 @@ import { distanceMeters, nearestOf } from "../lib/distance";
 import { useFavorites } from "../lib/favorites";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
+import { SearchOverlay } from "../features/search/SearchOverlay";
 import { useCities } from "../lib/useCities";
 import { useGeolocation } from "../lib/useGeolocation";
 
@@ -53,6 +54,7 @@ export function App() {
   const [peek, setPeek] = useState<EventItem[] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [view, setView] = useState<View>("map");
   const [sheetReady, setSheetReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -462,6 +464,14 @@ export function App() {
         onOpenChange={setFiltersOpen}
         onChange={setFilters}
         onMenu={() => setDrawerOpen(true)}
+        onOpenSearch={() => setSearchOpen(true)}
+      />
+      <SearchOverlay
+        open={searchOpen}
+        city={currentCity?.slug ?? null}
+        userPos={userPos}
+        onSelect={openEvent}
+        onClose={() => setSearchOpen(false)}
       />
       {view === "map" && !selected && !filtersOpen && (
         <Ticker
