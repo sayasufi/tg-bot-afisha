@@ -45,6 +45,8 @@
     <div class="grid" id="grid"></div>
     <script>
       const C = [
+        ["Инверсия #3300FF (тёмный)", "#3300ff"],
+        ["Электрик-блю", "#4d7cff"],
         ["Янтарь (текущий)", "#ffb02e"],
         ["Кислота (бренд светлой)", "#ccff00"],
         ["Лайм-нео", "#c2f000"],
@@ -52,11 +54,22 @@
         ["Лимон-лайм", "#e8ff45"],
         ["Мята (холодный)", "#5fe3a1"],
       ];
+      // Pick the on-accent text that actually reads (white on a dark accent, ink on a
+      // light one) — so a dark colour like #3300FF is judged fairly.
+      const lum = (hex) => {
+        const n = parseInt(hex.slice(1), 16);
+        const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+          c /= 255;
+          return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+      };
       const g = document.getElementById("grid");
       for (const [name, hex] of C) {
         const d = document.createElement("div");
         d.className = "card";
         d.style.setProperty("--acid", hex);
+        d.style.setProperty("--on-acid", lum(hex) < 0.4 ? "#f1ecde" : "#0b0b0b");
         d.innerHTML =
           '<div class="hex"><span class="name">' + name + '<span class="swatch"></span></span><span>' + hex + "</span></div>" +
           '<div class="row">' +
