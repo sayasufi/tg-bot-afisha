@@ -43,6 +43,8 @@ export function EventRow({
           <Highlight text={item.title} query={query} />
         </span>
         <span className="erow__meta">
+          {query && item.code && <span className="erow__code">{item.code}</span>}
+          {query && item.code ? " · " : ""}
           {go.eligible && <span className="erow__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}
           {go.eligible ? " · " : ""}
           {formatWhenShort(item.date_start, item.date_end)}

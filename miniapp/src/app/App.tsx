@@ -459,7 +459,7 @@ export function App() {
   }, [openEvent]);
 
   return (
-    <div className={`app${focusBarVisible ? " app--focusbar" : ""}`}>
+    <div className={`app${focusBarVisible ? " app--focusbar" : ""}${bottomNavVisible ? " app--bottomnav" : ""}`}>
       <Filters
         value={filters}
         total={shownTotal}

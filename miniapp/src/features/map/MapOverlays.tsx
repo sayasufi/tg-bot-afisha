@@ -69,7 +69,7 @@ export function EmptyState({
           <circle cx="21" cy="21" r="13" fill="none" stroke="currentColor" strokeWidth="3" />
           <line x1="31" y1="31" x2="42" y2="42" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
-        <span className="kicker kicker--code emptystate__kicker">Окрест · Москва</span>
+        <span className="kicker kicker--code emptystate__kicker">Окрест</span>
         <div className="emptystate__title serif">
           Тишина в <em>зале</em>
         </div>

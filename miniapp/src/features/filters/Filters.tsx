@@ -52,7 +52,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   // toggle categories instead of reshuffling by the order you happened to tap them.
   for (const c of [...value.categories].sort((a, b) => categoryOrder(a) - categoryOrder(b)))
     activeChips.push({ key: `c:${c}`, label: categoryMeta(c).label, clear: () => onChange({ ...value, categories: value.categories.filter((x) => x !== c) }) });
-  if (value.priceMax) activeChips.push({ key: "price", label: `до ${value.priceMax} ₽`, clear: () => onChange({ ...value, priceMax: "" }) });
+  if (value.priceMax) activeChips.push({ key: "price", label: Number(value.priceMax) <= 0 ? "Бесплатно" : `до ${value.priceMax} ₽`, clear: () => onChange({ ...value, priceMax: "" }) });
   if (value.radiusKm > 0)
     activeChips.push({ key: "radius", label: `до ${String(value.radiusKm).replace(".", ",")} км`, clear: () => onChange({ ...value, radiusKm: 0 }) });
   if (value.goNow) activeChips.push({ key: "gonow", label: "сейчас", clear: () => onChange({ ...value, goNow: false }) });

@@ -369,6 +369,12 @@
   transform: translateY(-74px);
 }
 
+/* Lift the locate FAB above the bottom nav so it isn't hidden behind it. (focusbar and
+   bottom nav never show together; the focusbar lift above wins when it does.) */
+.app--bottomnav .mapctl-locate {
+  transform: translateY(-62px);
+}
+
 .mapctl-locate:active {
   background: var(--acid);
   color: var(--on-acid);

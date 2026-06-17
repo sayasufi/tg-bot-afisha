@@ -1,15 +1,12 @@
-// Signature "print proof" layer over VITRINE: printer's crop marks at the
-// corners, a global photocopy/halftone texture, and a running gallery ticker.
-// Purely decorative (pointer-events none), so it never interferes.
+// Signature "print proof" layer over VITRINE: a global photocopy/halftone texture
+// and the running gallery ticker. (The corner crop marks were removed at the owner's
+// request — they read as stray black L's at the screen edges.) Purely decorative
+// (pointer-events none), so it never interferes.
 
 export function ProofFrame() {
   return (
     <div className="proof" aria-hidden="true">
       <span className="photocopy" />
-      <span className="proof__crop proof__crop--tl" />
-      <span className="proof__crop proof__crop--tr" />
-      <span className="proof__crop proof__crop--bl" />
-      <span className="proof__crop proof__crop--br" />
     </div>
   );
 }

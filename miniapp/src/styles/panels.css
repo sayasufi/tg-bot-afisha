@@ -613,6 +613,15 @@ mark.hl {
   font-weight: 700;
 }
 
+/* Matched event code on a search row — the one optimised query type now gets a clear
+   mono accession confirmation. */
+.erow__code {
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .erow__spark {
     animation: none;
