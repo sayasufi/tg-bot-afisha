@@ -83,6 +83,12 @@ function MapControls({ onLocate, locating }: { onLocate: () => void; locating: b
       clearTimeout(holdRef.current);
       holdRef.current = null;
     }
+    // Drop BOTH gesture listeners, not just the one that fired. A normal press ends
+    // with pointerup (which {once} self-removes), leaving the paired pointercancel
+    // dangling forever — one leaked listener per zoom tap. Removing both here (also
+    // called from the effect cleanup) keeps it from accumulating across presses.
+    window.removeEventListener("pointerup", stopHold);
+    window.removeEventListener("pointercancel", stopHold);
   };
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useMemo, useRef, type CSSProperties } from "react";
 
-import { CATEGORIES, categoryMeta } from "../../lib/categories";
+import { CATEGORIES, categoryMeta, categoryOrder } from "../../lib/categories";
 import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
 import { CategoryIcon, IconClose, IconGrid, IconMenu, IconSearch } from "../../lib/icons";
 import { haptic, hapticSelection } from "../../lib/telegram";
@@ -48,7 +48,9 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   if (value.q.trim()) activeChips.push({ key: "q", label: `«${value.q.trim()}»`, clear: () => onChange({ ...value, q: "" }) });
   if (value.dateFrom || value.dateTo)
     activeChips.push({ key: "date", label: summarizeDate(value.dateFrom, value.dateTo), clear: () => onChange({ ...value, dateFrom: "", dateTo: "" }) });
-  for (const c of value.categories)
+  // Canonical order (matching the category grid), so the chip row stays put as you
+  // toggle categories instead of reshuffling by the order you happened to tap them.
+  for (const c of [...value.categories].sort((a, b) => categoryOrder(a) - categoryOrder(b)))
     activeChips.push({ key: `c:${c}`, label: categoryMeta(c).label, clear: () => onChange({ ...value, categories: value.categories.filter((x) => x !== c) }) });
   if (value.priceMax) activeChips.push({ key: "price", label: `до ${value.priceMax} ₽`, clear: () => onChange({ ...value, priceMax: "" }) });
   if (value.radiusKm > 0)

@@ -22,9 +22,16 @@ export const CATEGORIES: CategoryMeta[] = [
 ];
 
 const BY_KEY = new Map(CATEGORIES.map((c) => [c.key, c]));
+const ORDER = new Map(CATEGORIES.map((c, i) => [c.key, i]));
 const FALLBACK: CategoryMeta = CATEGORIES[CATEGORIES.length - 1];
 
 export function categoryMeta(key: string | null | undefined): CategoryMeta {
   if (!key) return FALLBACK;
   return BY_KEY.get(key) ?? FALLBACK;
+}
+
+// Canonical position of a category (unknown keys sort last). Lets UI render a set
+// of picked categories in the SAME stable order as the grid, not tap order.
+export function categoryOrder(key: string): number {
+  return ORDER.get(key) ?? CATEGORIES.length;
 }
