@@ -207,13 +207,28 @@ class RecommendationService:
 
     @staticmethod
     def _is_live(c: dict, now: datetime) -> bool:
+        """"Можно успеть прямо сейчас" — mirrors the map's goNowState so the rail can't
+        disagree with the pins. A TIMED event (real clock time, run ≤24h) is catchable
+        only if it HASN'T started yet and starts within 3h (you can't catch a film that
+        began). An ONGOING / all-day run is live only while within its run AND the venue
+        is open RIGHT NOW (unknown hours → not live). The old check was date-range only,
+        so it flagged closed museums and long-past sessions as 'live'."""
         s = c["date_start"]
-        if s is None or s > now:
+        if s is None:
             return False
-        e = c["date_end"] or (s + timedelta(hours=3))
-        if e.year > now.year + 5:  # open-ended sentinel → ongoing
-            return True
-        return now <= e
+        e = c["date_end"]
+        end = e if e is not None else s + timedelta(hours=3)
+        s_msk = s.astimezone(_MSK)
+        timed = (s_msk.hour != 0 or s_msk.minute != 0) and (end - s) <= timedelta(hours=24)
+        if timed:
+            secs = (s - now).total_seconds()
+            return 0 < secs <= 3 * 3600  # not started yet, starts within 3 hours
+        if s > now:
+            return False  # ongoing run hasn't begun
+        far_future = e is not None and e.year > now.year + 5  # open-ended sentinel
+        if e is not None and not far_future and now > e:
+            return False  # run already over
+        return _venue_open_now(c["venue_hours"], now.astimezone(_MSK)) is True
 
     def _score_all(self, pool, now, today, hour, lat, lon, affinity, views):
         max_views = max((views.get(str(c["event_id"]), 0) for c in pool), default=0)
