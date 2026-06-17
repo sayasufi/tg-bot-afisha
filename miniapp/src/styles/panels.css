@@ -937,26 +937,18 @@ html[data-theme="dark"] .rcard__ph {
 /* ---------- Map → list toggle (floating, bottom-centre) ---------- */
 .listfab {
   position: absolute;
-  left: 50%;
-  /* Same baseline + height as the locate FAB, so the bottom controls line up. */
+  /* Icon-only square mirroring the locate FAB on the right — a balanced control pair on
+     the same baseline. Flat 1px hairline like the zoom/locate controls. */
+  left: 14px;
   bottom: calc(env(safe-area-inset-bottom) + 28px);
-  transform: translateX(-50%);
   z-index: 1180;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  width: 46px;
   height: 46px;
-  padding: 0 18px;
-  /* Flat 1px hairline like the zoom/locate controls — no cinnabar ghost (that's the
-     two-ink move for ACID surfaces; on a white pill it just reads as a stray shadow). */
+  display: grid;
+  place-items: center;
   border: 1px solid var(--line);
   background: var(--plinth);
   color: var(--ink);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   cursor: pointer;
   animation: dropIn 0.3s var(--ease-cut) both;
 }

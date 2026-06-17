@@ -12,7 +12,7 @@ const EventsMap = lazy(() => import("../features/map/EventsMap").then((m) => ({ 
 import { FocusBar } from "../features/map/FocusBar";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
 import { FavoritesPanel, ListView, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
-import { IconMenu } from "../lib/icons";
+import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
@@ -603,8 +603,7 @@ export function App() {
             setListOpen(true);
           }}
         >
-          <IconMenu size={15} />
-          списком
+          <IconList size={20} />
         </button>
       )}
 

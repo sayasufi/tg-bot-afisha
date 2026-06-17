@@ -56,6 +56,21 @@ export function IconMenu({ size = 18, className }: UiProps) {
   );
 }
 
+// "List view" — leading dots + lines (distinct from IconMenu's plain ☰, which is the
+// drawer). Dots are filled so they read as bullets at this weight.
+export function IconList({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <line x1="9" y1="7" x2="20" y2="7" />
+      <line x1="9" y1="12" x2="20" y2="12" />
+      <line x1="9" y1="17" x2="20" y2="17" />
+      <circle cx="4.6" cy="7" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="4.6" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="4.6" cy="17" r="1.15" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconHeart({ size = 18, className, filled = false }: UiProps & { filled?: boolean }) {
   return (
     <svg {...strokeProps(size, className)} fill={filled ? "currentColor" : "none"}>
