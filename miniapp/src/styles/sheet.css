@@ -132,6 +132,34 @@ html[data-theme="dark"] .sheet-veil {
   background: var(--acid);
 }
 
+/* One-time "you can swipe between events" hint — a self-fading pill under the counter. */
+.sheet__swipehint {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  z-index: 8;
+  pointer-events: none;
+  white-space: nowrap;
+  background: var(--ink);
+  color: var(--plinth);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  animation: swipeHintCycle 3.8s var(--ease-cut) both;
+}
+
+@keyframes swipeHintCycle {
+  0% { opacity: 0; transform: translate(-50%, -4px); }
+  12%, 84% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet__swipehint { animation: none; opacity: 1; transform: translateX(-50%); }
+}
+
 .sheet__close {
   position: absolute;
   top: 12px;

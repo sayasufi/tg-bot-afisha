@@ -30,6 +30,7 @@ export function SearchOverlay({
   const [items, setItems] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [active, setActive] = useState(-1); // keyboard-highlighted result (-1 = none)
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Reset + focus on open.
@@ -39,6 +40,7 @@ export function SearchOverlay({
     setItems([]);
     setLoading(false);
     setError(false);
+    setActive(-1);
     const t = setTimeout(() => inputRef.current?.focus(), 60);
     return () => clearTimeout(t);
   }, [open]);
@@ -47,6 +49,7 @@ export function SearchOverlay({
   // waits 250 ms and needs ≥2 chars.
   useEffect(() => {
     if (!open) return;
+    setActive(-1); // new query → drop the highlight (Enter falls back to the top hit)
     const s = q.trim();
     const code = looksLikeCode(s);
     if (s.length < 2 && !code) {
@@ -97,12 +100,29 @@ export function SearchOverlay({
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
+            role="combobox"
+            aria-expanded={items.length > 0}
+            aria-controls="searchov-results"
+            aria-autocomplete="list"
+            aria-activedescendant={active >= 0 ? `searchov-opt-${active}` : undefined}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Escape") onClose();
-              if (e.key === "Enter" && items[0]) {
-                onSelect(items[0]);
+              if (e.key === "Escape") {
                 onClose();
+                return;
+              }
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive((a) => Math.min(a + 1, items.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive((a) => Math.max(a - 1, 0));
+              } else if (e.key === "Enter") {
+                const pick = items[active >= 0 ? active : 0];
+                if (pick) {
+                  onSelect(pick);
+                  onClose();
+                }
               }
             }}
           />
@@ -124,7 +144,7 @@ export function SearchOverlay({
         </div>
 
         {(items.length > 0 || showEmpty || error) && (
-          <div className="searchov__results">
+          <div className="searchov__results" id="searchov-results" role="listbox">
             {items.map((it, i) => (
               <EventRow
                 key={it.event_id}
@@ -132,6 +152,8 @@ export function SearchOverlay({
                 index={i}
                 query={s}
                 userPos={userPos}
+                active={i === active}
+                optionId={`searchov-opt-${i}`}
                 onSelect={(x) => {
                   onSelect(x);
                   onClose();

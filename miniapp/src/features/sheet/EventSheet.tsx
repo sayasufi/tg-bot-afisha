@@ -30,6 +30,7 @@ type Props = {
 export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, onSelect, onShowMap, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
+  const [swipeHint, setSwipeHint] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const onCloseRef = useRef(onClose);
@@ -68,6 +69,21 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     const img = imgRef.current;
     if (img && img.complete) img.classList.add("is-developed");
   });
+
+  // One-time hint that you can swipe between events at the same point (the ‹ › arrows
+  // also work). Shown once ever, only when the opened pin has siblings.
+  useEffect(() => {
+    if (!selected || !hasSiblings) return;
+    try {
+      if (localStorage.getItem("okrest_swipe_seen") === "1") return;
+      localStorage.setItem("okrest_swipe_seen", "1");
+    } catch {
+      return;
+    }
+    setSwipeHint(true);
+    const t = setTimeout(() => setSwipeHint(false), 3800);
+    return () => clearTimeout(t);
+  }, [selected, hasSiblings]);
 
   // Parallax: the cover drifts up slower than the content as the sheet scrolls.
   useEffect(() => {
@@ -266,6 +282,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         <button type="button" className="sheet__close" aria-label="Закрыть" onClick={onClose}>
           <IconClose size={18} />
         </button>
+        {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>
 
       {/* mounted print */}

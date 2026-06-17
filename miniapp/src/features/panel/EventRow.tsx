@@ -12,6 +12,8 @@ export function EventRow({
   query,
   userPos,
   now,
+  active,
+  optionId,
   onSelect,
 }: {
   item: EventItem;
@@ -19,6 +21,8 @@ export function EventRow({
   query?: string;
   userPos?: LatLon | null;
   now?: number;
+  active?: boolean; // keyboard-highlighted (search combobox)
+  optionId?: string; // present → render as a listbox option
   onSelect: (i: EventItem) => void;
 }) {
   const dist =
@@ -30,8 +34,11 @@ export function EventRow({
   return (
     <button
       type="button"
-      className={`erow${go.eligible ? " erow--live" : ""}`}
+      className={`erow${go.eligible ? " erow--live" : ""}${active ? " erow--active" : ""}`}
       style={{ "--i": index } as CSSProperties}
+      id={optionId}
+      role={optionId ? "option" : undefined}
+      aria-selected={optionId ? !!active : undefined}
       onClick={() => onSelect(item)}
     >
       <span className="erow__mark">
