@@ -54,9 +54,10 @@
 .brand-o {
   position: relative;
   display: inline-block;
-  /* The glyph sits ON the acid disc → always the on-acid ink (black), never --ink
-     (which is off-white in dark mode and would vanish into the disc). */
-  color: var(--on-acid);
+  /* --ink is theme-aware: black "о" on the chartreuse disc in light, white "о" on the
+     amber disc in dark — so the glyph matches the rest of the wordmark in each theme.
+     (Works now because the dark disc is amber, not near-white chartreuse.) */
+  color: var(--ink);
 }
 
 .brand-o::before {
