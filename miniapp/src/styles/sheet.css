@@ -96,7 +96,7 @@ html[data-theme="dark"] .sheet-veil {
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
-  height: 26px;
+  height: 40px; /* fit the 40px nav buttons + match the icon cluster height */
   padding: 0 2px;
   background: var(--plinth);
   border: 1px solid var(--line);
@@ -157,8 +157,8 @@ html[data-theme="dark"] .sheet-veil {
   position: absolute;
   top: 12px;
   pointer-events: auto;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 0;
   border: 1px solid var(--line);
   background: var(--plinth);
