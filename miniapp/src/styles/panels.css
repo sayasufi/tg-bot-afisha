@@ -982,16 +982,19 @@ html[data-theme="dark"] .rcard__ph {
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
+/* Editorial text-tabs (no boxes) — they recede into the type system instead of reading
+   as floating UI buttons over the posters. Active = ink + a short two-ink acid underline. */
 .listview__sort {
-  height: 38px;
-  padding: 0 4px;
-  border: 1px solid var(--line);
-  background: var(--plinth);
-  color: var(--ink-dim);
+  position: relative;
+  height: 40px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
   font-family: var(--grotesk);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   text-align: center;
   white-space: nowrap;
@@ -999,8 +1002,18 @@ html[data-theme="dark"] .rcard__ph {
   cursor: pointer;
 }
 .listview__sort--on {
+  color: var(--ink);
+}
+.listview__sort--on::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 3px;
   background: var(--acid);
-  color: var(--on-acid);
+  box-shadow: 0 0 0 1px var(--ink);
 }
 /* Infinite-scroll trigger — an invisible sentinel the IntersectionObserver watches. */
 .listview__sentinel {
@@ -1015,11 +1028,12 @@ html[data-theme="dark"] .rcard__ph {
   color: var(--ink-dim);
 }
 
-/* Full-bleed cards — no side gutters, no top gap. */
+/* Full-bleed width, but a thin plaster gap (the --bg) shows between cards so each event
+   is delineated and the whole list reads as plates on the plaster ground. */
 .listview .panelview__scroll {
   padding-left: 0;
   padding-right: 0;
-  padding-top: 0;
+  padding-top: 6px;
 }
 
 /* List card — the event photo fills the whole tile, darkened, with the title + data set
@@ -1029,8 +1043,8 @@ html[data-theme="dark"] .rcard__ph {
   display: block;
   width: 100%;
   height: 172px;
+  margin-bottom: 6px;
   border: 0;
-  border-bottom: 1px solid rgba(244, 244, 239, 0.14);
   background: var(--ink);
   overflow: hidden;
   text-align: left;
