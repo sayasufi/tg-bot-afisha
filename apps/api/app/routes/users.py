@@ -6,7 +6,9 @@ from apps.api.app.services.telegram_auth import validate_init_data
 from core.db.repositories.users import (
     add_favorites,
     get_or_create_city,
+    get_prefs,
     list_favorite_ids,
+    merge_prefs,
     set_favorite,
     upsert_user,
     upsert_user_city,
@@ -31,6 +33,11 @@ class FavoriteToggleRequest(BaseModel):
     init_data: str
     event_id: str
     on: bool
+
+
+class SettingsRequest(BaseModel):
+    init_data: str
+    set: dict | None = None  # partial settings to merge; omit to just read
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -92,5 +99,18 @@ def toggle_favorite(payload: FavoriteToggleRequest):
         upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
         set_favorite(db, uid, payload.event_id, payload.on)
         return {"ids": list_favorite_ids(db, uid)}
+    finally:
+        db.close()
+
+
+@router.post("/settings")
+def user_settings(payload: SettingsRequest):
+    """Read (or merge-then-read) the account's app settings (theme, city, future prefs)."""
+    user, uid = _auth(payload.init_data)
+    db = SessionLocal()
+    try:
+        upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+        prefs = merge_prefs(db, uid, payload.set) if payload.set else get_prefs(db, uid)
+        return {"prefs": prefs}
     finally:
         db.close()

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { fetchCities, type City } from "../api/client";
 import { distanceMeters } from "./distance";
+import { pushSetting } from "./settings";
 
 const LS_KEY = "okrest:city";
 
@@ -48,7 +49,7 @@ export function useCities(userPos: [number, number] | null) {
     return cities[0];
   }, [cities, chosen, userPos]);
 
-  const select = (slug: string) => {
+  const setChosenLocal = (slug: string) => {
     setChosen(slug);
     try {
       localStorage.setItem(LS_KEY, slug);
@@ -57,5 +58,16 @@ export function useCities(userPos: [number, number] | null) {
     }
   };
 
-  return { cities, current, select };
+  // Explicit user pick → cache locally AND save to the account (syncs across devices).
+  const select = (slug: string) => {
+    setChosenLocal(slug);
+    pushSetting("city", slug);
+  };
+
+  // Seed from the account on load (no server write-back — we just read it).
+  const seed = (slug: string) => {
+    if (slug && slug !== chosen) setChosenLocal(slug);
+  };
+
+  return { cities, current, select, seed };
 }

@@ -23,6 +23,7 @@ import { syncFavorites, useFavorites } from "../lib/favorites";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
 import { SearchOverlay } from "../features/search/SearchOverlay";
+import { loadSettings, pushSetting } from "../lib/settings";
 import { useCities } from "../lib/useCities";
 import { useGeolocation } from "../lib/useGeolocation";
 
@@ -92,7 +93,20 @@ export function App() {
   // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
   // only when more than one city is active.
-  const { cities, current: currentCity, select: selectCity } = useCities(userPos);
+  const { cities, current: currentCity, select: selectCity, seed: seedCity } = useCities(userPos);
+  // Pull account-scoped settings (theme, city) on open so they match across devices,
+  // overriding this device's local cache when the account has a saved value.
+  useEffect(() => {
+    void loadSettings().then((prefs) => {
+      if (!prefs) return;
+      if (prefs.theme === "dark" || prefs.theme === "light") {
+        applyTheme(prefs.theme);
+        setTheme(prefs.theme);
+      }
+      if (typeof prefs.city === "string" && prefs.city) seedCity(prefs.city);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A coarse clock that ticks once a minute — drives the "можно пойти сейчас"
   // set (countdowns, which events are still catchable) without re-rendering the
@@ -484,6 +498,7 @@ export function App() {
     setTheme((t) => {
       const next: ThemeName = t === "dark" ? "light" : "dark";
       applyTheme(next);
+      pushSetting("theme", next); // sync the choice to the account, not this device
       return next;
     });
   }, []);

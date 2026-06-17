@@ -47,6 +47,39 @@ def upsert_user_city(db: Session, telegram_user_id: int, city: City) -> User:
     return user
 
 
+def _sanitize_prefs(patch: dict) -> dict:
+    """Only accept short scalar settings (str/number/bool) — generic enough for any future
+    setting, but bounded so a client can't stuff arbitrary blobs into the row."""
+    out: dict = {}
+    for k, v in list(patch.items())[:20]:
+        if not isinstance(k, str) or not k or len(k) > 40:
+            continue
+        if isinstance(v, bool) or isinstance(v, (int, float)):
+            out[k] = v
+        elif isinstance(v, str) and len(v) <= 200:
+            out[k] = v
+    return out
+
+
+def get_prefs(db: Session, telegram_user_id: int) -> dict:
+    user = db.get(User, telegram_user_id)
+    return dict(user.prefs or {}) if user else {}
+
+
+def merge_prefs(db: Session, telegram_user_id: int, patch: dict) -> dict:
+    """Shallow-merge sanitized settings into the user's prefs blob; returns the full set."""
+    user = db.get(User, telegram_user_id)
+    if not user:
+        return {}
+    current = dict(user.prefs or {})
+    current.update(_sanitize_prefs(patch))
+    user.prefs = current
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return dict(user.prefs or {})
+
+
 def list_favorite_ids(db: Session, telegram_user_id: int) -> list[str]:
     """Every event the user has hearted (as string UUIDs, for the Mini App)."""
     rows = (

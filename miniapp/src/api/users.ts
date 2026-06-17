@@ -43,6 +43,27 @@ export async function syncFavorites(add: string[] = []): Promise<string[] | null
   }
 }
 
+// Account-scoped app settings (theme, picked city, future prefs). Pass `set` to merge a
+// partial update; omit to just read. Returns the full prefs blob, or null outside
+// Telegram / on error (callers then keep their local values).
+export async function syncSettings(set?: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, set: set ?? null }),
+      keepalive: true,
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { prefs?: Record<string, unknown> };
+    return j.prefs ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function toggleFavoriteRemote(eventId: string, on: boolean): Promise<string[] | null> {
   const init = initData();
   if (!init) return null;
