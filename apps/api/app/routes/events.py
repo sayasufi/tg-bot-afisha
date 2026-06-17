@@ -5,6 +5,7 @@ from uuid import UUID
 
 import orjson
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.schemas.events import (
@@ -152,6 +153,27 @@ async def get_nearby_events(
 ):
     service = EventQueryService(db)
     return await service.nearby(lat, lon, radius_m, date_from, date_to, categories, q, limit)
+
+
+class ByIdsRequest(BaseModel):
+    ids: list[str]
+    lat: float | None = None
+    lon: float | None = None
+
+
+@router.post("/events/by-ids")
+async def events_by_ids(payload: ByIdsRequest, db: AsyncSession = Depends(get_async_db)):
+    """Hydrate specific events by id into the rich list-item shape — used by the
+    favourites/profile views so saved events render independent of the map's loaded set
+    (the count and the list can't diverge). Caps at 500 ids; drops non-UUIDs."""
+    ids = []
+    for s in payload.ids[:500]:
+        try:
+            ids.append(UUID(str(s)))
+        except (ValueError, TypeError):
+            continue
+    service = EventQueryService(db)
+    return await service.list_by_ids(ids, payload.lat, payload.lon)
 
 
 @router.get("/events/{event_id}", response_model=EventDetailResponse)

@@ -2,6 +2,7 @@ import hashlib
 import json
 import math
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -22,9 +23,17 @@ from core.db.models import Event, EventOccurrence, Venue
 # 304. Best-effort — any Redis hiccup falls back to a live query + encode. Async
 # client, created once on the API's single event loop.
 _MAP_CACHE_PREFIX = "map:resp:v4:"  # v4: cache stores the GZIPPED body bytes
-_MAP_CACHE_TTL = 60
+# The data changes only when the pipeline ingests (periodic, minutes apart), and the key
+# is day-quantized + shared across users — so a few minutes of staleness is fine and well
+# worth not recomputing the whole-city join on every cold key.
+_MAP_CACHE_TTL = 180
 _redis: aioredis.Redis | None = None
 _redis_off = False
+
+# Parsed rec:views counts, cached briefly in-process so the 'popularity' sort doesn't
+# HGETALL the whole engagement hash on every request (it accumulates forever, no TTL).
+_VIEWS_TTL = 30.0
+_views_cache: tuple[float, dict] | None = None
 
 
 def _redis_client() -> aioredis.Redis | None:
@@ -311,8 +320,11 @@ class EventQueryService:
         # across the frontend's per-zoom prefetch and across users skip all of this.
         # `city` (a CityConfig) scopes everything to one city when given.
         if zoom is not None and zoom < self._DETAIL_ZOOM:
-            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q, city)
             clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q, city)
+            # total = sum of per-cell counts — avoids a second full-region COUNT(DISTINCT)
+            # join on the most common (city-overview) cold path. With no bbox the clusters
+            # already span the whole region, so the sum equals the pinnable count.
+            total = sum(int(c.get("count", 0)) for c in clusters)
             return {"clusters": clusters, "items": [], "total": total}
         items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city)
         # "Показать N" = filter-wide count of map-able events. When the whole city is
@@ -534,64 +546,158 @@ class EventQueryService:
         )
         total = await self.db.scalar(select(func.count()).select_from(inner)) or 0
         rows_q = select(inner)
+        # Every sort ends with event_id — a unique, stable tiebreaker so events sharing the
+        # sort key keep a fixed relative order across pages (OFFSET pagination otherwise
+        # skips/duplicates rows when ties reshuffle between page 0 and page 1).
+        tie = inner.c.event_id.asc()
         if sort == "distance" and has_pt:
-            rows_q = rows_q.order_by(nullslast(inner.c.dist_m.asc()))
+            rows_q = rows_q.order_by(nullslast(inner.c.dist_m.asc()), tie)
         elif sort == "popularity":
             # popularity_score is unpopulated; the real signal is the rec:views counter
             # we collect ourselves. Rank the viewed events by their count, rest by date.
             rank = await self._views_rank(inner.c.event_id)
-            rows_q = rows_q.order_by(rank.desc(), inner.c.date_start.asc()) if rank is not None else rows_q.order_by(inner.c.date_start.asc())
+            rows_q = (
+                rows_q.order_by(rank.desc(), inner.c.date_start.asc(), tie)
+                if rank is not None
+                else rows_q.order_by(inner.c.date_start.asc(), tie)
+            )
         elif sort == "price":
-            rows_q = rows_q.order_by(nullslast(inner.c.price_min.asc()), inner.c.date_start.asc())
+            rows_q = rows_q.order_by(nullslast(inner.c.price_min.asc()), inner.c.date_start.asc(), tie)
         else:  # "date" (default) — soonest first
-            rows_q = rows_q.order_by(inner.c.date_start.asc())
+            rows_q = rows_q.order_by(inner.c.date_start.asc(), tie)
         rows = (await self.db.execute(rows_q.limit(limit).offset(offset))).all()
         now_msk = datetime.now(_MSK)
-        items = [
-            {
-                "event_id": r.event_id,
-                "code": event_code(r.display_no, r.venue_city),
-                "title": r.title,
-                "category": r.category,
-                "date_start": r.date_start,
-                "date_end": r.date_end,
-                "price_min": float(r.price_min) if r.price_min is not None else None,
-                "venue": r.venue_name,
-                "open_now": _venue_open_now(r.venue_hours, now_msk),
-                "lat": float(r.lat) if r.lat is not None else None,
-                "lon": float(r.lon) if r.lon is not None else None,
-                "primary_image_url": r.cached_image_url or r.primary_image_url,
-            }
-            for r in rows
+        return {"items": [self._list_item(r, now_msk) for r in rows], "total": int(total)}
+
+    @staticmethod
+    def _list_item(r, now_msk: datetime) -> dict:
+        """A list/by-ids row → the rich item shape the Mini App renders (cards + posters)."""
+        return {
+            "event_id": r.event_id,
+            "code": event_code(r.display_no, r.venue_city),
+            "title": r.title,
+            "category": r.category,
+            "date_start": r.date_start,
+            "date_end": r.date_end,
+            "price_min": float(r.price_min) if r.price_min is not None else None,
+            "venue": r.venue_name,
+            "open_now": _venue_open_now(r.venue_hours, now_msk),
+            "lat": float(r.lat) if r.lat is not None else None,
+            "lon": float(r.lon) if r.lon is not None else None,
+            "primary_image_url": r.cached_image_url or r.primary_image_url,
+        }
+
+    async def list_by_ids(self, ids: list[UUID], lat: float | None = None, lon: float | None = None) -> dict:
+        """Hydrate specific events by id (favourites) into the rich list-item shape —
+        independent of the map's loaded set, so saved events always render and the count
+        matches. Keeps only events with a future/ongoing occurrence (soonest first)."""
+        if not ids:
+            return {"items": []}
+        has_pt = lat is not None and lon is not None
+        pt = func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326) if has_pt else None
+        lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
+        lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
+        cols = [
+            Event.event_id.label("event_id"),
+            Event.display_no.label("display_no"),
+            Event.canonical_title.label("title"),
+            Event.category.label("category"),
+            Event.cached_image_url.label("cached_image_url"),
+            Event.primary_image_url.label("primary_image_url"),
+            EventOccurrence.date_start.label("date_start"),
+            EventOccurrence.date_end.label("date_end"),
+            EventOccurrence.price_min.label("price_min"),
+            Venue.name.label("venue_name"),
+            Venue.hours_json.label("venue_hours"),
+            Venue.city.label("venue_city"),
+            lat_col,
+            lon_col,
         ]
-        return {"items": items, "total": int(total)}
+        # No status/future filter: favourites are user-curated, so render EVERYTHING the
+        # user saved that still exists (the FK guarantees the event row). Past favourites
+        # show as past — so the list always matches the count, and nothing is silently
+        # hidden or deleted. DISTINCT ON picks the soonest-actionable occurrence per event.
+        base = (
+            select(*cols)
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
+            .where(Event.event_id.in_(ids))
+        )
+        inner = (
+            base.distinct(Event.event_id)
+            .order_by(Event.event_id, (EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
+            .subquery()
+        )
+        # Future/ongoing first (soonest), past favourites after.
+        rows = (await self.db.execute(
+            select(inner).order_by(
+                (inner.c.date_start < func.now()).asc(), inner.c.date_start.asc(), inner.c.event_id.asc()
+            )
+        )).all()
+        now_msk = datetime.now(_MSK)
+        return {"items": [self._list_item(r, now_msk) for r in rows]}
+
+    async def _views_counts(self) -> dict:
+        """rec:views parsed to {event_id: count}, cached in-process for _VIEWS_TTL so the
+        popularity sort doesn't HGETALL the whole (unbounded, no-TTL) hash per request."""
+        global _views_cache
+        now = time.monotonic()
+        if _views_cache is not None and _views_cache[0] > now:
+            return _views_cache[1]
+        data: dict = {}
+        client = _redis_client()
+        if client is not None:
+            try:
+                raw = await client.hgetall("rec:views")
+                for k, v in raw.items():
+                    key = k.decode() if isinstance(k, bytes) else k
+                    val = v.decode() if isinstance(v, bytes) else v
+                    try:
+                        data[UUID(str(key))] = int(val)
+                    except (ValueError, AttributeError):
+                        continue
+            except Exception:  # pragma: no cover - cache is best-effort
+                pass
+        _views_cache = (now + _VIEWS_TTL, data)
+        return data
 
     async def _views_rank(self, id_col):
         """A CASE expr ranking events by their rec:views count (unviewed → 0), or None
         when there's no view data — backs the 'по популярности' sort."""
-        client = _redis_client()
-        if client is None:
+        counts = await self._views_counts()
+        if not counts:
             return None
-        try:
-            raw = await client.hgetall("rec:views")
-        except Exception:  # pragma: no cover
-            return None
-        whens = []
-        for k, v in raw.items():
-            key = k.decode() if isinstance(k, bytes) else k
-            val = v.decode() if isinstance(v, bytes) else v
-            try:
-                whens.append((id_col == UUID(str(key)), int(val)))
-            except (ValueError, AttributeError):
-                continue
-        return case(*whens, else_=0) if whens else None
+        return case(*[(id_col == eid, n) for eid, n in counts.items()], else_=0)
+
+    def _event_head(self, head, city, occurrences):
+        # `head` is either a query Row (labeled cols) or an Event ORM object — both
+        # expose event_id/display_no/canonical_*/category/.../*_image_url by the same name.
+        return {
+            "event_id": head.event_id,
+            "code": event_code(head.display_no, city),
+            "canonical_title": head.canonical_title,
+            "canonical_description": head.canonical_description,
+            "category": head.category,
+            "subcategory": head.subcategory,
+            "age_limit": head.age_limit,
+            "primary_image_url": head.cached_image_url or head.primary_image_url,
+            "occurrences": occurrences,
+        }
 
     async def event_detail(self, event_id: UUID):
-        event = await self.db.get(Event, event_id)
-        if not event:
-            return None
+        # One query: event columns + its future/ongoing occurrences + venue (was a
+        # db.get(Event) ORM fetch followed by a separate occurrences query).
         rows = (await self.db.execute(
             select(
+                Event.event_id.label("event_id"),
+                Event.display_no,
+                Event.canonical_title,
+                Event.canonical_description,
+                Event.category,
+                Event.subcategory,
+                Event.age_limit,
+                Event.cached_image_url,
+                Event.primary_image_url,
                 EventOccurrence,
                 Venue.name.label("venue_name"),
                 Venue.address.label("venue_address"),
@@ -600,8 +706,9 @@ class EventQueryService:
                 func.ST_Y(cast(Venue.geom, Geometry)).label("lat"),
                 func.ST_X(cast(Venue.geom, Geometry)).label("lon"),
             )
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
-            .where(EventOccurrence.event_id == event_id)
+            .where(Event.event_id == event_id)
             # Same floor as the map (start of today, UTC) — NOT a tighter now()-3h. A
             # tighter floor could return ZERO occurrences for an event the map still pins
             # (single past-today session, end>floor), leaving a dateless/broken sheet.
@@ -610,35 +717,31 @@ class EventQueryService:
             # is the soonest you can still go to, not an earlier one already past.
             .order_by((EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
         )).all()
+        if not rows:
+            # No future/ongoing occurrence (or event gone) — still return the event so a
+            # deep link / stale tap renders a sheet without dates rather than 404-ing.
+            event = await self.db.get(Event, event_id)
+            if not event:
+                return None
+            return self._event_head(event, None, [])
         occurrences = [
             {
-                "occurrence_id": occ.occurrence_id,
-                "date_start": occ.date_start,
-                "date_end": occ.date_end,
-                "price_min": occ.price_min,
-                "price_max": occ.price_max,
-                "currency": occ.currency,
-                "source_best_url": occ.source_best_url,
-                "venue": venue_name,
-                "address": venue_address,
-                "venue_hours": venue_hours,
-                "lat": float(lat) if lat is not None else None,
-                "lon": float(lon) if lon is not None else None,
+                "occurrence_id": r.EventOccurrence.occurrence_id,
+                "date_start": r.EventOccurrence.date_start,
+                "date_end": r.EventOccurrence.date_end,
+                "price_min": r.EventOccurrence.price_min,
+                "price_max": r.EventOccurrence.price_max,
+                "currency": r.EventOccurrence.currency,
+                "source_best_url": r.EventOccurrence.source_best_url,
+                "venue": r.venue_name,
+                "address": r.venue_address,
+                "venue_hours": r.venue_hours,
+                "lat": float(r.lat) if r.lat is not None else None,
+                "lon": float(r.lon) if r.lon is not None else None,
             }
-            for occ, venue_name, venue_address, venue_hours, venue_city, lat, lon in rows
+            for r in rows
         ]
-        detail_city = rows[0].venue_city if rows else None
-        return {
-            "event_id": event.event_id,
-            "code": event_code(event.display_no, detail_city),
-            "canonical_title": event.canonical_title,
-            "canonical_description": event.canonical_description,
-            "category": event.category,
-            "subcategory": event.subcategory,
-            "age_limit": event.age_limit,
-            "primary_image_url": event.cached_image_url or event.primary_image_url,
-            "occurrences": occurrences,
-        }
+        return self._event_head(rows[0], rows[0].venue_city, occurrences)
 
     async def nearby(
         self,

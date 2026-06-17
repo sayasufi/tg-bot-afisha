@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from apps.api.app.services.events_service import _redis_client
 from apps.api.app.routes.events import router as events_router
 from apps.api.app.routes.health import router as health_router
 from apps.api.app.routes.media import router as media_router
@@ -57,6 +58,33 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+_RL_WINDOW = 60
+_RL_MAX = 600  # requests per client IP per minute — well above a heavy session, blocks
+# only volumetric abuse. Defense-in-depth behind the nginx edge (best-effort via Redis).
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    path = request.url.path
+    if request.method == "OPTIONS" or path in ("/v1/health", "/v1/ready"):
+        return await call_next(request)
+    client = _redis_client()
+    if client is not None:
+        # Real client IP — nginx sets X-Forwarded-For (the app sees only 127.0.0.1).
+        fwd = request.headers.get("x-forwarded-for", "")
+        ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+        try:
+            key = f"rl:{ip}"
+            n = await client.incr(key)
+            if n == 1:
+                await client.expire(key, _RL_WINDOW)
+            if n > _RL_MAX:
+                return Response(status_code=429, content=b'{"detail":"too many requests"}', media_type="application/json")
+        except Exception:  # never block on the limiter
+            pass
+    return await call_next(request)
 
 
 # Cache read endpoints so repeat loads come from the browser cache. Places are

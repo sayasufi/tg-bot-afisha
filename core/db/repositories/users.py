@@ -1,17 +1,18 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from core.db.models import City, RawEvent, User, UserFavorite
+from core.db.models import City, Event, RawEvent, User, UserFavorite
 from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
 
 def upsert_user(db: Session, telegram_user_id: int, username: str | None = None, first_name: str | None = None) -> User:
-    """Create or refresh a bot user (profile + last-active)."""
+    """Create or refresh a bot user (profile + last-active). No db.refresh — callers don't
+    read the server-default columns back, so it's a wasted round-trip."""
     user = db.get(User, telegram_user_id)
     if not user:
         user = User(telegram_user_id=telegram_user_id)
@@ -20,7 +21,6 @@ def upsert_user(db: Session, telegram_user_id: int, username: str | None = None,
     user.last_active_at = datetime.now(timezone.utc)
     db.add(user)
     db.commit()
-    db.refresh(user)
     return user
 
 
@@ -72,14 +72,14 @@ def update_settings(
     swipe_seen: bool | None = None,
 ) -> dict:
     """Set the provided settings (None = leave unchanged); returns the full set.
-    The client only ever sets values (never clears), so None means 'not provided'."""
+    None means 'not provided'; an empty-string city clears it (back to auto-detect)."""
     user = db.get(User, telegram_user_id)
     if not user:
         return {}
     if theme in ("light", "dark"):
         user.theme = theme
-    if city:
-        user.city_slug = str(city)[:64]
+    if city is not None:
+        user.city_slug = str(city)[:64] or None  # "" clears the explicit pick
     if onboarded is not None:
         user.onboarded = bool(onboarded)
     if coach is not None:
@@ -102,12 +102,16 @@ def list_favorite_ids(db: Session, telegram_user_id: int) -> list[str]:
 
 
 def set_favorite(db: Session, telegram_user_id: int, event_id: str, on: bool) -> None:
-    """Heart (on) or un-heart (off) a single event. Idempotent."""
+    """Heart (on) or un-heart (off) a single event. Idempotent. Inserting only a
+    still-existing event keeps the FK happy (the event may have been deleted between the
+    client loading it and the tap)."""
     try:
         eid = uuid.UUID(str(event_id))
     except (ValueError, TypeError):
         return
     if on:
+        if db.execute(select(Event.event_id).where(Event.event_id == eid)).first() is None:
+            return  # event no longer exists — nothing to favourite
         db.execute(
             pg_insert(UserFavorite.__table__)
             .values(telegram_user_id=telegram_user_id, event_id=eid)
@@ -123,34 +127,20 @@ def set_favorite(db: Session, telegram_user_id: int, event_id: str, on: bool) ->
     db.commit()
 
 
-def prune_stale_favorites(db: Session, telegram_user_id: int) -> None:
-    """Drop favourites whose event no longer exists (removed by the dedup/prune pipeline)
-    or has no future/ongoing occurrence — so the count and the list only ever reflect
-    events the user can still go to. There's no FK to events.events on purpose; this is
-    where stale references get cleaned up (on every sync)."""
-    db.execute(
-        text(
-            "DELETE FROM ref.user_favorites uf "
-            "WHERE uf.telegram_user_id = :uid "
-            "AND NOT EXISTS ("
-            "  SELECT 1 FROM events.event_occurrences o "
-            "  WHERE o.event_id = uf.event_id "
-            "  AND coalesce(o.date_end, o.date_start) >= date_trunc('day', now())"
-            ")"
-        ),
-        {"uid": telegram_user_id},
-    )
-    db.commit()
-
-
 def add_favorites(db: Session, telegram_user_id: int, event_ids: list[str]) -> None:
-    """Bulk-add (used once per device to merge its local favourites into the account)."""
+    """Bulk-add (used once per device to merge its local favourites into the account).
+    Filters to events that still exist so a stale device replaying old ids can't violate
+    the FK."""
     eids = []
     for e in event_ids[:500]:  # cap: a sane upper bound, never a real user's count
         try:
             eids.append(uuid.UUID(str(e)))
         except (ValueError, TypeError):
             continue
+    if not eids:
+        return
+    existing = set(db.execute(select(Event.event_id).where(Event.event_id.in_(eids))).scalars().all())
+    eids = [e for e in eids if e in existing]
     if not eids:
         return
     db.execute(

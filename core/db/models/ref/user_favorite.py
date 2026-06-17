@@ -18,8 +18,11 @@ class UserFavorite(Base):
     telegram_user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("ref.users.telegram_user_id", ondelete="CASCADE"), primary_key=True
     )
-    # No FK to events.events — a pruned event just leaves a harmless stale row (the app
-    # filters favourites against currently-loaded events), and this keeps the table
-    # decoupled from the events schema's lifecycle.
-    event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    # FK to events with ON DELETE CASCADE (migration 0016): when the dedup/lifecycle
+    # pipeline deletes an event, its favourites go with it — no dangling rows that would
+    # inflate the count. We do NOT delete favourites for merely-past events (that erased
+    # the user's history); past favourites stay and simply render as past.
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.events.event_id", ondelete="CASCADE"), primary_key=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
