@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>окрест — контролы vs маркеры</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@600;800&family=Martian+Mono:wght@500;600&family=Unbounded:wght@800&display=swap"
+    />
+    <style>
+      :root {
+        --plinth: #fff; --vitrine: #ececE4; --ink: #0b0b0b; --line: #0b0b0b;
+        --acid: #ccff00; --on-acid: #0b0b0b;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body { background: #d9d9d2; color: var(--ink); font-family: "Familjen Grotesk", system-ui, sans-serif; padding: 16px; }
+      h1 { font-family: "Unbounded"; font-size: 20px; text-transform: lowercase; letter-spacing: -.03em; }
+      .sub { font-family: "Martian Mono"; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 16px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+      .cap { font-family: "Martian Mono"; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #222; margin-bottom: 7px; font-weight: 600; }
+      .scr { position: relative; height: 480px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--ink);
+        background:
+          linear-gradient(0deg, rgba(11,11,11,.05) 1px, transparent 1px) 0 0/100% 46px,
+          linear-gradient(90deg, rgba(11,11,11,.05) 1px, transparent 1px) 0 0/52px 100%,
+          repeating-linear-gradient(58deg, transparent 0 60px, rgba(11,11,11,.045) 60px 62px),
+          #eceae3; }
+      .park { position: absolute; border-radius: 40%; background: rgba(120,160,90,.18); }
+      /* ----- map pins (white nameplates, always) ----- */
+      .pin { position: absolute; min-width: 30px; height: 30px; padding: 0 6px; display: grid; place-items: center;
+        background: var(--plinth); box-shadow: inset 0 0 0 1px var(--ink); font-family: "Martian Mono"; font-size: 12px; font-weight: 600; }
+      .pin::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 1px; height: 5px; background: var(--ink); transform: translateX(-50%); }
+      /* ----- controls (recolored per treatment) ----- */
+      .zoom { position: absolute; right: 14px; top: 46%; transform: translateY(-50%); display: flex; flex-direction: column; }
+      .zoom .c { width: 36px; height: 36px; display: grid; place-items: center; font-size: 18px; }
+      .zoom .c:first-child { border-bottom: 1px solid var(--cl-edge); }
+      .loc { position: absolute; right: 14px; bottom: 26px; width: 46px; height: 46px; display: grid; place-items: center; }
+      .lst { position: absolute; left: 14px; bottom: 26px; width: 46px; height: 46px; display: grid; place-items: center; }
+      .loc svg, .lst svg { width: 20px; height: 20px; }
+      .c-ctl { background: var(--cl-bg); box-shadow: inset 0 0 0 1px var(--cl-edge); color: var(--cl-ink); }
+      /* treatments */
+      .t-white { --cl-bg: #fff; --cl-edge: #0b0b0b; --cl-ink: #0b0b0b; }
+      .t-dark  { --cl-bg: #0b0b0b; --cl-edge: #0b0b0b; --cl-ink: #f4f4ef; }
+      .t-grey  { --cl-bg: #ececE4; --cl-edge: #0b0b0b; --cl-ink: #0b0b0b; }
+    </style>
+  </head>
+  <body>
+    <h1>окрест · контролы vs маркеры</h1>
+    <div class="sub">как развести кнопки и пины</div>
+    <div class="grid" id="grid"></div>
+    <script>
+      const LOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>';
+      const LST = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="4.6" cy="6" r="1.3"/><rect x="9" y="5" width="12" height="2"/><circle cx="4.6" cy="12" r="1.3"/><rect x="9" y="11" width="12" height="2"/><circle cx="4.6" cy="18" r="1.3"/><rect x="9" y="17" width="12" height="2"/></svg>';
+      // a few white pins, some deliberately near the controls so the blend shows
+      const PINS = `
+        <span class="park" style="left:-30px;top:150px;width:140px;height:150px"></span>
+        <span class="pin" style="left:40px;top:120px">12</span>
+        <span class="pin" style="left:150px;top:200px">5</span>
+        <span class="pin" style="right:70px;top:150px">8</span>
+        <span class="pin" style="right:18px;top:300px">17</span>
+        <span class="pin" style="left:120px;bottom:120px">38</span>
+        <span class="pin" style="left:60px;bottom:60px">7</span>
+        <span class="pin" style="right:80px;bottom:70px">21</span>`;
+      const ctls = `
+        <div class="zoom"><span class="c c-ctl">+</span><span class="c c-ctl">−</span></div>
+        <div class="loc c-ctl">${LOC}</div>
+        <div class="lst c-ctl">${LST}</div>`;
+      const V = [
+        { key: "1 · сейчас (белые)", t: "t-white" },
+        { key: "2 · тёмные (ink)", t: "t-dark" },
+        { key: "3 · серые (vitrine)", t: "t-grey" },
+      ];
+      const g = document.getElementById("grid");
+      for (const v of V) {
+        const d = document.createElement("div");
+        d.innerHTML = `<div class="cap">${v.key}</div><div class="scr ${v.t}">${PINS}${ctls}</div>`;
+        g.appendChild(d);
+      }
+    </script>
+  </body>
+</html>
