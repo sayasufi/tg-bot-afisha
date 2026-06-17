@@ -290,10 +290,11 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  background: var(--plinth);
-  /* Chrome frame — match the topbar / search / chips (--line), NOT the map's
-     pins & clusters, so a lone control never reads as a stray marker. */
-  border: 1px solid var(--line);
+  /* INVERTED vs the white pin-nameplates: chrome is ink (content is plinth), so a
+     control never blends into the markers — dark tools on the light map, and light
+     tools on the dark map (the tokens flip per theme). */
+  background: var(--ink);
+  border: 1px solid var(--ink);
   animation: mapctlIn 0.34s var(--ease-cut) both;
 }
 
@@ -311,7 +312,7 @@
   place-items: center;
   border: 0;
   background: transparent;
-  color: var(--ink);
+  color: var(--plinth);
   cursor: pointer;
   transition: background 0.12s ease;
 }
@@ -321,9 +322,9 @@
   transition: transform 0.1s ease;
 }
 
-/* the one internal line — a hairline splitting + from − */
+/* the one internal line — a light hairline splitting + from − on the ink block */
 .mapctl__btn--zoom + .mapctl__btn--zoom {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--plinth);
 }
 
 .mapctl__btn--zoom:active:not(:disabled) {
@@ -341,7 +342,8 @@
 }
 
 /* Locate — a detached control in the bottom-right corner; lifts to clear the
-   focus bar when one is showing. Same plinth + chrome frame as the zoom unit. */
+   focus bar when one is showing. Inverted (ink) like the zoom unit, so it reads as a
+   tool, not a marker. */
 .mapctl-locate {
   position: absolute;
   right: 14px;
@@ -351,9 +353,9 @@
   height: 46px;
   display: grid;
   place-items: center;
-  background: var(--plinth);
-  border: 1px solid var(--line);
-  color: var(--ink);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--plinth);
   cursor: pointer;
   animation: ctlFade 0.3s var(--ease-cut) both;
   transition: background 0.12s ease, transform 0.26s var(--ease-cut);
