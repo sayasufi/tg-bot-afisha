@@ -114,8 +114,8 @@ html[data-theme="dark"] .sheet-veil {
 .sheet__sib-nav {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 40px;
+  height: 40px;
   border: 0;
   background: none;
   color: var(--ink);
@@ -137,8 +137,8 @@ html[data-theme="dark"] .sheet-veil {
   top: 12px;
   right: 14px;
   pointer-events: auto;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 0;
   border: 1px solid var(--line);
   background: var(--plinth);

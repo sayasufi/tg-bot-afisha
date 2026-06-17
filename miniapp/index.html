@@ -91,6 +91,14 @@
           opacity: 0;
         }
       }
+      /* The splash renders before React, so the app's global reduced-motion kill-switch
+         can't reach it — gate the entrance animations here too. */
+      @media (prefers-reduced-motion: reduce) {
+        #splash .splash__word span,
+        #splash .emblem {
+          animation: none;
+        }
+      }
     </style>
   </head>
   <body>

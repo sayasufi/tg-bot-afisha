@@ -6,8 +6,8 @@
   --plinth: #ffffff; /* the hung white objects: cards, sheet, pins */
   --vitrine: #ececE4; /* recessed wells: inputs, inactive chips */
   --ink: #0b0b0b; /* vinyl wall-label black (never #000) */
-  --ink-dim: #6e6e66; /* captions, metadata */
-  --ink-faint: #a8a89e; /* accession numbers, 3rd tier */
+  --ink-dim: #5c5c54; /* captions, metadata — darkened for ≥4.5:1 on plaster */
+  --ink-faint: #87877c; /* accession numbers, 3rd tier — was 2.3:1, now ~3.4:1 */
   --line: #0b0b0b; /* 1px frames / rules */
   --line-soft: rgba(11, 11, 11, 0.14); /* inner dividers */
   --acid: #ccff00; /* the only saturated colour — selection/highlight */
@@ -43,8 +43,8 @@ html[data-theme="dark"] {
   --plinth: #1e1d17; /* raised objects: cards, sheet, pins */
   --vitrine: #272620; /* recessed wells: inputs, inactive chips */
   --ink: #f1ecde; /* warm off-white — the new vinyl */
-  --ink-dim: #9a958a;
-  --ink-faint: #6c685e;
+  --ink-dim: #a8a294;
+  --ink-faint: #8a857a; /* lifted for legibility on the warm-ink wall */
   --line: #3a3830; /* visible warm-grey hairline frames */
   --line-soft: rgba(241, 236, 222, 0.13);
   --acid: #ffb02e; /* after-dark accent: warm amber, not chartreuse */

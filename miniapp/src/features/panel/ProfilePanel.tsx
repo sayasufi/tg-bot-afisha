@@ -52,7 +52,7 @@ export function ProfilePanel({
         <div className="profile__hero">
           <div className="profile__stat">
             <span className="hero-num">{total}</span>
-            <span className="kicker kicker--code">событий рядом</span>
+            <span className="kicker kicker--code">событий в городе</span>
           </div>
           <div className="profile__stat">
             <span className="hero-num">{favIds.size}</span>

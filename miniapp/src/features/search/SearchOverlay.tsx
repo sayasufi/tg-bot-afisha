@@ -101,7 +101,19 @@ export function SearchOverlay({
               }
             }}
           />
-          <button type="button" className="search__clear" aria-label="Закрыть" onClick={onClose}>
+          <button
+            type="button"
+            className="search__clear"
+            aria-label={q ? "Очистить" : "Закрыть"}
+            onClick={() => {
+              if (q) {
+                setQ("");
+                inputRef.current?.focus();
+              } else {
+                onClose();
+              }
+            }}
+          >
             <IconClose size={16} />
           </button>
         </div>

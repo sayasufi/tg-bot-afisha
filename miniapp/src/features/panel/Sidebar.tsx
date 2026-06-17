@@ -3,7 +3,7 @@ import type { View } from "./view";
 
 const NAV: { key: View; label: string; glyph: string }[] = [
   { key: "map", label: "Карта", glyph: "▦" },
-  { key: "recs", label: "Рекомендации", glyph: "✷" },
+  { key: "recs", label: "Подборка", glyph: "✷" },
   { key: "favorites", label: "Избранное", glyph: "♥" },
   { key: "profile", label: "Профиль", glyph: "◑" },
 ];
@@ -60,7 +60,7 @@ export function Sidebar({
             <span className="themetoggle__knob" />
           </span>
         </button>
-        <div className="drawer__foot">Москва · события рядом</div>
+        <div className="drawer__foot">события рядом с тобой</div>
       </aside>
     </div>
   );
