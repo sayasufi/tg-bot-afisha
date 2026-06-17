@@ -1,25 +1,36 @@
+import hashlib
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import orjson
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.schemas.events import (
     CategoryResponse,
     EventDetailResponse,
-    EventMapResponse,
     NearbyResponse,
     SearchRequest,
     SearchResponse,
 )
-from apps.api.app.services.events_service import EventQueryService
+from apps.api.app.services.events_service import (
+    EventQueryService,
+    map_cache_get,
+    map_cache_key,
+    map_cache_set,
+)
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["events"])
 
+# Map data changes only on ingest; let the browser cache it and revalidate cheaply
+# (ETag → 304) after the window. Same value the cache_control middleware would set.
+_MAP_CACHE_CONTROL = "public, max-age=30, stale-while-revalidate=120"
 
-@router.get("/events/map", response_model=EventMapResponse)
+
+@router.get("/events/map")
 async def get_map_events(
+    request: Request,
     bbox: str | None = Query(default=None, description="min_lon,min_lat,max_lon,max_lat"),
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -44,8 +55,30 @@ async def get_map_events(
             raise HTTPException(status_code=400, detail="bbox must have 4 comma-separated numbers")
         bbox_tuple = (parts[0], parts[1], parts[2], parts[3])
 
-    service = EventQueryService(db)
-    return await service.map_events(bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom)
+    # Serve the whole response from Redis when warm (skips DB + row-build + encode),
+    # and emit an ETag so a post-window revalidation returns a bare 304 instead of
+    # re-shipping the (large) body. We bypass response_model on purpose: the payload
+    # is built as plain dicts and encoded once with orjson — Pydantic re-validating
+    # ~7k rows was a large, pointless slice of the latency.
+    key = map_cache_key(zoom, bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset)
+    cached = await map_cache_get(key)
+    if cached is not None:
+        body_str, etag = cached
+        body: bytes | str = body_str
+    else:
+        service = EventQueryService(db)
+        result = await service.map_events(
+            bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom
+        )
+        raw = orjson.dumps(result)  # orjson encodes datetime/UUID natively; price is float
+        etag = 'W/"' + hashlib.sha256(raw).hexdigest()[:32] + '"'
+        await map_cache_set(key, raw.decode("utf-8"), etag)
+        body = raw
+
+    headers = {"ETag": etag, "Cache-Control": _MAP_CACHE_CONTROL}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(content=body, media_type="application/json", headers=headers)
 
 
 @router.get("/events/nearby", response_model=NearbyResponse)

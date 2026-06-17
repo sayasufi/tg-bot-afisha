@@ -14,13 +14,14 @@ from core.codes import event_code
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
 
-# Cluster responses depend only on (zoom, bbox, filters) and the dataset, which
-# changes only when the pipeline ingests — so cache them in Redis briefly. This
-# makes the frontend's prefetch of every zoom level (and repeat loads across
-# users) skip the DB entirely. Best-effort: any Redis hiccup falls back to a live
-# query. Async client, created once on the API's single event loop.
-_CLUSTER_CACHE_PREFIX = "map:clusters:v1:"
-_CLUSTER_CACHE_TTL = 45
+# The map response (clusters or pins) depends only on (zoom, bbox, filters) and the
+# dataset, which changes only when the pipeline ingests. So the route caches the FULLY
+# SERIALIZED response bytes + an ETag in Redis briefly: a warm hit skips the DB, the
+# row build AND the JSON encode entirely, and an If-None-Match match returns a bare
+# 304. Best-effort — any Redis hiccup falls back to a live query + encode. Async
+# client, created once on the API's single event loop.
+_MAP_CACHE_PREFIX = "map:resp:v2:"
+_MAP_CACHE_TTL = 60
 _redis: aioredis.Redis | None = None
 _redis_off = False
 
@@ -40,7 +41,7 @@ def _redis_client() -> aioredis.Redis | None:
     return _redis
 
 
-def _cluster_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q) -> str:
+def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset) -> str:
     raw = json.dumps(
         [
             zoom,
@@ -51,30 +52,39 @@ def _cluster_cache_key(zoom, bbox, date_from, date_to, categories, price_min, pr
             price_min,
             price_max,
             q,
+            limit,
+            offset,
         ],
         default=str,
         sort_keys=True,
     )
-    return _CLUSTER_CACHE_PREFIX + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return _MAP_CACHE_PREFIX + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-async def _cluster_cache_get(key: str):
+async def map_cache_get(key: str) -> tuple[str, str] | None:
+    """(body, etag) for a cached map response, or None. Stored as 'etag\\nbody' in one
+    key (an ETag never contains a newline), so a hit is a single Redis round trip."""
     client = _redis_client()
     if client is None:
         return None
     try:
         hit = await client.get(key)
-        return json.loads(hit) if hit else None
     except Exception:  # pragma: no cover - never let the cache break the request
         return None
+    if not hit:
+        return None
+    nl = hit.find("\n")
+    if nl < 0:
+        return None
+    return hit[nl + 1 :], hit[:nl]
 
 
-async def _cluster_cache_set(key: str, value: dict) -> None:
+async def map_cache_set(key: str, body: str, etag: str) -> None:
     client = _redis_client()
     if client is None:
         return
     try:
-        await client.set(key, json.dumps(value, default=str), ex=_CLUSTER_CACHE_TTL)
+        await client.set(key, etag + "\n" + body, ex=_MAP_CACHE_TTL)
     except Exception:  # pragma: no cover
         pass
 
@@ -178,23 +188,22 @@ class EventQueryService:
         offset: int,
         zoom: int | None = None,
     ):
-        # Below detail zoom → clusters. bbox is optional: the client aggregates over
-        # the WHOLE city (keyed on zoom only) so panning doesn't refetch/redraw.
-        # Served from a short Redis cache when warm (the frontend prefetches every
-        # zoom level), so a cache hit answers with zero DB queries.
+        # Below detail zoom → server-aggregated clusters (payload/marker count don't
+        # grow with the catalogue); at/above it → individual pins. The WHOLE response
+        # is cached as serialized bytes by the route (map_cache_*), so repeat loads
+        # across the frontend's per-zoom prefetch and across users skip all of this.
         if zoom is not None and zoom < self._DETAIL_ZOOM:
-            key = _cluster_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q)
-            cached = await _cluster_cache_get(key)
-            if cached is not None:
-                return cached
             total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
             clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q)
-            result = {"clusters": clusters, "items": [], "total": total}
-            await _cluster_cache_set(key, result)
-            return result
-        # "Показать N" = filter-wide count of map-able events (stable while panning).
-        total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
+            return {"clusters": clusters, "items": [], "total": total}
         items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset)
+        # "Показать N" = filter-wide count of map-able events. When the whole city is
+        # fetched (no bbox, no paging) it EQUALS the result size after DISTINCT ON, so
+        # derive it from `items` instead of firing a second identical ~14k-row join.
+        if bbox is None and not limit and not offset:
+            total = len(items)
+        else:
+            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
         return {"clusters": [], "items": items, "total": total}
 
     async def _count_pinnable(self, date_from, date_to, categories, price_min, price_max, q) -> int:
@@ -281,11 +290,26 @@ class EventQueryService:
         # Compute venue lat/lon in the main query (was an N+1 per-row subquery).
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
+        # Select EXACTLY the columns the dict below reads — a Core row of scalars, NOT
+        # full Event/EventOccurrence ORM entities. This skips hydrating every row's
+        # canonical_description (a big Text column the map never shows) and the ORM
+        # identity-map overhead, which was ~the dominant cost of this whole-city query.
         stmt = (
             select(
-                Event, EventOccurrence,
-                Venue.name.label("venue_name"), Venue.hours_json.label("venue_hours"),
-                Venue.city.label("venue_city"), lat_col, lon_col,
+                Event.event_id.label("event_id"),
+                Event.display_no.label("display_no"),
+                Event.canonical_title.label("title"),
+                Event.category.label("category"),
+                Event.cached_image_url.label("cached_image_url"),
+                Event.primary_image_url.label("primary_image_url"),
+                EventOccurrence.date_start.label("date_start"),
+                EventOccurrence.date_end.label("date_end"),
+                EventOccurrence.price_min.label("price_min"),
+                Venue.name.label("venue_name"),
+                Venue.hours_json.label("venue_hours"),
+                Venue.city.label("venue_city"),
+                lat_col,
+                lon_col,
             )
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
@@ -317,20 +341,22 @@ class EventQueryService:
         rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
         items = [
             {
-                "event_id": event.event_id,
-                "code": event_code(event.display_no, venue_city),
-                "title": event.canonical_title,
-                "category": event.category,
-                "date_start": occ.date_start,
-                "date_end": occ.date_end,
-                "price_min": occ.price_min,
-                "venue": venue_name,
-                "venue_hours": venue_hours,
-                "lat": float(lat) if lat is not None else None,
-                "lon": float(lon) if lon is not None else None,
-                "primary_image_url": event.cached_image_url or event.primary_image_url,
+                "event_id": r.event_id,
+                "code": event_code(r.display_no, r.venue_city),
+                "title": r.title,
+                "category": r.category,
+                "date_start": r.date_start,
+                "date_end": r.date_end,
+                # float (not Decimal) — JSON-encodable by orjson and the wire type the
+                # client coerces to anyway; avoids per-row Decimal handling.
+                "price_min": float(r.price_min) if r.price_min is not None else None,
+                "venue": r.venue_name,
+                "venue_hours": r.venue_hours,
+                "lat": float(r.lat) if r.lat is not None else None,
+                "lon": float(r.lon) if r.lon is not None else None,
+                "primary_image_url": r.cached_image_url or r.primary_image_url,
             }
-            for event, occ, venue_name, venue_hours, venue_city, lat, lon in rows
+            for r in rows
         ]
         # DISTINCT ON forces event_id ordering; present pins by soonest date instead.
         items.sort(key=lambda it: it["date_start"])
