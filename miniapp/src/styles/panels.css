@@ -938,22 +938,24 @@ html[data-theme="dark"] .rcard__ph {
 .listfab {
   position: absolute;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  /* Same baseline + height as the locate FAB, so the bottom controls line up. */
+  bottom: calc(env(safe-area-inset-bottom) + 28px);
   transform: translateX(-50%);
   z-index: 1180;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 40px;
-  padding: 0 16px;
-  border: 0;
+  gap: 8px;
+  height: 46px;
+  padding: 0 18px;
+  /* Flat 1px hairline like the zoom/locate controls — no cinnabar ghost (that's the
+     two-ink move for ACID surfaces; on a white pill it just reads as a stray shadow). */
+  border: 1px solid var(--line);
   background: var(--plinth);
-  box-shadow: inset 0 0 0 1px var(--ink), 1.6px 1.6px 0 var(--cinnabar);
   color: var(--ink);
-  font-family: var(--grotesk);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
   animation: dropIn 0.3s var(--ease-cut) both;
