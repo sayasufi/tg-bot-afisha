@@ -668,7 +668,7 @@ class EventQueryService:
 
         # Also search the OPPOSITE-script transliteration (latin↔cyrillic) so "bolshoi"
         # finds "Большой" and "стендап" finds "STANDUP". Gated by :has_qt when there's a
-        # distinct variant. Both variants drive the same GIN indexes.
+        # distinct variant.
         qt = _translit_variant(qn)
         has_qt = bool(qt) and qt != qn
         if not has_qt:
@@ -677,46 +677,50 @@ class EventQueryService:
         # Lower word_similarity threshold for short-prefix recall (default 0.6 is too
         # strict). SET LOCAL is transaction-scoped → safe behind the Odyssey pooler.
         await self.db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
-        # Escape LIKE metacharacters in the value so a stray % / _ isn't a wildcard.
+        # Match ё-INSENSITIVELY: both the column and the query are folded via
+        # translate(lower(x), 'ё', 'е'), so "зеленый" finds "Зелёный" and vice-versa.
+        # The functional GIN indexes (migration 0012) are on the SAME expression, so
+        # prefix (LIKE) + fuzzy (%>) stay index-driven. LIKE metacharacters escaped.
         esc = str.maketrans({"%": r"\%", "_": r"\_", "\\": "\\\\"})
-        qlike, qtlike = qn.translate(esc), qt.translate(esc)
+        qf, qtf = qn.lower().replace("ё", "е"), qt.lower().replace("ё", "е")
+        qflike, qtflike = qf.translate(esc), qtf.translate(esc)
         region = _region_sql(city)
-        # GIN-DRIVEN candidate gathering FIRST (title trgm + venue-name trgm), THEN join
-        # for the soonest in-region occurrence. Driving from the text indexes keeps the
-        # candidate set tiny (~dozens) — vs the naive single join that seq-scanned every
-        # venue/occurrence and applied the text match as a late filter (~200ms). Each
-        # field is matched against BOTH the query (:q) and its transliteration (:qt).
+        ft = "translate(lower(e.canonical_title), 'ё', 'е')"  # folded title (matches the index)
+        fv = "translate(lower(venues.name), 'ё', 'е')"  # folded venue name
+        # GIN-DRIVEN candidate gathering FIRST (folded title + venue trgm), THEN join for
+        # the soonest in-region occurrence — keeps the candidate set small vs a naive
+        # single join. Each field is matched against BOTH the query and its translit.
         sql = text(
             "WITH cand AS ("
             "  SELECT e.event_id, GREATEST("
-            "      CASE WHEN e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' THEN 200 "
-            "           WHEN e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' THEN 100 ELSE 0 END, "
-            "      CASE WHEN char_length(:q) >= 3 THEN (word_similarity(:q, e.canonical_title) * 100)::int ELSE 0 END, "
-            "      CASE WHEN :has_qt AND e.canonical_title ILIKE :qtlike || '%' ESCAPE '\\' THEN 190 "
-            "           WHEN :has_qt AND e.canonical_title ILIKE '%' || :qtlike || '%' ESCAPE '\\' THEN 95 ELSE 0 END, "
-            "      CASE WHEN :has_qt AND char_length(:qt) >= 3 THEN (word_similarity(:qt, e.canonical_title) * 100)::int ELSE 0 END"
+            f"      CASE WHEN {ft} LIKE :qflike || '%' ESCAPE '\\' THEN 200 "
+            f"           WHEN {ft} LIKE '%' || :qflike || '%' ESCAPE '\\' THEN 100 ELSE 0 END, "
+            f"      CASE WHEN char_length(:qf) >= 3 THEN (word_similarity(:qf, {ft}) * 100)::int ELSE 0 END, "
+            f"      CASE WHEN :has_qt AND {ft} LIKE :qtflike || '%' ESCAPE '\\' THEN 190 "
+            f"           WHEN :has_qt AND {ft} LIKE '%' || :qtflike || '%' ESCAPE '\\' THEN 95 ELSE 0 END, "
+            f"      CASE WHEN :has_qt AND char_length(:qtf) >= 3 THEN (word_similarity(:qtf, {ft}) * 100)::int ELSE 0 END"
             "    ) AS score "
             "  FROM events.events e "
             "  WHERE e.status = 'active' AND ("
-            "      e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' "
-            "      OR e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' "
-            "      OR (char_length(:q) >= 3 AND e.canonical_title %> :q) "
-            "      OR (:has_qt AND (e.canonical_title ILIKE :qtlike || '%' ESCAPE '\\' "
-            "                       OR e.canonical_title ILIKE '%' || :qtlike || '%' ESCAPE '\\' "
-            "                       OR (char_length(:qt) >= 3 AND e.canonical_title %> :qt))) ) "
+            f"      {ft} LIKE :qflike || '%' ESCAPE '\\' "
+            f"      OR {ft} LIKE '%' || :qflike || '%' ESCAPE '\\' "
+            f"      OR (char_length(:qf) >= 3 AND {ft} %> :qf) "
+            f"      OR (:has_qt AND ({ft} LIKE :qtflike || '%' ESCAPE '\\' "
+            f"                       OR {ft} LIKE '%' || :qtflike || '%' ESCAPE '\\' "
+            f"                       OR (char_length(:qtf) >= 3 AND {ft} %> :qtf))) ) "
             "  UNION ALL "
             "  SELECT o.event_id, GREATEST("
-            "      CASE WHEN venues.name ILIKE :qlike || '%' ESCAPE '\\' THEN 120 ELSE 0 END, "
-            "      CASE WHEN char_length(:q) >= 3 AND venues.name %> :q THEN (word_similarity(:q, venues.name) * 130)::int ELSE 0 END, "
-            "      CASE WHEN :has_qt AND venues.name ILIKE :qtlike || '%' ESCAPE '\\' THEN 118 ELSE 0 END, "
-            "      CASE WHEN :has_qt AND char_length(:qt) >= 3 AND venues.name %> :qt THEN (word_similarity(:qt, venues.name) * 128)::int ELSE 0 END"
+            f"      CASE WHEN {fv} LIKE :qflike || '%' ESCAPE '\\' THEN 120 ELSE 0 END, "
+            f"      CASE WHEN char_length(:qf) >= 3 AND {fv} %> :qf THEN (word_similarity(:qf, {fv}) * 130)::int ELSE 0 END, "
+            f"      CASE WHEN :has_qt AND {fv} LIKE :qtflike || '%' ESCAPE '\\' THEN 118 ELSE 0 END, "
+            f"      CASE WHEN :has_qt AND char_length(:qtf) >= 3 AND {fv} %> :qtf THEN (word_similarity(:qtf, {fv}) * 128)::int ELSE 0 END"
             "    ) AS score "
             "  FROM events.venues "
             "  JOIN events.event_occurrences o ON o.venue_id = venues.venue_id "
-            "  WHERE venues.name ILIKE :qlike || '%' ESCAPE '\\' "
-            "        OR (char_length(:q) >= 3 AND venues.name %> :q) "
-            "        OR (:has_qt AND (venues.name ILIKE :qtlike || '%' ESCAPE '\\' "
-            "                         OR (char_length(:qt) >= 3 AND venues.name %> :qt))) "
+            f"  WHERE {fv} LIKE :qflike || '%' ESCAPE '\\' "
+            f"        OR (char_length(:qf) >= 3 AND {fv} %> :qf) "
+            f"        OR (:has_qt AND ({fv} LIKE :qtflike || '%' ESCAPE '\\' "
+            f"                         OR (char_length(:qtf) >= 3 AND {fv} %> :qtf))) "
             "), best AS (SELECT event_id, max(score) AS score FROM cand GROUP BY event_id HAVING max(score) > 0), "
             "rows AS ("
             f"  SELECT DISTINCT ON (e.event_id) {self._SEARCH_COLS}, e.popularity_score, b.score "
@@ -733,7 +737,7 @@ class EventQueryService:
         )
         rows = (await self.db.execute(
             sql,
-            {"q": qn, "qlike": qlike, "qt": qt, "qtlike": qtlike, "has_qt": has_qt,
+            {"qf": qf, "qflike": qflike, "qtf": qtf, "qtflike": qtflike, "has_qt": has_qt,
              "lim": limit, "placeholder": _PLACEHOLDER_VENUE},
         )).mappings().all()
         return {"items": [self._search_item(r, float(r["score"])) for r in rows]}
