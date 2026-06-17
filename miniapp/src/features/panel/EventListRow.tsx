@@ -20,17 +20,20 @@ function EventListRowImpl({
   item,
   index,
   userPos,
+  now,
   onSelect,
 }: {
   item: EventItem;
   index: number;
   userPos?: LatLon | null;
+  now?: number; // shared minute-tick, so the list's "идёт сейчас"/countdown matches the map
   onSelect: (i: EventItem) => void;
 }) {
   const img = safeHttpUrl(item.primary_image_url);
   const dist = item.lat != null && item.lon != null ? distanceLabel(userPos, [item.lat, item.lon]) : null;
-  const go = goNowState(item.date_start, item.date_end, item.open_now);
-  const when = formatWhenShort(item.date_start, item.date_end);
+  const nowDate = now != null ? new Date(now) : undefined;
+  const go = goNowState(item.date_start, item.date_end, item.open_now, nowDate);
+  const when = formatWhenShort(item.date_start, item.date_end, nowDate);
   const price = priceLabel(item.price_min);
   const meta = [when, item.venue].filter(Boolean).join(" · ");
 

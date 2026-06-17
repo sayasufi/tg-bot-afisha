@@ -35,23 +35,26 @@ def get_or_create_city(db: Session, name: str, country: str = "RU") -> City:
     return city
 
 
-def upsert_user_city(db: Session, telegram_user_id: int, city: City) -> User:
-    user = db.get(User, telegram_user_id)
+# --- API user/favourites/settings: async (burst endpoints on the async pool), and they
+# do NOT commit — each route commits once for the whole request. The sync upsert_user /
+# get_or_create_city above stay for the low-frequency /location route + the worker. ---
+
+
+async def upsert_user_async(
+    db: AsyncSession, telegram_user_id: int, username: str | None = None, first_name: str | None = None
+) -> User:
+    """Create or refresh a bot user (profile + last-active). No commit."""
+    user = await db.get(User, telegram_user_id)
     if not user:
-        user = User(telegram_user_id=telegram_user_id, city_id=city.city_id)
-    else:
-        user.city_id = city.city_id
+        user = User(telegram_user_id=telegram_user_id)
+    user.username = username
+    user.first_name = first_name
+    user.last_active_at = datetime.now(timezone.utc)
     db.add(user)
-    db.commit()
-    db.refresh(user)
     return user
 
 
-def get_settings(db: Session, telegram_user_id: int) -> dict:
-    """The account's app settings (explicit columns), shaped for the Mini App."""
-    user = db.get(User, telegram_user_id)
-    if not user:
-        return {}
+def _settings_dict(user: User) -> dict:
     return {
         "theme": user.theme,
         "city": user.city_slug,
@@ -61,8 +64,14 @@ def get_settings(db: Session, telegram_user_id: int) -> dict:
     }
 
 
-def update_settings(
-    db: Session,
+async def get_settings(db: AsyncSession, telegram_user_id: int) -> dict:
+    """The account's app settings (explicit columns), shaped for the Mini App."""
+    user = await db.get(User, telegram_user_id)
+    return _settings_dict(user) if user else {}
+
+
+async def update_settings(
+    db: AsyncSession,
     telegram_user_id: int,
     *,
     theme: str | None = None,
@@ -71,9 +80,8 @@ def update_settings(
     coach: bool | None = None,
     swipe_seen: bool | None = None,
 ) -> dict:
-    """Set the provided settings (None = leave unchanged); returns the full set.
-    None means 'not provided'; an empty-string city clears it (back to auto-detect)."""
-    user = db.get(User, telegram_user_id)
+    """Set the provided settings (None = leave unchanged; "" clears city). No commit."""
+    user = await db.get(User, telegram_user_id)
     if not user:
         return {}
     if theme in ("light", "dark"):
@@ -87,50 +95,42 @@ def update_settings(
     if swipe_seen is not None:
         user.swipe_seen = bool(swipe_seen)
     db.add(user)
-    db.commit()
-    return get_settings(db, telegram_user_id)
+    return _settings_dict(user)
 
 
-def list_favorite_ids(db: Session, telegram_user_id: int) -> list[str]:
+async def list_favorite_ids(db: AsyncSession, telegram_user_id: int) -> list[str]:
     """Every event the user has hearted (as string UUIDs, for the Mini App)."""
     rows = (
-        db.execute(select(UserFavorite.event_id).where(UserFavorite.telegram_user_id == telegram_user_id))
-        .scalars()
-        .all()
-    )
+        await db.execute(select(UserFavorite.event_id).where(UserFavorite.telegram_user_id == telegram_user_id))
+    ).scalars().all()
     return [str(r) for r in rows]
 
 
-def set_favorite(db: Session, telegram_user_id: int, event_id: str, on: bool) -> None:
-    """Heart (on) or un-heart (off) a single event. Idempotent. Inserting only a
-    still-existing event keeps the FK happy (the event may have been deleted between the
-    client loading it and the tap)."""
+async def set_favorite(db: AsyncSession, telegram_user_id: int, event_id: str, on: bool) -> None:
+    """Heart / un-heart one event (no commit). Inserts only a still-existing event (FK)."""
     try:
         eid = uuid.UUID(str(event_id))
     except (ValueError, TypeError):
         return
     if on:
-        if db.execute(select(Event.event_id).where(Event.event_id == eid)).first() is None:
+        if (await db.execute(select(Event.event_id).where(Event.event_id == eid))).first() is None:
             return  # event no longer exists — nothing to favourite
-        db.execute(
+        await db.execute(
             pg_insert(UserFavorite.__table__)
             .values(telegram_user_id=telegram_user_id, event_id=eid)
             .on_conflict_do_nothing()
         )
     else:
-        db.execute(
+        await db.execute(
             delete(UserFavorite).where(
                 UserFavorite.telegram_user_id == telegram_user_id,
                 UserFavorite.event_id == eid,
             )
         )
-    db.commit()
 
 
-def add_favorites(db: Session, telegram_user_id: int, event_ids: list[str]) -> None:
-    """Bulk-add (used once per device to merge its local favourites into the account).
-    Filters to events that still exist so a stale device replaying old ids can't violate
-    the FK."""
+async def add_favorites(db: AsyncSession, telegram_user_id: int, event_ids: list[str]) -> None:
+    """Bulk-add (one-time per-device merge), filtered to existing events (FK). No commit."""
     eids = []
     for e in event_ids[:500]:  # cap: a sane upper bound, never a real user's count
         try:
@@ -139,16 +139,15 @@ def add_favorites(db: Session, telegram_user_id: int, event_ids: list[str]) -> N
             continue
     if not eids:
         return
-    existing = set(db.execute(select(Event.event_id).where(Event.event_id.in_(eids))).scalars().all())
+    existing = set((await db.execute(select(Event.event_id).where(Event.event_id.in_(eids)))).scalars().all())
     eids = [e for e in eids if e in existing]
     if not eids:
         return
-    db.execute(
+    await db.execute(
         pg_insert(UserFavorite.__table__)
         .values([{"telegram_user_id": telegram_user_id, "event_id": e} for e in eids])
         .on_conflict_do_nothing()
     )
-    db.commit()
 
 
 async def save_forward_message(db: AsyncSession, message_id: int, chat_id: int, payload: dict) -> RawEvent:

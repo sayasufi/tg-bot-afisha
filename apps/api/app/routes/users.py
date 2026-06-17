@@ -1,19 +1,20 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.services.geo import reverse_city
 from apps.api.app.services.telegram_auth import validate_init_data
+from core.cities import city_by_name
 from core.db.repositories.users import (
     add_favorites,
-    get_or_create_city,
     get_settings,
     list_favorite_ids,
     set_favorite,
     update_settings,
-    upsert_user,
-    upsert_user_city,
+    upsert_user,  # sync — for the low-frequency /location route
+    upsert_user_async,
 )
-from core.db.session import SessionLocal
+from core.db.session import SessionLocal, get_async_db
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
@@ -56,85 +57,71 @@ def _auth(init_data: str) -> tuple[dict, int]:
 
 @router.post("/location")
 def save_location(payload: LocationRequest):
-    """Persist the user's home city, derived from their map geolocation.
-
-    Replaces the old in-bot "choose a city" step: the Mini App sends the first
-    location fix once, we reverse-geocode it to a city and store it on the user.
-    """
+    """Persist the user's home city from their first map geolocation. Sync (not on the
+    per-open hot path): it does a blocking reverse-geocode and runs once."""
     user, uid = _auth(payload.init_data)
-    city_name = reverse_city(payload.lat, payload.lon)
+    city_name = reverse_city(payload.lat, payload.lon)  # blocking httpx (cached)
     db = SessionLocal()
     try:
-        upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-        city_out = None
-        if city_name:
-            city = get_or_create_city(db, city_name)
-            upsert_user_city(db, uid, city)
-            city_out = city.name
-        return {"ok": True, "city": city_out}
+        u = upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+        # Set the home city once into city_slug (the single column the app reads), but
+        # never override an explicit pick from the city switcher.
+        if city_name and not u.city_slug:
+            cfg = city_by_name(city_name)
+            if cfg:
+                u.city_slug = cfg.slug
+                db.add(u)
+                db.commit()
+        return {"ok": True, "city": city_name}
     finally:
         db.close()
 
 
 @router.post("/favorites/sync")
-def sync_favorites(payload: FavoritesSyncRequest):
-    """Return the account's favourites; on a device's first sync, merge that device's
-    local favourites in (one-time migration from the old per-device localStorage). Deleted
-    events are removed by the FK (ON DELETE CASCADE), so there's nothing to prune here."""
+async def sync_favorites(payload: FavoritesSyncRequest, db: AsyncSession = Depends(get_async_db)):
+    """Return the account's favourites; on a device's FIRST sync, merge that device's local
+    favourites in (once per account, gated by favorites_merged so a stale device can't
+    resurrect removed ones). Deleted events are removed by the FK CASCADE — nothing to prune."""
     user, uid = _auth(payload.init_data)
-    db = SessionLocal()
-    try:
-        # Records the open (last_active) + creates the row the merge insert needs.
-        u = upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-        # Merge this device's local favourites only ONCE per account (first sync). After
-        # that, ignore `add` — a stale device must not resurrect removed favourites.
-        if payload.add and not u.favorites_merged:
-            add_favorites(db, uid, payload.add)
-            u.favorites_merged = True
-            db.add(u)
-            db.commit()
-        return {"ids": list_favorite_ids(db, uid)}
-    finally:
-        db.close()
+    u = await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+    if payload.add and not u.favorites_merged:
+        await add_favorites(db, uid, payload.add)
+        u.favorites_merged = True
+    await db.commit()
+    return {"ids": await list_favorite_ids(db, uid)}
 
 
 @router.post("/favorites")
-def toggle_favorite(payload: FavoriteToggleRequest):
+async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Depends(get_async_db)):
     """Heart / un-heart one event for the account; returns the updated full list."""
     user, uid = _auth(payload.init_data)
-    db = SessionLocal()
-    try:
-        upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-        set_favorite(db, uid, payload.event_id, payload.on)
-        return {"ids": list_favorite_ids(db, uid)}
-    finally:
-        db.close()
+    await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+    await set_favorite(db, uid, payload.event_id, payload.on)
+    await db.commit()
+    return {"ids": await list_favorite_ids(db, uid)}
 
 
 @router.post("/settings")
-def user_settings(payload: SettingsRequest):
+async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get_async_db)):
     """Read, or set-then-read, the account's app settings (theme, city, first-run flags)."""
     user, uid = _auth(payload.init_data)
-    db = SessionLocal()
-    try:
-        changing = any(
-            v is not None for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen)
+    changing = any(
+        v is not None for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen)
+    )
+    if changing:
+        # Only write the user row when actually changing a setting (a pure read on app
+        # open shouldn't UPDATE+commit — favorites/sync already recorded the open).
+        await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+        settings = await update_settings(
+            db,
+            uid,
+            theme=payload.theme,
+            city=payload.city,
+            onboarded=payload.onboarded,
+            coach=payload.coach,
+            swipe_seen=payload.swipe_seen,
         )
-        if changing:
-            # Only write the user row when actually changing a setting (a pure read on app
-            # open shouldn't UPDATE+commit — favorites/sync already recorded the open).
-            upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-            settings = update_settings(
-                db,
-                uid,
-                theme=payload.theme,
-                city=payload.city,
-                onboarded=payload.onboarded,
-                coach=payload.coach,
-                swipe_seen=payload.swipe_seen,
-            )
-        else:
-            settings = get_settings(db, uid)
-        return {"settings": settings}
-    finally:
-        db.close()
+        await db.commit()
+    else:
+        settings = await get_settings(db, uid)
+    return {"settings": settings}

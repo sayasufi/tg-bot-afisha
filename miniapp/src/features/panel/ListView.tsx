@@ -29,6 +29,7 @@ export function ListView({
   bbox,
   userPos,
   radiusKm,
+  now,
   onSelect,
   onClose,
 }: {
@@ -37,6 +38,7 @@ export function ListView({
   bbox: [number, number, number, number] | null;
   userPos?: LatLon | null;
   radiusKm?: number;
+  now?: number;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
@@ -164,7 +166,7 @@ export function ListView({
 
       <div className="panelview__scroll" ref={scrollRef}>
         {items.map((it, i) => (
-          <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} onSelect={onSelect} />
+          <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} now={now} onSelect={onSelect} />
         ))}
         {!loading && error && <div className="listview__empty">Не удалось загрузить. Попробуй ещё раз.</div>}
         {!loading && !error && items.length === 0 && <div className="listview__empty">В этой области по фильтрам пусто. Подвинь карту или сними фильтры.</div>}

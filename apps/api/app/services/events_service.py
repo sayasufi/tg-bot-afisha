@@ -13,8 +13,8 @@ from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.codes import event_code, parse_event_code
-from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
+from core.redis import get_redis
 
 # The map response (clusters or pins) depends only on (zoom, bbox, filters) and the
 # dataset, which changes only when the pipeline ingests. So the route caches the FULLY
@@ -27,8 +27,6 @@ _MAP_CACHE_PREFIX = "map:resp:v4:"  # v4: cache stores the GZIPPED body bytes
 # is day-quantized + shared across users — so a few minutes of staleness is fine and well
 # worth not recomputing the whole-city join on every cold key.
 _MAP_CACHE_TTL = 180
-_redis: aioredis.Redis | None = None
-_redis_off = False
 
 # Parsed rec:views counts, cached briefly in-process so the 'popularity' sort doesn't
 # HGETALL the whole engagement hash on every request (it accumulates forever, no TTL).
@@ -37,20 +35,8 @@ _views_cache: tuple[float, dict] | None = None
 
 
 def _redis_client() -> aioredis.Redis | None:
-    # decode_responses=False: the map cache stores GZIPPED (binary) response bytes, not
-    # text. This is the ONLY user of this client (recommend.py has its own text client).
-    global _redis, _redis_off
-    if _redis_off:
-        return None
-    if _redis is None:
-        try:
-            _redis = aioredis.from_url(
-                get_settings().redis_url, decode_responses=False, socket_timeout=0.5, socket_connect_timeout=0.5
-            )
-        except Exception:  # pragma: no cover - cache is best-effort
-            _redis_off = True
-            return None
-    return _redis
+    # decode_responses=False: the map cache stores GZIPPED (binary) bytes, not text.
+    return get_redis(decode=False)
 
 
 def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city=None) -> str:
@@ -160,16 +146,10 @@ def _translit_variant(qn: str) -> str | None:
 
 
 def _region_sql(city) -> str:
-    """Raw-SQL region predicate (venues.geom within a city's radius) for the search CTE —
-    same city-agnostic guard as _region_clause, as a string we can embed in text()."""
-    from core.cities import active_cities
+    """Raw-SQL region predicate (venues.geom within a city's radius) for the search CTE."""
+    from core.cities import region_predicate_sql
 
-    cities = [city] if city is not None else active_cities()
-    parts = [
-        f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
-        for c in cities
-    ]
-    return "(" + " OR ".join(parts) + ")" if parts else "true"
+    return region_predicate_sql(city)
 
 
 def _hm_to_min(s) -> int:
@@ -282,14 +262,9 @@ class EventQueryService:
     # no city it ORs over all active cities (back-compat / "everything" fallback).
     @staticmethod
     def _region_clause(city=None):
-        from core.cities import active_cities
+        from core.cities import region_predicate_sql
 
-        cities = [city] if city is not None else active_cities()
-        parts = [
-            f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
-            for c in cities
-        ]
-        return text("(" + " OR ".join(parts) + ")") if parts else text("true")
+        return text(region_predicate_sql(city))
 
     @staticmethod
     def _concrete_time_clause():

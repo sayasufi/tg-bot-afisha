@@ -66,6 +66,19 @@ def active_cities() -> list[CityConfig]:
     return [c for c in CITIES.values() if c.active]
 
 
+def region_predicate_sql(city: "CityConfig | None" = None) -> str:
+    """The 'venues.geom within a city's region radius' SQL predicate, OR-ed over the given
+    city (or all active cities when None). Single source for the map/list/search/recs region
+    guard, so a change to region semantics happens in one place. Coordinates come from this
+    trusted registry — not user input — so the f-string interpolation is not an injection vector."""
+    cities = [city] if city is not None else active_cities()
+    parts = [
+        f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
+        for c in cities
+    ]
+    return "(" + " OR ".join(parts) + ")" if parts else "true"
+
+
 def city_by_slug(slug: str | None) -> CityConfig:
     return CITIES.get(slug or "", DEFAULT_CITY)
 

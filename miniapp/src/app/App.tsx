@@ -11,7 +11,14 @@ import { ClusterPeek } from "../features/map/ClusterPeek";
 const EventsMap = lazy(() => import("../features/map/EventsMap").then((m) => ({ default: m.EventsMap })));
 import { FocusBar } from "../features/map/FocusBar";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
-import { FavoritesPanel, ListView, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
+import { ListView, Sidebar, type View } from "../features/panel";
+// View-panels are only mounted when their tab is opened (most users never do) — lazy-load
+// so they don't sit in the initial bundle.
+const RecommendationsPanel = lazy(() =>
+  import("../features/panel/RecommendationsPanel").then((m) => ({ default: m.RecommendationsPanel })),
+);
+const FavoritesPanel = lazy(() => import("../features/panel/FavoritesPanel").then((m) => ({ default: m.FavoritesPanel })));
+const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m) => ({ default: m.ProfilePanel })));
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
@@ -693,6 +700,7 @@ export function App() {
         bbox={listBbox}
         userPos={userPos}
         radiusKm={filters.radiusKm}
+        now={now}
         onSelect={openEvent}
         onClose={() => setListOpen(false)}
       />
@@ -711,15 +719,17 @@ export function App() {
         onClose={() => setSelected(null)}
       />
 
-      {view === "recs" && (
-        <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} city={currentCity?.slug ?? null} onSelect={openEvent} onClose={() => setView("map")} />
-      )}
-      {view === "favorites" && (
-        <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
-      )}
-      {view === "profile" && (
-        <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} favIds={fav.ids} onClose={() => setView("map")} />
-      )}
+      <Suspense fallback={null}>
+        {view === "recs" && (
+          <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} city={currentCity?.slug ?? null} onSelect={openEvent} onClose={() => setView("map")} />
+        )}
+        {view === "favorites" && (
+          <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
+        )}
+        {view === "profile" && (
+          <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} favIds={fav.ids} onClose={() => setView("map")} />
+        )}
+      </Suspense>
 
       <Sidebar
         open={drawerOpen}

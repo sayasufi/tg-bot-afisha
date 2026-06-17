@@ -19,14 +19,13 @@ import math
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-import redis.asyncio as aioredis
 from geoalchemy2 import Geometry
 from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.services.events_service import _venue_open_now
-from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
+from core.redis import get_redis
 
 _MSK = timezone(timedelta(hours=3))
 _POOL_CAP = 6000
@@ -62,23 +61,9 @@ _CATEGORY_LABELS = {
     "party": "Вечеринки", "quest": "Квесты", "kids": "Детям", "other": "Другое",
 }
 
-_redis: aioredis.Redis | None = None
-_redis_off = False
-
-
-def _redis_client() -> aioredis.Redis | None:
-    global _redis, _redis_off
-    if _redis_off:
-        return None
-    if _redis is None:
-        try:
-            _redis = aioredis.from_url(
-                get_settings().redis_url, decode_responses=True, socket_timeout=0.5, socket_connect_timeout=0.5
-            )
-        except Exception:  # pragma: no cover - best-effort
-            _redis_off = True
-            return None
-    return _redis
+def _redis_client():
+    # decode_responses=True: recommend stores/reads text counters (rec:views, rec:seen).
+    return get_redis(decode=True)
 
 
 def _haversine_km(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
@@ -155,21 +140,14 @@ class RecommendationService:
         return 1.0 if category in _DAYTIME else 0.5  # daytime
 
     async def _load_pool(self, now: datetime, city=None) -> list[dict]:
-        from core.cities import active_cities
+        from core.cities import region_predicate_sql
 
         floor = now.replace(hour=0, minute=0, second=0, microsecond=0)
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
-        # Scope to the city's region (centre ± region_radius), or OR over all active
-        # cities when none given — same city-agnostic guard the map uses, replacing the
-        # old hardcoded Moscow-ish envelope (a multi-city blocker for the rec feed).
-        cities = [city] if city is not None else active_cities()
-        region = (
-            "(" + " OR ".join(
-                f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
-                for c in cities
-            ) + ")"
-        ) if cities else "true"
+        # Scope to the city's region (centre ± region_radius), or OR over all active cities
+        # when none given — the single shared region predicate the map/list/search use too.
+        region = region_predicate_sql(city)
         # One row per event = its soonest upcoming occurrence (DISTINCT ON requires
         # the event_id lead in ORDER BY).
         inner = (
