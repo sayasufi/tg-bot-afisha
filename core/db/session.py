@@ -19,7 +19,12 @@ _POOL = dict(pool_pre_ping=True, pool_size=5, max_overflow=10, pool_recycle=1800
 # now()), which are equal ONLY under a UTC session; dedup day-bucketing likewise). The
 # Postgres default is already UTC, but a future container `TZ=`/`PGTZ=` env would
 # silently change date_trunc semantics — this makes the invariant explicit and safe.
-_CONNECT = {"options": "-c timezone=UTC"}
+#
+# prepare_threshold=None disables psycopg3 auto-prepared-statements. REQUIRED when the
+# DB URL points at the transaction-pooling Odyssey (odyssey:6432): a prepared statement
+# created on one pooled server connection won't exist on the next one a transaction
+# lands on. Harmless on a direct Postgres connection, so it's always on.
+_CONNECT = {"options": "-c timezone=UTC", "prepare_threshold": None}
 
 # Sync engine — kept for scripts / any sync caller during/after the async migration.
 engine = create_engine(settings.sync_database_url, connect_args=_CONNECT, **_POOL)
