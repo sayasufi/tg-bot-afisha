@@ -40,6 +40,22 @@ const CITY = "Москва";
 // Keep in sync with DETAIL_ZOOM in EventsMap / _DETAIL_ZOOM in the API service.
 const DETAIL_ZOOM = 14;
 
+// A lat/lon box that fully contains a radius around a point (the client then trims to the
+// exact circle). Lets "Рядом" fetch only the radius area instead of the whole city.
+function radiusBbox([lat, lon]: [number, number], km: number): [number, number, number, number] {
+  const dLat = km / 111;
+  const dLon = km / (111 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
+  return [lon - dLon, lat - dLat, lon + dLon, lat + dLat];
+}
+
+// Snap the viewport bbox OUTWARD to a ~1km grid, so small pans reuse the same cached
+// fetch (and the fetched area always fully contains the viewport).
+function quantizeBbox([w, s, e, n]: [number, number, number, number]): [number, number, number, number] {
+  const f = (v: number) => Math.floor(v * 100) / 100;
+  const c = (v: number) => Math.ceil(v * 100) / 100;
+  return [f(w), f(s), c(e), c(n)];
+}
+
 export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
@@ -229,10 +245,24 @@ export function App() {
   // them directly instead of asking the server to grid them.
   const clusterMode = !((filters.radiusKm > 0 && !!userPos) || filters.goNow);
   // Only the integer zoom drives clustering; the map reports it on zoomend.
-  // Reporting the same value is a no-op (React bails), so panning never refetches.
   const onZoom = useCallback((z: number) => {
     setZoom(z);
   }, []);
+
+  // The area the map fetch is scoped to, so a zoomed-in view doesn't pull the whole city:
+  //  • "Рядом" → a box around the user covering the radius (client trims to the circle);
+  //  • "Сейчас" → whole region (the can-go-now set spans the city, then client-filtered);
+  //  • detail zoom (default) → the visible viewport — only the pins on screen;
+  //  • low zoom → whole region (clusters render it; items power the city-wide aggregates).
+  // The server returns the region-wide count regardless of bbox, so "Показать N" stays
+  // city-wide while only the on-screen pins are fetched.
+  const fetchBbox = useMemo<[number, number, number, number] | null>(() => {
+    if (filters.radiusKm > 0 && userPos) return radiusBbox(userPos, filters.radiusKm);
+    if (filters.goNow) return null;
+    if (zoom != null && zoom >= DETAIL_ZOOM && mapBbox) return quantizeBbox(mapBbox);
+    return null;
+  }, [filters.radiusKm, filters.goNow, userPos, zoom, mapBbox]);
+  const fetchBboxKey = fetchBbox ? fetchBbox.join(",") : "";
 
   // Favourite categories drive the "Для тебя" boost in recommendations.
   const favCategories = useMemo(() => {
@@ -278,7 +308,9 @@ export function App() {
     setLoading(true);
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      fetchMapEvents(query, ctrl.signal)
+      const p = new URLSearchParams(query);
+      if (fetchBbox) p.set("bbox", fetchBbox.join(","));
+      fetchMapEvents(p, ctrl.signal)
         .then((res) => {
           setItems(res.items);
           setTotal(res.total);
@@ -297,10 +329,10 @@ export function App() {
       clearTimeout(t);
       ctrl.abort();
     };
-    // refreshNonce forces a re-fetch on pull-to-refresh even when the query is
-    // unchanged; it is intentionally part of the dependency list.
+    // fetchBboxKey changes when the viewport (detail zoom), radius, or "Сейчас" changes →
+    // refetch the new scope. refreshNonce forces a re-fetch on pull-to-refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, refreshNonce]);
+  }, [query, fetchBboxKey, refreshNonce]);
 
   // Pull-to-refresh invalidates the warmed clusters so they refetch fresh.
   useEffect(() => {
