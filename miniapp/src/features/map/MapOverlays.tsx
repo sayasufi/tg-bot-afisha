@@ -30,10 +30,9 @@ export function MapShimmer({ show }: { show: boolean }) {
   return (
     <div className="mapshimmer" role="status" aria-label="Загрузка">
       <span className="dotfield" aria-hidden="true" />
-      <span className="aurora" aria-hidden="true" />
       <div className="mapshimmer__card">
         <span className="mapshimmer__bar" />
-        <span className="mapshimmer__cap">Проявляем окрест…</span>
+        <span className="mapshimmer__cap">Проявляем карту…</span>
       </div>
     </div>
   );

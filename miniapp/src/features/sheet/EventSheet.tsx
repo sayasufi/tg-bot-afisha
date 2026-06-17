@@ -29,6 +29,7 @@ type Props = {
 
 export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, onSelect, onShowMap, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
+  const [descOpen, setDescOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const onCloseRef = useRef(onClose);
@@ -51,6 +52,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
 
   useEffect(() => {
     setDetail(null);
+    setDescOpen(false);
     if (!selected) return;
     const ctrl = new AbortController();
     fetchEventDetail(selected.event_id, ctrl.signal)
@@ -58,6 +60,14 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
       .catch(() => undefined);
     return () => ctrl.abort();
   }, [selected]);
+
+  // A cached cover can already be `complete` before onLoad binds (so it would stay
+  // permanently blurred), and a broken image must not stay blurred either — develop
+  // on mount if loaded, and on error.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete) img.classList.add("is-developed");
+  });
 
   // Parallax: the cover drifts up slower than the content as the sheet scrolls.
   useEffect(() => {
@@ -269,6 +279,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             decoding="async"
             className="sheet__cover-img"
             onLoad={(e) => e.currentTarget.classList.add("is-developed")}
+            onError={(e) => e.currentTarget.classList.add("is-developed")}
           />
         ) : detail ? (
           <CategoryIcon cat={selected.category} size={64} className="sheet__plate-glyph" />
@@ -347,7 +358,16 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           </div>
         </div>
 
-        {description && <p className="sheet__desc">{description}</p>}
+        {description && (
+          <div className={`sheet__desc-wrap${descOpen ? " is-open" : ""}`}>
+            <p className="sheet__desc">{description}</p>
+            {!descOpen && description.length > 220 && (
+              <button type="button" className="sheet__desc-more" onClick={() => setDescOpen(true)}>
+                читать дальше
+              </button>
+            )}
+          </div>
+        )}
 
         {(sourceUrl || routeUrl || (onShowMap && lat != null && lon != null)) && (
           <div className="sheet__actions">

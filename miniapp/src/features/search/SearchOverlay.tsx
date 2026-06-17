@@ -29,6 +29,7 @@ export function SearchOverlay({
   const [q, setQ] = useState("");
   const [items, setItems] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Reset + focus on open.
@@ -37,6 +38,7 @@ export function SearchOverlay({
     setQ("");
     setItems([]);
     setLoading(false);
+    setError(false);
     const t = setTimeout(() => inputRef.current?.focus(), 60);
     return () => clearTimeout(t);
   }, [open]);
@@ -50,9 +52,11 @@ export function SearchOverlay({
     if (s.length < 2 && !code) {
       setItems([]);
       setLoading(false);
+      setError(false);
       return;
     }
     setLoading(true);
+    setError(false);
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       searchEvents(s, city, ctrl.signal)
@@ -64,6 +68,7 @@ export function SearchOverlay({
           if (e?.name !== "AbortError") {
             setItems([]);
             setLoading(false);
+            setError(true);
           }
         });
     }, code ? 0 : 250);
@@ -75,7 +80,7 @@ export function SearchOverlay({
 
   if (!open) return null;
   const s = q.trim();
-  const showEmpty = !loading && s.length >= 2 && items.length === 0;
+  const showEmpty = !loading && !error && s.length >= 2 && items.length === 0;
 
   return (
     <div className="searchov" role="dialog" aria-modal="true" aria-label="Поиск">
@@ -118,8 +123,8 @@ export function SearchOverlay({
           </button>
         </div>
 
-        {(items.length > 0 || showEmpty) && (
-          <div className="searchov__results">
+        {(items.length > 0 || showEmpty || error) && (
+          <div className="searchov__results" role="listbox" aria-label="Результаты поиска">
             {items.map((it, i) => (
               <EventRow
                 key={it.event_id}
@@ -134,6 +139,7 @@ export function SearchOverlay({
               />
             ))}
             {showEmpty && <div className="searchov__empty">Ничего не найдено</div>}
+            {error && <div className="searchov__empty">Не удалось загрузить. Попробуй ещё раз.</div>}
           </div>
         )}
       </div>
