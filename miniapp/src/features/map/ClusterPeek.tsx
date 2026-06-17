@@ -9,11 +9,13 @@ import { EventRow } from "../panel/EventRow";
 export function ClusterPeek({
   events,
   userPos,
+  now,
   onSelect,
   onClose,
 }: {
   events: EventItem[] | null;
   userPos?: LatLon | null;
+  now?: number;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
@@ -37,7 +39,7 @@ export function ClusterPeek({
         </div>
         <div className="peek__scroll">
           {list.map((it, i) => (
-            <EventRow key={it.event_id} item={it} index={i} userPos={userPos} onSelect={onSelect} />
+            <EventRow key={it.event_id} item={it} index={i} userPos={userPos} now={now} onSelect={onSelect} />
           ))}
         </div>
       </div>

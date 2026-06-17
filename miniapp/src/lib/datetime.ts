@@ -131,8 +131,9 @@ export function goNowState(
   const timed = !isMidnight(s) && endMs - s.getTime() <= 24 * 3600 * 1000;
 
   if (timed) {
-    const minutesUntilStart = Math.round((s.getTime() - now.getTime()) / 60000);
-    if (minutesUntilStart < 0) return { eligible: false }; // already started — can't go
+    const ms = s.getTime() - now.getTime();
+    if (ms <= 0) return { eligible: false }; // already started — can't catch it (exact, no rounding)
+    const minutesUntilStart = Math.round(ms / 60000);
     if (minutesUntilStart > SOON_MAX_MIN) return { eligible: false }; // not soon enough
     return { eligible: true, kind: "soon", minutesUntilStart, label: untilLabel(minutesUntilStart) };
   }

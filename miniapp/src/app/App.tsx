@@ -83,8 +83,11 @@ export function App() {
     // which keeps thousands of markers smooth without capping the data.
     if (filters.q) params.set("q", filters.q);
     for (const c of filters.categories) params.append("categories", c);
-    if (filters.dateFrom) params.set("date_from", new Date(filters.dateFrom).toISOString());
-    if (filters.dateTo) params.set("date_to", new Date(filters.dateTo).toISOString());
+    // Span the WHOLE local day: a bare "2026-06-17" parses as UTC midnight (03:00 MSK),
+    // so `date_start <= date_to` would hide everything after 03:00. Send start-of-day for
+    // `from` and end-of-day for `to` (local), so "Сегодня" covers the full day.
+    if (filters.dateFrom) params.set("date_from", new Date(`${filters.dateFrom}T00:00:00`).toISOString());
+    if (filters.dateTo) params.set("date_to", new Date(`${filters.dateTo}T23:59:59`).toISOString());
     if (filters.priceMax) params.set("price_max", filters.priceMax);
     return params;
   }, [filters]);
@@ -307,9 +310,11 @@ export function App() {
 
   const openEvent = useCallback((i: EventItem) => {
     haptic("light");
-    // Keep the cluster peek (if any) behind the sheet — closing the event returns
-    // you to the SAME list of events at that point, not to a bare map. The peek is
-    // hidden while the sheet is up and reappears on close (see the render below).
+    // Keep the cluster peek behind the sheet ONLY while it still contains this event
+    // (so closing returns you to the same point's list + swipe siblings). Opening an
+    // event from elsewhere (a "Рядом" card, a different pin) drops the stale peek so it
+    // can't reappear out of sync with the map.
+    setPeek((p) => (p && p.some((e) => e.event_id === i.event_id) ? p : null));
     setSelected(i);
     setFocused(i); // keep this marker highlighted on the map even after closing
     setFocusOut(false); // cancel any pending dismiss animation
@@ -482,7 +487,7 @@ export function App() {
         />
       </Suspense>
 
-      <ClusterPeek events={selected ? null : peek} userPos={userPos} onSelect={openEvent} onClose={() => setPeek(null)} />
+      <ClusterPeek events={selected ? null : peek} userPos={userPos} now={now} onSelect={openEvent} onClose={() => setPeek(null)} />
 
       <RadarPing key={radarNonce} nonce={radarNonce} />
 

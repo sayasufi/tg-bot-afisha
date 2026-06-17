@@ -11,19 +11,21 @@ export function EventRow({
   index,
   query,
   userPos,
+  now,
   onSelect,
 }: {
   item: EventItem;
   index: number;
   query?: string;
   userPos?: LatLon | null;
+  now?: number;
   onSelect: (i: EventItem) => void;
 }) {
   const dist =
     item.lat != null && item.lon != null ? distanceLabel(userPos, [item.lat, item.lon]) : null;
-  // The "можно пойти сейчас" spark — same predicate that reddens the map pin, so a
-  // peeked list makes it obvious WHICH event is the red one (огонёк + кикер).
-  const go = goNowState(item.date_start, item.date_end, item.venue_hours);
+  // The "можно пойти сейчас" spark — same predicate that reddens the map pin, off the
+  // SAME shared minute-tick as goNowIds, so the list never disagrees with the map.
+  const go = goNowState(item.date_start, item.date_end, item.venue_hours, now ? new Date(now) : new Date());
 
   return (
     <button
