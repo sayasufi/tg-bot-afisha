@@ -420,10 +420,11 @@ export function App() {
   }, []);
 
   // "На карте" from the sheet: drop to the map (the camera already flew to the
-  // event when it was opened) and close the card so the pin is in view.
+  // event when it was opened) and close everything that covers it so the pin is in view.
   const showOnMap = useCallback(() => {
     haptic("light");
-    setView("map");
+    setView("map"); // closes recs/favorites/profile panels
+    setListOpen(false); // the list is a separate overlay — close it too (was the bug)
     setSelected(null);
     setPeek(null); // "На карте" wants the pin in view, not the peek list over it
   }, []);
