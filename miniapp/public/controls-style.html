@@ -3,54 +3,46 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>окрест — контролы vs пины+кластеры</title>
+    <title>окрест — белые контролы, как развести</title>
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@600;800&family=Martian+Mono:wght@500;600&family=Unbounded:wght@800&display=swap"
     />
     <style>
-      :root { --plinth:#fff; --vitrine:#ececE4; --ink:#0b0b0b; --acid:#ccff00; --on-acid:#0b0b0b; }
+      :root { --plinth:#fff; --vitrine:#e7e6df; --ink:#0b0b0b; --acid:#ccff00; }
       * { box-sizing: border-box; margin: 0; }
       body { background: #d9d9d2; color: var(--ink); font-family: "Familjen Grotesk", system-ui, sans-serif; padding: 16px; }
-      h1 { font-family: "Unbounded"; font-size: 19px; text-transform: lowercase; letter-spacing: -.03em; }
-      .sub { font-family: "Martian Mono"; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 16px; }
+      h1 { font-family: "Unbounded"; font-size: 18px; text-transform: lowercase; letter-spacing: -.03em; }
+      .sub { font-family: "Martian Mono"; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .05em; margin: 4px 0 16px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 18px; }
       .cap { font-family: "Martian Mono"; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #222; margin-bottom: 7px; font-weight: 600; }
-      .scr { position: relative; height: 480px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--ink);
+      .scr { position: relative; height: 470px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--ink);
         background:
           linear-gradient(0deg, rgba(11,11,11,.05) 1px, transparent 1px) 0 0/100% 46px,
           linear-gradient(90deg, rgba(11,11,11,.05) 1px, transparent 1px) 0 0/52px 100%,
           repeating-linear-gradient(58deg, transparent 0 60px, rgba(11,11,11,.045) 60px 62px),
           #eceae3; }
-      /* white individual pin */
       .pin { position: absolute; min-width: 28px; height: 28px; padding: 0 6px; display: grid; place-items: center;
-        background: var(--plinth); box-shadow: inset 0 0 0 1px var(--ink); font-family: "Martian Mono"; font-size: 11px; font-weight: 600; }
-      /* black cluster (stacked frames) */
+        background: #fff; box-shadow: inset 0 0 0 1px var(--ink); font-family: "Martian Mono"; font-size: 11px; font-weight: 600; }
       .clus { position: absolute; min-width: 42px; height: 42px; padding: 0 8px; display: grid; place-items: center;
         background: var(--ink); color: #f4f4ef; font-family: "Martian Mono"; font-size: 14px; font-weight: 600;
-        box-shadow: 4px 4px 0 #planreplace; }
-      .clus { box-shadow: 4px 4px 0 rgba(11,11,11,.30), 8px 8px 0 rgba(11,11,11,.15); }
-      /* controls */
-      .zoom { position: absolute; right: 14px; top: 44%; transform: translateY(-50%); display: flex; flex-direction: column; }
-      .zoom .c { width: 36px; height: 36px; display: grid; place-items: center; font-size: 18px; }
-      .zoom .c:first-child { border-bottom: 1px solid var(--cl-div); }
-      .loc { position: absolute; right: 14px; bottom: 26px; width: 46px; height: 46px; display: grid; place-items: center; }
-      .lst { position: absolute; left: 14px; bottom: 26px; width: 46px; height: 46px; display: grid; place-items: center; }
+        box-shadow: 4px 4px 0 rgba(11,11,11,.30), 8px 8px 0 rgba(11,11,11,.15); }
+      .zoom { position: absolute; right: 14px; top: 44%; transform: translateY(-50%); display: flex; flex-direction: column; background: var(--cl-bg); box-shadow: var(--cl-sh); }
+      .zoom .c { width: 36px; height: 36px; display: grid; place-items: center; font-size: 18px; color: var(--ink); }
+      .zoom .c:first-child { border-bottom: 1px solid var(--ink); }
+      .loc, .lst { position: absolute; bottom: 26px; width: 46px; height: 46px; display: grid; place-items: center; background: var(--cl-bg); box-shadow: var(--cl-sh); color: var(--ink); }
+      .loc { right: 14px; } .lst { left: 14px; }
       .loc svg, .lst svg { width: 20px; height: 20px; }
-      .c-ctl { background: var(--cl-bg); color: var(--cl-ink); box-shadow: var(--cl-sh); }
-      /* treatments */
-      .t-dark   { --cl-bg:#0b0b0b; --cl-ink:#f4f4ef; --cl-div:#f4f4ef; --cl-sh: inset 0 0 0 1px #0b0b0b; }
-      .t-darkring { --cl-bg:#0b0b0b; --cl-ink:#f4f4ef; --cl-div:#f4f4ef; --cl-sh: inset 0 0 0 1px #0b0b0b, 0 0 0 3px #f4f4ef; }
-      .t-shadow { --cl-bg:#fff; --cl-ink:#0b0b0b; --cl-div:#0b0b0b; --cl-sh: inset 0 0 0 1px #0b0b0b, 0 3px 9px rgba(11,11,11,.32); }
-      .t-acid   { --cl-bg:#fff; --cl-ink:#0b0b0b; --cl-div:#0b0b0b; --cl-sh: inset 0 0 0 2px var(--acid), 0 0 0 1px #0b0b0b; }
-      .zoom .c-ctl { box-shadow: none; }
-      .zoom { background: var(--cl-bg); box-shadow: var(--cl-sh); }
-      .zoom .c { color: var(--cl-ink); }
+      /* white-core treatments (no black fill) */
+      .t-shadow { --cl-bg:#fff; --cl-sh: inset 0 0 0 1px var(--ink), 0 2px 8px rgba(11,11,11,.24); }
+      .t-grey   { --cl-bg:#e7e6df; --cl-sh: inset 0 0 0 1px var(--ink); }
+      .t-mat    { --cl-bg:#fff; --cl-sh: inset 0 0 0 1px var(--ink), 0 0 0 3px var(--plinth), 0 0 0 4px var(--ink); }
+      .t-acid   { --cl-bg:#fff; --cl-sh: inset 0 0 0 1px var(--ink), 0 0 0 2.5px var(--acid); }
     </style>
   </head>
   <body>
-    <h1>окрест · контролы vs пины + кластеры</h1>
-    <div class="sub">белые пины И чёрные кластеры рядом — что не сливается</div>
+    <h1>окрест · белые контролы — как отделить от пинов</h1>
+    <div class="sub">без чёрной заливки · белые пины + чёрные кластеры рядом</div>
     <div class="grid" id="grid"></div>
     <script>
       const LOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>';
@@ -60,21 +52,19 @@
         <span class="pin" style="left:18px;top:300px">21</span>
         <span class="pin" style="left:150px;top:360px">5</span>
         <span class="clus" style="left:120px;top:150px">160</span>
-        <span class="clus" style="left:140px;top:280px">205</span>
         <span class="clus" style="right:30px;top:150px">276</span>
         <span class="clus" style="right:22px;top:330px">291</span>
         <span class="clus" style="left:60px;bottom:70px">56</span>
-        <span class="clus" style="left:150px;bottom:80px">103</span>
-        <span class="clus" style="right:90px;bottom:90px">84</span>`;
+        <span class="clus" style="left:150px;bottom:80px">103</span>`;
       const ctls = `
-        <div class="zoom"><span class="c c-ctl">+</span><span class="c c-ctl">−</span></div>
-        <div class="loc c-ctl">${LOC}</div>
-        <div class="lst c-ctl">${LST}</div>`;
+        <div class="zoom"><span class="c">+</span><span class="c">−</span></div>
+        <div class="loc">${LOC}</div>
+        <div class="lst">${LST}</div>`;
       const V = [
-        { key: "1 · тёмные (сейчас)", t: "t-dark" },
-        { key: "2 · тёмные + белый кант", t: "t-darkring" },
-        { key: "3 · белые + тень", t: "t-shadow" },
-        { key: "4 · белые + acid-кант", t: "t-acid" },
+        { key: "A · белые + лёгкая тень", t: "t-shadow" },
+        { key: "B · светло-серые (vitrine)", t: "t-grey" },
+        { key: "C · белые «паспарту» (двойная рамка)", t: "t-mat" },
+        { key: "D · белые + acid-кант", t: "t-acid" },
       ];
       const g = document.getElementById("grid");
       for (const v of V) {
