@@ -283,18 +283,37 @@ export function App() {
     };
   }, [query, clusterMode, refreshNonce]);
 
-  // Telegram back button closes whatever is on top (sheet → panel → drawer).
+  const dismissOnboarding = useCallback(() => {
+    haptic("light");
+    try {
+      localStorage.setItem("okrest_onboarded", "1");
+    } catch {
+      /* ignore */
+    }
+    setOnboarded(true);
+  }, []);
+
+  // Close whatever is on top, most-modal first — shared by the Telegram BackButton and
+  // the keyboard Escape, so both behave like tapping the visible × . Returns true if it
+  // closed something.
+  const closeTop = useCallback((): boolean => {
+    if (searchOpen) setSearchOpen(false);
+    else if (selected) setSelected(null);
+    else if (peek) setPeek(null);
+    else if (filtersOpen) setFiltersOpen(false);
+    else if (drawerOpen) setDrawerOpen(false);
+    else if (view !== "map") setView("map");
+    else return false;
+    return true;
+  }, [searchOpen, selected, peek, filtersOpen, drawerOpen, view]);
+
+  // Telegram back button closes whatever is on top (search → sheet → peek → filters →
+  // drawer → panel).
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || peek || filtersOpen || drawerOpen || view !== "map";
-    const pop = () => {
-      if (selected) setSelected(null);
-      else if (peek) setPeek(null);
-      else if (filtersOpen) setFiltersOpen(false);
-      else if (drawerOpen) setDrawerOpen(false);
-      else setView("map");
-    };
+    const stacked = selected || peek || filtersOpen || drawerOpen || searchOpen || view !== "map";
+    const pop = () => closeTop();
     if (stacked) {
       back.show();
       back.onClick(pop);
@@ -302,7 +321,22 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, peek, filtersOpen, drawerOpen, view]);
+  }, [selected, peek, filtersOpen, drawerOpen, searchOpen, view, closeTop]);
+
+  // Esc behaves like tapping the visible × — closes the first-run guide, then the
+  // top overlay.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (!onboarded) {
+        dismissOnboarding();
+        return;
+      }
+      closeTop();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onboarded, dismissOnboarding, closeTop]);
 
   const dismissCoach = useCallback(() => {
     setCoachSeen(true);
@@ -426,16 +460,6 @@ export function App() {
       splash.classList.add("hide");
       window.setTimeout(() => splash.remove(), 400);
     }, 300);
-  }, []);
-
-  const dismissOnboarding = useCallback(() => {
-    haptic("light");
-    try {
-      localStorage.setItem("okrest_onboarded", "1");
-    } catch {
-      /* ignore */
-    }
-    setOnboarded(true);
   }, []);
 
   const toggleTheme = useCallback(() => {
