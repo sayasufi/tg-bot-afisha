@@ -23,8 +23,16 @@ services:
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
+    # Bound memory (volatile-lru evicts only TTL'd caches — map/rec/LLM — and spares
+    # no-TTL keys like rec:views) and persist to a volume (rec:views is accumulated
+    # engagement data, not recomputable). NOTE: applied at runtime via CONFIG SET; this
+    # makes it durable across recreates. The volume is empty on FIRST recreate — copy
+    # the current dump.rdb in if rec:views must survive that one-time transition.
+    command: redis-server --save 60 1 --maxmemory 512mb --maxmemory-policy volatile-lru
     ports:
       - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -154,3 +162,4 @@ volumes:
   pg_data:
   minio_data:
   prefect_data:
+  redis_data:
