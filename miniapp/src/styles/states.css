@@ -285,7 +285,7 @@ html[data-theme="dark"] .aurora::before {
 .coach {
   position: fixed;
   right: 84px;
-  bottom: 30px;
+  bottom: calc(env(safe-area-inset-bottom) + 78px); /* clears the bottom nav */
   z-index: 1150;
   max-width: 210px;
   background: var(--ink);

@@ -139,17 +139,22 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             </div>
           )}
 
+          {/* "Можно успеть" is a STATE filter (catch it right now), not a date range —
+             so it gets its own row, away from the date presets below. */}
+          <span className="kicker">Можно успеть</span>
+          <button
+            type="button"
+            className={`gonow-toggle${value.goNow ? " gonow-toggle--on" : ""}`}
+            aria-pressed={value.goNow}
+            onClick={toggleGoNow}
+          >
+            <span className="chip__livedot" aria-hidden="true" />
+            <span className="gonow-toggle__label">Сейчас</span>
+            <span className="gonow-toggle__hint">идёт или открыто прямо сейчас</span>
+          </button>
+
           <span className="kicker">Когда</span>
           <div className="chips csheet__presets">
-            <button
-              type="button"
-              className={`chip chip--live${value.goNow ? " chip--live-on" : ""}`}
-              aria-pressed={value.goNow}
-              onClick={toggleGoNow}
-            >
-              <span className="chip__livedot" aria-hidden="true" />
-              Сейчас
-            </button>
             {PRESETS.map((p) => (
               <button key={p.key} type="button" className={`chip${activePreset === p.key ? " chip--active" : ""}`} onClick={() => tapPreset(p.key)}>
                 {p.label}

@@ -92,6 +92,51 @@
   padding: 0 8px; /* fixed width, so trim h-padding to fit "ВЫХОДНЫЕ" */
 }
 
+/* "Можно успеть" — a full-width STATE toggle, visually distinct from the date chips.
+   Cinnabar (the live ink) frames it when on; off, it just shows the dot + hint. */
+.gonow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  cursor: pointer;
+}
+.gonow-toggle .chip__livedot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+}
+.gonow-toggle__label {
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.gonow-toggle__hint {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--ink-dim);
+}
+.gonow-toggle--on {
+  border-color: var(--cinnabar);
+  box-shadow: inset 0 0 0 1px var(--cinnabar);
+}
+.gonow-toggle--on .gonow-toggle__hint {
+  color: var(--cinnabar);
+}
+.gonow-toggle:active {
+  background: var(--vitrine);
+}
+
 .csheet__dates {
   display: grid;
   grid-template-columns: 1fr 1fr;
