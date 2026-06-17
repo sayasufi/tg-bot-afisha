@@ -111,7 +111,7 @@ export function App() {
     const at = new Date(now);
     const ids = new Set<string>();
     for (const i of radiusItems) {
-      if (goNowState(i.date_start, i.date_end, i.venue_hours, at).eligible) ids.add(i.event_id);
+      if (goNowState(i.date_start, i.date_end, i.open_now, at).eligible) ids.add(i.event_id);
     }
     return ids;
   }, [radiusItems, now]);

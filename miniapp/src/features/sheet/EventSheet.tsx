@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
-import { formatDateChip, formatWhen, goNowState, venueHoursToday, whenTimeNote } from "../../lib/datetime";
+import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
@@ -197,7 +197,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const timeNote = baseNote ? venueHoursToday(occ?.venue_hours) ?? baseNote : "";
   // "Можно пойти сейчас" badge for the headline session — the soonest you can
   // still get to (occurrences are future-first): timed within 3 h, or open now.
-  const go = goNowState(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end, occ?.venue_hours);
+  // The detail occurrence carries full hours → derive open-now from them; before the
+  // detail loads, fall back to the map item's server-computed open_now.
+  const openNow = venueOpenNow(occ?.venue_hours) ?? selected.open_now ?? null;
+  const go = goNowState(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end, openNow);
 
   const onShare = async () => {
     haptic("light");

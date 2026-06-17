@@ -7,7 +7,10 @@ export type EventItem = {
   date_end: string | null;
   price_min: number | null;
   venue: string | null;
-  venue_hours?: VenueHours | null;
+  // Compact "open now" tri-state computed server-side in Moscow time (true/false/null
+  // unknown) — replaces the full weekly schedule on the map payload. Full venue_hours
+  // live on the detail endpoint (EventOccurrence below). Drives the "идёт сейчас" badge.
+  open_now?: boolean | null;
   lat: number | null;
   lon: number | null;
   primary_image_url?: string | null;

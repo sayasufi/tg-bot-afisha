@@ -118,10 +118,14 @@ function untilLabel(m: number): string {
   return `через ${h} ч ${mm} мин`;
 }
 
+// `openNow` is a precomputed tri-state (true/false/null-unknown): the map ships it
+// server-computed in Moscow time; the detail sheet derives it via venueOpenNow() from
+// the full hours. Only the ONGOING branch uses it — the timed "soon" branch is purely
+// date-based and stays live off `now`.
 export function goNowState(
   start?: string | null,
   end?: string | null,
-  hours?: { week?: (string[][] | null)[] } | null,
+  openNow?: boolean | null,
   now: Date = new Date(),
 ): GoNow {
   const s = parse(start);
@@ -147,7 +151,7 @@ export function goNowState(
   if (!open && realEnd && now.getTime() > realEnd.getTime()) return { eligible: false }; // run is over
   // Only "идёт сейчас" when we KNOW the venue is open right now (real hours). If the
   // hours are unknown ("время уточняйте"), we can't claim it's on — so it's never red.
-  if (venueOpenNow(hours, now) !== true) return { eligible: false };
+  if (openNow !== true) return { eligible: false };
   return { eligible: true, kind: "now", label: "идёт сейчас" };
 }
 const dmy = (d: Date, withYear: boolean, short = false) =>

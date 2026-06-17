@@ -1,7 +1,7 @@
 import hashlib
 import json
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -20,7 +20,7 @@ from core.db.models import Event, EventOccurrence, Venue
 # row build AND the JSON encode entirely, and an If-None-Match match returns a bare
 # 304. Best-effort — any Redis hiccup falls back to a live query + encode. Async
 # client, created once on the API's single event loop.
-_MAP_CACHE_PREFIX = "map:resp:v2:"
+_MAP_CACHE_PREFIX = "map:resp:v3:"  # v3: payload ships open_now instead of venue_hours
 _MAP_CACHE_TTL = 60
 _redis: aioredis.Redis | None = None
 _redis_off = False
@@ -92,6 +92,56 @@ async def map_cache_set(key: str, body: str, etag: str) -> None:
 # Placeholder venue name for events whose source gave no venue (see worker enrich).
 # It has no real location, so it must never appear on the map / in clusters / counts.
 _PLACEHOLDER_VENUE = "Unknown venue"
+
+# All current cities are UTC+3 (Europe/Moscow, no DST since 2014). Used to compute the
+# venue "open now" signal in the venues' own wall-clock time.
+_MSK = timezone(timedelta(hours=3))
+
+
+def _hm_to_min(s) -> int:
+    try:
+        h, m = str(s).split(":")
+        return (int(h) if h else 0) * 60 + (int(m) if m else 0)
+    except Exception:
+        return 0
+
+
+def _venue_open_now(hours, now_msk: datetime) -> bool | None:
+    """Is the venue open at Moscow `now`? true / false / None (unknown). Server-side port
+    of the frontend venueOpenNow (miniapp/src/lib/datetime.ts) so the map payload can ship
+    a 1-byte tri-state per pin instead of the full weekly schedule (~18% of the gzipped
+    response), AND so it's correct for non-MSK clients (the JS port read the DEVICE clock
+    against Moscow hours). Keep in sync with datetime.ts venueOpenNow/isTerritoryHours."""
+    if not isinstance(hours, dict):
+        return None
+    week = hours.get("week")
+    if not isinstance(week, list) or len(week) != 7:
+        return None
+
+    def _rtc_day(day) -> bool:  # a single round-the-clock range
+        if not isinstance(day, list) or len(day) != 1:
+            return False
+        r = day[0]
+        return isinstance(r, list) and len(r) == 2 and (r[0] == r[1] or (r[0] == "00:00" and r[1] in ("24:00", "00:00")))
+
+    if all(_rtc_day(d) for d in week):
+        return None  # all-week 24/7 = matched a TERRITORY, not the hall → unknown
+    day = week[now_msk.isoweekday() % 7]  # JS getDay() convention: 0=Sun .. 6=Sat
+    if day is None:
+        return False  # closed today
+    if not isinstance(day, list) or len(day) == 0:
+        return None  # unknown
+    mins = now_msk.hour * 60 + now_msk.minute
+    for r in day:
+        if not isinstance(r, list) or len(r) != 2:
+            continue
+        open_m = _hm_to_min(r[0])
+        close_m = _hm_to_min(r[1]) or 1440  # 00:00 close = end of day
+        if open_m == close_m:
+            return True  # round-the-clock (single day)
+        if open_m <= mins < close_m:
+            return True
+    return False  # outside today's ranges
 
 
 class EventQueryService:
@@ -339,6 +389,7 @@ class EventQueryService:
         # page pass an explicit limit. (At city scale this is tens of KB gzipped; a
         # viewport-bbox fetch is the lever if the dataset ever grows past that.)
         rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
+        now_msk = datetime.now(_MSK)
         items = [
             {
                 "event_id": r.event_id,
@@ -351,7 +402,10 @@ class EventQueryService:
                 # client coerces to anyway; avoids per-row Decimal handling.
                 "price_min": float(r.price_min) if r.price_min is not None else None,
                 "venue": r.venue_name,
-                "venue_hours": r.venue_hours,
+                # Compact "open now" tri-state instead of the full weekly schedule
+                # (which was ~18% of the gzipped payload). Full hours stay on the
+                # detail endpoint. The client uses this for the "идёт сейчас" highlight.
+                "open_now": _venue_open_now(r.venue_hours, now_msk),
                 "lat": float(r.lat) if r.lat is not None else None,
                 "lon": float(r.lon) if r.lon is not None else None,
                 "primary_image_url": r.cached_image_url or r.primary_image_url,

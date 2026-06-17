@@ -25,7 +25,7 @@ export function EventRow({
     item.lat != null && item.lon != null ? distanceLabel(userPos, [item.lat, item.lon]) : null;
   // The "можно пойти сейчас" spark — same predicate that reddens the map pin, off the
   // SAME shared minute-tick as goNowIds, so the list never disagrees with the map.
-  const go = goNowState(item.date_start, item.date_end, item.venue_hours, now ? new Date(now) : new Date());
+  const go = goNowState(item.date_start, item.date_end, item.open_now, now ? new Date(now) : new Date());
 
   return (
     <button

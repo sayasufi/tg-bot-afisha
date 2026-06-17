@@ -20,7 +20,7 @@ function priceLabel(p: number | null | undefined): { text: string; free: boolean
 // tag, then title + when/distance.
 export function EventCard({ item, userPos, onSelect }: { item: CardItem; userPos?: LatLon | null; onSelect: (i: EventItem) => void }) {
   const meta = categoryMeta(item.category);
-  const go = goNowState(item.date_start, item.date_end, item.venue_hours);
+  const go = goNowState(item.date_start, item.date_end, item.open_now);
   const img = safeHttpUrl(item.primary_image_url);
   const dist =
     item.distance_m != null

@@ -24,6 +24,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.app.services.events_service import _venue_open_now
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
 
@@ -34,7 +35,7 @@ _MIN_RAIL = 4  # themed rails with fewer items are dropped (avoid sparse noise)
 _NEAR_KM = 8.0
 _RECENT_CAP = 60  # max recent opens the client may send (behavioural profile)
 _VIEWS_KEY = "rec:views"
-_CACHE_PREFIX = "rec:feed:v2:"
+_CACHE_PREFIX = "rec:feed:v3:"  # v3: items ship open_now instead of venue_hours
 _CACHE_TTL = 90
 
 # Scoring weights — the "model". Tune here; features are independent.
@@ -204,6 +205,7 @@ class RecommendationService:
     def _score_all(self, pool, now, today, hour, lat, lon, affinity, views):
         max_views = max((views.get(str(c["event_id"]), 0) for c in pool), default=0)
         pop_norm = math.log1p(max_views) or 1.0
+        now_msk = now.astimezone(_MSK)
         out = []
         for c in pool:
             s, e = c["date_start"], c["date_end"]
@@ -239,6 +241,9 @@ class RecommendationService:
             out.append({
                 "c": c, "score": score, "dist_km": dist_km, "live": live,
                 "ds": ds, "de": de, "free": free, "views": v,
+                # Compact open-now (Moscow time) — the rails ship this, not the full
+                # weekly schedule, matching the map payload (see events_service).
+                "open_now": _venue_open_now(c["venue_hours"], now_msk),
             })
         return out
 
@@ -248,7 +253,7 @@ class RecommendationService:
             "event_id": c["event_id"], "title": c["title"], "category": c["category"],
             "date_start": c["date_start"], "date_end": c["date_end"],
             "price_min": float(c["price_min"]) if c["price_min"] is not None else None,
-            "venue": c["venue"], "venue_hours": c["venue_hours"], "lat": c["lat"], "lon": c["lon"],
+            "venue": c["venue"], "open_now": e.get("open_now"), "lat": c["lat"], "lon": c["lon"],
             "primary_image_url": c["cached_image_url"] or c["primary_image_url"] or None,
             "distance_m": round(e["dist_km"] * 1000) if e["dist_km"] is not None else None,
         }

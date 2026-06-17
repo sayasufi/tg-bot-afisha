@@ -23,7 +23,7 @@ export function FocusBar({
 }) {
   const meta = categoryMeta(event.category);
   const when = formatWhenShort(event.date_start, event.date_end);
-  const go = goNowState(event.date_start, event.date_end, event.venue_hours, now ? new Date(now) : new Date());
+  const go = goNowState(event.date_start, event.date_end, event.open_now, now ? new Date(now) : new Date());
   return (
     <div className={`focusbar${out ? " focusbar--out" : ""}`}>
       <button type="button" className="focusbar__main" onClick={() => onOpen(event)}>
