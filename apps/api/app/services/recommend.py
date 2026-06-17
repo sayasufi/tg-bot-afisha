@@ -32,6 +32,7 @@ _MSK = timezone(timedelta(hours=3))
 _POOL_CAP = 6000
 _PER_RAIL = 12
 _MIN_RAIL = 4  # themed rails with fewer items are dropped (avoid sparse noise)
+_MAX_RAILS = 7  # hard cap so the feed is a few strong rails, not a wall of relabelled lists
 _NEAR_KM = 8.0
 _RECENT_CAP = 60  # max recent opens the client may send (behavioural profile)
 _VIEWS_KEY = "rec:views"
@@ -317,51 +318,62 @@ class RecommendationService:
     def _build_rails(self, scored, today, has_loc, affinity, per_rail):
         by_score = sorted(scored, key=lambda e: -e["score"])
         rails = []
+        seen: set = set()  # cross-rail dedup: an event shows in ONE rail, so each rail is
+        # genuinely new content, not the same ~12 events relabelled. Rails are tried in
+        # priority order; one renders only if it still adds ≥_MIN_RAIL UNSEEN events.
 
-        # "Для тебя" — a VARIED personalised top (capped per category + venue).
-        foryou = self._rail("for_you", "Для тебя", "Собрано лично для вас", self._diverse(by_score, per_rail), per_rail, min_items=1)
-        if foryou:
-            rails.append(foryou)
+        def add(key, title, subtitle, entries, *, diverse=False, min_items=_MIN_RAIL):
+            if len(rails) >= _MAX_RAILS:
+                return
+            pool = [e for e in entries if e["c"]["event_id"] not in seen]
+            if diverse:
+                pool = self._diverse(pool, per_rail)
+            rail = self._rail(key, title, subtitle, pool, per_rail, min_items=min_items)
+            if rail:
+                seen.update(it["event_id"] for it in rail["items"])
+                rails.append(rail)
 
-        # "Идёт сейчас" — live right now.
-        rails.append(self._rail("live", "Идёт сейчас", "Можно успеть прямо сейчас", [e for e in by_score if e["live"]], per_rail))
+        # "Для тебя" — a VARIED personalised top (capped per category + venue). Claims
+        # first; min 1 so it always leads.
+        add("for_you", "Для тебя", "Собрано лично для вас", by_score, diverse=True, min_items=1)
 
-        # "Рядом" — closest to you.
+        # "Рядом" — closest to you (a distinct proximity axis).
         if has_loc:
             near = sorted([e for e in scored if e["dist_km"] is not None and e["dist_km"] <= _NEAR_KM], key=lambda e: e["dist_km"])
-            rails.append(self._rail("near", "Рядом с вами", "В пешей доступности и около", near, per_rail))
+            add("near", "Рядом с вами", "В пешей доступности и около", near)
 
-        # "Сегодня" — today's events (incl. ongoing covering today).
-        rails.append(self._rail("today", "Сегодня", None, [e for e in by_score if e["live"] or (e["ds"] <= today <= e["de"])], per_rail))
+        # "Сегодня" — today's events (incl. ongoing covering today). The old standalone
+        # "Идёт сейчас" rail was a strict subset of this AND every card already shows a
+        # live badge, so it's dropped — it only padded the feed with repeats.
+        add("today", "Сегодня", None, [e for e in by_score if e["live"] or (e["ds"] <= today <= e["de"])])
 
         # "На выходных" — the current-or-upcoming weekend as a contiguous Sat+Sun.
         wd = today.weekday()
         sat = today if wd == 5 else today - timedelta(days=1) if wd == 6 else today + timedelta(days=5 - wd)
         weekend = {sat, sat + timedelta(days=1)}
-        rails.append(self._rail("weekend", "На выходных", None, [e for e in by_score if (e["ds"] in weekend) or (min(weekend) <= e["de"] and e["ds"] <= max(weekend))], per_rail))
+        add("weekend", "На выходных", None, [e for e in by_score if (e["ds"] in weekend) or (min(weekend) <= e["de"] and e["ds"] <= max(weekend))])
 
         # "Популярное" — most opened by others (live engagement).
         if any(e["views"] > 0 for e in scored):
-            rails.append(self._rail("popular", "Популярное", "Чаще всего открывают", sorted([e for e in scored if e["views"] > 0], key=lambda e: -e["views"]), per_rail))
+            add("popular", "Популярное", "Чаще всего открывают", sorted([e for e in scored if e["views"] > 0], key=lambda e: -e["views"]))
 
         # "Бесплатно".
-        rails.append(self._rail("free", "Бесплатно", None, [e for e in by_score if e["free"]], per_rail))
+        add("free", "Бесплатно", None, [e for e in by_score if e["free"]])
 
-        # "Откройте новое" — strong events OUTSIDE any category you've engaged with
-        # (favourited or opened) — genuinely new to you (anti-filter-bubble).
+        # "Откройте новое" — strong events OUTSIDE any category you've engaged with.
         usual = set(affinity)
         if usual:
-            rails.append(self._rail("explore", "Откройте новое", "Не из ваших привычных тем", self._diverse([e for e in by_score if e["c"]["category"] not in usual], per_rail), per_rail))
+            add("explore", "Откройте новое", "Не из ваших привычных тем", [e for e in by_score if e["c"]["category"] not in usual], diverse=True)
 
-        # Category rails — your strongest-affinity categories first (concrete focused
-        # rails like «Выставки»), then the busiest others.
+        # Category rails — strongest-affinity categories first, then busiest; each only
+        # if it still brings ≥_MIN_RAIL unseen events (and within the rail cap).
         counts = Counter(e["c"]["category"] for e in scored)
         busiest = [c for c in counts if c != "other"]
         ordered = sorted(busiest, key=lambda c: (-affinity.get(c, 0.0), -counts[c]))
-        for cat in ordered[:4]:
-            rails.append(self._rail(f"category:{cat}", _CATEGORY_LABELS.get(cat, cat), None, [e for e in by_score if e["c"]["category"] == cat], per_rail))
+        for cat in ordered:
+            add(f"category:{cat}", _CATEGORY_LABELS.get(cat, cat), None, [e for e in by_score if e["c"]["category"] == cat])
 
-        return [r for r in rails if r]
+        return rails
 
     async def log_view(self, event_id, user_id=None) -> None:
         client = _redis_client()
