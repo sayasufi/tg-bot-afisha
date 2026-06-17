@@ -637,7 +637,10 @@ class EventQueryService:
         q = (q or "").strip()
         if not q:
             return {"items": []}
-        qn = q.replace("ё", "е").replace("Ё", "Е")  # cheap ё/е folding (app-side)
+        # Keep ё as typed: folding it to е broke the prefix/contains ILIKE against the ё
+        # in the data ("зеленый" stopped matching "Зелёный"). Trigram %> already tolerates
+        # the one-char ё/е difference, so both spellings still match fuzzily.
+        qn = q
 
         # Tier 0 — exact event code ("MSK-04PN"): a unique display_no probe. EXCLUSIVE —
         # a code is unambiguous, so don't pollute it with fuzzy text matches.
