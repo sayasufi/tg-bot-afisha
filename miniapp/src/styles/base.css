@@ -45,12 +45,13 @@ html[data-theme="dark"] {
   --ink-faint: #8a857a; /* lifted for legibility on the warm-ink wall */
   --line: #3a3830; /* visible warm-grey hairline frames */
   --line-soft: rgba(241, 236, 222, 0.13);
-  /* Night accent = warm amber, NOT chartreuse: on a dark wall #CCFF00 is near-white-
-     luminous, so off-white text/elements on it merge. Amber is a distinct mid-luminance
-     accent that still carries black text. (Light theme keeps the signature chartreuse.) */
-  --acid: #ffb02e;
-  --acid-deep: #e0951f;
-  --on-acid: #0b0b0b;
+  /* Night accent = the NEGATIVE of the day's chartreuse: #3300FF is the literal RGB
+     inverse of #CCFF00 — "the gallery's negative at night", on-concept for the print/
+     darkroom theme. It's a deep colour, so text on it is light (not black), and the
+     cinnabar ghost gives a complementary blue+orange pop. (Light theme keeps chartreuse.) */
+  --acid: #3300ff;
+  --acid-deep: #2200cc;
+  --on-acid: #f1ecde;
   --cinnabar: #ff5a3c; /* nudged brighter so it reads on dark */
   color: var(--ink);
   background: var(--bg);
