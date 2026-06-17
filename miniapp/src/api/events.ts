@@ -39,6 +39,19 @@ export async function fetchMapEvents(params: URLSearchParams, signal?: AbortSign
   };
 }
 
+export type ListSort = "date" | "distance" | "popularity" | "price";
+export type EventsListResponse = { items: EventItem[]; total: number };
+
+// Flat, paginated, sortable list of events in the current map bbox (the "list view").
+// Mirrors the map's filters so the list matches the pins.
+export async function fetchEventsList(params: URLSearchParams, signal?: AbortSignal): Promise<EventsListResponse> {
+  const data = await getJson<{ items: EventItem[]; total: number }>(`/v1/events/list?${params.toString()}`, signal);
+  return {
+    items: (data.items ?? []).map((x: any) => ({ ...x, price_min: toNum(x.price_min) })),
+    total: data.total ?? 0,
+  };
+}
+
 export async function fetchNearby(
   lat: number,
   lon: number,

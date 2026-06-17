@@ -1,4 +1,5 @@
 export { Sidebar } from "./Sidebar";
+export { ListView } from "./ListView";
 export { RecommendationsPanel } from "./RecommendationsPanel";
 export { FavoritesPanel } from "./FavoritesPanel";
 export { ProfilePanel } from "./ProfilePanel";

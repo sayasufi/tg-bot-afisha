@@ -37,6 +37,7 @@ type Props = {
   locating: boolean;
   center?: [number, number] | null;
   onReady?: () => void;
+  onViewport?: (bbox: Bbox, zoom: number) => void; // reports the bbox to the parent (list view)
 };
 
 // Last-resort initial centre only (before /v1/cities resolves); the real centre comes
@@ -244,6 +245,7 @@ export function EventsMap({
   onLocate,
   locating,
   onReady,
+  onViewport,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
@@ -264,9 +266,12 @@ export function EventsMap({
 
   const onZoomRef = useRef(onZoom);
   onZoomRef.current = onZoom;
+  const onViewportRef = useRef(onViewport);
+  onViewportRef.current = onViewport;
   const handleViewport = useMemo(
     () => (bbox: Bbox, zoom: number) => {
       onZoomRef.current(zoom);
+      onViewportRef.current?.(bbox, zoom);
       // Skip the re-render when only the bbox changed at cluster zoom: clusters
       // are whole-city, so panning needs no redraw. At detail zoom the bbox drives
       // which pins render, so update there (and on any zoom change).

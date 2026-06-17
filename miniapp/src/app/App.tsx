@@ -11,7 +11,8 @@ import { ClusterPeek } from "../features/map/ClusterPeek";
 const EventsMap = lazy(() => import("../features/map/EventsMap").then((m) => ({ default: m.EventsMap })));
 import { FocusBar } from "../features/map/FocusBar";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
-import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
+import { FavoritesPanel, ListView, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
+import { IconMenu } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
@@ -56,6 +57,11 @@ export function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // List view ("Списком"): the current map bbox (reported by EventsMap) + the bbox
+  // frozen when the list was opened, so the list reflects the area you were looking at.
+  const [mapBbox, setMapBbox] = useState<[number, number, number, number] | null>(null);
+  const [listOpen, setListOpen] = useState(false);
+  const [listBbox, setListBbox] = useState<[number, number, number, number] | null>(null);
   const [view, setView] = useState<View>("map");
   const [sheetReady, setSheetReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -302,20 +308,21 @@ export function App() {
     else if (peek) setPeek(null);
     else if (filtersOpen) setFiltersOpen(false);
     else if (drawerOpen) setDrawerOpen(false);
+    else if (listOpen) setListOpen(false);
     else if (view !== "map") setView("map");
     else return false;
     // Drop focus from the trigger so it doesn't keep a focus ring after closing
     // (a keyboard Escape otherwise leaves the pill button looking "highlighted").
     (document.activeElement as HTMLElement | null)?.blur?.();
     return true;
-  }, [searchOpen, selected, peek, filtersOpen, drawerOpen, view]);
+  }, [searchOpen, selected, peek, filtersOpen, drawerOpen, listOpen, view]);
 
   // Telegram back button closes whatever is on top (search → sheet → peek → filters →
   // drawer → panel).
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || peek || filtersOpen || drawerOpen || searchOpen || view !== "map";
+    const stacked = selected || peek || filtersOpen || drawerOpen || searchOpen || listOpen || view !== "map";
     const pop = () => closeTop();
     if (stacked) {
       back.show();
@@ -324,7 +331,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, peek, filtersOpen, drawerOpen, searchOpen, view, closeTop]);
+  }, [selected, peek, filtersOpen, drawerOpen, searchOpen, listOpen, view, closeTop]);
 
   // Esc behaves like tapping the visible × — closes the first-run guide, then the
   // top overlay.
@@ -558,6 +565,7 @@ export function App() {
           onLocate={handleLocate}
           locating={locating}
           onReady={handleMapReady}
+          onViewport={(bbox) => setMapBbox(bbox)}
         />
       </Suspense>
 
@@ -582,6 +590,33 @@ export function App() {
       )}
 
       {focusBarVisible && focused && <FocusBar event={focused} out={focusOut} now={now} onOpen={openEvent} onClose={dismissFocus} />}
+
+      {/* Map↔list toggle — opens the current map area as a sortable list. */}
+      {view === "map" && !selected && !peek && !filtersOpen && !drawerOpen && !searchOpen && !listOpen && !focusBarVisible && !loading && (
+        <button
+          type="button"
+          className="listfab"
+          aria-label="Показать списком"
+          onClick={() => {
+            haptic("light");
+            setListBbox(mapBbox);
+            setListOpen(true);
+          }}
+        >
+          <IconMenu size={15} />
+          списком
+        </button>
+      )}
+
+      <ListView
+        open={listOpen}
+        baseParams={query}
+        bbox={listBbox}
+        userPos={userPos}
+        radiusKm={filters.radiusKm}
+        onSelect={openEvent}
+        onClose={() => setListOpen(false)}
+      />
 
       <EventSheet
         selected={sheetReady ? selected : null}
