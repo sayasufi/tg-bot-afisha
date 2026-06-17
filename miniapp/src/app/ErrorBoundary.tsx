@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
       <div style={S.wrap}>
         <div style={S.box}>
           <div style={S.title}>что-то сломалось</div>
-          <div style={S.hint}>Попробуйте перезагрузить — это починит экран.</div>
+          <div style={S.hint}>Перезагрузи — это починит экран.</div>
           <button type="button" style={S.btn} onClick={() => window.location.reload()}>
             Перезагрузить
           </button>
@@ -35,30 +35,42 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
+// Inline + on-brand (VITRINE): plaster wall, ink text, black-on-acid button, hairline
+// frame, brand font stack with a sans fallback (a failed CSS chunk can't undo this).
+const BRAND = "'Unbounded', 'Familjen Grotesk', system-ui, sans-serif";
+const MONO = "'Martian Mono', ui-monospace, monospace";
 const S: Record<string, CSSProperties> = {
   wrap: {
     position: "fixed",
     inset: 0,
-    background: "#14130e",
-    color: "#f1ecde",
+    background: "#F4F4EF",
+    color: "#0B0B0B",
     display: "grid",
     placeItems: "center",
     padding: "24px",
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+    fontFamily: BRAND,
     zIndex: 99999,
   },
-  box: { maxWidth: 320, textAlign: "center" },
-  title: { fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 10 },
-  hint: { fontSize: 14, color: "#9a958a", marginBottom: 22, lineHeight: 1.4 },
+  box: {
+    maxWidth: 320,
+    textAlign: "center",
+    padding: "28px 22px",
+    background: "#FFFFFF",
+    boxShadow: "inset 0 0 0 1px #0B0B0B",
+  },
+  title: { fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", textTransform: "lowercase", marginBottom: 10 },
+  hint: { fontSize: 13, fontFamily: MONO, color: "#6e6e66", marginBottom: 22, lineHeight: 1.5 },
   btn: {
-    border: "1px solid #3a3830",
-    background: "#ffb02e",
-    color: "#0b0b0b",
+    border: 0,
+    boxShadow: "inset 0 0 0 1px #0B0B0B, 1.6px 1.6px 0 #E63312",
+    background: "#CCFF00",
+    color: "#0B0B0B",
+    fontFamily: BRAND,
     fontWeight: 700,
-    letterSpacing: "0.06em",
+    letterSpacing: "0.08em",
     textTransform: "uppercase",
-    fontSize: 13,
-    padding: "12px 22px",
+    fontSize: 12,
+    padding: "13px 24px",
     cursor: "pointer",
   },
 };

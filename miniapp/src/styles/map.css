@@ -282,7 +282,9 @@ html[data-theme="dark"] .vpin--active::before {
   height: 46px;
 }
 
-/* The "you" dot — solid acid with a crisp light ring so it reads on any map. */
+/* The "you" dot — INK (acid is reserved for the selected exhibit only). An ink core in
+   a white halo ringed by ink reads as a surveyor's mark and stays findable by form, not
+   colour. Flat — no soft shadow. */
 .vyou__dot {
   position: absolute;
   left: 50%;
@@ -290,9 +292,9 @@ html[data-theme="dark"] .vpin--active::before {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--acid);
+  background: var(--ink);
   border: 2.5px solid var(--plinth);
-  box-shadow: 0 0 0 1px var(--ink), 0 1px 5px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 1px var(--ink);
   transform: translate(-50%, -50%);
 }
 
@@ -304,7 +306,7 @@ html[data-theme="dark"] .vpin--active::before {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--acid);
+  background: var(--ink);
   transform: translate(-50%, -50%);
   animation: youPulse 2.4s var(--ease-cut) infinite;
 }
@@ -344,7 +346,7 @@ html[data-theme="dark"] .vpin--active::before {
 }
 
 .vyou__nav-face {
-  fill: var(--acid);
+  fill: var(--ink);
   stroke: var(--plinth);
   stroke-width: 2.6;
   stroke-linejoin: round;

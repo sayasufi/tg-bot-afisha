@@ -195,12 +195,13 @@ body {
   opacity: 0.7;
 }
 
-/* Editorial serif accent — refined display for special moments, with an
-   optional italic emphasis word. The signature of elite editorial design. */
+/* Editorial accent for special moments — Unbounded (our display), lowercase. We do
+   NOT ship a 4th font family; VITRINE is Unbounded / Grotesk / Mono only. */
 .serif {
-  font-family: var(--serif);
+  font-family: var(--display);
   font-weight: 400;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
 }
 
 .serif em,

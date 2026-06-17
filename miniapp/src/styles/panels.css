@@ -600,7 +600,8 @@ mark.hl {
   height: 8px;
   border-radius: 50%;
   background: var(--cinnabar);
-  animation: livePulse 1.9s var(--ease-cut) infinite;
+  /* Static — the pulse is reserved for the ONE focused live pin on the map. A list of
+     pulsing red dots reads as noise; a still cinnabar mark still says "идёт сейчас". */
 }
 
 .erow--live {
@@ -961,7 +962,7 @@ html[data-theme="dark"] .rcard__ph {
   height: 7px;
   border-radius: 50%;
   background: var(--cinnabar);
-  animation: livePulse 1.9s var(--ease-cut) infinite;
+  /* Static (see .erow__spark) — pulse only on the focused map pin. */
 }
 
 /* Concrete rgba (not color-mix) so the pulse renders on older Telegram WebViews. */
@@ -1006,14 +1007,12 @@ html[data-theme="dark"] .rcard__ph {
 }
 
 .rcard__title {
-  /* Editorial display type (lowercase), like the hero rail + the sheet title —
-     not a plain sans. */
-  font-family: var(--display);
-  font-size: 12px;
+  /* Grotesk, natural case — a card title repeated ×12/rail is NOT a hero; oversized
+     lowercase Unbounded is reserved for the one hero card (below) + the sheet title. */
+  font-family: var(--grotesk);
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  text-transform: lowercase;
+  line-height: 1.25;
   color: var(--ink);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1022,8 +1021,11 @@ html[data-theme="dark"] .rcard__ph {
 }
 
 .rail--hero .rcard__title {
+  font-family: var(--display);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
+  letter-spacing: -0.03em;
+  text-transform: lowercase;
 }
 
 .rcard__meta {
