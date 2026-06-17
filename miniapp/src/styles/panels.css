@@ -946,10 +946,9 @@ html[data-theme="dark"] .rcard__ph {
   height: 46px;
   display: grid;
   place-items: center;
-  /* Inverted (ink) to match the zoom/locate controls — a tool, not a marker. */
-  border: 1px solid var(--ink);
-  background: var(--ink);
-  color: var(--plinth);
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
   cursor: pointer;
   animation: dropIn 0.3s var(--ease-cut) both;
 }
