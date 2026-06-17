@@ -2,10 +2,10 @@ import type { EventItem } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
 import { IconClose, IconHeart } from "../../lib/icons";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
-import { EventCard } from "./EventCard";
+import { EventListRow } from "./EventListRow";
 import { PullHint } from "./PullHint";
 
-// Favourites you've hearted — shown as a card grid, soonest first.
+// Favourites you've hearted — same full-bleed poster format as the list view, soonest first.
 export function FavoritesPanel({
   items,
   favIds,
@@ -29,7 +29,7 @@ export function FavoritesPanel({
     .sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""));
 
   return (
-    <div className="panelview">
+    <div className="panelview listview">
       <header className="panelview__head">
         <h2>Избранное</h2>
         <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
@@ -39,11 +39,9 @@ export function FavoritesPanel({
       <div className="panelview__scroll" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {favs.length > 0 ? (
-          <div className="card-grid">
-            {favs.map((it) => (
-              <EventCard key={it.event_id} item={it} userPos={userPos} onSelect={onSelect} />
-            ))}
-          </div>
+          favs.map((it, i) => (
+            <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} onSelect={onSelect} />
+          ))
         ) : (
           <div className="favempty">
             <IconHeart size={40} className="favempty__glyph" />
