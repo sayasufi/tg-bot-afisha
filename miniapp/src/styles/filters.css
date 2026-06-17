@@ -79,9 +79,17 @@
   justify-content: space-between;
 }
 
+/* Equal-size "когда" buttons: a 3-up grid so Сейчас/Сегодня/Завтра/Выходные/Неделя
+   are all the same width, not content-sized. */
 .csheet__presets {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
   overflow: visible;
+}
+.csheet__presets .chip {
+  justify-content: center;
+  padding: 0 8px; /* fixed width, so trim h-padding to fit "ВЫХОДНЫЕ" */
 }
 
 .csheet__dates {

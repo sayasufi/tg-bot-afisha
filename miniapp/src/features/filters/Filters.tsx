@@ -188,7 +188,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
                 onClick={() => tapDay(d.iso)}
               >
                 <span className="daycell__mon">{d.monLabel}</span>
-                <span className="daycell__dow">{d.today ? "сег" : d.tomorrow ? "зав" : d.dow}</span>
+                <span className="daycell__dow">{d.dow}</span>
                 <span className="daycell__num">{d.day}</span>
               </button>
             ))}
