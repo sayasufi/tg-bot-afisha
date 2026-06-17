@@ -1,6 +1,7 @@
 import hashlib
 import json
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -10,7 +11,7 @@ from geoalchemy2 import Geography, Geometry
 from sqlalchemy import Select, and_, bindparam, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.codes import event_code
+from core.codes import event_code, parse_event_code
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, Venue
 
@@ -100,6 +101,28 @@ _PLACEHOLDER_VENUE = "Unknown venue"
 # All current cities are UTC+3 (Europe/Moscow, no DST since 2014). Used to compute the
 # venue "open now" signal in the venues' own wall-clock time.
 _MSK = timezone(timedelta(hours=3))
+
+# Search-as-you-type helpers --------------------------------------------------
+# A query that looks like a public event code ("MSK-04PN", "msk04pn", "04PN"): 2-4
+# letters + optional sep + 2-8 base32 chars. We try an exact code lookup for these.
+_CODE_RE = re.compile(r"^[A-Za-z]{2,4}[-·\s]?[0-9A-Za-z]{2,8}$")
+
+
+def _looks_like_code(q: str) -> bool:
+    return bool(_CODE_RE.match(q.strip()))
+
+
+def _region_sql(city) -> str:
+    """Raw-SQL region predicate (venues.geom within a city's radius) for the search CTE —
+    same city-agnostic guard as _region_clause, as a string we can embed in text()."""
+    from core.cities import active_cities
+
+    cities = [city] if city is not None else active_cities()
+    parts = [
+        f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
+        for c in cities
+    ]
+    return "(" + " OR ".join(parts) + ")" if parts else "true"
 
 
 def _hm_to_min(s) -> int:
@@ -542,34 +565,105 @@ class EventQueryService:
         rows = (await self.db.execute(select(Event.category).distinct().order_by(Event.category.asc()))).scalars().all()
         return {"categories": rows}
 
-    async def search(self, q: str, city: str | None, limit: int):
-        score = func.similarity(Event.canonical_title, bindparam("q", q))
-        match = or_(Event.canonical_title.ilike(f"%{q}%"), Event.canonical_description.ilike(f"%{q}%"))
-        # Tie-break on event_id so equal-score rows (and the many description-only
-        # matches that score ~0) come back in a stable, deterministic order rather
-        # than at the DB's whim — without it, the same query can re-shuffle.
-        order = (score.desc(), Event.event_id.asc())
+    # Lean projection shared by the code fast-path and the text CTE — exactly the fields
+    # a search row needs to render AND to open the sheet with no extra round-trip.
+    _SEARCH_COLS = (
+        "e.event_id, e.display_no, e.canonical_title AS title, e.category, "
+        "e.cached_image_url, e.primary_image_url, o.date_start, o.date_end, "
+        "venues.name AS venue_name, venues.city AS venue_city, "
+        "ST_Y(venues.geom::geometry) AS lat, ST_X(venues.geom::geometry) AS lon"
+    )
 
-        if city:
-            stmt = (
-                select(Event.event_id, Event.canonical_title, score.label("score"))
-                .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
-                .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
-                .where(Event.status == "active")
-                .where(Venue.city.ilike(city))
-                .where(match)
-                .distinct()
-                .order_by(*order)
-                .limit(limit)
-            )
-        else:
-            stmt = (
-                select(Event.event_id, Event.canonical_title, score.label("score"))
-                .where(Event.status == "active")
-                .where(match)
-                .order_by(*order)
-                .limit(limit)
-            )
+    def _search_item(self, r, score: float) -> dict:
+        return {
+            "type": "event",
+            "event_id": r["event_id"],
+            "code": event_code(r["display_no"], r["venue_city"]),
+            "title": r["title"],
+            "category": r["category"],
+            "date_start": r["date_start"],
+            "date_end": r["date_end"],
+            "price_min": None,
+            "venue": r["venue_name"],
+            "open_now": None,
+            "lat": float(r["lat"]) if r["lat"] is not None else None,
+            "lon": float(r["lon"]) if r["lon"] is not None else None,
+            "primary_image_url": r["cached_image_url"] or r["primary_image_url"],
+            "score": float(score),
+        }
 
-        rows = (await self.db.execute(stmt)).all()
-        return {"items": [{"event_id": row[0], "title": row[1], "score": float(row[2] or 0)} for row in rows]}
+    async def search(self, q: str, city, limit: int) -> dict:
+        """Typeahead search across event CODE, title and venue name, ranked. Fast at this
+        scale (GIN trigram + a display_no probe); NEVER touches canonical_description
+        (the old 130ms seq-scan). `city` is a CityConfig|None (resolved in the route)."""
+        q = (q or "").strip()
+        if not q:
+            return {"items": []}
+        qn = q.replace("ё", "е").replace("Ё", "Е")  # cheap ё/е folding (app-side)
+        # Escape LIKE metacharacters in the value so a stray % / _ isn't a wildcard.
+        qlike = qn.translate(str.maketrans({"%": r"\%", "_": r"\_", "\\": "\\\\"}))
+        items: list[dict] = []
+        seen: set = set()
+
+        # Tier 0 — exact event code ("MSK-04PN"): a unique display_no probe, pinned top.
+        if _looks_like_code(q):
+            try:
+                _city_code, no = parse_event_code(q)
+            except Exception:
+                no = None
+            if no is not None:
+                row = (await self.db.execute(
+                    text(
+                        f"SELECT {self._SEARCH_COLS} FROM events.events e "
+                        "JOIN events.event_occurrences o ON o.event_id = e.event_id "
+                        "JOIN events.venues ON venues.venue_id = o.venue_id "
+                        "WHERE e.status = 'active' AND e.display_no = :no "
+                        "ORDER BY (o.date_start < now()) ASC, o.date_start ASC LIMIT 1"
+                    ),
+                    {"no": no},
+                )).mappings().first()
+                if row:
+                    items.append(self._search_item(row, 1000.0))
+                    seen.add(row["event_id"])
+
+        if len(qn) >= 2:
+            # Lower the word_similarity threshold for recall on short prefixes (default
+            # 0.6 is too strict for typeahead). SET LOCAL is transaction-scoped → safe
+            # behind the Odyssey transaction pooler.
+            await self.db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
+            region = _region_sql(city)
+            sql = text(
+                "WITH ev AS ("
+                f" SELECT DISTINCT ON (e.event_id) {self._SEARCH_COLS}, e.popularity_score, "
+                "  GREATEST("
+                "    CASE WHEN e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' THEN 200 "
+                "         WHEN e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' THEN 100 ELSE 0 END, "
+                "    CASE WHEN char_length(:q) >= 3 THEN (word_similarity(:q, e.canonical_title) * 100)::int ELSE 0 END, "
+                "    CASE WHEN venues.name ILIKE :qlike || '%' ESCAPE '\\' THEN 80 "
+                "         WHEN char_length(:q) >= 3 AND venues.name %> :q THEN 50 ELSE 0 END"
+                "  ) AS score "
+                " FROM events.events e "
+                " JOIN events.event_occurrences o ON o.event_id = e.event_id "
+                " JOIN events.venues ON venues.venue_id = o.venue_id "
+                " WHERE e.status = 'active' AND venues.name IS DISTINCT FROM :placeholder "
+                "  AND coalesce(o.date_end, o.date_start) >= date_trunc('day', now()) "
+                f"  AND {region} "
+                "  AND ( e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' "
+                "        OR e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' "
+                "        OR (char_length(:q) >= 3 AND e.canonical_title %> :q) "
+                "        OR venues.name ILIKE :qlike || '%' ESCAPE '\\' "
+                "        OR (char_length(:q) >= 3 AND venues.name %> :q) ) "
+                " ORDER BY e.event_id, (o.date_start < now()) ASC, o.date_start ASC"
+                ") SELECT * FROM ev WHERE score > 0 "
+                "ORDER BY score DESC, popularity_score DESC NULLS LAST, date_start ASC LIMIT :lim"
+            )
+            rows = (await self.db.execute(
+                sql, {"q": qn, "qlike": qlike, "lim": limit, "placeholder": _PLACEHOLDER_VENUE}
+            )).mappings().all()
+            for r in rows:
+                if r["event_id"] in seen:
+                    continue
+                items.append(self._search_item(r, float(r["score"])))
+                seen.add(r["event_id"])
+
+        return {"items": items[:limit]}

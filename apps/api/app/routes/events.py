@@ -11,8 +11,6 @@ from apps.api.app.schemas.events import (
     CategoryResponse,
     EventDetailResponse,
     NearbyResponse,
-    SearchRequest,
-    SearchResponse,
 )
 from apps.api.app.services.events_service import (
     EventQueryService,
@@ -137,7 +135,16 @@ async def get_categories(db: AsyncSession = Depends(get_async_db)):
     return await service.categories()
 
 
-@router.post("/search", response_model=SearchResponse)
-async def search(payload: SearchRequest, db: AsyncSession = Depends(get_async_db)):
+@router.get("/search")
+async def search(
+    q: str = Query(min_length=1, max_length=200),
+    city: str | None = Query(default=None, max_length=120, description="city slug or name to scope to"),
+    limit: int = Query(default=8, ge=1, le=20),
+    db: AsyncSession = Depends(get_async_db),
+):
+    # GET so the typeahead can use AbortController + browser/edge caching. Returns ranked
+    # event rows (matched by code / title / venue) ready to render and open with no extra
+    # fetch. No response_model — the rows are built as plain dicts (datetime/UUID handled
+    # by FastAPI's encoder).
     service = EventQueryService(db)
-    return await service.search(payload.q, payload.city, payload.limit)
+    return await service.search(q, city_by_name(city), limit)
