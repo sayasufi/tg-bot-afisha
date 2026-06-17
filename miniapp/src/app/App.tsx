@@ -19,6 +19,7 @@ import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { useFavorites } from "../lib/favorites";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
+import { useCities } from "../lib/useCities";
 import { useGeolocation } from "../lib/useGeolocation";
 
 const CITY = "Москва";
@@ -64,6 +65,10 @@ export function App() {
     }
   });
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
+  // The current city (nearest by geolocation, or an explicit pick). Drives the map `city`
+  // scope param and the map centre — no hardcoded city on the client. The full list +
+  // `select` are exposed by useCities for a switcher once more than one city is active.
+  const { current: currentCity } = useCities(userPos);
 
   // A coarse clock that ticks once a minute — drives the "можно пойти сейчас"
   // set (countdowns, which events are still catchable) without re-rendering the
@@ -91,8 +96,11 @@ export function App() {
     if (filters.dateFrom) params.set("date_from", new Date(`${filters.dateFrom}T00:00:00+03:00`).toISOString());
     if (filters.dateTo) params.set("date_to", new Date(`${filters.dateTo}T23:59:59+03:00`).toISOString());
     if (filters.priceMax) params.set("price_max", filters.priceMax);
+    // Scope the map to the current city (multi-city). Absent until /v1/cities resolves;
+    // the server treats "no city" as all-active, so the first frame is still correct.
+    if (currentCity) params.set("city", currentCity.slug);
     return params;
-  }, [filters]);
+  }, [filters, currentCity?.slug]);
 
   // Distance filter ("Рядом") is applied client-side over the fetched set, so
   // the radius slider responds instantly without a round-trip.
@@ -478,6 +486,7 @@ export function App() {
           heading={heading}
           locateNonce={locateNonce}
           theme={theme}
+          center={currentCity ? [currentCity.lat, currentCity.lon] : null}
           metro={nearMetro}
           onSelect={openEvent}
           onCluster={onCluster}
@@ -532,7 +541,7 @@ export function App() {
         <FavoritesPanel items={items} favIds={fav.ids} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "profile" && (
-        <ProfilePanel user={tgUser} total={total} city={CITY} items={items} favIds={fav.ids} onClose={() => setView("map")} />
+        <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} items={items} favIds={fav.ids} onClose={() => setView("map")} />
       )}
 
       <Sidebar

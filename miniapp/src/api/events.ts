@@ -1,5 +1,11 @@
 import { getJson, toNum } from "./http";
-import type { EventDetail, EventItem, MapResponse } from "./types";
+import type { City, EventDetail, EventItem, MapResponse } from "./types";
+
+// Active cities the app serves — for the city picker / auto-detect and per-city centring.
+export async function fetchCities(signal?: AbortSignal): Promise<City[]> {
+  const data = await getJson<{ cities: City[] }>(`/v1/cities`, signal);
+  return data.cities ?? [];
+}
 
 // The API returns one row per occurrence, so an event with several dates repeats.
 // For map pins we want one marker per event.

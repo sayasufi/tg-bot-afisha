@@ -35,9 +35,12 @@ type Props = {
   onClearFocus: () => void;
   onLocate: () => void;
   locating: boolean;
+  center?: [number, number] | null;
   onReady?: () => void;
 };
 
+// Last-resort initial centre only (before /v1/cities resolves); the real centre comes
+// from the active city via the `center` prop.
 const MOSCOW: [number, number] = [55.751244, 37.618423];
 
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
@@ -212,6 +215,7 @@ export function EventsMap({
   locateNonce,
   theme,
   metro,
+  center,
   onSelect,
   onCluster,
   onZoom,
@@ -384,7 +388,7 @@ export function EventsMap({
 
   return (
     <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}${focusOut ? " map-wrap--focus-out" : ""}`}>
-      <MapContainer center={MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
+      <MapContainer center={center ?? MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />

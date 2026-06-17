@@ -46,6 +46,10 @@ export type EventOccurrence = {
 // index 0=Sunday (JS getDay). `text` is the human label.
 export type VenueHours = { text?: string; week?: (string[][] | null)[] };
 
+// An active city the app serves (from GET /v1/cities → core.cities registry). Drives
+// the city picker / auto-detect, per-city map centring, and the map `city` scope param.
+export type City = { slug: string; name: string; lat: number; lon: number; radius_km: number };
+
 export type EventDetail = {
   event_id: string;
   code?: string | null; // public "MSK-04PN" accession code
