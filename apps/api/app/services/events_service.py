@@ -8,7 +8,7 @@ from uuid import UUID
 
 import redis.asyncio as aioredis
 from geoalchemy2 import Geography, Geometry
-from sqlalchemy import Select, and_, bindparam, cast, func, nullslast, or_, select, text
+from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.codes import event_code, parse_event_code
@@ -537,7 +537,10 @@ class EventQueryService:
         if sort == "distance" and has_pt:
             rows_q = rows_q.order_by(nullslast(inner.c.dist_m.asc()))
         elif sort == "popularity":
-            rows_q = rows_q.order_by(nullslast(inner.c.popularity_score.desc()), inner.c.date_start.asc())
+            # popularity_score is unpopulated; the real signal is the rec:views counter
+            # we collect ourselves. Rank the viewed events by their count, rest by date.
+            rank = await self._views_rank(inner.c.event_id)
+            rows_q = rows_q.order_by(rank.desc(), inner.c.date_start.asc()) if rank is not None else rows_q.order_by(inner.c.date_start.asc())
         elif sort == "price":
             rows_q = rows_q.order_by(nullslast(inner.c.price_min.asc()), inner.c.date_start.asc())
         else:  # "date" (default) — soonest first
@@ -562,6 +565,26 @@ class EventQueryService:
             for r in rows
         ]
         return {"items": items, "total": int(total)}
+
+    async def _views_rank(self, id_col):
+        """A CASE expr ranking events by their rec:views count (unviewed → 0), or None
+        when there's no view data — backs the 'по популярности' sort."""
+        client = _redis_client()
+        if client is None:
+            return None
+        try:
+            raw = await client.hgetall("rec:views")
+        except Exception:  # pragma: no cover
+            return None
+        whens = []
+        for k, v in raw.items():
+            key = k.decode() if isinstance(k, bytes) else k
+            val = v.decode() if isinstance(v, bytes) else v
+            try:
+                whens.append((id_col == UUID(str(key)), int(val)))
+            except (ValueError, AttributeError):
+                continue
+        return case(*whens, else_=0) if whens else None
 
     async def event_detail(self, event_id: UUID):
         event = await self.db.get(Event, event_id)
