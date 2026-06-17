@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { fetchEventsList, type EventItem, type ListSort } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
@@ -46,6 +46,8 @@ export function ListView({
   const [loading, setLoading] = useState(false);
   const [more, setMore] = useState(false);
   const [error, setError] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const bboxKey = bbox ? bbox.join(",") : "";
   const paramsKey = baseParams.toString();
@@ -100,6 +102,23 @@ export function ListView({
       .catch(() => setMore(false));
   };
 
+  // Infinite scroll: auto-load the next page when a sentinel near the list's end comes
+  // into view (no "показать ещё" tap). Re-binds with a fresh loadMore as items grow.
+  const canMore = items.length > 0 && items.length < total;
+  useEffect(() => {
+    if (!canMore) return;
+    const root = scrollRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel) return;
+    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), {
+      root,
+      rootMargin: "500px",
+    });
+    io.observe(sentinel);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canMore, items.length, sort, bboxKey]);
+
   if (!open) return null;
 
   return (
@@ -131,18 +150,15 @@ export function ListView({
         </div>
       </div>
 
-      <div className="panelview__scroll">
+      <div className="panelview__scroll" ref={scrollRef}>
         {items.map((it, i) => (
           <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} onSelect={onSelect} />
         ))}
         {!loading && error && <div className="listview__empty">Не удалось загрузить. Попробуй ещё раз.</div>}
         {!loading && !error && items.length === 0 && <div className="listview__empty">В этой области по фильтрам пусто. Подвинь карту или сними фильтры.</div>}
         {loading && <div className="listview__empty">Загружаем…</div>}
-        {!loading && items.length > 0 && items.length < total && (
-          <button type="button" className="listview__more" onClick={loadMore} disabled={more}>
-            {more ? "Загружаем…" : `Показать ещё (${total - items.length})`}
-          </button>
-        )}
+        {canMore && <div ref={sentinelRef} className="listview__sentinel" aria-hidden="true" />}
+        {more && <div className="listview__empty">Загружаем ещё…</div>}
       </div>
     </div>
   );

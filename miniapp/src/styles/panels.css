@@ -987,13 +987,13 @@ html[data-theme="dark"] .rcard__ph {
 }
 .listview__sort {
   flex: 0 0 auto;
-  height: 32px;
-  padding: 0 12px;
+  height: 38px;
+  padding: 0 14px;
   border: 1px solid var(--line);
   background: var(--plinth);
   color: var(--ink-dim);
   font-family: var(--grotesk);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1003,22 +1003,9 @@ html[data-theme="dark"] .rcard__ph {
   background: var(--acid);
   color: var(--on-acid);
 }
-.listview__more {
-  width: 100%;
-  height: 46px;
-  margin: 10px 0 4px;
-  border: 1px solid var(--line);
-  background: var(--plinth);
-  color: var(--ink);
-  font-family: var(--grotesk);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.listview__more:disabled {
-  color: var(--ink-faint);
+/* Infinite-scroll trigger — an invisible sentinel the IntersectionObserver watches. */
+.listview__sentinel {
+  height: 1px;
 }
 .listview__empty {
   padding: 40px 20px;
@@ -1147,8 +1134,9 @@ html[data-theme="dark"] .rcard__ph {
   color: var(--ink);
   white-space: nowrap;
 }
+/* "Бесплатно" is ink-bold, NOT an acid chip — a list sorted by price was a wall of
+   green, and acid is reserved for the one selected/active thing. */
 .lrow__price--free {
-  background: var(--acid);
-  color: var(--on-acid);
-  padding: 2px 6px;
+  color: var(--ink);
+  font-weight: 700;
 }
