@@ -115,6 +115,41 @@ def _looks_like_code(q: str) -> bool:
     return bool(_CODE_RE.match(s)) and ("-" in s or any(c.isdigit() for c in s))
 
 
+# Phonetic transliteration so a query typed in ONE script also finds titles in the OTHER
+# ("bolshoi" → "Большой", "стендап" → "standup"). Approximate by design — it only feeds
+# ILIKE/trigram, which tolerate the imperfections. Digraphs MUST come before single chars.
+_LAT2CYR = [
+    ("shch", "щ"), ("sch", "щ"), ("yo", "ё"), ("yu", "ю"), ("ya", "я"), ("ye", "е"),
+    ("zh", "ж"), ("kh", "х"), ("ts", "ц"), ("ch", "ч"), ("sh", "ш"), ("eh", "э"),
+    ("a", "а"), ("b", "б"), ("v", "в"), ("g", "г"), ("d", "д"), ("e", "е"), ("z", "з"),
+    ("i", "и"), ("j", "ж"), ("k", "к"), ("l", "л"), ("m", "м"), ("n", "н"), ("o", "о"),
+    ("p", "п"), ("q", "к"), ("r", "р"), ("s", "с"), ("t", "т"), ("u", "у"), ("f", "ф"),
+    ("h", "х"), ("c", "ц"), ("w", "в"), ("x", "кс"), ("y", "ы"),
+]
+_CYR2LAT = [
+    ("щ", "shch"), ("ш", "sh"), ("ч", "ch"), ("ж", "zh"), ("х", "kh"), ("ц", "ts"),
+    ("ю", "yu"), ("я", "ya"), ("ё", "yo"), ("э", "e"), ("а", "a"), ("б", "b"), ("в", "v"),
+    ("г", "g"), ("д", "d"), ("е", "e"), ("з", "z"), ("и", "i"), ("й", "y"), ("к", "k"),
+    ("л", "l"), ("м", "m"), ("н", "n"), ("о", "o"), ("п", "p"), ("р", "r"), ("с", "s"),
+    ("т", "t"), ("у", "u"), ("ф", "f"), ("ы", "y"), ("ъ", ""), ("ь", ""),
+]
+_CYR_SET = frozenset("абвгдежзийклмнопрстуфхцчшщъыьэюяё")
+
+
+def _translit_variant(qn: str) -> str | None:
+    """The opposite-script form of the query, or None when it's mixed / scriptless."""
+    low = qn.lower()
+    has_lat = any("a" <= c <= "z" for c in low)
+    has_cyr = any(c in _CYR_SET for c in low)
+    table = _LAT2CYR if (has_lat and not has_cyr) else _CYR2LAT if (has_cyr and not has_lat) else None
+    if table is None:
+        return None
+    out = low
+    for a, b in table:
+        out = out.replace(a, b)
+    return out or None
+
+
 def _region_sql(city) -> str:
     """Raw-SQL region predicate (venues.geom within a city's radius) for the search CTE —
     same city-agnostic guard as _region_clause, as a string we can embed in text()."""
@@ -628,35 +663,57 @@ class EventQueryService:
         if len(qn) < 2:
             return {"items": []}
 
+        # Also search the OPPOSITE-script transliteration (latin↔cyrillic) so "bolshoi"
+        # finds "Большой" and "стендап" finds "STANDUP". Gated by :has_qt when there's a
+        # distinct variant. Both variants drive the same GIN indexes.
+        qt = _translit_variant(qn)
+        has_qt = bool(qt) and qt != qn
+        if not has_qt:
+            qt = qn  # bound but switched off by :has_qt
+
         # Lower word_similarity threshold for short-prefix recall (default 0.6 is too
         # strict). SET LOCAL is transaction-scoped → safe behind the Odyssey pooler.
         await self.db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
         # Escape LIKE metacharacters in the value so a stray % / _ isn't a wildcard.
-        qlike = qn.translate(str.maketrans({"%": r"\%", "_": r"\_", "\\": "\\\\"}))
+        esc = str.maketrans({"%": r"\%", "_": r"\_", "\\": "\\\\"})
+        qlike, qtlike = qn.translate(esc), qt.translate(esc)
         region = _region_sql(city)
         # GIN-DRIVEN candidate gathering FIRST (title trgm + venue-name trgm), THEN join
         # for the soonest in-region occurrence. Driving from the text indexes keeps the
         # candidate set tiny (~dozens) — vs the naive single join that seq-scanned every
-        # venue/occurrence and applied the text match as a late filter (~200ms).
+        # venue/occurrence and applied the text match as a late filter (~200ms). Each
+        # field is matched against BOTH the query (:q) and its transliteration (:qt).
         sql = text(
             "WITH cand AS ("
             "  SELECT e.event_id, GREATEST("
             "      CASE WHEN e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' THEN 200 "
             "           WHEN e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' THEN 100 ELSE 0 END, "
-            "      CASE WHEN char_length(:q) >= 3 THEN (word_similarity(:q, e.canonical_title) * 100)::int ELSE 0 END"
+            "      CASE WHEN char_length(:q) >= 3 THEN (word_similarity(:q, e.canonical_title) * 100)::int ELSE 0 END, "
+            "      CASE WHEN :has_qt AND e.canonical_title ILIKE :qtlike || '%' ESCAPE '\\' THEN 190 "
+            "           WHEN :has_qt AND e.canonical_title ILIKE '%' || :qtlike || '%' ESCAPE '\\' THEN 95 ELSE 0 END, "
+            "      CASE WHEN :has_qt AND char_length(:qt) >= 3 THEN (word_similarity(:qt, e.canonical_title) * 100)::int ELSE 0 END"
             "    ) AS score "
             "  FROM events.events e "
             "  WHERE e.status = 'active' AND ("
             "      e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' "
             "      OR e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' "
-            "      OR (char_length(:q) >= 3 AND e.canonical_title %> :q) ) "
+            "      OR (char_length(:q) >= 3 AND e.canonical_title %> :q) "
+            "      OR (:has_qt AND (e.canonical_title ILIKE :qtlike || '%' ESCAPE '\\' "
+            "                       OR e.canonical_title ILIKE '%' || :qtlike || '%' ESCAPE '\\' "
+            "                       OR (char_length(:qt) >= 3 AND e.canonical_title %> :qt))) ) "
             "  UNION ALL "
-            "  SELECT o.event_id, (CASE WHEN venues.name ILIKE :qlike || '%' ESCAPE '\\' THEN 80 "
-            "           WHEN char_length(:q) >= 3 AND venues.name %> :q THEN 50 ELSE 0 END) AS score "
+            "  SELECT o.event_id, GREATEST("
+            "      CASE WHEN venues.name ILIKE :qlike || '%' ESCAPE '\\' THEN 80 "
+            "           WHEN char_length(:q) >= 3 AND venues.name %> :q THEN 50 ELSE 0 END, "
+            "      CASE WHEN :has_qt AND venues.name ILIKE :qtlike || '%' ESCAPE '\\' THEN 78 "
+            "           WHEN :has_qt AND char_length(:qt) >= 3 AND venues.name %> :qt THEN 48 ELSE 0 END"
+            "    ) AS score "
             "  FROM events.venues "
             "  JOIN events.event_occurrences o ON o.venue_id = venues.venue_id "
             "  WHERE venues.name ILIKE :qlike || '%' ESCAPE '\\' "
             "        OR (char_length(:q) >= 3 AND venues.name %> :q) "
+            "        OR (:has_qt AND (venues.name ILIKE :qtlike || '%' ESCAPE '\\' "
+            "                         OR (char_length(:qt) >= 3 AND venues.name %> :qt))) "
             "), best AS (SELECT event_id, max(score) AS score FROM cand GROUP BY event_id HAVING max(score) > 0), "
             "rows AS ("
             f"  SELECT DISTINCT ON (e.event_id) {self._SEARCH_COLS}, e.popularity_score, b.score "
@@ -672,6 +729,8 @@ class EventQueryService:
             "ORDER BY score DESC, popularity_score DESC NULLS LAST, date_start ASC LIMIT :lim"
         )
         rows = (await self.db.execute(
-            sql, {"q": qn, "qlike": qlike, "lim": limit, "placeholder": _PLACEHOLDER_VENUE}
+            sql,
+            {"q": qn, "qlike": qlike, "qt": qt, "qtlike": qtlike, "has_qt": has_qt,
+             "lim": limit, "placeholder": _PLACEHOLDER_VENUE},
         )).mappings().all()
         return {"items": [self._search_item(r, float(r["score"])) for r in rows]}
