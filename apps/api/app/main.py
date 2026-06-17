@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 
 from apps.api.app.routes.events import router as events_router
 from apps.api.app.routes.health import router as health_router
@@ -24,8 +23,9 @@ if settings.sentry_dsn and sentry_sdk is not None:
     sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.app_env)
 
 app = FastAPI(title="Afisha API", version="0.1.0")
-# Compress JSON responses (map/places payloads are tens of KB → a few KB).
-app.add_middleware(GZipMiddleware, minimum_size=256)
+# NOTE: JSON responses are gzipped at the nginx edge (gzip_proxied any in the
+# okrestmap site), NOT in-process — compressing the multi-MB map payload on the single
+# event loop blocked the worker ~200ms/response. Keep compression off the Python path.
 
 
 def _cors_origins() -> list[str]:

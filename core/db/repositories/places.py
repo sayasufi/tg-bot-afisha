@@ -40,8 +40,11 @@ def upsert_map_place(
 def list_map_places(db: Session, kind: str, city_id: int | None = None) -> list[dict]:
     rows = db.execute(
         text(
+            # CAST the nullable param: with a bare NULL :city_id psycopg can't infer the
+            # parameter type and raises AmbiguousParameter (a no-city /places → 500).
             "SELECT name, color, meta_json, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon "
-            "FROM ref.map_places WHERE kind = :kind AND (:city_id IS NULL OR city_id = :city_id)"
+            "FROM ref.map_places WHERE kind = :kind "
+            "AND (CAST(:city_id AS integer) IS NULL OR city_id = CAST(:city_id AS integer))"
         ),
         {"kind": kind, "city_id": city_id},
     ).mappings().all()
