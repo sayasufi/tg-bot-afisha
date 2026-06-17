@@ -352,9 +352,10 @@ class EventQueryService:
             )
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(EventOccurrence.event_id == event_id)
-            # Only upcoming sessions (3h grace, matching the lifecycle "live" rule) —
-            # the map pin already filters, so the sheet must not surface a past date.
-            .where(func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= text("now() - interval '3 hours'"))
+            # Same floor as the map (start of today, UTC) — NOT a tighter now()-3h. A
+            # tighter floor could return ZERO occurrences for an event the map still pins
+            # (single past-today session, end>floor), leaving a dateless/broken sheet.
+            .where(func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= func.date_trunc("day", func.now()))
             # Future-first (then by time), matching the map pin: the headline session
             # is the soonest you can still go to, not an earlier one already past.
             .order_by((EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
@@ -413,13 +414,17 @@ class EventQueryService:
             .where(Event.status == "active")
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, None, None, q)
+        # One row per EVENT (its nearest occurrence) — a recurring event must not eat
+        # several `limit` slots. DISTINCT ON forces event_id order; sort by distance and
+        # cut the limit in Python (same shape as _detail).
         stmt = (
             stmt.where(Venue.geom.is_not(None))
             .where(func.ST_DWithin(Venue.geom, point, radius_m))
-            .order_by(dist_col.asc())
-            .limit(limit)
+            .distinct(Event.event_id)
+            .order_by(Event.event_id, dist_col.asc())
         )
         rows = (await self.db.execute(stmt)).all()
+        rows = sorted(rows, key=lambda r: r.distance_m if r.distance_m is not None else 0.0)[:limit]
         result = [
             {
                 "event_id": event.event_id,

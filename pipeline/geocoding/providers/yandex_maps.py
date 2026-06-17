@@ -198,24 +198,34 @@ class YandexMapsScraper:
 
     async def fetch_hours(self, query: str, city_hint: str | None = None) -> dict | None:
         """Keyless working hours for a venue name → {hours:{text,week}, coords}.
-        Source-agnostic: any venue (any event source) resolves the same way."""
+        Source-agnostic: any venue (any event source) resolves the same way.
+
+        Tri-state so callers can tell a BLOCK from a genuine miss:
+          • {"hours": …, "coords": …} — found.
+          • None — reached Yandex, the business simply lists no hours.
+          • {"blocked": True} — every endpoint captcha'd / errored, i.e. we never got
+            a clean answer. The caller MUST NOT cache this as "no hours" (see H3)."""
         text = (query or "").strip()
         if not text:
             return None
         params = {"text": f"{text} {city_hint}".strip() if city_hint else text}
         headers = {"User-Agent": self.USER_AGENT, "Accept-Language": "ru,en;q=0.9"}
+        reached = False  # got a real (non-captcha, <400) page from at least one endpoint
         try:
             async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
                 for url in self.SEARCH_URLS:
                     response = await client.get(url, params=params, headers=headers)
                     if response.status_code >= 400 or not response.text or self._is_captcha_page(response.text):
                         continue
+                    reached = True
                     hours = self.extract_working_hours(response.text)
                     if hours:
                         return {"hours": hours, "coords": self.extract_first_business_coords(response.text)}
         except httpx.HTTPError:
-            return None
-        return None
+            return {"blocked": True}  # network/timeout — transient, not "no hours"
+        if not reached:
+            return {"blocked": True}  # every endpoint captcha'd/errored — transient block
+        return None  # reached Yandex; the business genuinely lists no hours
 
     @staticmethod
     def _is_captcha_page(html: str) -> bool:

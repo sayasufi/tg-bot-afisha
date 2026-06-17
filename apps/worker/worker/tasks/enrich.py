@@ -275,7 +275,9 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city_hint, ci
     """Best real weekly hours for a venue + an optional coords fix. Tries the venue
     name (+address), then — if that only yields a 24/7 territory / wrong business —
     RETRIES with the event title prepended, which pulls the specific hall/museum.
-    Returns (hours_dict_or_{}, relocate_to_or_None)."""
+    Returns (hours_dict_or_{}, relocate_to_or_None, blocked). ``blocked`` is True only
+    when EVERY try was captcha'd/errored (we never got a clean answer) — the caller
+    must then NOT cache {} as 'no hours', or a captcha wave freezes venues for 30d (H3)."""
     candidates: list[str] = []
     if address:
         candidates.append(f"{name}, {address}".strip().strip(",").strip())
@@ -283,6 +285,7 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city_hint, ci
     if ev_title and ev_title.strip():
         candidates.append(f"{ev_title.strip()} {name}".strip())
     seen: set[str] = set()
+    reached_any = False  # at least one try reached Yandex with a clean (non-blocked) answer
     for q in candidates:
         if not q or q in seen:
             continue
@@ -290,12 +293,18 @@ def _resolve_hours_for(scraper, name, address, lat, lon, ev_title, city_hint, ci
         try:
             res = asyncio.run(scraper.fetch_hours(q, city_hint))
         except Exception:
-            res = None
+            res = {"blocked": True}
+        if isinstance(res, dict) and res.get("blocked"):
+            time.sleep(0.8)
+            continue  # transient block — don't count as a clean "no hours" answer
+        reached_any = True
         hours, relocate = _match_hours(res, lat, lon, city_center, country, region_radius_m)
         if hours:
-            return hours, relocate
+            return hours, relocate, False
         time.sleep(0.8)  # polite between tries
-    return {}, None  # "checked, nothing usable" → stamped so we don't re-query
+    # Reached at least once → genuine "checked, nothing usable" ({} is cacheable).
+    # Never reached → blocked; signal so the caller leaves it unstamped for a retry.
+    return {}, None, (not reached_any)
 
 
 # Process never-resolved venues (hours_json IS NULL) AND re-check stale EMPTY ones
@@ -324,12 +333,12 @@ def _resolve_venue_hours_impl(limit: int = 15):
     scraper = YandexMapsScraper()
     try:
         rows = db.execute(text(_VENUE_HOURS_QUERY), {"lim": limit}).all()
-        stored = relocated = 0
+        stored = relocated = blocked = 0
         for vid, name, address, lat, lon, vcity, ev_title in rows:
             # Per-venue city (NOT a global "Москва") — works for any city: the search
             # hint, the centre the relocation guard anchors on, and the country.
             cc = city_by_name(vcity) or DEFAULT_CITY
-            hours, relocate = _resolve_hours_for(
+            hours, relocate, was_blocked = _resolve_hours_for(
                 scraper, name, address, lat, lon, ev_title, vcity or cc.name, cc.center, cc.country, cc.region_radius_km * 1000
             )
             if hours:
@@ -337,20 +346,30 @@ def _resolve_venue_hours_impl(limit: int = 15):
             if relocate:
                 # Fix an oblast venue the geocoder mis-pinned near Moscow, using the
                 # matched org's real coordinates (so it lands at its true place AND
-                # its hours stop being rejected by the distance guard next time).
+                # its hours stop being rejected by the distance guard next time). We
+                # intentionally keep `city` (the metro REGION label, e.g. "Москва"):
+                # the relocation is within that city's region radius, the guard still
+                # anchors correctly, and reverse_geocode's transliterated name
+                # ("Kolomna") wouldn't round-trip through city_by_name (M6).
                 db.execute(
                     text("UPDATE events.venues SET geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, "
                          "geocode_provider = 'yandex_hours', geocode_confidence = 0.8 WHERE venue_id = :v"),
                     {"lat": relocate[0], "lon": relocate[1], "v": vid},
                 )
                 relocated += 1
-            db.execute(
-                text("UPDATE events.venues SET hours_json = CAST(:h AS JSON), hours_checked_at = now() WHERE venue_id = :v"),
-                {"h": json.dumps(hours, ensure_ascii=False), "v": vid},
-            )
+            if hours or not was_blocked:
+                # Real hours OR a clean "no hours" answer → cache + stamp. When BLOCKED
+                # on every try, leave the venue UNSTAMPED so the next run retries it
+                # soon, instead of freezing it as "no hours" for 30 days (H3).
+                db.execute(
+                    text("UPDATE events.venues SET hours_json = CAST(:h AS JSON), hours_checked_at = now() WHERE venue_id = :v"),
+                    {"h": json.dumps(hours, ensure_ascii=False), "v": vid},
+                )
+            else:
+                blocked += 1
             db.commit()
             time.sleep(1.0)
-        return {"checked": len(rows), "stored": stored, "relocated": relocated}
+        return {"checked": len(rows), "stored": stored, "relocated": relocated, "blocked": blocked}
     except Exception:
         raise
     finally:

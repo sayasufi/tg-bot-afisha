@@ -67,6 +67,11 @@ def main() -> None:
         except Exception:
             res = None
         hours: dict = {}  # default: checked, nothing usable → stamp {} so we don't re-query
+        if isinstance(res, dict) and res.get("blocked"):
+            stats.setdefault("blocked", 0)
+            stats["blocked"] += 1
+            time.sleep(args.sleep)
+            continue  # captcha/network — don't cache {} as "no hours"; leave for retry
         if res and res.get("hours"):
             stats["found"] += 1
             coords = res.get("coords")

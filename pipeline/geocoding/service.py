@@ -1,23 +1,22 @@
 import hashlib
 import re
 
+from core.cities import city_by_name
 from core.config.settings import get_settings
 from pipeline.geocoding.providers.nominatim import NominatimGeocoder
 from pipeline.geocoding.providers.yandex import GeoResult, YandexGeocoder
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 
 
-# City centroid each provider falls back to when it can't resolve a query. Accepting
-# it pins every unresolved venue on one spot (the "Unknown venue on Red Square"
-# cluster), so any result landing within ~30 m of it is treated as no match.
-_CITY_CENTROIDS = {"Москва": (55.75582, 37.61764)}
-
-
 def _is_city_centroid(result: "GeoResult", city: str | None) -> bool:
-    c = _CITY_CENTROIDS.get((city or "").strip())
-    if not c:
+    """A provider falls back to the CITY CENTRE when it can't resolve a query; accepting
+    it pins every unresolved venue on one spot. So a result within ~30 m of the city's
+    own centre (from core.cities — city-agnostic, not just Moscow) is treated as no match."""
+    cc = city_by_name(city)
+    if not cc:
         return False
-    return abs(result.lat - c[0]) < 3.0e-4 and abs(result.lon - c[1]) < 5.0e-4
+    lat, lon = cc.center
+    return abs(result.lat - lat) < 3.0e-4 and abs(result.lon - lon) < 5.0e-4
 
 
 class GeocodingService:
