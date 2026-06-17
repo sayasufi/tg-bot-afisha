@@ -93,7 +93,7 @@ class RecommendationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def feed(self, lat, lon, interests, recent, per_rail: int = _PER_RAIL) -> dict:
+    async def feed(self, lat, lon, interests, recent, per_rail: int = _PER_RAIL, city=None) -> dict:
         favs = {c for c in (interests or []) if c in _CATEGORY_LABELS}
         recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][:_RECENT_CAP]
         affinity = self._affinity(favs, recent)
@@ -110,6 +110,7 @@ class RecommendationService:
                     today.isoformat(),
                     hour // 6,  # context changes ~every 6h
                     per_rail,
+                    city.slug if city else None,
                 ],
                 sort_keys=True,
             ).encode()
@@ -123,7 +124,7 @@ class RecommendationService:
             if cached is not None:
                 return cached
 
-        pool = await self._load_pool(now)
+        pool = await self._load_pool(now, city)
         views = await self._views()
         scored = self._score_all(pool, now, today, hour, lat, lon, affinity, views)
         result = {
@@ -152,10 +153,22 @@ class RecommendationService:
             return 1.0 if category in _EVENING else 0.35
         return 1.0 if category in _DAYTIME else 0.5  # daytime
 
-    async def _load_pool(self, now: datetime) -> list[dict]:
+    async def _load_pool(self, now: datetime, city=None) -> list[dict]:
+        from core.cities import active_cities
+
         floor = now.replace(hour=0, minute=0, second=0, microsecond=0)
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
+        # Scope to the city's region (centre ± region_radius), or OR over all active
+        # cities when none given — same city-agnostic guard the map uses, replacing the
+        # old hardcoded Moscow-ish envelope (a multi-city blocker for the rec feed).
+        cities = [city] if city is not None else active_cities()
+        region = (
+            "(" + " OR ".join(
+                f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
+                for c in cities
+            ) + ")"
+        ) if cities else "true"
         # One row per event = its soonest upcoming occurrence (DISTINCT ON requires
         # the event_id lead in ORDER BY).
         inner = (
@@ -168,7 +181,7 @@ class RecommendationService:
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active", Venue.geom.is_not(None))
-            .where(text("ST_Intersects(venues.geom::geometry, ST_MakeEnvelope(30.0, 50.0, 45.0, 60.0, 4326))"))
+            .where(text(region))
             .where(func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= floor)
             .distinct(Event.event_id)
             .order_by(Event.event_id, EventOccurrence.date_start.asc())

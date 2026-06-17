@@ -19,6 +19,7 @@ import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { useFavorites } from "../lib/favorites";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
+import { CitySwitcher } from "../features/map/CitySwitcher";
 import { useCities } from "../lib/useCities";
 import { useGeolocation } from "../lib/useGeolocation";
 
@@ -65,10 +66,10 @@ export function App() {
     }
   });
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
-  // The current city (nearest by geolocation, or an explicit pick). Drives the map `city`
-  // scope param and the map centre — no hardcoded city on the client. The full list +
-  // `select` are exposed by useCities for a switcher once more than one city is active.
-  const { current: currentCity } = useCities(userPos);
+  // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
+  // scope param and the map centre — no hardcoded city on the client. The switcher shows
+  // only when more than one city is active.
+  const { cities, current: currentCity, select: selectCity } = useCities(userPos);
 
   // A coarse clock that ticks once a minute — drives the "можно пойти сейчас"
   // set (countdowns, which events are still catchable) without re-rendering the
@@ -472,6 +473,9 @@ export function App() {
           }}
         />
       )}
+      {view === "map" && !selected && !filtersOpen && (
+        <CitySwitcher cities={cities} current={currentCity} onSelect={selectCity} />
+      )}
 
       <Suspense fallback={null}>
         <EventsMap
@@ -535,7 +539,7 @@ export function App() {
       />
 
       {view === "recs" && (
-        <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} onSelect={openEvent} onClose={() => setView("map")} />
+        <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} city={currentCity?.slug ?? null} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "favorites" && (
         <FavoritesPanel items={items} favIds={fav.ids} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />

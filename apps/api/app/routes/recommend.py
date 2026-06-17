@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.schemas.recommend import RecommendationsResponse
 from apps.api.app.services.recommend import RecommendationService
 from apps.api.app.services.telegram_auth import validate_init_data
+from core.cities import city_by_name
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["recommend"])
@@ -22,6 +23,7 @@ async def get_recommendations(
     interests: list[str] | None = Query(default=None),
     recent: list[str] | None = Query(default=None, description="categories of recently opened events (behavioural profile)"),
     per_rail: int = Query(default=12, ge=4, le=30),
+    city: str | None = Query(default=None, max_length=120, description="city slug or name to scope to"),
     db: AsyncSession = Depends(get_async_db),
 ):
     service = RecommendationService(db)
@@ -30,6 +32,7 @@ async def get_recommendations(
         interests[:_MAX_PROFILE] if interests else interests,
         recent[:_MAX_PROFILE] if recent else recent,
         per_rail,
+        city_by_name(city),
     )
 
 

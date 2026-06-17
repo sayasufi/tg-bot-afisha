@@ -43,6 +43,27 @@ type Props = {
 // from the active city via the `center` prop.
 const MOSCOW: [number, number] = [55.751244, 37.618423];
 
+// Centre the map on the active city: snap instantly the first time (the city resolved
+// after mount, so MapContainer's initial centre may be the fallback), then animate when
+// the user switches city.
+function CityRecenter({ center }: { center: [number, number] | null }) {
+  const map = useMap();
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    if (!center) return;
+    const key = `${center[0].toFixed(5)},${center[1].toFixed(5)}`;
+    if (seen.current === key) return;
+    if (seen.current === null) {
+      seen.current = key;
+      map.setView(center, map.getZoom()); // first resolve → snap, no animation
+      return;
+    }
+    seen.current = key;
+    map.flyTo(center, Math.max(map.getZoom(), 11), { duration: 0.8 }); // city switch → glide
+  }, [center, map]);
+  return null;
+}
+
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 
 // Reports the map's bbox+zoom to the parent on every settle (moveend/zoomend)
@@ -408,6 +429,7 @@ export function EventsMap({
         )}
         {userPos && <Marker position={userPos} icon={userIco} pane="shadowPane" interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
+        <CityRecenter center={center ?? null} />
       </MapContainer>
     </div>
   );

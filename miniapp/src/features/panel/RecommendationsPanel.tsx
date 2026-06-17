@@ -50,12 +50,14 @@ export function RecommendationsPanel({
   userPos,
   favCategories = [],
   refreshNonce = 0,
+  city = null,
   onSelect,
   onClose,
 }: {
   userPos?: LatLon | null;
   favCategories?: string[];
   refreshNonce?: number;
+  city?: string | null;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
@@ -73,7 +75,7 @@ export function RecommendationsPanel({
   useEffect(() => {
     setLoading(true);
     const ctrl = new AbortController();
-    fetchRecommendations({ lat, lon, interests: interestsKey ? interestsKey.split(",") : [], recent: recentCategories() }, ctrl.signal)
+    fetchRecommendations({ lat, lon, interests: interestsKey ? interestsKey.split(",") : [], recent: recentCategories(), city }, ctrl.signal)
       .then((r) => {
         setRails(r.rails);
         setLoading(false);
@@ -85,7 +87,7 @@ export function RecommendationsPanel({
         }
       });
     return () => ctrl.abort();
-  }, [lat, lon, interestsKey, refreshNonce, localNonce]);
+  }, [lat, lon, interestsKey, refreshNonce, localNonce, city]);
 
   const empty = !loading && rails.length === 0;
 
