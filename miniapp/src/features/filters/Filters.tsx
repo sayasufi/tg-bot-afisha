@@ -114,7 +114,6 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
         <div className="csheet__panel" role="dialog" aria-modal="true">
           <span className="csheet__grip" />
           <div className="csheet__head">
-            <span className="kicker">Фильтр</span>
             <button type="button" className="icon-btn" aria-label="Закрыть" onClick={close}>
               <IconClose size={18} />
             </button>

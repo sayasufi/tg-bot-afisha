@@ -610,10 +610,16 @@
 .searchov__results::-webkit-scrollbar {
   display: none;
 }
-/* Indeterminate acid progress strip — the loading cue, instead of fading the whole
-   list (which made it transparent over the map). */
+/* Indeterminate acid progress strip pinned to the TOP of the screen (a classic page
+   loader), not under the input — instead of fading the whole list, which made it
+   transparent over the map. */
 .searchov__loading {
-  height: 2px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 3px;
   background: var(--vitrine);
   overflow: hidden;
 }

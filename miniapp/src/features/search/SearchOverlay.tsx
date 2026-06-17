@@ -80,6 +80,7 @@ export function SearchOverlay({
   return (
     <div className="searchov" role="dialog" aria-modal="true" aria-label="Поиск">
       <button type="button" className="searchov__scrim" aria-label="Закрыть" onClick={onClose} />
+      {loading && <div className="searchov__loading" aria-hidden="true" />}
       <div className="searchov__panel">
         <div className="search searchov__bar">
           <IconSearch className="search__glyph" size={18} />
@@ -105,7 +106,6 @@ export function SearchOverlay({
           </button>
         </div>
 
-        {loading && <div className="searchov__loading" aria-hidden="true" />}
         {(items.length > 0 || showEmpty) && (
           <div className="searchov__results">
             {items.map((it, i) => (

@@ -76,7 +76,7 @@
 .csheet__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
 }
 
 /* Equal-size "когда" buttons: a 3-up grid so Сейчас/Сегодня/Завтра/Выходные/Неделя
