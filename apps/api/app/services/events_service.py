@@ -109,7 +109,10 @@ _CODE_RE = re.compile(r"^[A-Za-z]{2,4}[-·\s]?[0-9A-Za-z]{2,8}$")
 
 
 def _looks_like_code(q: str) -> bool:
-    return bool(_CODE_RE.match(q.strip()))
+    # Require a dash or a digit so plain Latin words ("standup", "techno") don't waste a
+    # display_no probe — real codes always have one (e.g. "MSK-04PN").
+    s = q.strip()
+    return bool(_CODE_RE.match(s)) and ("-" in s or any(c.isdigit() for c in s))
 
 
 def _region_sql(city) -> str:
@@ -600,12 +603,9 @@ class EventQueryService:
         if not q:
             return {"items": []}
         qn = q.replace("ё", "е").replace("Ё", "Е")  # cheap ё/е folding (app-side)
-        # Escape LIKE metacharacters in the value so a stray % / _ isn't a wildcard.
-        qlike = qn.translate(str.maketrans({"%": r"\%", "_": r"\_", "\\": "\\\\"}))
-        items: list[dict] = []
-        seen: set = set()
 
-        # Tier 0 — exact event code ("MSK-04PN"): a unique display_no probe, pinned top.
+        # Tier 0 — exact event code ("MSK-04PN"): a unique display_no probe. EXCLUSIVE —
+        # a code is unambiguous, so don't pollute it with fuzzy text matches.
         if _looks_like_code(q):
             try:
                 _city_code, no = parse_event_code(q)
@@ -623,47 +623,55 @@ class EventQueryService:
                     {"no": no},
                 )).mappings().first()
                 if row:
-                    items.append(self._search_item(row, 1000.0))
-                    seen.add(row["event_id"])
+                    return {"items": [self._search_item(row, 1000.0)]}
 
-        if len(qn) >= 2:
-            # Lower the word_similarity threshold for recall on short prefixes (default
-            # 0.6 is too strict for typeahead). SET LOCAL is transaction-scoped → safe
-            # behind the Odyssey transaction pooler.
-            await self.db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
-            region = _region_sql(city)
-            sql = text(
-                "WITH ev AS ("
-                f" SELECT DISTINCT ON (e.event_id) {self._SEARCH_COLS}, e.popularity_score, "
-                "  GREATEST("
-                "    CASE WHEN e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' THEN 200 "
-                "         WHEN e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' THEN 100 ELSE 0 END, "
-                "    CASE WHEN char_length(:q) >= 3 THEN (word_similarity(:q, e.canonical_title) * 100)::int ELSE 0 END, "
-                "    CASE WHEN venues.name ILIKE :qlike || '%' ESCAPE '\\' THEN 80 "
-                "         WHEN char_length(:q) >= 3 AND venues.name %> :q THEN 50 ELSE 0 END"
-                "  ) AS score "
-                " FROM events.events e "
-                " JOIN events.event_occurrences o ON o.event_id = e.event_id "
-                " JOIN events.venues ON venues.venue_id = o.venue_id "
-                " WHERE e.status = 'active' AND venues.name IS DISTINCT FROM :placeholder "
-                "  AND coalesce(o.date_end, o.date_start) >= date_trunc('day', now()) "
-                f"  AND {region} "
-                "  AND ( e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' "
-                "        OR e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' "
-                "        OR (char_length(:q) >= 3 AND e.canonical_title %> :q) "
-                "        OR venues.name ILIKE :qlike || '%' ESCAPE '\\' "
-                "        OR (char_length(:q) >= 3 AND venues.name %> :q) ) "
-                " ORDER BY e.event_id, (o.date_start < now()) ASC, o.date_start ASC"
-                ") SELECT * FROM ev WHERE score > 0 "
-                "ORDER BY score DESC, popularity_score DESC NULLS LAST, date_start ASC LIMIT :lim"
-            )
-            rows = (await self.db.execute(
-                sql, {"q": qn, "qlike": qlike, "lim": limit, "placeholder": _PLACEHOLDER_VENUE}
-            )).mappings().all()
-            for r in rows:
-                if r["event_id"] in seen:
-                    continue
-                items.append(self._search_item(r, float(r["score"])))
-                seen.add(r["event_id"])
+        if len(qn) < 2:
+            return {"items": []}
 
-        return {"items": items[:limit]}
+        # Lower word_similarity threshold for short-prefix recall (default 0.6 is too
+        # strict). SET LOCAL is transaction-scoped → safe behind the Odyssey pooler.
+        await self.db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
+        # Escape LIKE metacharacters in the value so a stray % / _ isn't a wildcard.
+        qlike = qn.translate(str.maketrans({"%": r"\%", "_": r"\_", "\\": "\\\\"}))
+        region = _region_sql(city)
+        # GIN-DRIVEN candidate gathering FIRST (title trgm + venue-name trgm), THEN join
+        # for the soonest in-region occurrence. Driving from the text indexes keeps the
+        # candidate set tiny (~dozens) — vs the naive single join that seq-scanned every
+        # venue/occurrence and applied the text match as a late filter (~200ms).
+        sql = text(
+            "WITH cand AS ("
+            "  SELECT e.event_id, GREATEST("
+            "      CASE WHEN e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' THEN 200 "
+            "           WHEN e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' THEN 100 ELSE 0 END, "
+            "      CASE WHEN char_length(:q) >= 3 THEN (word_similarity(:q, e.canonical_title) * 100)::int ELSE 0 END"
+            "    ) AS score "
+            "  FROM events.events e "
+            "  WHERE e.status = 'active' AND ("
+            "      e.canonical_title ILIKE :qlike || '%' ESCAPE '\\' "
+            "      OR e.canonical_title ILIKE '%' || :qlike || '%' ESCAPE '\\' "
+            "      OR (char_length(:q) >= 3 AND e.canonical_title %> :q) ) "
+            "  UNION ALL "
+            "  SELECT o.event_id, (CASE WHEN venues.name ILIKE :qlike || '%' ESCAPE '\\' THEN 80 "
+            "           WHEN char_length(:q) >= 3 AND venues.name %> :q THEN 50 ELSE 0 END) AS score "
+            "  FROM events.venues "
+            "  JOIN events.event_occurrences o ON o.venue_id = venues.venue_id "
+            "  WHERE venues.name ILIKE :qlike || '%' ESCAPE '\\' "
+            "        OR (char_length(:q) >= 3 AND venues.name %> :q) "
+            "), best AS (SELECT event_id, max(score) AS score FROM cand GROUP BY event_id HAVING max(score) > 0), "
+            "rows AS ("
+            f"  SELECT DISTINCT ON (e.event_id) {self._SEARCH_COLS}, e.popularity_score, b.score "
+            "  FROM best b "
+            "  JOIN events.events e ON e.event_id = b.event_id "
+            "  JOIN events.event_occurrences o ON o.event_id = e.event_id "
+            "  JOIN events.venues ON venues.venue_id = o.venue_id "
+            "  WHERE venues.name IS DISTINCT FROM :placeholder "
+            "    AND coalesce(o.date_end, o.date_start) >= date_trunc('day', now()) "
+            f"   AND {region} "
+            "  ORDER BY e.event_id, (o.date_start < now()) ASC, o.date_start ASC"
+            ") SELECT * FROM rows "
+            "ORDER BY score DESC, popularity_score DESC NULLS LAST, date_start ASC LIMIT :lim"
+        )
+        rows = (await self.db.execute(
+            sql, {"q": qn, "qlike": qlike, "lim": limit, "placeholder": _PLACEHOLDER_VENUE}
+        )).mappings().all()
+        return {"items": [self._search_item(r, float(r["score"])) for r in rows]}
