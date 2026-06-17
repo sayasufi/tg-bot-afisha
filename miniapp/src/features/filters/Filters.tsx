@@ -1,4 +1,4 @@
-import { useMemo, useRef, type CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 
 import { CATEGORIES, categoryMeta, categoryOrder } from "../../lib/categories";
 import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
@@ -30,7 +30,6 @@ type Props = {
 };
 
 export function Filters({ value, total, open, hasLocation, onOpenChange, onChange, onMenu, onOpenSearch }: Props) {
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0, value.goNow].filter(Boolean).length;
   const toggleGoNow = () => {
@@ -58,10 +57,9 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
     activeChips.push({ key: "radius", label: `до ${String(value.radiusKm).replace(".", ",")} км`, clear: () => onChange({ ...value, radiusKm: 0 }) });
   if (value.goNow) activeChips.push({ key: "gonow", label: "сейчас", clear: () => onChange({ ...value, goNow: false }) });
 
-  const openSheet = (focusSearch = false) => {
+  const openSheet = () => {
     haptic("light");
     onOpenChange(true);
-    if (focusSearch) setTimeout(() => searchRef.current?.focus(), 320);
   };
   const close = () => onOpenChange(false);
   // "" = all (clear). Any category toggles its membership in the multi-select.
@@ -99,7 +97,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             <span className="brand-o">о</span>крест
           </span>
         </button>
-        <button type="button" className="cmdpill__body" aria-label="Фильтры" onClick={() => openSheet(false)}>
+        <button type="button" className="cmdpill__body" aria-label="Фильтры" onClick={openSheet}>
           <span className="cmdpill__summary">
             {catLabel} · {dateLabel}
           </span>
@@ -120,25 +118,6 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             <button type="button" className="icon-btn" aria-label="Закрыть" onClick={close}>
               <IconClose size={18} />
             </button>
-          </div>
-
-          <div className="search">
-            <IconSearch className="search__glyph" size={18} />
-            <input
-              ref={searchRef}
-              className="search__input"
-              placeholder="Поиск событий"
-              value={value.q}
-              onChange={(e) => onChange({ ...value, q: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") searchRef.current?.blur();
-              }}
-            />
-            {value.q && (
-              <button type="button" className="search__clear" aria-label="Очистить" onClick={() => onChange({ ...value, q: "" })}>
-                <IconClose size={15} />
-              </button>
-            )}
           </div>
 
           {activeChips.length > 0 && (

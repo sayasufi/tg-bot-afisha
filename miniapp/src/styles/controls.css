@@ -597,8 +597,10 @@
   gap: 8px;
   animation: dropIn 0.28s var(--ease-cut) both;
 }
+/* Results sit on an OPAQUE plinth (never see-through over the map) and read as one
+   framed object, like the rest of the gallery chrome. */
 .searchov__results {
-  max-height: min(62vh, 560px);
+  max-height: min(64vh, 580px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--plinth);
@@ -608,13 +610,35 @@
 .searchov__results::-webkit-scrollbar {
   display: none;
 }
-.searchov__results.is-loading {
-  opacity: 0.6;
+/* Indeterminate acid progress strip — the loading cue, instead of fading the whole
+   list (which made it transparent over the map). */
+.searchov__loading {
+  height: 2px;
+  background: var(--vitrine);
+  overflow: hidden;
+}
+.searchov__loading::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 36%;
+  background: var(--acid);
+  animation: searchbar 0.9s var(--ease-cut) infinite;
+}
+@keyframes searchbar {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(390%);
+  }
 }
 .searchov__empty {
   padding: 22px 16px;
   text-align: center;
-  font-family: var(--grotesk);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--ink-dim);
 }

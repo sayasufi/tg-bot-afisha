@@ -105,8 +105,9 @@ export function SearchOverlay({
           </button>
         </div>
 
+        {loading && <div className="searchov__loading" aria-hidden="true" />}
         {(items.length > 0 || showEmpty) && (
-          <div className={`searchov__results${loading ? " is-loading" : ""}`}>
+          <div className="searchov__results">
             {items.map((it, i) => (
               <EventRow
                 key={it.event_id}
