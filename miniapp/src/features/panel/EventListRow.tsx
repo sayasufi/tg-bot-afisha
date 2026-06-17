@@ -37,11 +37,12 @@ export function EventListRow({
         {img ? (
           <img src={img} alt="" loading="lazy" decoding="async" />
         ) : (
-          <CategoryIcon cat={item.category} size={24} />
+          <CategoryIcon cat={item.category} size={30} />
         )}
         {go.eligible && <i className="lrow__spark" aria-hidden="true" />}
       </span>
       <span className="lrow__body">
+        {item.code && <span className="lrow__code">{item.code}</span>}
         <span className="lrow__title">{item.title}</span>
         <span className="lrow__meta">
           {go.eligible && <span className="lrow__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}

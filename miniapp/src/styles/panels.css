@@ -1029,33 +1029,40 @@ html[data-theme="dark"] .rcard__ph {
   color: var(--ink-dim);
 }
 
-/* List row — thumbnail + title + meta + price/distance. */
+/* Give the first row a little air below the sort bar. */
+.listview .panelview__scroll {
+  padding-top: 10px;
+}
+
+/* List row — a framed "catalogue plate": photo + accession code + title + when/venue +
+   price/distance. Square hairline frame, Mono data, Grotesk title — pure VITRINE. */
 .lrow {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  padding: 10px 0;
+  margin-bottom: 8px;
+  padding: 12px;
   border: 0;
-  border-top: 1px solid var(--line-soft);
-  background: none;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  background: var(--plinth);
   text-align: left;
   cursor: pointer;
   animation: rowIn 0.3s var(--ease-cut) both;
-  animation-delay: calc(var(--i) * 0.015s);
+  animation-delay: calc(var(--i) * 0.02s);
 }
-.lrow:first-child {
-  border-top: 0;
+.lrow:active {
+  background: var(--vitrine);
 }
 .lrow__thumb {
   position: relative;
   flex: 0 0 auto;
-  width: 64px;
-  height: 64px;
+  width: 92px;
+  height: 92px;
   display: grid;
   place-items: center;
   background: var(--vitrine);
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: inset 0 0 0 1px var(--ink);
   color: var(--ink-faint);
   overflow: hidden;
 }
@@ -1063,14 +1070,15 @@ html[data-theme="dark"] .rcard__ph {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Muted like the cards/sheet, so photos sit inside the editorial palette. */
   filter: saturate(0.62) brightness(0.9) contrast(1.02);
 }
 .lrow__spark {
   position: absolute;
-  top: 5px;
-  left: 5px;
-  width: 8px;
-  height: 8px;
+  top: 6px;
+  left: 6px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--cinnabar);
   box-shadow: 0 0 0 1.5px var(--plinth);
@@ -1080,14 +1088,22 @@ html[data-theme="dark"] .rcard__ph {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 4px;
+  gap: 5px;
+}
+/* Accession code kicker — the VITRINE signature on every catalogue entry. */
+.lrow__code {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 .lrow__title {
   font-family: var(--grotesk);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.28;
   color: var(--ink);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1095,9 +1111,11 @@ html[data-theme="dark"] .rcard__ph {
   overflow: hidden;
 }
 .lrow__meta {
+  margin-top: auto;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
   letter-spacing: 0.02em;
+  line-height: 1.45;
   color: var(--ink-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -1112,24 +1130,25 @@ html[data-theme="dark"] .rcard__ph {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: center;
-  gap: 5px;
+  justify-content: space-between;
   text-align: right;
+  gap: 6px;
 }
 .lrow__dist {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--ink-dim);
   white-space: nowrap;
 }
 .lrow__price {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
 }
 .lrow__price--free {
   background: var(--acid);
   color: var(--on-acid);
-  padding: 1px 5px;
+  padding: 2px 6px;
 }
