@@ -20,6 +20,7 @@ from apps.api.app.services.events_service import (
     map_cache_key,
     map_cache_set,
 )
+from core.cities import active_cities, city_by_name
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["events"])
@@ -42,8 +43,12 @@ async def get_map_events(
     zoom: int | None = Query(default=None, ge=0, le=22),
     limit: int | None = Query(default=None, ge=1, le=20000),
     offset: int = Query(default=0, ge=0),
+    city: str | None = Query(default=None, max_length=120, description="city slug or name to scope to"),
     db: AsyncSession = Depends(get_async_db),
 ):
+    # Resolve the city to scope the map to one city (multi-city). Unknown/absent → None
+    # → all active cities (back-compat). city_by_name accepts slug or display name.
+    city_cfg = city_by_name(city)
     bbox_tuple = None
     if bbox:
         # Parse defensively — a malformed bbox must be a clean 400, not a 500
@@ -65,14 +70,15 @@ async def get_map_events(
     # edge re-compresses the multi-MB payload per request, and the nginx proxy_cache in
     # front stores it already-compressed.
     accepts_gzip = "gzip" in request.headers.get("accept-encoding", "").lower()
-    key = map_cache_key(zoom, bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset)
+    city_slug = city_cfg.slug if city_cfg else None
+    key = map_cache_key(zoom, bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, city_slug)
     cached = await map_cache_get(key)
     if cached is not None:
         gz_body, etag = cached
     else:
         service = EventQueryService(db)
         result = await service.map_events(
-            bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom
+            bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom, city_cfg
         )
         raw = orjson.dumps(result)  # orjson encodes datetime/UUID natively; price is float
         etag = 'W/"' + hashlib.sha256(raw).hexdigest()[:32] + '"'
@@ -86,6 +92,18 @@ async def get_map_events(
         headers["Content-Encoding"] = "gzip"
         return Response(content=gz_body, media_type="application/json", headers=headers)
     return Response(content=gzip.decompress(gz_body), media_type="application/json", headers=headers)
+
+
+@router.get("/cities")
+async def get_cities():
+    """Active cities the app serves — for the frontend's city picker / auto-detect and
+    per-city map centring. From the core.cities registry (the multi-city source of truth)."""
+    return {
+        "cities": [
+            {"slug": c.slug, "name": c.name, "lat": c.center[0], "lon": c.center[1], "radius_km": c.region_radius_km}
+            for c in active_cities()
+        ]
+    }
 
 
 @router.get("/events/nearby", response_model=NearbyResponse)

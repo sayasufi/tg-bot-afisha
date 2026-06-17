@@ -43,7 +43,7 @@ def _redis_client() -> aioredis.Redis | None:
     return _redis
 
 
-def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset) -> str:
+def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city=None) -> str:
     raw = json.dumps(
         [
             zoom,
@@ -56,6 +56,7 @@ def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_m
             q,
             limit,
             offset,
+            city,
         ],
         default=str,
         sort_keys=True,
@@ -204,18 +205,19 @@ class EventQueryService:
             bindparam("max_lat", max_lat),
         )
 
-    # Only events within an ACTIVE city's region render — a guard against bad/foreign
-    # coordinates (transposed lat/lon land in the Caspian; a touring date lands in
-    # Almaty). The region is each city's own centre ± region_radius_km from core.cities,
-    # so it's fully city-agnostic and grows automatically as cities are activated — no
-    # hardcoded Moscow box.
+    # Only events within a city's region render — a guard against bad/foreign coordinates
+    # (transposed lat/lon land in the Caspian; a touring date lands in Almaty). The region
+    # is the city's own centre ± region_radius_km from core.cities. With `city` given the
+    # map is SCOPED to that one city (multi-city: a Moscow user never sees SPb pins); with
+    # no city it ORs over all active cities (back-compat / "everything" fallback).
     @staticmethod
-    def _region_clause():
+    def _region_clause(city=None):
         from core.cities import active_cities
 
+        cities = [city] if city is not None else active_cities()
         parts = [
             f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
-            for c in active_cities()
+            for c in cities
         ]
         return text("(" + " OR ".join(parts) + ")") if parts else text("true")
 
@@ -240,26 +242,28 @@ class EventQueryService:
         limit: int | None,
         offset: int,
         zoom: int | None = None,
+        city=None,
     ):
         # Below detail zoom → server-aggregated clusters (payload/marker count don't
         # grow with the catalogue); at/above it → individual pins. The WHOLE response
         # is cached as serialized bytes by the route (map_cache_*), so repeat loads
         # across the frontend's per-zoom prefetch and across users skip all of this.
+        # `city` (a CityConfig) scopes everything to one city when given.
         if zoom is not None and zoom < self._DETAIL_ZOOM:
-            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
-            clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q)
+            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q, city)
+            clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q, city)
             return {"clusters": clusters, "items": [], "total": total}
-        items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset)
+        items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city)
         # "Показать N" = filter-wide count of map-able events. When the whole city is
         # fetched (no bbox, no paging) it EQUALS the result size after DISTINCT ON, so
         # derive it from `items` instead of firing a second identical ~14k-row join.
         if bbox is None and not limit and not offset:
             total = len(items)
         else:
-            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q)
+            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q, city)
         return {"clusters": [], "items": items, "total": total}
 
-    async def _count_pinnable(self, date_from, date_to, categories, price_min, price_max, q) -> int:
+    async def _count_pinnable(self, date_from, date_to, categories, price_min, price_max, q, city=None) -> int:
         stmt = (
             select(func.count(func.distinct(Event.event_id)))
             .select_from(Event)
@@ -267,13 +271,13 @@ class EventQueryService:
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active", Venue.geom.is_not(None))
             .where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
-            .where(self._region_clause())
+            .where(self._region_clause(city))
             .where(self._concrete_time_clause())
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
         return int(await self.db.scalar(stmt) or 0)
 
-    async def _cluster(self, bbox, zoom, date_from, date_to, categories, price_min, price_max, q):
+    async def _cluster(self, bbox, zoom, date_from, date_to, categories, price_min, price_max, q, city=None):
         # One representative point per event (soonest occurrence's venue) within the
         # viewport, then snap to a zoom-sized grid and aggregate to cluster centroids.
         inner = (
@@ -282,7 +286,7 @@ class EventQueryService:
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active", Venue.geom.is_not(None))
             .where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
-            .where(self._region_clause())
+            .where(self._region_clause(city))
             .where(self._concrete_time_clause())
         )
         inner = self._apply_filters(inner, date_from, date_to, categories, price_min, price_max, q)
@@ -339,7 +343,7 @@ class EventQueryService:
                 merged.append(dict(c))
         return [{"id": f"c{i}", "lat": m["lat"], "lon": m["lon"], "count": m["count"]} for i, m in enumerate(merged)]
 
-    async def _detail(self, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset):
+    async def _detail(self, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city=None):
         # Compute venue lat/lon in the main query (was an N+1 per-row subquery).
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
@@ -369,8 +373,9 @@ class EventQueryService:
             .where(Event.status == "active")
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
-        # Only Moscow-region events with coordinates (implies geom is not null).
-        stmt = stmt.where(self._region_clause())
+        # Only in-region events with coordinates (implies geom is not null) — scoped to
+        # the requested city when given (multi-city), else all active cities.
+        stmt = stmt.where(self._region_clause(city))
         stmt = stmt.where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
         stmt = stmt.where(self._concrete_time_clause())
         if bbox:
