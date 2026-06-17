@@ -3,7 +3,14 @@ from pydantic import BaseModel
 
 from apps.api.app.services.geo import reverse_city
 from apps.api.app.services.telegram_auth import validate_init_data
-from core.db.repositories.users import get_or_create_city, upsert_user, upsert_user_city
+from core.db.repositories.users import (
+    add_favorites,
+    get_or_create_city,
+    list_favorite_ids,
+    set_favorite,
+    upsert_user,
+    upsert_user_city,
+)
 from core.db.session import SessionLocal
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
@@ -13,6 +20,26 @@ class LocationRequest(BaseModel):
     init_data: str
     lat: float
     lon: float
+
+
+class FavoritesSyncRequest(BaseModel):
+    init_data: str
+    add: list[str] = []  # this device's local favourites to merge in (once, on first sync)
+
+
+class FavoriteToggleRequest(BaseModel):
+    init_data: str
+    event_id: str
+    on: bool
+
+
+def _auth(init_data: str) -> tuple[dict, int]:
+    """Verify the Telegram signature and return (user dict, telegram user id)."""
+    user = validate_init_data(init_data)
+    uid = user.get("id")
+    if not uid:
+        raise HTTPException(status_code=400, detail="no user id in init data")
+    return user, int(uid)
 
 
 @router.post("/location")
@@ -37,5 +64,33 @@ def save_location(payload: LocationRequest):
             upsert_user_city(db, int(uid), city)
             city_out = city.name
         return {"ok": True, "city": city_out}
+    finally:
+        db.close()
+
+
+@router.post("/favorites/sync")
+def sync_favorites(payload: FavoritesSyncRequest):
+    """Return the account's favourites; on a device's first sync, merge that device's
+    local favourites in (one-time migration from the old per-device localStorage)."""
+    user, uid = _auth(payload.init_data)
+    db = SessionLocal()
+    try:
+        upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+        if payload.add:
+            add_favorites(db, uid, payload.add)
+        return {"ids": list_favorite_ids(db, uid)}
+    finally:
+        db.close()
+
+
+@router.post("/favorites")
+def toggle_favorite(payload: FavoriteToggleRequest):
+    """Heart / un-heart one event for the account; returns the updated full list."""
+    user, uid = _auth(payload.init_data)
+    db = SessionLocal()
+    try:
+        upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+        set_favorite(db, uid, payload.event_id, payload.on)
+        return {"ids": list_favorite_ids(db, uid)}
     finally:
         db.close()

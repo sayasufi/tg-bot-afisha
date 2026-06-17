@@ -10,6 +10,7 @@ from core.db.models.ref.map_place import MapPlace
 from core.db.models.ref.source import Source
 from core.db.models.ref.telegram_channel import TelegramChannel
 from core.db.models.ref.user import User
+from core.db.models.ref.user_favorite import UserFavorite
 
 __all__ = [
     "City",
@@ -23,5 +24,6 @@ __all__ = [
     "SourceRun",
     "TelegramChannel",
     "User",
+    "UserFavorite",
     "Venue",
 ]

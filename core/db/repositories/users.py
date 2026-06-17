@@ -1,10 +1,12 @@
+import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from core.db.models import City, RawEvent, User
+from core.db.models import City, RawEvent, User, UserFavorite
 from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
 
@@ -43,6 +45,56 @@ def upsert_user_city(db: Session, telegram_user_id: int, city: City) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def list_favorite_ids(db: Session, telegram_user_id: int) -> list[str]:
+    """Every event the user has hearted (as string UUIDs, for the Mini App)."""
+    rows = (
+        db.execute(select(UserFavorite.event_id).where(UserFavorite.telegram_user_id == telegram_user_id))
+        .scalars()
+        .all()
+    )
+    return [str(r) for r in rows]
+
+
+def set_favorite(db: Session, telegram_user_id: int, event_id: str, on: bool) -> None:
+    """Heart (on) or un-heart (off) a single event. Idempotent."""
+    try:
+        eid = uuid.UUID(str(event_id))
+    except (ValueError, TypeError):
+        return
+    if on:
+        db.execute(
+            pg_insert(UserFavorite.__table__)
+            .values(telegram_user_id=telegram_user_id, event_id=eid)
+            .on_conflict_do_nothing()
+        )
+    else:
+        db.execute(
+            delete(UserFavorite).where(
+                UserFavorite.telegram_user_id == telegram_user_id,
+                UserFavorite.event_id == eid,
+            )
+        )
+    db.commit()
+
+
+def add_favorites(db: Session, telegram_user_id: int, event_ids: list[str]) -> None:
+    """Bulk-add (used once per device to merge its local favourites into the account)."""
+    eids = []
+    for e in event_ids[:500]:  # cap: a sane upper bound, never a real user's count
+        try:
+            eids.append(uuid.UUID(str(e)))
+        except (ValueError, TypeError):
+            continue
+    if not eids:
+        return
+    db.execute(
+        pg_insert(UserFavorite.__table__)
+        .values([{"telegram_user_id": telegram_user_id, "event_id": e} for e in eids])
+        .on_conflict_do_nothing()
+    )
+    db.commit()
 
 
 async def save_forward_message(db: AsyncSession, message_id: int, chat_id: int, payload: dict) -> RawEvent:

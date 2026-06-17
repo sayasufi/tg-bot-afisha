@@ -19,7 +19,7 @@ import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
 import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
-import { useFavorites } from "../lib/favorites";
+import { syncFavorites, useFavorites } from "../lib/favorites";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
 import { SearchOverlay } from "../features/search/SearchOverlay";
@@ -36,6 +36,11 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
   const fav = useFavorites();
+  // Pull this account's favourites from the server once on open (and merge this device's
+  // local hearts in on first run) so they sync across devices instead of per-device.
+  useEffect(() => {
+    void syncFavorites();
+  }, []);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
