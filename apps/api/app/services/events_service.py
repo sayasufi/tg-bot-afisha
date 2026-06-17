@@ -141,13 +141,20 @@ class EventQueryService:
             bindparam("max_lat", max_lat),
         )
 
-    # Only events in/around Moscow render — a permanent guard against bad/foreign
-    # coordinates (transposed lat/lon land in the Caspian near Iran; a touring date
-    # lands in Almaty). Envelope is generous (lon 30..45, lat 50..60) so legitimate
-    # Moscow-region events (Tver/Kaluga day-trips) stay visible.
+    # Only events within an ACTIVE city's region render — a guard against bad/foreign
+    # coordinates (transposed lat/lon land in the Caspian; a touring date lands in
+    # Almaty). The region is each city's own centre ± region_radius_km from core.cities,
+    # so it's fully city-agnostic and grows automatically as cities are activated — no
+    # hardcoded Moscow box.
     @staticmethod
     def _region_clause():
-        return text("ST_Intersects(venues.geom::geometry, ST_MakeEnvelope(30.0, 50.0, 45.0, 60.0, 4326))")
+        from core.cities import active_cities
+
+        parts = [
+            f"ST_DWithin(venues.geom, ST_SetSRID(ST_MakePoint({c.center[1]}, {c.center[0]}), 4326)::geography, {c.region_radius_km * 1000})"
+            for c in active_cities()
+        ]
+        return text("(" + " OR ".join(parts) + ")") if parts else text("true")
 
     @staticmethod
     def _concrete_time_clause():

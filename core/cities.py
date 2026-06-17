@@ -19,7 +19,11 @@ class CityConfig:
     afisha_city: str  # afisha.ru city slug (afisha.ru/<slug>/schedule_*)
     active: bool  # whether the pipeline currently ingests this city
     center: tuple[float, float]  # (lat, lon) city centre — anchors geo heuristics
-    region_radius_km: float = 250.0  # how far the city's "oblast" reaches (day-trips)
+    # How far the city's region reaches (day-trip oblast venues + far festivals). Used
+    # both to keep events on the map and to bound venue relocation. Wide enough for a
+    # cross-oblast festival (~330 km) yet far short of another city (SPb 635 km) or
+    # transposed/foreign coords (Caspian/Almaty >1000 km).
+    region_radius_km: float = 350.0
 
 
 CITIES: dict[str, CityConfig] = {
