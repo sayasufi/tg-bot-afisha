@@ -209,12 +209,17 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const code = selected.code || detail?.code || `ОКР·${accessionNo(selected.event_id)}`;
   const accession = `${code} · ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
-  // The soonest session drives the headline (`dates`); show up to 3 more upcoming
-  // sessions as chips (4 dates total), then a compact "+N" for the rest, so a long
-  // recurring run isn't hidden behind its first date but doesn't flood the card.
-  const upcoming = detail?.occurrences ?? [];
-  const moreDates = upcoming.slice(1, 4);
-  const extraDates = Math.max(0, upcoming.length - 4);
+  // The soonest session drives the headline (`dates`); show up to 3 more sessions as
+  // chips, then a compact "+N" for the rest. Chips list only sessions that HAVEN'T
+  // started yet — an ongoing run's past start date (e.g. an exhibition that opened
+  // 16 июн and runs through 21 июн) isn't a meaningful "next date"; that the event is
+  // happening now is already carried by the headline + "идёт сейчас" badge.
+  const nowMs = Date.now();
+  const futureMore = (detail?.occurrences ?? [])
+    .slice(1)
+    .filter((o) => o.date_start && Date.parse(o.date_start) > nowMs);
+  const moreDates = futureMore.slice(0, 3);
+  const extraDates = Math.max(0, futureMore.length - 3);
   // For an all-day event, show the venue's REAL hours today ("сегодня 10:00–20:00")
   // when we have them; otherwise an honest "время уточняйте". Never a misleading
   // "в часы работы" or a 24/7 "круглосуточно" (that's a matched-territory artefact —
