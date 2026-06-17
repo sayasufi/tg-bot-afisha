@@ -26,3 +26,4 @@ audit_digest.txt
 # dedup eval scratch
 dedup_eval.py
 titles_corpus.txt
+infra/odyssey/odyssey.conf

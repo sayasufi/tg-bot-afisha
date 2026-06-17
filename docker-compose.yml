@@ -40,6 +40,21 @@ services:
       retries: 10
       start_period: 5s
 
+  # PostgreSQL connection pooler (Odyssey, built from source). Brought up ALONGSIDE
+  # Postgres; the API/worker DB URLs are repointed to it (odyssey:6432) as a separate,
+  # verified step. Config is generated on the server from the .template (password
+  # injected from .env), so it's never in git.
+  odyssey:
+    build:
+      context: .
+      dockerfile: infra/docker/odyssey.Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./infra/odyssey/odyssey.conf:/etc/odyssey/odyssey.conf:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"

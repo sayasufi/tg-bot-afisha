@@ -1,0 +1,46 @@
+# Odyssey pooler config TEMPLATE. The real config (infra/odyssey/odyssey.conf) is
+# generated ON THE SERVER from this file with __AFISHA_PASSWORD__ replaced from .env —
+# it is gitignored so the DB password never lands in git. Transaction pooling lets many
+# client connections share a small set of real Postgres connections.
+daemonize no
+log_to_stdout yes
+log_format "%p %t %l [%i %s] (%c) %m\n"
+log_config yes
+log_stats yes
+log_session no
+
+workers 2
+resolvers 1
+readahead 8192
+cache_coroutine 0
+coroutine_stack_size 24
+log_syslog no
+
+listen {
+    host "*"
+    port 6432
+}
+
+storage "pg" {
+    type "remote"
+    host "postgres"
+    port 5432
+}
+
+database "afisha" {
+    user "afisha" {
+        authentication "scram-sha-256"
+        password "__AFISHA_PASSWORD__"
+        storage "pg"
+        storage_db "afisha"
+        storage_user "afisha"
+        storage_password "__AFISHA_PASSWORD__"
+        # Transaction pooling: the only mode that actually REDUCES Postgres connections
+        # for our pooled clients (session mode holds a server conn 1:1). Requires the
+        # app to disable psycopg3 prepared statements (prepare_threshold=None).
+        pool "transaction"
+        pool_size 25
+        pool_timeout 4000
+        server_lifetime 3600
+    }
+}
