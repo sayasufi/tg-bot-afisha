@@ -20,20 +20,22 @@ from core.db.models import Event, EventOccurrence, Venue
 # row build AND the JSON encode entirely, and an If-None-Match match returns a bare
 # 304. Best-effort — any Redis hiccup falls back to a live query + encode. Async
 # client, created once on the API's single event loop.
-_MAP_CACHE_PREFIX = "map:resp:v3:"  # v3: payload ships open_now instead of venue_hours
+_MAP_CACHE_PREFIX = "map:resp:v4:"  # v4: cache stores the GZIPPED body bytes
 _MAP_CACHE_TTL = 60
 _redis: aioredis.Redis | None = None
 _redis_off = False
 
 
 def _redis_client() -> aioredis.Redis | None:
+    # decode_responses=False: the map cache stores GZIPPED (binary) response bytes, not
+    # text. This is the ONLY user of this client (recommend.py has its own text client).
     global _redis, _redis_off
     if _redis_off:
         return None
     if _redis is None:
         try:
             _redis = aioredis.from_url(
-                get_settings().redis_url, decode_responses=True, socket_timeout=0.5, socket_connect_timeout=0.5
+                get_settings().redis_url, decode_responses=False, socket_timeout=0.5, socket_connect_timeout=0.5
             )
         except Exception:  # pragma: no cover - cache is best-effort
             _redis_off = True
@@ -61,9 +63,10 @@ def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_m
     return _MAP_CACHE_PREFIX + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-async def map_cache_get(key: str) -> tuple[str, str] | None:
-    """(body, etag) for a cached map response, or None. Stored as 'etag\\nbody' in one
-    key (an ETag never contains a newline), so a hit is a single Redis round trip."""
+async def map_cache_get(key: str) -> tuple[bytes, str] | None:
+    """(gzipped_body, etag) for a cached map response, or None. Stored as
+    b'etag\\n' + gzipped_body in one key — the ETag is ASCII with no newline, so the
+    FIRST newline is the separator (the gzip stream after it may contain 0x0a)."""
     client = _redis_client()
     if client is None:
         return None
@@ -73,18 +76,18 @@ async def map_cache_get(key: str) -> tuple[str, str] | None:
         return None
     if not hit:
         return None
-    nl = hit.find("\n")
+    nl = hit.find(b"\n")
     if nl < 0:
         return None
-    return hit[nl + 1 :], hit[:nl]
+    return hit[nl + 1 :], hit[:nl].decode("ascii")
 
 
-async def map_cache_set(key: str, body: str, etag: str) -> None:
+async def map_cache_set(key: str, gzipped_body: bytes, etag: str) -> None:
     client = _redis_client()
     if client is None:
         return
     try:
-        await client.set(key, etag + "\n" + body, ex=_MAP_CACHE_TTL)
+        await client.set(key, etag.encode("ascii") + b"\n" + gzipped_body, ex=_MAP_CACHE_TTL)
     except Exception:  # pragma: no cover
         pass
 

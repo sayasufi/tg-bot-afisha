@@ -1,3 +1,4 @@
+import gzip
 import hashlib
 from datetime import datetime
 from uuid import UUID
@@ -55,16 +56,19 @@ async def get_map_events(
             raise HTTPException(status_code=400, detail="bbox must have 4 comma-separated numbers")
         bbox_tuple = (parts[0], parts[1], parts[2], parts[3])
 
-    # Serve the whole response from Redis when warm (skips DB + row-build + encode),
-    # and emit an ETag so a post-window revalidation returns a bare 304 instead of
-    # re-shipping the (large) body. We bypass response_model on purpose: the payload
-    # is built as plain dicts and encoded once with orjson — Pydantic re-validating
-    # ~7k rows was a large, pointless slice of the latency.
+    # Serve the whole response from Redis when warm (skips DB + row-build + encode +
+    # compress), and emit an ETag so a post-window revalidation returns a bare 304
+    # instead of re-shipping the body. We bypass response_model on purpose: the payload
+    # is built as plain dicts and encoded once with orjson — Pydantic re-validating ~7k
+    # rows was a large, pointless slice of the latency. The cached body is GZIPPED ONCE
+    # per window: served as-is to gzip clients (≈all), so neither uvicorn nor the nginx
+    # edge re-compresses the multi-MB payload per request, and the nginx proxy_cache in
+    # front stores it already-compressed.
+    accepts_gzip = "gzip" in request.headers.get("accept-encoding", "").lower()
     key = map_cache_key(zoom, bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset)
     cached = await map_cache_get(key)
     if cached is not None:
-        body_str, etag = cached
-        body: bytes | str = body_str
+        gz_body, etag = cached
     else:
         service = EventQueryService(db)
         result = await service.map_events(
@@ -72,13 +76,16 @@ async def get_map_events(
         )
         raw = orjson.dumps(result)  # orjson encodes datetime/UUID natively; price is float
         etag = 'W/"' + hashlib.sha256(raw).hexdigest()[:32] + '"'
-        await map_cache_set(key, raw.decode("utf-8"), etag)
-        body = raw
+        gz_body = gzip.compress(raw, 5)
+        await map_cache_set(key, gz_body, etag)
 
-    headers = {"ETag": etag, "Cache-Control": _MAP_CACHE_CONTROL}
+    headers = {"ETag": etag, "Cache-Control": _MAP_CACHE_CONTROL, "Vary": "Accept-Encoding"}
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
-    return Response(content=body, media_type="application/json", headers=headers)
+    if accepts_gzip:
+        headers["Content-Encoding"] = "gzip"
+        return Response(content=gz_body, media_type="application/json", headers=headers)
+    return Response(content=gzip.decompress(gz_body), media_type="application/json", headers=headers)
 
 
 @router.get("/events/nearby", response_model=NearbyResponse)
