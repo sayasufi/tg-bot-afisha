@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>окрест — акцент тёмной темы</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Martian+Mono:wght@500;600&family=Unbounded:wght@700;800&display=swap"
+    />
+    <style>
+      :root {
+        --bg: #14130e;
+        --plinth: #1e1d17;
+        --vitrine: #272620;
+        --ink: #f1ecde;
+        --ink-dim: #a8a294;
+        --line: #3a3830;
+        --on-acid: #0b0b0b;
+        --cinnabar: #ff5a3c;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body { background: var(--bg); color: var(--ink); font-family: "Familjen Grotesk", system-ui, sans-serif; padding: 18px 16px 40px; }
+      h1 { font-family: "Unbounded"; font-weight: 800; font-size: 22px; text-transform: lowercase; letter-spacing: -0.03em; }
+      .sub { font-family: "Martian Mono"; font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 4px 0 18px; }
+      .grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      .card { background: var(--plinth); box-shadow: inset 0 0 0 1px var(--line); padding: 15px 16px 18px; }
+      .hex { font-family: "Martian Mono"; font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; display: flex; justify-content: space-between; margin-bottom: 14px; }
+      .name { color: var(--ink); }
+      .row { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }
+      .wm { font-family: "Unbounded"; font-weight: 800; font-size: 22px; text-transform: lowercase; letter-spacing: -0.04em; }
+      .o { position: relative; display: inline-block; color: var(--ink); }
+      .o::before { content: ""; position: absolute; left: 50%; top: 48%; width: 0.78em; height: 0.78em; background: var(--acid); border-radius: 50%; transform: translate(-50%, -50%); z-index: -1; }
+      .pin { width: 46px; height: 46px; display: grid; place-items: center; background: var(--acid); box-shadow: inset 0 0 0 1px var(--ink), 2px 2px 0 var(--cinnabar); color: var(--on-acid); font-size: 20px; }
+      .chip { height: 32px; padding: 0 12px; display: inline-grid; place-items: center; background: var(--acid); color: var(--on-acid); font-family: "Martian Mono"; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+      .cta { height: 44px; padding: 0 18px; display: inline-grid; place-items: center; background: var(--acid); color: var(--on-acid); box-shadow: 2px 2px 0 var(--cinnabar); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; }
+      .nav { display: flex; align-items: center; height: 40px; padding-left: 12px; position: relative; color: var(--ink); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; margin-top: 12px; }
+      .nav::before { content: ""; position: absolute; left: 0; width: 4px; height: 22px; background: var(--acid); box-shadow: 0 0 0 1px var(--ink); }
+      .swatch { width: 22px; height: 22px; background: var(--acid); box-shadow: inset 0 0 0 1px var(--ink); display: inline-block; vertical-align: middle; margin-left: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>окрест · акцент ночи</h1>
+    <div class="sub">какой лучше на тёмной стене?</div>
+    <div class="grid" id="grid"></div>
+    <script>
+      const C = [
+        ["Янтарь (текущий)", "#ffb02e"],
+        ["Кислота (бренд светлой)", "#ccff00"],
+        ["Лайм-нео", "#c2f000"],
+        ["Тёмный лайм", "#b4e000"],
+        ["Лимон-лайм", "#e8ff45"],
+        ["Мята (холодный)", "#5fe3a1"],
+      ];
+      const g = document.getElementById("grid");
+      for (const [name, hex] of C) {
+        const d = document.createElement("div");
+        d.className = "card";
+        d.style.setProperty("--acid", hex);
+        d.innerHTML =
+          '<div class="hex"><span class="name">' + name + '<span class="swatch"></span></span><span>' + hex + "</span></div>" +
+          '<div class="row">' +
+          '<span class="wm"><span class="o">о</span>крест</span>' +
+          '<span class="pin">♪</span>' +
+          '<span class="chip">● сейчас</span>' +
+          '<span class="cta">показать 340</span>' +
+          "</div>" +
+          '<div class="nav">▦ карта</div>';
+        g.appendChild(d);
+      }
+    </script>
+  </body>
+</html>

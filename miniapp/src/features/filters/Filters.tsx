@@ -35,7 +35,10 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0, value.goNow].filter(Boolean).length;
   const toggleGoNow = () => {
     hapticSelection();
-    onChange({ ...value, goNow: !value.goNow });
+    const on = !value.goNow;
+    // "Сейчас" and a "Когда" date are mutually exclusive (now isn't a date range) —
+    // turning it on drops any picked date/preset.
+    onChange({ ...value, goNow: on, ...(on ? { dateFrom: "", dateTo: "" } : {}) });
   };
   const shownTotal = useCountUp(total);
   const activePreset = matchPreset(value.dateFrom, value.dateTo);
@@ -77,13 +80,15 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   const tapPreset = (key: PresetKey) => {
     hapticSelection();
     const next = activePreset === key ? { dateFrom: "", dateTo: "" } : rangeFor(key);
-    onChange({ ...value, ...next });
+    // Picking a date turns "Сейчас" off (mutually exclusive).
+    onChange({ ...value, goNow: false, ...next });
   };
   const days = useMemo(() => nextDays(14), []);
   const activeDay = value.dateFrom && value.dateFrom === value.dateTo ? value.dateFrom : null;
   const tapDay = (iso: string) => {
     hapticSelection();
-    onChange(activeDay === iso ? { ...value, dateFrom: "", dateTo: "" } : { ...value, dateFrom: iso, dateTo: iso });
+    // Picking a day turns "Сейчас" off (mutually exclusive).
+    onChange(activeDay === iso ? { ...value, goNow: false, dateFrom: "", dateTo: "" } : { ...value, goNow: false, dateFrom: iso, dateTo: iso });
   };
 
   return (
