@@ -23,6 +23,7 @@
 }
 
 .cmdpill__menu {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -32,6 +33,25 @@
   background: none;
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+/* Favourites count on the ☰ — a quiet, persistent reason to open the menu (where the
+   sections live). Ink, not acid/cinnabar, so the scarce accents stay meaningful. */
+.cmdpill__navdot {
+  position: absolute;
+  top: 6px;
+  left: 23px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: var(--plinth);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .cmdpill__burger {

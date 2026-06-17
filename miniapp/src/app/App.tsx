@@ -12,6 +12,7 @@ const EventsMap = lazy(() => import("../features/map/EventsMap").then((m) => ({ 
 import { FocusBar } from "../features/map/FocusBar";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
 import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
+import { Onboarding } from "../features/onboarding/Onboarding";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
@@ -63,6 +64,15 @@ export function App() {
   const [coachSeen, setCoachSeen] = useState(() => {
     try {
       return localStorage.getItem("okrest_coach") === "1";
+    } catch {
+      return true;
+    }
+  });
+  // First-run guide — shown once over the loaded map (default true on storage failure
+  // so it never blocks).
+  const [onboarded, setOnboarded] = useState(() => {
+    try {
+      return localStorage.getItem("okrest_onboarded") === "1";
     } catch {
       return true;
     }
@@ -418,6 +428,16 @@ export function App() {
     }, 300);
   }, []);
 
+  const dismissOnboarding = useCallback(() => {
+    haptic("light");
+    try {
+      localStorage.setItem("okrest_onboarded", "1");
+    } catch {
+      /* ignore */
+    }
+    setOnboarded(true);
+  }, []);
+
   const toggleTheme = useCallback(() => {
     haptic("light");
     setTheme((t) => {
@@ -465,6 +485,7 @@ export function App() {
         onChange={setFilters}
         onMenu={() => setDrawerOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
+        favCount={fav.ids.size}
       />
       <SearchOverlay
         open={searchOpen}
@@ -573,6 +594,8 @@ export function App() {
       />
 
       <ProofFrame />
+
+      {!onboarded && <Onboarding onClose={dismissOnboarding} />}
     </div>
   );
 }

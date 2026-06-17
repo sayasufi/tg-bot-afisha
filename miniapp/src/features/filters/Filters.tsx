@@ -27,9 +27,10 @@ type Props = {
   onChange: (value: FilterState) => void;
   onMenu: () => void;
   onOpenSearch: () => void;
+  favCount?: number;
 };
 
-export function Filters({ value, total, open, hasLocation, onOpenChange, onChange, onMenu, onOpenSearch }: Props) {
+export function Filters({ value, total, open, hasLocation, onOpenChange, onChange, onMenu, onOpenSearch, favCount = 0 }: Props) {
 
   const advancedCount = [value.q, value.categories.length > 0, value.dateFrom || value.dateTo, value.priceMax, value.radiusKm > 0, value.goNow].filter(Boolean).length;
   const toggleGoNow = () => {
@@ -91,8 +92,9 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
           "Сейчас" filter is on, the whole pill pulses cinnabar so it's unmistakable
           the map is narrowed to catchable-now events. */}
       <div className={`cmdpill${open ? " cmdpill--open" : ""}${value.goNow ? " cmdpill--live" : ""}`}>
-        <button type="button" className="cmdpill__menu" aria-label="Меню" onClick={(e) => { e.stopPropagation(); onMenu(); }}>
+        <button type="button" className="cmdpill__menu" aria-label={favCount > 0 ? `Меню, в избранном: ${favCount}` : "Меню"} onClick={(e) => { e.stopPropagation(); onMenu(); }}>
           <IconMenu className="cmdpill__burger" size={18} />
+          {favCount > 0 && <span className="cmdpill__navdot" aria-hidden="true">{favCount}</span>}
           <span className="cmdpill__mark">
             <span className="brand-o">о</span>крест
           </span>
