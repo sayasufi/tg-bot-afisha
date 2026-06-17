@@ -6,10 +6,10 @@ from apps.api.app.services.telegram_auth import validate_init_data
 from core.db.repositories.users import (
     add_favorites,
     get_or_create_city,
-    get_prefs,
+    get_settings,
     list_favorite_ids,
-    merge_prefs,
     set_favorite,
+    update_settings,
     upsert_user,
     upsert_user_city,
 )
@@ -37,7 +37,12 @@ class FavoriteToggleRequest(BaseModel):
 
 class SettingsRequest(BaseModel):
     init_data: str
-    set: dict | None = None  # partial settings to merge; omit to just read
+    # Each field: a value sets it, None leaves it unchanged (the client only ever sets).
+    theme: str | None = None
+    city: str | None = None
+    onboarded: bool | None = None
+    coach: bool | None = None
+    swipe_seen: bool | None = None
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -105,12 +110,26 @@ def toggle_favorite(payload: FavoriteToggleRequest):
 
 @router.post("/settings")
 def user_settings(payload: SettingsRequest):
-    """Read (or merge-then-read) the account's app settings (theme, city, future prefs)."""
+    """Read, or set-then-read, the account's app settings (theme, city, first-run flags)."""
     user, uid = _auth(payload.init_data)
     db = SessionLocal()
     try:
         upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-        prefs = merge_prefs(db, uid, payload.set) if payload.set else get_prefs(db, uid)
-        return {"prefs": prefs}
+        changing = any(
+            v is not None for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen)
+        )
+        if changing:
+            settings = update_settings(
+                db,
+                uid,
+                theme=payload.theme,
+                city=payload.city,
+                onboarded=payload.onboarded,
+                coach=payload.coach,
+                swipe_seen=payload.swipe_seen,
+            )
+        else:
+            settings = get_settings(db, uid)
+        return {"settings": settings}
     finally:
         db.close()

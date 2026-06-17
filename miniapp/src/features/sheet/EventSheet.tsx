@@ -6,6 +6,7 @@ import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, 
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
+import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
@@ -80,6 +81,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     } catch {
       return;
     }
+    pushSetting("swipe_seen", true); // remember on the account, not just this device
     setSwipeHint(true);
     const t = setTimeout(() => setSwipeHint(false), 3800);
     return () => clearTimeout(t);

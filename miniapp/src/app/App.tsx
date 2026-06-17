@@ -94,16 +94,39 @@ export function App() {
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
   // only when more than one city is active.
   const { cities, current: currentCity, select: selectCity, seed: seedCity } = useCities(userPos);
-  // Pull account-scoped settings (theme, city) on open so they match across devices,
-  // overriding this device's local cache when the account has a saved value.
+  // Pull account-scoped settings on open so they match across devices, overriding this
+  // device's local cache when the account has a saved value.
   useEffect(() => {
-    void loadSettings().then((prefs) => {
-      if (!prefs) return;
-      if (prefs.theme === "dark" || prefs.theme === "light") {
-        applyTheme(prefs.theme);
-        setTheme(prefs.theme);
+    void loadSettings().then((s) => {
+      if (!s) return;
+      if (s.theme === "dark" || s.theme === "light") {
+        applyTheme(s.theme);
+        setTheme(s.theme);
       }
-      if (typeof prefs.city === "string" && prefs.city) seedCity(prefs.city);
+      if (typeof s.city === "string" && s.city) seedCity(s.city);
+      // First-run flags are sticky-true across devices: adopt the account's "seen", and
+      // push this device's local "seen" up once so other devices skip it too.
+      const reconcile = (lsKey: string, key: "onboarded" | "coach" | "swipe_seen", seen: boolean | undefined, markSeen?: () => void) => {
+        let local = false;
+        try {
+          local = localStorage.getItem(lsKey) === "1";
+        } catch {
+          /* ignore */
+        }
+        if (seen) {
+          try {
+            localStorage.setItem(lsKey, "1");
+          } catch {
+            /* ignore */
+          }
+          markSeen?.();
+        } else if (local) {
+          pushSetting(key, true);
+        }
+      };
+      reconcile("okrest_onboarded", "onboarded", s.onboarded, () => setOnboarded(true));
+      reconcile("okrest_coach", "coach", s.coach, () => setCoachSeen(true));
+      reconcile("okrest_swipe_seen", "swipe_seen", s.swipe_seen);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -316,6 +339,7 @@ export function App() {
       /* ignore */
     }
     setOnboarded(true);
+    pushSetting("onboarded", true); // remember on the account, not just this device
   }, []);
 
   // Close whatever is on top, most-modal first — shared by the Telegram BackButton and
@@ -375,6 +399,7 @@ export function App() {
     } catch {
       /* ignore */
     }
+    pushSetting("coach", true); // remember on the account, not just this device
   }, []);
 
   // Auto-dismiss the first-run coach if untouched.

@@ -47,37 +47,48 @@ def upsert_user_city(db: Session, telegram_user_id: int, city: City) -> User:
     return user
 
 
-def _sanitize_prefs(patch: dict) -> dict:
-    """Only accept short scalar settings (str/number/bool) — generic enough for any future
-    setting, but bounded so a client can't stuff arbitrary blobs into the row."""
-    out: dict = {}
-    for k, v in list(patch.items())[:20]:
-        if not isinstance(k, str) or not k or len(k) > 40:
-            continue
-        if isinstance(v, bool) or isinstance(v, (int, float)):
-            out[k] = v
-        elif isinstance(v, str) and len(v) <= 200:
-            out[k] = v
-    return out
-
-
-def get_prefs(db: Session, telegram_user_id: int) -> dict:
-    user = db.get(User, telegram_user_id)
-    return dict(user.prefs or {}) if user else {}
-
-
-def merge_prefs(db: Session, telegram_user_id: int, patch: dict) -> dict:
-    """Shallow-merge sanitized settings into the user's prefs blob; returns the full set."""
+def get_settings(db: Session, telegram_user_id: int) -> dict:
+    """The account's app settings (explicit columns), shaped for the Mini App."""
     user = db.get(User, telegram_user_id)
     if not user:
         return {}
-    current = dict(user.prefs or {})
-    current.update(_sanitize_prefs(patch))
-    user.prefs = current
+    return {
+        "theme": user.theme,
+        "city": user.city_slug,
+        "onboarded": user.onboarded,
+        "coach": user.coach,
+        "swipe_seen": user.swipe_seen,
+    }
+
+
+def update_settings(
+    db: Session,
+    telegram_user_id: int,
+    *,
+    theme: str | None = None,
+    city: str | None = None,
+    onboarded: bool | None = None,
+    coach: bool | None = None,
+    swipe_seen: bool | None = None,
+) -> dict:
+    """Set the provided settings (None = leave unchanged); returns the full set.
+    The client only ever sets values (never clears), so None means 'not provided'."""
+    user = db.get(User, telegram_user_id)
+    if not user:
+        return {}
+    if theme in ("light", "dark"):
+        user.theme = theme
+    if city:
+        user.city_slug = str(city)[:64]
+    if onboarded is not None:
+        user.onboarded = bool(onboarded)
+    if coach is not None:
+        user.coach = bool(coach)
+    if swipe_seen is not None:
+        user.swipe_seen = bool(swipe_seen)
     db.add(user)
     db.commit()
-    db.refresh(user)
-    return dict(user.prefs or {})
+    return get_settings(db, telegram_user_id)
 
 
 def list_favorite_ids(db: Session, telegram_user_id: int) -> list[str]:

@@ -43,22 +43,30 @@ export async function syncFavorites(add: string[] = []): Promise<string[] | null
   }
 }
 
-// Account-scoped app settings (theme, picked city, future prefs). Pass `set` to merge a
-// partial update; omit to just read. Returns the full prefs blob, or null outside
-// Telegram / on error (callers then keep their local values).
-export async function syncSettings(set?: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+// Account-scoped app settings (explicit fields). Pass a partial to set those fields;
+// omit to just read. Returns the full settings, or null outside Telegram / on error
+// (callers then keep their local values).
+export type UserSettings = {
+  theme?: string | null;
+  city?: string | null;
+  onboarded?: boolean;
+  coach?: boolean;
+  swipe_seen?: boolean;
+};
+
+export async function syncSettings(patch?: Partial<UserSettings>): Promise<UserSettings | null> {
   const init = initData();
   if (!init) return null;
   try {
     const r = await fetch(`${API_BASE}/v1/users/settings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, set: set ?? null }),
+      body: JSON.stringify({ init_data: init, ...(patch ?? {}) }),
       keepalive: true,
     });
     if (!r.ok) return null;
-    const j = (await r.json()) as { prefs?: Record<string, unknown> };
-    return j.prefs ?? null;
+    const j = (await r.json()) as { settings?: UserSettings };
+    return j.settings ?? null;
   } catch {
     return null;
   }
