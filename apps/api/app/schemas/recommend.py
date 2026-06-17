@@ -13,7 +13,7 @@ class RailItem(BaseModel):
     date_end: datetime | None = None
     price_min: Decimal | None = None
     venue: str | None = None
-    venue_hours: dict | None = None
+    open_now: bool | None = None  # compact venue-open tri-state (replaces venue_hours)
     lat: float | None = None
     lon: float | None = None
     primary_image_url: str | None = None
