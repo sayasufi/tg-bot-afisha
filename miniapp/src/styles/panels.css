@@ -924,14 +924,24 @@ html[data-theme="dark"] .rcard__ph {
   background: var(--cat, var(--ink-faint));
 }
 
-/* Live now — a calm pulsing dot + lowercase label (replaces the harsh ИДЁТ box). */
-.rcard__live {
+/* Bottom overlay bar: live badge (left) + price (right) on ONE row so they can never
+   overlap — the live label truncates before it reaches the price. */
+.rcard__tags {
   position: absolute;
   left: 7px;
+  right: 7px;
   bottom: 8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* Live now — a calm pulsing dot + lowercase label (replaces the harsh ИДЁТ box). */
+.rcard__live {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-width: 0; /* allow the label to shrink/ellipsis instead of pushing into the price */
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.03em;
@@ -939,7 +949,14 @@ html[data-theme="dark"] .rcard__ph {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
+.rcard__livetext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rcard__livedot {
+  flex: 0 0 auto;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -967,11 +984,12 @@ html[data-theme="dark"] .rcard__ph {
   }
 }
 
-/* Price tag, bottom-right; free events get the one accent. */
+/* Price tag — hugs the right of the bar (margin-left:auto keeps it right even when
+   there's no live badge); never shrinks, so the live label yields first. */
 .rcard__price {
-  position: absolute;
-  right: 7px;
-  bottom: 8px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 1px 6px;
   background: rgba(8, 7, 5, 0.74);
   color: #fff;

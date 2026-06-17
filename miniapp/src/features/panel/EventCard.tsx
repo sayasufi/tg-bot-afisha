@@ -47,13 +47,17 @@ export function EventCard({ item, userPos, onSelect }: { item: CardItem; userPos
           </span>
         )}
         <span className="rcard__scrim" aria-hidden="true" />
-        {go.eligible && (
-          <span className="rcard__live">
-            <i className="rcard__livedot" aria-hidden="true" />
-            {go.kind === "soon" ? go.label : "идёт сейчас"}
+        {(go.eligible || price) && (
+          <span className="rcard__tags">
+            {go.eligible && (
+              <span className="rcard__live">
+                <i className="rcard__livedot" aria-hidden="true" />
+                <span className="rcard__livetext">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>
+              </span>
+            )}
+            {price && <span className={`rcard__price${price.free ? " rcard__price--free" : ""}`}>{price.text}</span>}
           </span>
         )}
-        {price && <span className={`rcard__price${price.free ? " rcard__price--free" : ""}`}>{price.text}</span>}
       </span>
       <span className="rcard__title">{item.title}</span>
       <span className="rcard__meta">
