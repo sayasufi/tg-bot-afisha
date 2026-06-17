@@ -54,7 +54,9 @@
 .brand-o {
   position: relative;
   display: inline-block;
-  color: var(--ink);
+  /* The glyph sits ON the acid disc → always the on-acid ink (black), never --ink
+     (which is off-white in dark mode and would vanish into the disc). */
+  color: var(--on-acid);
 }
 
 .brand-o::before {

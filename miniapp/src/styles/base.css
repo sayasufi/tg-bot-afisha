@@ -45,8 +45,11 @@ html[data-theme="dark"] {
   --ink-faint: #8a857a; /* lifted for legibility on the warm-ink wall */
   --line: #3a3830; /* visible warm-grey hairline frames */
   --line-soft: rgba(241, 236, 222, 0.13);
-  --acid: #ccff00; /* night mode keeps the chartreuse — the white-cube at night, NOT amber */
-  --acid-deep: #a8d400;
+  /* Night accent = warm amber, NOT chartreuse: on a dark wall #CCFF00 is near-white-
+     luminous, so off-white text/elements on it merge. Amber is a distinct mid-luminance
+     accent that still carries black text. (Light theme keeps the signature chartreuse.) */
+  --acid: #ffb02e;
+  --acid-deep: #e0951f;
   --on-acid: #0b0b0b;
   --cinnabar: #ff5a3c; /* nudged brighter so it reads on dark */
   color: var(--ink);

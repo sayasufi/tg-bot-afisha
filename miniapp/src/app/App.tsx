@@ -11,7 +11,7 @@ import { ClusterPeek } from "../features/map/ClusterPeek";
 const EventsMap = lazy(() => import("../features/map/EventsMap").then((m) => ({ default: m.EventsMap })));
 import { FocusBar } from "../features/map/FocusBar";
 import { Coach, EmptyState, LoadingBar, MapShimmer, RadarPing } from "../features/map/MapOverlays";
-import { BottomNav, FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
+import { FavoritesPanel, ProfilePanel, RecommendationsPanel, Sidebar, type View } from "../features/panel";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
@@ -398,10 +398,6 @@ export function App() {
   // The slim "marked exhibit" bar shows on the map when a marker is highlighted
   // and no card is open.
   const focusBarVisible = view === "map" && !!focused && !selected && !peek;
-  // Bottom nav shows on the bare map and on the panel views — hidden whenever a
-  // higher overlay (event sheet, filter sheet, search, drawer) or the focused-pin
-  // bar owns the screen, so it never collides with them.
-  const bottomNavVisible = !selected && !peek && !filtersOpen && !drawerOpen && !searchOpen && !focusBarVisible;
 
   const onRefresh = useCallback(() => {
     haptic("medium");
@@ -459,7 +455,7 @@ export function App() {
   }, [openEvent]);
 
   return (
-    <div className={`app${focusBarVisible ? " app--focusbar" : ""}${bottomNavVisible ? " app--bottomnav" : ""}`}>
+    <div className={`app${focusBarVisible ? " app--focusbar" : ""}`}>
       <Filters
         value={filters}
         total={shownTotal}
@@ -560,17 +556,6 @@ export function App() {
       )}
       {view === "profile" && (
         <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} items={items} favIds={fav.ids} onClose={() => setView("map")} />
-      )}
-
-      {bottomNavVisible && (
-        <BottomNav
-          view={view}
-          favCount={fav.ids.size}
-          onSelect={(v) => {
-            haptic("light");
-            setView(v);
-          }}
-        />
       )}
 
       <Sidebar
