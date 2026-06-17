@@ -85,9 +85,14 @@ def sync_favorites(payload: FavoritesSyncRequest):
     db = SessionLocal()
     try:
         # Records the open (last_active) + creates the row the merge insert needs.
-        upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-        if payload.add:
+        u = upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+        # Merge this device's local favourites only ONCE per account (first sync). After
+        # that, ignore `add` — a stale device must not resurrect removed favourites.
+        if payload.add and not u.favorites_merged:
             add_favorites(db, uid, payload.add)
+            u.favorites_merged = True
+            db.add(u)
+            db.commit()
         return {"ids": list_favorite_ids(db, uid)}
     finally:
         db.close()

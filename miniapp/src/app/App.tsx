@@ -94,16 +94,19 @@ export function App() {
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
   // only when more than one city is active.
   const { cities, current: currentCity, select: selectCity, seed: seedCity } = useCities(userPos);
+  // If the user changes theme/city before the settings GET resolves, don't let the (older)
+  // account value snap it back. Set when they act; checked when the load lands.
+  const settingsTouched = useRef({ theme: false, city: false });
   // Pull account-scoped settings on open so they match across devices, overriding this
   // device's local cache when the account has a saved value.
   useEffect(() => {
     void loadSettings().then((s) => {
       if (!s) return;
-      if (s.theme === "dark" || s.theme === "light") {
+      if (!settingsTouched.current.theme && (s.theme === "dark" || s.theme === "light")) {
         applyTheme(s.theme);
         setTheme(s.theme);
       }
-      if (typeof s.city === "string" && s.city) seedCity(s.city);
+      if (!settingsTouched.current.city && typeof s.city === "string" && s.city) seedCity(s.city);
       // First-run flags are sticky-true across devices: adopt the account's "seen", and
       // push this device's local "seen" up once so other devices skip it too.
       const reconcile = (lsKey: string, key: "onboarded" | "coach" | "swipe_seen", seen: boolean | undefined, markSeen?: () => void) => {
@@ -137,8 +140,31 @@ export function App() {
   // minutes.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
+    // Pause the tick while backgrounded — no point re-rendering + re-scanning goNow over
+    // the whole set when the app isn't visible; refresh immediately on return.
+    let t: ReturnType<typeof setInterval> | undefined;
+    const start = () => {
+      if (t === undefined && !document.hidden) t = setInterval(() => setNow(Date.now()), 60_000);
+    };
+    const stop = () => {
+      if (t !== undefined) {
+        clearInterval(t);
+        t = undefined;
+      }
+    };
+    const onVis = () => {
+      if (document.hidden) stop();
+      else {
+        setNow(Date.now());
+        start();
+      }
+    };
+    start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
 
   const query = useMemo(() => {
@@ -520,6 +546,7 @@ export function App() {
 
   const toggleTheme = useCallback(() => {
     haptic("light");
+    settingsTouched.current.theme = true; // user chose — a late settings GET must not revert it
     setTheme((t) => {
       const next: ThemeName = t === "dark" ? "light" : "dark";
       applyTheme(next);
@@ -586,7 +613,14 @@ export function App() {
         />
       )}
       {view === "map" && !selected && !filtersOpen && (
-        <CitySwitcher cities={cities} current={currentCity} onSelect={selectCity} />
+        <CitySwitcher
+          cities={cities}
+          current={currentCity}
+          onSelect={(slug) => {
+            settingsTouched.current.city = true;
+            selectCity(slug);
+          }}
+        />
       )}
 
       <Suspense fallback={null}>
@@ -681,10 +715,10 @@ export function App() {
         <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} city={currentCity?.slug ?? null} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "favorites" && (
-        <FavoritesPanel items={items} favIds={fav.ids} userPos={userPos} loading={loading} onRefresh={onRefresh} onSelect={openEvent} onClose={() => setView("map")} />
+        <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
       )}
       {view === "profile" && (
-        <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} items={items} favIds={fav.ids} onClose={() => setView("map")} />
+        <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} favIds={fav.ids} onClose={() => setView("map")} />
       )}
 
       <Sidebar

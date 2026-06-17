@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
 import { formatWhenShort, goNowState } from "../../lib/datetime";
@@ -14,7 +14,9 @@ function priceLabel(p: number | null | undefined): string | null {
 
 // A list-view card: the event photo fills the whole tile, darkened, with the title and
 // data set over it — a full-bleed "poster" catalogue entry (no padding, edge to edge).
-export function EventListRow({
+// memo'd: props are primitives + a stable onSelect, so appended pages don't re-render
+// already-mounted rows.
+function EventListRowImpl({
   item,
   index,
   userPos,
@@ -36,7 +38,7 @@ export function EventListRow({
     <button
       type="button"
       className={`lrow${img ? "" : " lrow--noimg"}`}
-      style={{ "--i": index } as CSSProperties}
+      style={{ "--i": Math.min(index, 8) } as CSSProperties}
       onClick={() => onSelect(item)}
     >
       {img ? (
@@ -61,3 +63,5 @@ export function EventListRow({
     </button>
   );
 }
+
+export const EventListRow = memo(EventListRowImpl);

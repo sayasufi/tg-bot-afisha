@@ -93,34 +93,43 @@ export function ListView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sort, bboxKey, paramsKey]);
 
+  const loadingMoreRef = useRef(false);
   const loadMore = () => {
-    if (more) return;
+    // Synchronous reentrancy guard (state would be stale within a tick), and never page
+    // while a sort/filter reload is in flight (old offset under a new sort).
+    if (loadingMoreRef.current || loading) return;
+    loadingMoreRef.current = true;
     setMore(true);
     fetchEventsList(build(items.length))
       .then((r) => {
         setItems((prev) => [...prev, ...r.items]);
         setTotal(r.total);
-        setMore(false);
       })
-      .catch(() => setMore(false));
+      .catch(() => undefined)
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setMore(false);
+      });
   };
+  const loadMoreRef = useRef(loadMore);
+  loadMoreRef.current = loadMore;
 
-  // Infinite scroll: auto-load the next page when a sentinel near the list's end comes
-  // into view (no "показать ещё" tap). Re-binds with a fresh loadMore as items grow.
+  // Infinite scroll: one long-lived observer calls the LATEST loadMore via a ref, so it
+  // isn't torn down + rebuilt on every page append.
   const canMore = items.length > 0 && items.length < total;
   useEffect(() => {
     if (!canMore) return;
     const root = scrollRef.current;
     const sentinel = sentinelRef.current;
     if (!root || !sentinel) return;
-    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), {
+    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMoreRef.current(), {
       root,
       rootMargin: "500px",
     });
     io.observe(sentinel);
     return () => io.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canMore, items.length, sort, bboxKey]);
+  }, [canMore]);
 
   if (!open) return null;
 

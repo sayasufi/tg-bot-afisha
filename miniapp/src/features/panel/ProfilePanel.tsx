@@ -1,4 +1,6 @@
-import type { EventItem } from "../../api/client";
+import { useEffect, useState } from "react";
+
+import { fetchEventsByIds, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import { IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
@@ -8,21 +10,29 @@ export function ProfilePanel({
   user,
   total,
   city,
-  items,
   favIds,
   onClose,
 }: {
   user: TgUser | null;
   total: number;
   city: string;
-  items: EventItem[];
   favIds: Set<string>;
   onClose: () => void;
 }) {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
-  const favs = items.filter((it) => favIds.has(it.event_id));
+  // Hydrate the favourites by id (not the map's loaded set) so the taste mix is accurate.
+  const [favs, setFavs] = useState<EventItem[]>([]);
+  const idsKey = [...favIds].sort().join(",");
+  useEffect(() => {
+    const ids = idsKey ? idsKey.split(",") : [];
+    if (!ids.length) {
+      setFavs([]);
+      return;
+    }
+    fetchEventsByIds(ids).then(setFavs);
+  }, [idsKey]);
 
   // "Твой вкус" — the category mix of your favourites, as a proportion bar.
   const taste = (() => {

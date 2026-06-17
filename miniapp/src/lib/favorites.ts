@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { syncFavorites as syncRemote, toggleFavoriteRemote } from "../api/users";
 
@@ -20,13 +20,23 @@ function read(): Set<string> {
 
 let favs = read();
 const subscribers = new Set<() => void>();
+// Monotonic counter of LOCAL mutations — a server response only adopts if no newer local
+// toggle happened since its request was issued (otherwise a stale list clobbers a fresh tap).
+let mutationSeq = 0;
 
 function emit() {
   for (const fn of subscribers) fn();
 }
 
+function sameSet(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const x of a) if (!b.has(x)) return false;
+  return true;
+}
+
 function setLocal(next: Set<string>): void {
-  favs = next;
+  if (sameSet(favs, next)) return; // no-op (e.g. server adopt returns the same list) → no re-render
+  favs = next; // new identity ONLY on a real change → referential stability for consumers
   try {
     localStorage.setItem(KEY, JSON.stringify([...next]));
   } catch {
@@ -41,10 +51,12 @@ export function toggleFavorite(id: string): void {
   if (on) next.add(id);
   else next.delete(id);
   setLocal(next); // optimistic — the UI flips instantly
-  // Persist to the account (best-effort); adopt the server's authoritative list back.
+  const seq = ++mutationSeq;
+  // Persist to the account; adopt the server list back ONLY if this is still the latest
+  // local op (a later toggle must not be overwritten by this one's stale response).
   toggleFavoriteRemote(id, on)
     .then((ids) => {
-      if (ids) setLocal(new Set(ids));
+      if (ids && seq === mutationSeq) setLocal(new Set(ids));
     })
     .catch(() => {
       /* the local toggle already stands; next sync reconciles */
@@ -65,9 +77,10 @@ export async function syncFavorites(): Promise<void> {
     } catch {
       /* ignore */
     }
+    const seq = mutationSeq;
     const ids = await syncRemote(merged ? [] : [...favs]);
     if (ids) {
-      setLocal(new Set(ids));
+      if (seq === mutationSeq) setLocal(new Set(ids)); // don't clobber a toggle made mid-sync
       try {
         localStorage.setItem(MERGED_KEY, "1");
       } catch {
@@ -79,20 +92,24 @@ export async function syncFavorites(): Promise<void> {
   }
 }
 
-// Reactive hook: re-renders subscribers whenever favorites change. `ids` is a
-// fresh copy so callers can't mutate the store directly (only toggle() can).
+function subscribe(cb: () => void): () => void {
+  subscribers.add(cb);
+  return () => {
+    subscribers.delete(cb);
+  };
+}
+
+// `favs` is replaced (new identity) only on a real change, so the snapshot is stable
+// between unrelated renders — consumers' memos keyed on fav.ids no longer thrash.
+function getSnapshot(): Set<string> {
+  return favs;
+}
+
 export function useFavorites() {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const fn = () => force((x) => x + 1);
-    subscribers.add(fn);
-    return () => {
-      subscribers.delete(fn);
-    };
-  }, []);
+  const ids = useSyncExternalStore(subscribe, getSnapshot);
   return {
-    ids: new Set(favs),
-    has: (id: string) => favs.has(id),
+    ids,
+    has: (id: string) => ids.has(id),
     toggle: toggleFavorite,
   };
 }

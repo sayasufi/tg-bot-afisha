@@ -1,5 +1,33 @@
-import { getJson, toNum } from "./http";
+import { API_BASE, getJson, toNum } from "./http";
 import type { City, EventDetail, EventItem, MapResponse } from "./types";
+
+// Hydrate specific events by id (favourites) into the list-item shape — independent of
+// the map's loaded set, so saved events always render and the count can't diverge.
+export async function fetchEventsByIds(
+  ids: string[],
+  userPos?: [number, number] | null,
+  signal?: AbortSignal,
+): Promise<EventItem[]> {
+  if (!ids.length) return [];
+  const body: Record<string, unknown> = { ids };
+  if (userPos) {
+    body.lat = userPos[0];
+    body.lon = userPos[1];
+  }
+  try {
+    const r = await fetch(`${API_BASE}/v1/events/by-ids`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!r.ok) return [];
+    const data = (await r.json()) as { items?: EventItem[] };
+    return (data.items ?? []).map((x: any) => ({ ...x, price_min: toNum(x.price_min) }));
+  } catch {
+    return [];
+  }
+}
 
 // Active cities the app serves — for the city picker / auto-detect and per-city centring.
 export async function fetchCities(signal?: AbortSignal): Promise<City[]> {

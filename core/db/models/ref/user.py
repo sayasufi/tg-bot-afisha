@@ -21,5 +21,9 @@ class User(Base):
     onboarded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     coach: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     swipe_seen: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # True once the account has merged a device's local favourites (the one-time
+    # localStorage migration). After that, a stale never-synced device's `add` list is
+    # ignored, so it can't resurrect favourites removed on another device.
+    favorites_merged: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

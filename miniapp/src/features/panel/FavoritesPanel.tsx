@@ -1,32 +1,48 @@
-import type { EventItem } from "../../api/client";
+import { useEffect, useState } from "react";
+
+import { fetchEventsByIds, type EventItem } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
 import { IconClose, IconHeart } from "../../lib/icons";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
 import { EventListRow } from "./EventListRow";
 import { PullHint } from "./PullHint";
 
-// Favourites you've hearted — same full-bleed poster format as the list view, soonest first.
+// Favourites — fetched by id from the server (independent of the map's loaded set, so the
+// list always matches the count), in the same full-bleed poster format as the list view.
 export function FavoritesPanel({
-  items,
   favIds,
   userPos,
-  loading = false,
-  onRefresh,
   onSelect,
   onClose,
 }: {
-  items: EventItem[];
   favIds: Set<string>;
   userPos?: LatLon | null;
-  loading?: boolean;
-  onRefresh?: () => void;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
-  const ptr = usePullToRefresh(() => onRefresh?.());
-  const favs = items
-    .filter((it) => favIds.has(it.event_id))
-    .sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""));
+  const [favs, setFavs] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const idsKey = [...favIds].sort().join(",");
+
+  const load = () => {
+    const ids = idsKey ? idsKey.split(",") : [];
+    if (!ids.length) {
+      setFavs([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchEventsByIds(ids, userPos ?? null)
+      .then(setFavs)
+      .finally(() => setLoading(false));
+  };
+  // Mounted only while the favourites view is open; (re)fetch on open and when the set changes.
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
+
+  const ptr = usePullToRefresh(() => load());
 
   return (
     <div className="panelview listview">
@@ -42,7 +58,7 @@ export function FavoritesPanel({
           favs.map((it, i) => (
             <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} onSelect={onSelect} />
           ))
-        ) : (
+        ) : loading ? null : (
           <div className="favempty">
             <IconHeart size={40} className="favempty__glyph" />
             <p className="panelview__hint">
