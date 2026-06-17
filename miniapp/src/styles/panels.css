@@ -976,27 +976,26 @@ html[data-theme="dark"] .rcard__ph {
   text-transform: uppercase;
   color: var(--ink-dim);
 }
+/* All four sorts fit on one row — a 4-up grid, no horizontal scroll. */
 .listview__sorts {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.listview__sorts::-webkit-scrollbar {
-  display: none;
 }
 .listview__sort {
-  flex: 0 0 auto;
   height: 38px;
-  padding: 0 14px;
+  padding: 0 4px;
   border: 1px solid var(--line);
   background: var(--plinth);
   color: var(--ink-dim);
   font-family: var(--grotesk);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
   cursor: pointer;
 }
 .listview__sort--on {
@@ -1016,127 +1015,151 @@ html[data-theme="dark"] .rcard__ph {
   color: var(--ink-dim);
 }
 
-/* Give the first row a little air below the sort bar. */
+/* Full-bleed cards — no side gutters, no top gap. */
 .listview .panelview__scroll {
-  padding-top: 10px;
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 0;
 }
 
-/* List row — a framed "catalogue plate": photo + accession code + title + when/venue +
-   price/distance. Square hairline frame, Mono data, Grotesk title — pure VITRINE. */
+/* List card — the event photo fills the whole tile, darkened, with the title + data set
+   over it. Full-bleed (edge to edge), tall, "editorial after-dark" poster. */
 .lrow {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
+  position: relative;
+  display: block;
   width: 100%;
-  margin-bottom: 8px;
-  padding: 12px;
+  height: 172px;
   border: 0;
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  background: var(--plinth);
+  border-bottom: 1px solid rgba(244, 244, 239, 0.14);
+  background: var(--ink);
+  overflow: hidden;
   text-align: left;
   cursor: pointer;
   animation: rowIn 0.3s var(--ease-cut) both;
-  animation-delay: calc(var(--i) * 0.02s);
+  animation-delay: calc(var(--i) * 0.03s);
 }
-.lrow:active {
-  background: var(--vitrine);
-}
-.lrow__thumb {
-  position: relative;
-  flex: 0 0 auto;
-  width: 92px;
-  height: 92px;
-  display: grid;
-  place-items: center;
-  background: var(--vitrine);
-  box-shadow: inset 0 0 0 1px var(--ink);
-  color: var(--ink-faint);
-  overflow: hidden;
-}
-.lrow__thumb img {
+.lrow__img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Muted like the cards/sheet, so photos sit inside the editorial palette. */
-  filter: saturate(0.62) brightness(0.9) contrast(1.02);
+  /* Muted + darkened so the overlaid type always reads. */
+  filter: saturate(0.6) brightness(0.78) contrast(1.04);
 }
-.lrow__spark {
+.lrow__glyph {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--cinnabar);
-  box-shadow: 0 0 0 1.5px var(--plinth);
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(244, 244, 239, 0.22);
 }
-.lrow__body {
-  flex: 1 1 auto;
-  min-width: 0;
+/* Legibility scrim — heavy at the bottom (title), a touch at the top (code/distance). */
+.lrow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(11, 11, 11, 0.92) 0%,
+    rgba(11, 11, 11, 0.5) 32%,
+    rgba(11, 11, 11, 0.04) 58%,
+    rgba(11, 11, 11, 0.44) 100%
+  );
+}
+.lrow:active::after {
+  background: linear-gradient(to top, rgba(11, 11, 11, 0.96), rgba(11, 11, 11, 0.62) 45%, rgba(11, 11, 11, 0.55));
+}
+.lrow__top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
 }
-/* Accession code kicker — the VITRINE signature on every catalogue entry. */
+/* Accession code kicker — the VITRINE signature, set over the photo. */
 .lrow__code {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: rgba(244, 244, 239, 0.62);
+}
+.lrow__dist {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(244, 244, 239, 0.85);
+  white-space: nowrap;
+}
+.lrow__btm {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 0 14px 13px;
+}
+.lrow__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cinnabar);
+}
+.lrow__live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cinnabar);
 }
 .lrow__title {
-  font-family: var(--grotesk);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.28;
-  color: var(--ink);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin: 6px 0 8px;
+  font-family: var(--grotesk);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.16;
+  color: #f4f4ef;
+}
+.lrow__foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
 }
 .lrow__meta {
-  margin-top: auto;
+  min-width: 0;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.02em;
-  line-height: 1.45;
-  color: var(--ink-dim);
+  color: rgba(244, 244, 239, 0.76);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.lrow__live {
-  color: var(--cinnabar);
-  font-weight: 600;
-}
-.lrow__side {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  text-align: right;
-  gap: 6px;
-}
-.lrow__dist {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--ink-dim);
-  white-space: nowrap;
-}
 .lrow__price {
+  flex: 0 0 auto;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--ink);
+  color: #f4f4ef;
   white-space: nowrap;
 }
-/* "Бесплатно" is ink-bold, NOT an acid chip — a list sorted by price was a wall of
-   green, and acid is reserved for the one selected/active thing. */
 .lrow__price--free {
-  color: var(--ink);
+  color: #f4f4ef;
   font-weight: 700;
 }

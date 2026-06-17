@@ -12,8 +12,8 @@ function priceLabel(p: number | null | undefined): string | null {
   return `от ${Math.round(p).toLocaleString("ru-RU")} ₽`;
 }
 
-// A list-view row: photo thumbnail + title + when/venue + price/distance. Heavier than
-// EventRow (which is glyph-only) because the list is meant for browsing with images.
+// A list-view card: the event photo fills the whole tile, darkened, with the title and
+// data set over it — a full-bleed "poster" catalogue entry (no padding, edge to edge).
 export function EventListRow({
   item,
   index,
@@ -30,30 +30,33 @@ export function EventListRow({
   const go = goNowState(item.date_start, item.date_end, item.open_now);
   const when = formatWhenShort(item.date_start, item.date_end);
   const price = priceLabel(item.price_min);
+  const meta = [when, item.venue].filter(Boolean).join(" · ");
 
   return (
-    <button type="button" className="lrow" style={{ "--i": index } as CSSProperties} onClick={() => onSelect(item)}>
-      <span className="lrow__thumb">
-        {img ? (
-          <img src={img} alt="" loading="lazy" decoding="async" />
-        ) : (
-          <CategoryIcon cat={item.category} size={30} />
-        )}
-        {go.eligible && <i className="lrow__spark" aria-hidden="true" />}
-      </span>
-      <span className="lrow__body">
-        {item.code && <span className="lrow__code">{item.code}</span>}
-        <span className="lrow__title">{item.title}</span>
-        <span className="lrow__meta">
-          {go.eligible && <span className="lrow__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}
-          {go.eligible ? " · " : ""}
-          {when}
-          {item.venue ? ` · ${item.venue}` : ""}
+    <button
+      type="button"
+      className={`lrow${img ? "" : " lrow--noimg"}`}
+      style={{ "--i": index } as CSSProperties}
+      onClick={() => onSelect(item)}
+    >
+      {img ? (
+        <img className="lrow__img" src={img} alt="" loading="lazy" decoding="async" />
+      ) : (
+        <span className="lrow__glyph">
+          <CategoryIcon cat={item.category} size={44} />
         </span>
-      </span>
-      <span className="lrow__side">
+      )}
+      <span className="lrow__top">
+        {item.code && <span className="lrow__code">{item.code}</span>}
         {dist && <span className="lrow__dist">{dist}</span>}
-        {price && <span className={`lrow__price${price === "бесплатно" ? " lrow__price--free" : ""}`}>{price}</span>}
+      </span>
+      <span className="lrow__btm">
+        {go.eligible && <span className="lrow__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}
+        <span className="lrow__title">{item.title}</span>
+        <span className="lrow__foot">
+          {meta && <span className="lrow__meta">{meta}</span>}
+          {price && <span className={`lrow__price${price === "бесплатно" ? " lrow__price--free" : ""}`}>{price}</span>}
+        </span>
       </span>
     </button>
   );
