@@ -304,6 +304,9 @@ export function App() {
     else if (drawerOpen) setDrawerOpen(false);
     else if (view !== "map") setView("map");
     else return false;
+    // Drop focus from the trigger so it doesn't keep a focus ring after closing
+    // (a keyboard Escape otherwise leaves the pill button looking "highlighted").
+    (document.activeElement as HTMLElement | null)?.blur?.();
     return true;
   }, [searchOpen, selected, peek, filtersOpen, drawerOpen, view]);
 
@@ -330,6 +333,7 @@ export function App() {
       if (e.key !== "Escape") return;
       if (!onboarded) {
         dismissOnboarding();
+        (document.activeElement as HTMLElement | null)?.blur?.();
         return;
       }
       closeTop();
