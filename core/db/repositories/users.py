@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -120,6 +120,26 @@ def set_favorite(db: Session, telegram_user_id: int, event_id: str, on: bool) ->
                 UserFavorite.event_id == eid,
             )
         )
+    db.commit()
+
+
+def prune_stale_favorites(db: Session, telegram_user_id: int) -> None:
+    """Drop favourites whose event no longer exists (removed by the dedup/prune pipeline)
+    or has no future/ongoing occurrence — so the count and the list only ever reflect
+    events the user can still go to. There's no FK to events.events on purpose; this is
+    where stale references get cleaned up (on every sync)."""
+    db.execute(
+        text(
+            "DELETE FROM ref.user_favorites uf "
+            "WHERE uf.telegram_user_id = :uid "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM events.event_occurrences o "
+            "  WHERE o.event_id = uf.event_id "
+            "  AND coalesce(o.date_end, o.date_start) >= date_trunc('day', now())"
+            ")"
+        ),
+        {"uid": telegram_user_id},
+    )
     db.commit()
 
 

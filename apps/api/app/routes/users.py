@@ -8,6 +8,7 @@ from core.db.repositories.users import (
     get_or_create_city,
     get_settings,
     list_favorite_ids,
+    prune_stale_favorites,
     set_favorite,
     update_settings,
     upsert_user,
@@ -90,6 +91,7 @@ def sync_favorites(payload: FavoritesSyncRequest):
         upsert_user(db, uid, username=user.get("username"), first_name=user.get("first_name"))
         if payload.add:
             add_favorites(db, uid, payload.add)
+        prune_stale_favorites(db, uid)  # drop deleted/expired events so the count is honest
         return {"ids": list_favorite_ids(db, uid)}
     finally:
         db.close()
