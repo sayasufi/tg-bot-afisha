@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>окрест — кнопка «списком»</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700;800&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@800&display=swap"
+    />
+    <style>
+      :root {
+        --bg: #f4f4ef; --plinth: #fff; --vitrine: #ececE4; --ink: #0b0b0b;
+        --ink-dim: #5c5c54; --line: #0b0b0b; --line-soft: rgba(11,11,11,.14);
+        --acid: #ccff00; --on-acid: #0b0b0b; --cinnabar: #e63312;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body { background: #d9d9d2; color: var(--ink); font-family: "Familjen Grotesk", system-ui, sans-serif; padding: 16px; }
+      h1 { font-family: "Unbounded"; font-size: 20px; text-transform: lowercase; letter-spacing: -.03em; }
+      .sub { font-family: "Martian Mono"; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 16px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+      .card { }
+      .cap { font-family: "Martian Mono"; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #333; margin-bottom: 7px; display: flex; justify-content: space-between; }
+      .cap b { color: #000; }
+      /* phone */
+      .scr { position: relative; height: 460px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--ink);
+        /* faux positron map: plaster + faint street grid */
+        background:
+          linear-gradient(0deg, rgba(11,11,11,.05) 1px, transparent 1px) 0 0/100% 46px,
+          linear-gradient(90deg, rgba(11,11,11,.05) 1px, transparent 1px) 0 0/52px 100%,
+          repeating-linear-gradient(58deg, transparent 0 60px, rgba(11,11,11,.045) 60px 62px),
+          #eceae3; }
+      .park { position: absolute; border-radius: 40%; background: rgba(120,160,90,.18); }
+      /* top pill */
+      .pill { position: absolute; top: 12px; left: 12px; right: 12px; height: 44px; display: flex; align-items: stretch; background: var(--plinth); box-shadow: inset 0 0 0 1px var(--line); }
+      .pill .mn { display: flex; align-items: center; gap: 6px; padding: 0 11px; border-right: 1px solid var(--line); }
+      .pill .bz { font-size: 12px; }
+      .pill .wm { font-family: "Unbounded"; font-weight: 800; font-size: 16px; letter-spacing: -.04em; text-transform: lowercase; }
+      .pill .o { position: relative; }
+      .pill .o::before { content: ""; position: absolute; left: 50%; top: 48%; width: .78em; height: .78em; background: var(--acid); border-radius: 50%; transform: translate(-50%,-50%); z-index: -1; }
+      .pill .bd { flex: 1; display: flex; align-items: center; padding: 0 10px; font-family: "Martian Mono"; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+      .pill .sr { width: 40px; display: grid; place-items: center; border-left: 1px solid var(--line); }
+      .pill .lc { width: 40px; display: grid; place-items: center; border-left: 1px solid var(--line); }
+      /* ticker */
+      .tick { position: absolute; top: 60px; left: 12px; right: 12px; height: 22px; display: flex; align-items: center; padding: 0 10px; background: #161412; color: #efe7d8; font-family: "Martian Mono"; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+      /* zoom */
+      .zoom { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; background: var(--plinth); box-shadow: inset 0 0 0 1px var(--line); }
+      .zoom span { width: 36px; height: 36px; display: grid; place-items: center; font-size: 17px; }
+      .zoom span:first-child { border-bottom: 1px solid var(--line); }
+      /* locate FAB */
+      .loc { position: absolute; right: 14px; bottom: 28px; width: 46px; height: 46px; display: grid; place-items: center; background: var(--plinth); border: 1px solid var(--line); }
+      .loc svg { width: 20px; height: 20px; }
+      /* base list button styles */
+      .lb { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--plinth); border: 1px solid var(--line); color: var(--ink); cursor: default; font-family: "Martian Mono"; font-size: 10.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }
+      .lb svg { width: 18px; height: 18px; flex: 0 0 auto; }
+      /* variant positions */
+      .v-leftsq { position: absolute; left: 14px; bottom: 28px; width: 46px; height: 46px; }
+      .v-leftsm { position: absolute; left: 14px; bottom: 31px; width: 40px; height: 40px; }
+      .v-censq { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); width: 46px; height: 46px; }
+      .v-cenpill { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); height: 46px; padding: 0 18px; }
+      /* segmented */
+      .seg { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; background: var(--plinth); box-shadow: inset 0 0 0 1px var(--line); height: 40px; }
+      .seg b { display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; font-family: "Martian Mono"; font-size: 10px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; }
+      .seg b:first-child { border-right: 1px solid var(--line); background: var(--acid); color: var(--on-acid); }
+      .seg b svg { width: 15px; height: 15px; }
+    </style>
+  </head>
+  <body>
+    <h1>окрест · кнопка «списком»</h1>
+    <div class="sub">6 вариантов — где и какой</div>
+    <div class="grid" id="grid"></div>
+    <script>
+      const LIST_ICON =
+        '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="4" cy="6" r="1.7"/><rect x="9" y="5" width="12" height="2"/><circle cx="4" cy="12" r="1.7"/><rect x="9" y="11" width="12" height="2"/><circle cx="4" cy="18" r="1.7"/><rect x="9" y="17" width="12" height="2"/></svg>';
+      const LOC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>';
+
+      const chrome = `
+        <span class="park" style="left:-30px;top:120px;width:130px;height:150px"></span>
+        <span class="park" style="right:-20px;top:200px;width:120px;height:140px"></span>
+        <div class="pill">
+          <span class="mn"><span class="bz">☰</span><span class="wm"><span class="o">о</span>крест</span></span>
+          <span class="bd">все · все даты</span>
+          <span class="sr">⌕</span>{PILLCELL}
+        </div>
+        <div class="tick">··· событий 7363 · театр 1926 · детям 790</div>
+        <div class="zoom"><span>+</span><span>−</span></div>
+        <div class="loc">${LOC_ICON}</div>`;
+
+      const V = [
+        { key: "1 · слева, иконка (46px)", note: "симметрично локации", cell: "", btn: `<span class="lb v-leftsq">${LIST_ICON}</span>` },
+        { key: "2 · слева, иконка (40px)", note: "поменьше", cell: "", btn: `<span class="lb v-leftsm">${LIST_ICON}</span>` },
+        { key: "3 · центр, иконка", note: "icon-only по центру", cell: "", btn: `<span class="lb v-censq">${LIST_ICON}</span>` },
+        { key: "4 · центр, иконка + лейбл", note: "текущий стиль, flat", cell: "", btn: `<span class="lb v-cenpill">${LIST_ICON}<span>список</span></span>` },
+        { key: "5 · сегмент карта|список", note: "переключатель", cell: "", btn: `<div class="seg"><b>${LOC_ICON_MINI()}карта</b><b>${LIST_ICON}список</b></div>` },
+        { key: "6 · в плашке сверху", note: "ячейка рядом с ⌕", cell: `<span class="lc">${LIST_ICON}</span>`, btn: "" },
+      ];
+      function LOC_ICON_MINI() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.5 7-11a7 7 0 10-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>'; }
+
+      const g = document.getElementById("grid");
+      for (const v of V) {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML =
+          `<div class="cap"><b>${v.key}</b><span>${v.note}</span></div>` +
+          `<div class="scr">${chrome.replace("{PILLCELL}", v.cell)}${v.btn}</div>`;
+        g.appendChild(card);
+      }
+    </script>
+  </body>
+</html>
