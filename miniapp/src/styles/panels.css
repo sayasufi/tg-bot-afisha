@@ -946,8 +946,10 @@ html[data-theme="dark"] .rcard__ph {
   height: 46px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
+  /* White passe-partout — matches the zoom/locate controls (framed, distinct from
+     pins/clusters; no shadow/black/acid). */
   background: var(--plinth);
+  box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px var(--plinth), 0 0 0 4px var(--ink);
   color: var(--ink);
   cursor: pointer;
   animation: dropIn 0.3s var(--ease-cut) both;
