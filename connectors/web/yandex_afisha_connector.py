@@ -104,6 +104,28 @@ class YandexAfishaConnector:
         response.raise_for_status()
         return response.json()
 
+    async def _post_checked(self, session: AsyncSession, body: dict, *, attempts: int = 3) -> dict:
+        """POST a GraphQL body and validate it, RETRYING transient upstream failures.
+        Yandex's resolver intermittently answers with a 'Request timed out' GraphQL
+        error (or the edge drops the connection). Without a retry that bubbles up and
+        fails the whole fetch flow — which then parks the single concurrency-1 worker
+        through its 30s flow-level retries and fetches 0 events. A few fast in-connector
+        attempts absorb the hiccup; only a persistent failure reaches the flow."""
+        last_err: Exception | None = None
+        for i in range(attempts):
+            try:
+                data = await self._post(session, body)
+                errors = data.get("errors")
+                if errors:
+                    messages = "; ".join(str(e.get("message", e)) for e in errors if isinstance(e, dict))
+                    raise RuntimeError(f"Yandex Afisha GraphQL error: {messages or errors}")
+                return data
+            except Exception as exc:  # transient timeout / dropped connection / GraphQL error
+                last_err = exc
+                if i + 1 < attempts:
+                    await asyncio.sleep(0.6 * (2 ** i))  # 0.6s, 1.2s backoff
+        raise last_err  # exhausted — fail loudly so Prefect surfaces a real outage
+
     async def _fetch_page(self, session: AsyncSession, offset: int, today) -> tuple[list[RawRecord], int]:
         """One page of `actualEvents` -> (records, total). Raises on GraphQL errors so
         the Celery task fails loudly instead of silently treating an API error (rate
@@ -116,11 +138,7 @@ class YandexAfishaConnector:
             },
             "query": _LIST_QUERY,
         }
-        data = await self._post(session, body)
-        errors = data.get("errors")
-        if errors:
-            messages = "; ".join(str(e.get("message", e)) for e in errors if isinstance(e, dict))
-            raise RuntimeError(f"Yandex Afisha GraphQL error: {messages or errors}")
+        data = await self._post_checked(session, body)
         block = (data.get("data") or {}).get("actualEvents")
         if not isinstance(block, dict):
             block = {}

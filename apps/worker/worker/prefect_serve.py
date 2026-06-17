@@ -14,7 +14,12 @@ from apps.worker.worker import flows
 # (flow, interval_seconds) — mirrors the former Celery beat schedule.
 _SCHEDULE = [
     (flows.fetch_kudago, 300),
-    (flows.fetch_kudago_full_scan, 86400),
+    # The incremental -publication_date cursor wraps on 404 and re-reads the head, so
+    # it surfaces few upcoming events; the dates-ordered full-scan is what actually
+    # walks the upcoming window. Run it every 6h (was 24h) to cut KudaGo staleness
+    # ~24h→~6h. Kept at 6h (not more frequent) because the worker is concurrency_limit=1
+    # and a deep scan must not starve the normalize→enrich→dedup pipeline.
+    (flows.fetch_kudago_full_scan, 21600),
     (flows.fetch_yandex_afisha, 300),
     (flows.fetch_yandex_afisha_full_scan, 43200),
     (flows.fetch_afisha_ru, 300),

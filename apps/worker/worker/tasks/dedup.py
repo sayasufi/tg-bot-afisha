@@ -7,6 +7,8 @@ from core.db.repositories.ingestion import dedup_and_upsert_event, get_venue
 from core.db.session import WorkerAsyncSessionLocal
 from pipeline.llm.service import LLMService
 
+_CLASSIFY_CONCURRENCY = 4  # parallel in-flight LLM classify calls during dedup
+
 
 async def _dedup_impl() -> dict:
     llm = LLMService()
@@ -24,13 +26,31 @@ async def _dedup_impl() -> dict:
             .limit(200)
         )
         rows = (await db.execute(stmt)).all()
+
+        # Pre-classify CONCURRENTLY (bounded). The LLM classify is a ~20s-timeout-prone
+        # network call with a ~43% cache miss rate; running it serially per candidate
+        # made dedup — the LAST stage before an event becomes visible — a multi-minute
+        # tail. The upsert loop below stays SERIAL (its dedup lookups/writes depend on
+        # prior commits, e.g. two candidates that are duplicates of each other).
+        need = [c for c, _r, _s in rows if not any(t.startswith("category:") for t in c.tags_json)]
+        sem = asyncio.Semaphore(_CLASSIFY_CONCURRENCY)
+
+        async def _classify(candidate):
+            async with sem:
+                return await llm.classify(candidate.title, candidate.description, candidate.tags_json)
+
+        classified = dict(zip(
+            (c.candidate_id for c in need),
+            await asyncio.gather(*[_classify(c) for c in need]),
+        )) if need else {}
+
         decisions = {"auto-merge": 0, "new-event": 0, "needs-review": 0}
         for candidate, raw, source in rows:
             category = "other"
             subcategory = ""
             tags: list[str] = []
-            if not any(tag.startswith("category:") for tag in candidate.tags_json):
-                classification = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
+            classification = classified.get(candidate.candidate_id)
+            if classification is not None:
                 category = classification.category
                 subcategory = classification.subcategory
                 tags = classification.tags
