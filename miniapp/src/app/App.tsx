@@ -83,11 +83,13 @@ export function App() {
     // which keeps thousands of markers smooth without capping the data.
     if (filters.q) params.set("q", filters.q);
     for (const c of filters.categories) params.append("categories", c);
-    // Span the WHOLE local day: a bare "2026-06-17" parses as UTC midnight (03:00 MSK),
-    // so `date_start <= date_to` would hide everything after 03:00. Send start-of-day for
-    // `from` and end-of-day for `to` (local), so "Сегодня" covers the full day.
-    if (filters.dateFrom) params.set("date_from", new Date(`${filters.dateFrom}T00:00:00`).toISOString());
-    if (filters.dateTo) params.set("date_to", new Date(`${filters.dateTo}T23:59:59`).toISOString());
+    // Span the WHOLE Moscow day. The dates are Moscow-anchored (see datePresets), so
+    // pin the bounds to Moscow's UTC+3 — NOT the client's tz. `new Date("…T00:00:00")`
+    // alone parses in the device timezone, which shifts the window by hours for any
+    // non-MSK client and drops/adds a band of events. (All current cities are UTC+3,
+    // no DST since 2014; generalise per-city tz when a non-UTC+3 city goes live.)
+    if (filters.dateFrom) params.set("date_from", new Date(`${filters.dateFrom}T00:00:00+03:00`).toISOString());
+    if (filters.dateTo) params.set("date_to", new Date(`${filters.dateTo}T23:59:59+03:00`).toISOString());
     if (filters.priceMax) params.set("price_max", filters.priceMax);
     return params;
   }, [filters]);

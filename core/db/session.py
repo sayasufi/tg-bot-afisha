@@ -14,8 +14,15 @@ settings = get_settings()
 # Postgres max_connections (100).
 _POOL = dict(pool_pre_ping=True, pool_size=5, max_overflow=10, pool_recycle=1800)
 
+# Pin every session to UTC explicitly. Code relies on a UTC session (e.g. the map and
+# event-detail date floor compare a Python UTC-midnight against SQL date_trunc('day',
+# now()), which are equal ONLY under a UTC session; dedup day-bucketing likewise). The
+# Postgres default is already UTC, but a future container `TZ=`/`PGTZ=` env would
+# silently change date_trunc semantics — this makes the invariant explicit and safe.
+_CONNECT = {"options": "-c timezone=UTC"}
+
 # Sync engine — kept for scripts / any sync caller during/after the async migration.
-engine = create_engine(settings.sync_database_url, **_POOL)
+engine = create_engine(settings.sync_database_url, connect_args=_CONNECT, **_POOL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
@@ -29,7 +36,7 @@ def _async_url(url: str) -> str:
 
 
 # Async engine — FastAPI (one long-lived event loop per uvicorn worker → pooled).
-async_engine = create_async_engine(_async_url(settings.database_url), **_POOL)
+async_engine = create_async_engine(_async_url(settings.database_url), connect_args=_CONNECT, **_POOL)
 AsyncSessionLocal = async_sessionmaker(bind=async_engine, autoflush=False, expire_on_commit=False)
 
 # Worker async engine — Celery tasks call asyncio.run() per task, creating a fresh
@@ -38,7 +45,7 @@ AsyncSessionLocal = async_sessionmaker(bind=async_engine, autoflush=False, expir
 # discarded on close. Concurrency is bounded by prefork process count, so total
 # connections stay small. Uses the same DSN as the API async engine (database_url);
 # DATABASE_URL and SYNC_DATABASE_URL must point to the same database.
-worker_async_engine = create_async_engine(_async_url(settings.database_url), poolclass=NullPool)
+worker_async_engine = create_async_engine(_async_url(settings.database_url), connect_args=_CONNECT, poolclass=NullPool)
 WorkerAsyncSessionLocal = async_sessionmaker(bind=worker_async_engine, autoflush=False, expire_on_commit=False)
 
 

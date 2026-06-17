@@ -1,5 +1,6 @@
-// Quick date presets for the filter sheet. All values are LOCAL yyyy-mm-dd so
-// App's `new Date(filters.dateFrom).toISOString()` keeps working unchanged.
+// Quick date presets for the filter sheet. Values are Moscow-anchored yyyy-mm-dd:
+// "Сегодня" means today-in-Moscow for every client, regardless of device timezone
+// (the events are Moscow wall-clock times). App pairs these with +03:00 ISO bounds.
 
 export type PresetKey = "today" | "tomorrow" | "weekend" | "week" | "month";
 
@@ -10,6 +11,24 @@ export const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "week", label: "Неделя" },
 ];
 
+// All current cities are UTC+3 (Europe/Moscow, no DST since 2014). "Now" in Moscow,
+// returned as a Date whose LOCAL y/m/d are Moscow's calendar day — every consumer
+// only reads getFullYear/Month/Date/getDay off it, never the absolute instant. So
+// the day-strip and presets stay on the Moscow calendar even for a non-MSK device.
+const APP_TZ = "Europe/Moscow";
+function mskToday(now: Date = new Date()): Date {
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .format(now)
+    .split("-")
+    .map(Number);
+  return new Date(y, m - 1, d);
+}
+
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (base: Date, n: number) => {
   const d = new Date(base);
@@ -18,7 +37,7 @@ const addDays = (base: Date, n: number) => {
 };
 
 export function rangeFor(key: PresetKey, now: Date = new Date()): { dateFrom: string; dateTo: string } {
-  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // local midnight
+  const t = mskToday(now); // Moscow's today (not the device's)
   switch (key) {
     case "today":
       return { dateFrom: iso(t), dateTo: iso(t) };
@@ -67,7 +86,7 @@ export type DayCell = { iso: string; dow: string; day: number; today: boolean; t
 // (uppercase) month on the first cell and whenever the strip crosses into a new
 // month, so a number near the month boundary isn't ambiguous; "" otherwise.
 export function nextDays(count = 14, now: Date = new Date()): DayCell[] {
-  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const t = mskToday(now);
   let prevMonth = -1;
   return Array.from({ length: count }, (_, i) => {
     const d = addDays(t, i);

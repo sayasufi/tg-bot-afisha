@@ -421,7 +421,16 @@ class EventQueryService:
             stmt.where(Venue.geom.is_not(None))
             .where(func.ST_DWithin(Venue.geom, point, radius_m))
             .distinct(Event.event_id)
-            .order_by(Event.event_id, dist_col.asc())
+            # DISTINCT ON keeps the FIRST row per event by this order: nearest venue,
+            # then future-first (soonest still-catchable session), then earliest — so a
+            # same-venue recurring event reports a deterministic, soonest occurrence,
+            # matching _detail/event_detail instead of an arbitrary distance-tie winner.
+            .order_by(
+                Event.event_id,
+                dist_col.asc(),
+                (EventOccurrence.date_start < func.now()).asc(),
+                EventOccurrence.date_start.asc(),
+            )
         )
         rows = (await self.db.execute(stmt)).all()
         rows = sorted(rows, key=lambda r: r.distance_m if r.distance_m is not None else 0.0)[:limit]

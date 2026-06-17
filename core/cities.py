@@ -53,7 +53,13 @@ CITIES: dict[str, CityConfig] = {
 }
 
 DEFAULT_CITY = CITIES["moscow"]
-_BY_NAME = {c.name.strip().lower(): c for c in CITIES.values()}
+# Resolvable by display name ("Москва") OR slug ("moscow"). The slug keys also catch
+# the Latin default hint settings.default_city="Moscow" (== the moscow slug), which
+# would otherwise miss the Cyrillic name and silently disable geo guards keyed on it.
+_BY_NAME = {}
+for _c in CITIES.values():
+    _BY_NAME[_c.name.strip().lower()] = _c
+    _BY_NAME[_c.slug.strip().lower()] = _c
 
 
 def active_cities() -> list[CityConfig]:

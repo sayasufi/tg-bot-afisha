@@ -159,9 +159,11 @@ def _commit_event_merges(db, canon_pairs: list[tuple[str, str]], apply: bool) ->
     # unknown" occurrence (afisha/kudago store 00:00 MSK) with a real timed one for
     # the SAME canonical event, venue and Moscow day, the 00:00 row is just a
     # placeholder — remove it so the event shows the real start ("19:00"), not the
-    # midnight stand-in that reads as an all-day run. Only SINGLE-DAY placeholders:
-    # an open-ended/multi-day run (a real exhibition span, date_end far out) is NOT a
-    # placeholder and must survive.
+    # midnight stand-in that reads as an all-day run. Delete ONLY a row whose own span
+    # is a single Moscow calendar day (concrete, same start/end day). A NULL date_end —
+    # the canonical open-ended shape for ~95% of occurrences, incl. exhibitions — or a
+    # span crossing into another day is a real run, NOT a placeholder, and must survive
+    # even if it acquires a same-day timed sibling (a vernissage on an exhibition).
     placeholders = 0
     canons = list({c for _, c in canon_pairs})
     if canons:
@@ -169,7 +171,8 @@ def _commit_event_merges(db, canon_pairs: list[tuple[str, str]], apply: bool) ->
             "delete from events.event_occurrences d "
             "where d.event_id = any(:canons) "
             "  and (d.date_start at time zone 'Europe/Moscow')::time = time '00:00' "
-            "  and (d.date_end is null or d.date_end - d.date_start < interval '2 days') "
+            "  and d.date_end is not null "
+            "  and (d.date_end at time zone 'Europe/Moscow')::date = (d.date_start at time zone 'Europe/Moscow')::date "
             "  and exists (select 1 from events.event_occurrences t "
             "     where t.event_id = d.event_id "
             "       and t.venue_id is not distinct from d.venue_id "
