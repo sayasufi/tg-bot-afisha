@@ -74,22 +74,30 @@
 /* Tappable venue name in the peek header → venue page. Acid highlighter swipe under it
    (matches the event sheet's «Где» treatment), filling in on press. */
 .peek__venuebtn {
-  display: inline-block;
-  padding: 2px 8px;
+  display: inline;
+  padding: 0 1px;
   border: 0;
-  background: var(--acid);
-  color: var(--on-acid);
-  font-family: var(--grotesk);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  background-image: linear-gradient(var(--acid), var(--acid));
+  background-repeat: no-repeat;
+  background-position: 0 92%;
+  background-size: 100% 0.26em;
   cursor: pointer;
-  vertical-align: baseline;
-  transition: background 0.14s var(--ease-cut);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  animation: venueBreathe 2.6s ease-in-out infinite;
 }
 .peek__venuebtn:active {
-  background: var(--acid-deep);
+  animation: none;
+  background-size: 100% 100%;
+  color: var(--on-acid);
+}
+@media (prefers-reduced-motion: reduce) {
+  .peek__venuebtn {
+    animation: none;
+  }
 }
 
 .peek__scroll {

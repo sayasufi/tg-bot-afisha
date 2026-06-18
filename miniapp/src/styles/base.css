@@ -154,25 +154,44 @@ body {
   color: var(--ink-dim);
 }
 
-/* Tappable venue name → opens the venue page. A clear FILLED ACID BUTTON (the brand's flat
-   accent) — the single highlighted element in the sheet; metro/distance below stay plain so
-   they don't compete. Darkens on press. */
+/* Tappable venue name → opens the venue page. An acid highlighter that gently BREATHES
+   (never fully off) — the motion is the cue that THIS value is interactive, where metro /
+   distance stay static. Fills fully on press; respects reduced-motion. */
 .wall-label__place {
   display: inline;
   margin: 0;
-  padding: 2px 9px;
+  padding: 0 1px;
   border: 0;
-  background: var(--acid);
-  color: var(--on-acid);
+  color: var(--ink);
   font: inherit;
   font-weight: 600;
+  background-image: linear-gradient(var(--acid), var(--acid));
+  background-repeat: no-repeat;
+  background-position: 0 92%;
+  background-size: 100% 0.28em;
   cursor: pointer;
-  -webkit-box-decoration-break: clone; /* keep the fill if the name wraps */
+  -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
-  transition: background 0.14s var(--ease-cut);
+  animation: venueBreathe 2.6s ease-in-out infinite;
+}
+@keyframes venueBreathe {
+  0%,
+  100% {
+    background-size: 100% 0.28em;
+  }
+  50% {
+    background-size: 100% 0.46em;
+  }
 }
 .wall-label__place:active {
-  background: var(--acid-deep);
+  animation: none;
+  background-size: 100% 100%;
+  color: var(--on-acid);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wall-label__place {
+    animation: none;
+  }
 }
 
 /* Metro + proximity are plain values now (the venue button is the sheet's only acid accent). */
