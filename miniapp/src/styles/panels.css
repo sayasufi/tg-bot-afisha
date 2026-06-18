@@ -1576,20 +1576,40 @@ mark.hl {
   white-space: nowrap;
 }
 
-/* Optional full-width rule between the title and the footer (rotates: hairline / acid / none). */
+/* Optional rule between the title and the footer, varied by weight + geometry: a thin
+   hairline, a bold line, or a short stub (rotates; none on most). Colour adapts to the band
+   via --rule (white-ish on dark cards, ink on the white/acid bands). */
+.cat {
+  --rule: rgba(255, 255, 255, 0.3);
+  --rule-strong: rgba(255, 255, 255, 0.62);
+}
+.cat--whiteband,
+.cat--acidband {
+  --rule: rgba(11, 11, 11, 0.22);
+  --rule-strong: rgba(11, 11, 11, 0.5);
+}
 .cat--line-hair .cat__foot,
-.cat--line-acid .cat__foot {
+.cat--line-bold .cat__foot {
   margin: 12px -14px 0;
   padding: 12px 14px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.26);
+  border-top: 1px solid var(--rule);
 }
-.cat--line-acid .cat__foot {
-  border-top-width: 2px;
-  border-top-color: var(--acid);
+.cat--line-bold .cat__foot {
+  border-top-width: 3px;
 }
-.cat--whiteband.cat--line-hair .cat__foot,
-.cat--acidband.cat--line-hair .cat__foot {
-  border-top-color: rgba(11, 11, 11, 0.2);
+.cat--line-stub .cat__foot {
+  position: relative;
+  margin-top: 15px;
+  padding-top: 14px;
+}
+.cat--line-stub .cat__foot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 3px;
+  background: var(--rule-strong);
 }
 
 /* ---- Variant: band — a big smooth fade to a solid black band at the bottom ---- */

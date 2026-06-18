@@ -46,10 +46,10 @@ type Variant = "bottom" | "sideblack" | "band" | "tall" | "whiteband" | "acidban
 const FULL_VARIANTS: Variant[] = ["bottom", "sideblack", "whiteband", "tall", "band", "acidband", "topband"];
 const HALF_VARIANTS: Variant[] = ["bottom", "whiteband", "band", "acidband"];
 const ROWS = ["full", "duo", "full", "full", "duo"] as const;
-// A rule between title and footer: none / a hairline / an acid line (rotates). Adjacent duo
-// cards never both get one (enforced below).
-type Line = "none" | "hair" | "acid";
-const LINES: Line[] = ["none", "hair", "none", "acid", "hair", "none", "acid", "hair", "none"];
+// A rule between title and footer, varied by weight + geometry: none / thin hairline / bold
+// line / a short stub (rotates). Adjacent duo cards never both get one (enforced below).
+type Line = "none" | "hair" | "bold" | "stub";
+const LINES: Line[] = ["none", "hair", "none", "stub", "bold", "none", "hair", "none", "stub", "bold"];
 
 function PhotoCard({
   c,
