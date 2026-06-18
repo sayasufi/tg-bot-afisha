@@ -1,6 +1,6 @@
 import type { EventItem } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
-import { IconClose } from "../../lib/icons";
+import { IconClose, IconPin } from "../../lib/icons";
 import { EventRow } from "../panel/EventRow";
 
 // A mini-list that peeks up when a cluster of events sits on one point (a venue
@@ -45,6 +45,7 @@ export function ClusterPeek({
                 {" · "}
                 {venueId != null && onOpenVenue ? (
                   <button type="button" className="peek__venuebtn" onClick={() => onOpenVenue(venueId)}>
+                    <IconPin size={12} className="peek__pin" />
                     {venue}
                   </button>
                 ) : (

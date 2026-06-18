@@ -154,44 +154,63 @@ body {
   color: var(--ink-dim);
 }
 
-/* Tappable venue name → opens the venue page. An acid highlighter that gently BREATHES
-   (never fully off) — the motion is the cue that THIS value is interactive, where metro /
-   distance stay static. Fills fully on press; respects reduced-motion. */
-.wall-label__place {
-  display: inline;
-  margin: 0;
-  padding: 0 1px;
+/* «Где» place card → opens the venue page. A full-width ink-bordered row (high contrast on
+   the light plaster — acid is too pale to read here) with a pin, the venue + address and a
+   chevron: the standard "tap to open this place" affordance. Flashes acid on press. */
+.placecard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
   border: 0;
+  box-shadow: inset 0 0 0 1px var(--ink);
+  background: none;
   color: var(--ink);
-  font: inherit;
-  font-weight: 600;
-  background-image: linear-gradient(var(--acid), var(--acid));
-  background-repeat: no-repeat;
-  background-position: 0 92%;
-  background-size: 100% 0.28em;
+  text-align: left;
   cursor: pointer;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-  animation: venueBreathe 2.6s ease-in-out infinite;
+  transition: background 0.13s var(--ease-cut), color 0.13s var(--ease-cut);
 }
-@keyframes venueBreathe {
-  0%,
-  100% {
-    background-size: 100% 0.28em;
-  }
-  50% {
-    background-size: 100% 0.46em;
-  }
-}
-.wall-label__place:active {
-  animation: none;
-  background-size: 100% 100%;
+.placecard:active {
+  background: var(--acid);
   color: var(--on-acid);
 }
-@media (prefers-reduced-motion: reduce) {
-  .wall-label__place {
-    animation: none;
-  }
+.placecard__pin {
+  flex: 0 0 auto;
+}
+.placecard__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.placecard__name {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: inherit;
+}
+.placecard__addr {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+.placecard:active .placecard__addr {
+  color: var(--on-acid);
+}
+.placecard__go {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid var(--ink-faint);
+  border-right: 2px solid var(--ink-faint);
+  transform: rotate(45deg);
+}
+.placecard:active .placecard__go {
+  border-color: var(--on-acid);
 }
 
 /* Metro + proximity are plain values now (the venue button is the sheet's only acid accent). */

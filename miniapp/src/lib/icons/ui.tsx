@@ -103,6 +103,16 @@ export function IconCalendar({ size = 18, className }: UiProps) {
   );
 }
 
+// Location pin — marks a venue / place (the «Где» place card).
+export function IconPin({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <path d="M12 21c4.5-4.2 7-7.7 7-11a7 7 0 1 0-14 0c0 3.3 2.5 6.8 7 11Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
 // "All categories" mark — a filled 2×2 grid (reads as "everything").
 export function IconGrid({ size = 18, className }: UiProps) {
   return (

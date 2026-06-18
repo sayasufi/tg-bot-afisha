@@ -6,7 +6,7 @@ import { categoryMeta } from "../../lib/categories";
 import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
-import { CategoryIcon, IconBell, IconClose, IconHeart, IconShare } from "../../lib/icons";
+import { CategoryIcon, IconBell, IconClose, IconHeart, IconPin, IconShare } from "../../lib/icons";
 import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
@@ -407,23 +407,28 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           {venue && (
             <div className="wall-label">
               <span className="wall-label__cap">Где</span>
-              <span className="wall-label__val">
-                {venueId != null && onOpenVenue ? (
-                  <button
-                    type="button"
-                    className="wall-label__place"
-                    onClick={() => {
-                      haptic("light");
-                      onOpenVenue(venueId);
-                    }}
-                  >
-                    {venue}
-                  </button>
-                ) : (
-                  venue
-                )}
-                {address ? <span className="dim"> · {address}</span> : null}
-              </span>
+              {venueId != null && onOpenVenue ? (
+                <button
+                  type="button"
+                  className="placecard"
+                  onClick={() => {
+                    haptic("light");
+                    onOpenVenue(venueId);
+                  }}
+                >
+                  <IconPin size={16} className="placecard__pin" />
+                  <span className="placecard__text">
+                    <span className="placecard__name">{venue}</span>
+                    {address ? <span className="placecard__addr">{address}</span> : null}
+                  </span>
+                  <span className="placecard__go" aria-hidden="true" />
+                </button>
+              ) : (
+                <span className="wall-label__val">
+                  {venue}
+                  {address ? <span className="dim"> · {address}</span> : null}
+                </span>
+              )}
             </div>
           )}
           {metro && metro.meters <= 2500 && (
