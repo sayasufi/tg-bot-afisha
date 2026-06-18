@@ -205,6 +205,10 @@ html[data-theme="dark"] .sheet-veil {
   left: 14px;
 }
 
+.sheet__icon--bell {
+  left: 54px;
+}
+
 .sheet__icon--share {
   right: 54px;
 }

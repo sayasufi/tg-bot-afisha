@@ -27,6 +27,7 @@ import { categoryMeta } from "../lib/categories";
 import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { syncFavorites, useFavorites } from "../lib/favorites";
+import { syncReminders, useReminders } from "../lib/reminders";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
 import { SearchOverlay } from "../features/search/SearchOverlay";
@@ -44,10 +45,12 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
   const fav = useFavorites();
-  // Pull this account's favourites from the server once on open (and merge this device's
-  // local hearts in on first run) so they sync across devices instead of per-device.
+  const rem = useReminders();
+  // Pull this account's favourites + reminders from the server once on open (favourites
+  // also merge this device's local hearts in on first run) so they sync across devices.
   useEffect(() => {
     void syncFavorites();
+    void syncReminders();
   }, []);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
@@ -722,6 +725,8 @@ export function App() {
         metro={nearMetro}
         isFav={!!selected && fav.has(selected.event_id)}
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
+        hasReminder={!!selected && rem.has(selected.event_id)}
+        onToggleReminder={() => selected && rem.toggle(selected.event_id)}
         onSelect={openEvent}
         onShowMap={showOnMap}
         onClose={() => setSelected(null)}

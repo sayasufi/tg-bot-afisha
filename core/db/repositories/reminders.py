@@ -1,0 +1,118 @@
+"""Saved-event reminders — the product's first re-engagement loop.
+
+A user taps "Напомнить" on an event; we schedule a fire time (a couple hours before the
+soonest session) and a Prefect sweep DMs them via the bot. All async (API + worker paths).
+"""
+from datetime import datetime, timezone
+
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.db.models import Event, EventOccurrence, Venue
+from core.db.models.ref.event_reminder import EventReminder
+from core.db.models.ref.user import User
+
+
+async def soonest_start(db: AsyncSession, event_id: str) -> datetime | None:
+    """The soonest UPCOMING session start for an event (future-first); falls back to the
+    soonest start overall (ongoing/just-started). None if the event has no sessions."""
+    now = datetime.now(timezone.utc)
+    future = await db.scalar(
+        select(func.min(EventOccurrence.date_start)).where(
+            EventOccurrence.event_id == event_id, EventOccurrence.date_start >= now
+        )
+    )
+    if future is not None:
+        return future
+    return await db.scalar(select(func.min(EventOccurrence.date_start)).where(EventOccurrence.event_id == event_id))
+
+
+async def set_reminder(db: AsyncSession, user_id: int, event_id: str, fire_at: datetime) -> None:
+    """Arm (or re-arm) a reminder. Re-setting clears sent_at so it fires again."""
+    await db.execute(
+        pg_insert(EventReminder)
+        .values(telegram_user_id=user_id, event_id=event_id, fire_at=fire_at, sent_at=None)
+        .on_conflict_do_update(
+            index_elements=[EventReminder.telegram_user_id, EventReminder.event_id],
+            set_={"fire_at": fire_at, "sent_at": None},
+        )
+    )
+
+
+async def cancel_reminder(db: AsyncSession, user_id: int, event_id: str) -> None:
+    await db.execute(
+        delete(EventReminder).where(
+            EventReminder.telegram_user_id == user_id, EventReminder.event_id == event_id
+        )
+    )
+
+
+async def list_reminder_ids(db: AsyncSession, user_id: int) -> list[str]:
+    """Event ids with an active (not-yet-fired) reminder — drives the bell's on/off state."""
+    rows = await db.execute(
+        select(EventReminder.event_id).where(
+            EventReminder.telegram_user_id == user_id, EventReminder.sent_at.is_(None)
+        )
+    )
+    return [str(r[0]) for r in rows.all()]
+
+
+async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> list[dict]:
+    """Reminders whose time has come, for users who haven't muted reminders — joined to the
+    event's soonest session + venue so the sweep can render the bot card with no N+1."""
+    soon = (
+        select(
+            EventOccurrence.event_id.label("eid"),
+            EventOccurrence.date_start,
+            EventOccurrence.price_min,
+            EventOccurrence.venue_id,
+        )
+        .distinct(EventOccurrence.event_id)
+        .order_by(EventOccurrence.event_id, EventOccurrence.date_start.asc())
+        .subquery()
+    )
+    rows = (
+        await db.execute(
+            select(
+                EventReminder.telegram_user_id,
+                EventReminder.event_id,
+                Event.canonical_title,
+                Event.category,
+                soon.c.date_start,
+                soon.c.price_min,
+                Venue.name,
+            )
+            .join(Event, Event.event_id == EventReminder.event_id)
+            .join(User, User.telegram_user_id == EventReminder.telegram_user_id)
+            .outerjoin(soon, soon.c.eid == EventReminder.event_id)
+            .outerjoin(Venue, Venue.venue_id == soon.c.venue_id)
+            .where(
+                EventReminder.sent_at.is_(None),
+                EventReminder.fire_at <= now,
+                User.notify_reminders.is_(True),
+                Event.status == "active",
+            )
+            .limit(limit)
+        )
+    ).all()
+    return [
+        {
+            "user_id": r[0],
+            "event_id": str(r[1]),
+            "title": r[2],
+            "category": r[3],
+            "date_start": r[4].isoformat() if r[4] else None,
+            "price_min": float(r[5]) if r[5] is not None else None,
+            "venue": r[6],
+        }
+        for r in rows
+    ]
+
+
+async def mark_sent(db: AsyncSession, user_id: int, event_id: str) -> None:
+    await db.execute(
+        update(EventReminder)
+        .where(EventReminder.telegram_user_id == user_id, EventReminder.event_id == event_id)
+        .values(sent_at=func.now())
+    )

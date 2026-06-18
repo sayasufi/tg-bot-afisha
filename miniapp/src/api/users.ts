@@ -89,3 +89,41 @@ export async function toggleFavoriteRemote(eventId: string, on: boolean): Promis
     return null;
   }
 }
+
+// Event reminders (the bot DMs the user ~2h before a saved event). Like favourites, the
+// reminder set is account-scoped. Pass nothing to just LIST; pass (eventId, on) to toggle.
+// Returns the account's active reminder event-ids, or null outside Telegram / on error.
+export async function syncReminders(): Promise<string[] | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/reminders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { ids?: string[] };
+    return Array.isArray(j.ids) ? j.ids : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function toggleReminderRemote(eventId: string, on: boolean): Promise<string[] | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/reminders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, event_id: eventId, on }),
+      keepalive: true,
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { ids?: string[] };
+    return Array.isArray(j.ids) ? j.ids : null;
+  } catch {
+    return null;
+  }
+}

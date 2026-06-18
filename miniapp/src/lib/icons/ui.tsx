@@ -79,6 +79,16 @@ export function IconHeart({ size = 18, className, filled = false }: UiProps & { 
   );
 }
 
+// Reminder bell — outline by default, filled when a reminder is armed.
+export function IconBell({ size = 18, className, filled = false }: UiProps & { filled?: boolean }) {
+  return (
+    <svg {...strokeProps(size, className)} fill={filled ? "currentColor" : "none"}>
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+
 // "Add to calendar" — a simple calendar with a plus.
 export function IconCalendar({ size = 18, className }: UiProps) {
   return (

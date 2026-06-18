@@ -6,7 +6,7 @@ import { categoryMeta } from "../../lib/categories";
 import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
-import { CategoryIcon, IconClose, IconHeart, IconShare } from "../../lib/icons";
+import { CategoryIcon, IconBell, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
@@ -24,12 +24,14 @@ type Props = {
   metro?: MetroPing | null;
   isFav: boolean;
   onToggleFav: () => void;
+  hasReminder: boolean;
+  onToggleReminder: () => void;
   onSelect: (i: EventItem) => void;
   onShowMap?: () => void;
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, onSelect, onShowMap, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, onSelect, onShowMap, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
   const [swipeHint, setSwipeHint] = useState(false);
@@ -291,6 +293,19 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           }}
         >
           <IconHeart filled={isFav} size={18} />
+        </button>
+        <button
+          type="button"
+          className={`sheet__icon sheet__icon--bell${hasReminder ? " sheet__icon--on" : ""}`}
+          aria-label={hasReminder ? "Напоминание включено" : "Напомнить о начале"}
+          aria-pressed={hasReminder}
+          onClick={() => {
+            haptic("light");
+            if (!hasReminder) logIntent("reminder", selected.event_id);
+            onToggleReminder();
+          }}
+        >
+          <IconBell filled={hasReminder} size={18} />
         </button>
         <button type="button" className="sheet__icon sheet__icon--share" aria-label="Поделиться" onClick={onShare}>
           <IconShare size={18} />

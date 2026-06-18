@@ -6,7 +6,7 @@ run history/observability UI. The logic lives in ``tasks/*`` and is unchanged.
 """
 from prefect import flow
 
-from apps.worker.worker.tasks import dedup, enrich, fetch, media, normalize
+from apps.worker.worker.tasks import dedup, enrich, fetch, media, normalize, reminders
 
 _RETRIES = 2
 _RETRY_DELAY = 30  # seconds
@@ -140,3 +140,13 @@ def resolve_venue_hours():
 @flow(name="cache-event-images", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
 def cache_event_images():
     return media._cache_event_images_impl()
+
+
+# --- re-engagement (outbound) ------------------------------------------------
+
+@flow(name="send-reminders", retries=1, retry_delay_seconds=15, log_prints=True)
+async def send_reminders():
+    """DM users a bot reminder for saved events whose start is near (the first outbound
+    channel). Idempotent: each reminder row is stamped sent_at after a delivered/permanent
+    Telegram response, so a retry never double-sends."""
+    return await reminders._send_reminders_impl()

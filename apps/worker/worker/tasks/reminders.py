@@ -1,0 +1,66 @@
+"""Reminder sweep — the product's first OUTBOUND message.
+
+Finds due saved-event reminders and DMs the user via the bot (a couple hours before the
+event), then stamps sent_at so each fires once. Sends over the raw Telegram HTTP API
+(same approach as the share prepare flow) — no aiogram session lifecycle in the flow.
+"""
+import logging
+from datetime import datetime, timezone
+
+import httpx
+
+from apps.bot.bot.formatting import event_card
+from core.config.settings import get_settings
+from core.db.repositories.reminders import due_reminders, mark_sent
+from core.db.session import WorkerAsyncSessionLocal
+
+log = logging.getLogger(__name__)
+_BOT_USERNAME = "okrestmap_bot"
+
+
+def _open_url(event_id: str) -> str:
+    # startapp deep link → opens the Mini App on this event.
+    return f"https://t.me/{_BOT_USERNAME}?startapp={event_id}"
+
+
+async def _send_reminders_impl() -> int:
+    token = get_settings().telegram_bot_token
+    if not token:
+        return 0
+    now = datetime.now(timezone.utc)
+    sent = 0
+    async with WorkerAsyncSessionLocal() as db:
+        due = await due_reminders(db, now)
+        if not due:
+            return 0
+        async with httpx.AsyncClient(timeout=10) as client:
+            for r in due:
+                text = "🔔 <b>Скоро — не пропусти</b>\n\n" + event_card(r)
+                got_response = False
+                ok = False
+                try:
+                    resp = await client.post(
+                        f"https://api.telegram.org/bot{token}/sendMessage",
+                        json={
+                            "chat_id": r["user_id"],
+                            "text": text,
+                            "parse_mode": "HTML",
+                            "reply_markup": {
+                                "inline_keyboard": [[{"text": "Открыть", "url": _open_url(r["event_id"])}]]
+                            },
+                        },
+                    )
+                    got_response = True
+                    ok = bool(resp.json().get("ok"))
+                except Exception:  # transient network/infra → leave unsent, retry next sweep
+                    got_response = False
+                # Telegram answered (delivered, OR a permanent 403/400 like blocked/never-started)
+                # → stamp sent so we don't retry forever. Only a thrown request retries.
+                if got_response:
+                    await mark_sent(db, r["user_id"], r["event_id"])
+                    if ok:
+                        sent += 1
+            await db.commit()
+    if sent:
+        log.info("sent %s reminders", sent)
+    return sent
