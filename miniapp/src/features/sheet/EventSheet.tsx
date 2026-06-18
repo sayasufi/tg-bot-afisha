@@ -29,6 +29,14 @@ function formatActualDate(iso: string | null | undefined): string | null {
   return Number.isNaN(t) ? null : ACTUAL_FMT.format(new Date(t));
 }
 
+function pluralDates(n: number): string {
+  const d = n % 10;
+  const dd = n % 100;
+  if (d === 1 && dd !== 11) return "дата";
+  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return "даты";
+  return "дат";
+}
+
 type MetroPing = { name: string; meters: number };
 
 type Props = {
@@ -51,6 +59,7 @@ type Props = {
 export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
+  const [datesOpen, setDatesOpen] = useState(false);
   const [swipeHint, setSwipeHint] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -75,6 +84,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   useEffect(() => {
     setDetail(null);
     setDescOpen(false);
+    setDatesOpen(false);
     if (!selected) return;
     const ctrl = new AbortController();
     fetchEventDetail(selected.event_id, ctrl.signal)
@@ -392,16 +402,21 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             <span className="xcell__cap">Когда</span>
             <span className="xcell__val">{dates || "—"}</span>
             {timeNote && <span className="xcell__sub">{timeNote}</span>}
-            {moreDates.length > 0 && (
-              <div className="sheet__dates" aria-label="Ближайшие даты">
-                {moreDates.map((o) => (
-                  <span className="sheet__date-chip" key={o.occurrence_id}>
-                    {formatDateChip(o.date_start)}
-                  </span>
-                ))}
-                {extraDates > 0 && <span className="sheet__date-more">+{extraDates}</span>}
-              </div>
-            )}
+            {futureMore.length > 0 &&
+              (datesOpen ? (
+                <div className="sheet__dates" aria-label="Другие даты">
+                  {moreDates.map((o) => (
+                    <span className="sheet__date-chip" key={o.occurrence_id}>
+                      {formatDateChip(o.date_start)}
+                    </span>
+                  ))}
+                  {extraDates > 0 && <span className="sheet__date-more">+{extraDates}</span>}
+                </div>
+              ) : (
+                <button type="button" className="xcell__more" onClick={() => setDatesOpen(true)}>
+                  +{futureMore.length} {pluralDates(futureMore.length)}
+                </button>
+              ))}
           </div>
           <div className="xcell">
             <span className="xcell__cap">Цена</span>
