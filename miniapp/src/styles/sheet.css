@@ -409,17 +409,20 @@ html[data-theme="dark"] .sheet-veil {
   overflow-wrap: anywhere;
 }
 /* Price = black text with a thin acid marker swiped under it (the one acid accent in
-   the grid — attention without a plate). */
+   the grid — attention without a plate). One line: never break a range mid-number
+   (the cell inherits overflow-wrap:anywhere from .xcell__val — override it). */
 .xcell__price {
   align-self: flex-start;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  overflow-wrap: normal;
   padding-bottom: 1px;
   background-image: linear-gradient(var(--acid), var(--acid));
   background-repeat: no-repeat;
   background-position: 0 100%;
-  background-size: 100% 0.32em;
+  background-size: 100% 0.3em;
 }
 .xcell__sub {
   font-family: var(--mono);
