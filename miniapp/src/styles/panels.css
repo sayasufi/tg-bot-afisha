@@ -1056,13 +1056,54 @@ mark.hl {
   padding: 8px 8px calc(env(safe-area-inset-bottom) + 24px);
 }
 
-/* Venue page — address + a "Следить" follow toggle above the venue's event list. */
+/* Venue page header — kicker + clean (boxless) close, the venue name, then address + follow.
+   Custom (not panelview__head) so a long venue name wraps freely without crowding the X. */
+.venuesheet__head {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.venuesheet__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.venuesheet__kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.venuesheet__close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -4px -6px -4px 0; /* optical: hug the corner, no heavy box */
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.venuesheet__close:active {
+  color: var(--ink-dim);
+}
+.venuesheet__title {
+  margin: 0 0 12px;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(22px, 6.4vw, 30px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  text-transform: lowercase;
+  color: var(--ink);
+}
 .venuesheet__bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px 11px;
-  border-bottom: 1px solid var(--line-soft);
 }
 .venuesheet__addr {
   flex: 1 1 auto;

@@ -410,6 +410,7 @@ class EventQueryService:
                 EventOccurrence.date_start.label("date_start"),
                 EventOccurrence.date_end.label("date_end"),
                 EventOccurrence.price_min.label("price_min"),
+                EventOccurrence.venue_id.label("venue_id"),
                 Venue.name.label("venue_name"),
                 Venue.hours_json.label("venue_hours"),
                 Venue.city.label("venue_city"),
@@ -458,6 +459,7 @@ class EventQueryService:
                 # client coerces to anyway; avoids per-row Decimal handling.
                 "price_min": float(r.price_min) if r.price_min is not None else None,
                 "venue": r.venue_name,
+                "venue_id": r.venue_id,  # lets the cluster peek / sheet open the venue page
                 # Compact "open now" tri-state instead of the full weekly schedule
                 # (which was ~18% of the gzipped payload). Full hours stay on the
                 # detail endpoint. The client uses this for the "идёт сейчас" highlight.

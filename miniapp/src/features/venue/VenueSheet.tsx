@@ -60,30 +60,33 @@ export function VenueSheet({
   const events = venue?.events ?? [];
   return (
     <div className="panelview listview venuesheet">
-      <header className="panelview__head">
-        <h2>{venue?.name ?? "Площадка"}</h2>
-        <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
-          <IconClose size={18} />
-        </button>
-      </header>
-      <div className="venuesheet__bar">
-        <span className="venuesheet__addr">
-          {venue?.address || "Площадка"}
-          {events.length > 0 && (
-            <span className="venuesheet__count">
-              {" · "}
-              {events.length} {plural(events.length, "событие", "события", "событий")}
-            </span>
-          )}
-        </span>
-        <button
-          type="button"
-          className={`venuesheet__follow${followed ? " venuesheet__follow--on" : ""}`}
-          aria-pressed={followed}
-          onClick={onFollow}
-        >
-          {followed ? "Слежу" : "Следить"}
-        </button>
+      <div className="venuesheet__head">
+        <div className="venuesheet__top">
+          <span className="venuesheet__kicker">Площадка</span>
+          <button type="button" className="venuesheet__close" aria-label="Закрыть" onClick={onClose}>
+            <IconClose size={18} />
+          </button>
+        </div>
+        <h2 className="venuesheet__title">{venue?.name ?? "Площадка"}</h2>
+        <div className="venuesheet__bar">
+          <span className="venuesheet__addr">
+            {venue?.address || "Площадка"}
+            {events.length > 0 && (
+              <span className="venuesheet__count">
+                {" · "}
+                {events.length} {plural(events.length, "событие", "события", "событий")}
+              </span>
+            )}
+          </span>
+          <button
+            type="button"
+            className={`venuesheet__follow${followed ? " venuesheet__follow--on" : ""}`}
+            aria-pressed={followed}
+            onClick={onFollow}
+          >
+            {followed ? "Слежу" : "Следить"}
+          </button>
+        </div>
       </div>
       <div className="panelview__scroll">
         {loading && !venue ? null : events.length > 0 ? (

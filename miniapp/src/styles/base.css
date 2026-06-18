@@ -154,21 +154,28 @@ body {
   color: var(--ink-dim);
 }
 
-/* Tappable venue name → opens the venue page. Acid underline signals "interactive". */
-.wall-label__venue {
+/* Tappable venue name → opens the venue page. A trailing acid arrow signals "go there"
+   (cleaner than an underline through the long name). */
+.wall-label__place {
   border: 0;
   background: none;
   padding: 0;
+  margin: 0;
   font: inherit;
   color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--acid);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
   cursor: pointer;
+  text-align: left;
 }
-.wall-label__venue:active {
+.wall-label__chev {
+  margin-left: 6px;
+  color: var(--acid);
+  font-weight: 700;
+}
+.wall-label__place:active {
   color: var(--ink-dim);
+}
+.wall-label__place:active .wall-label__chev {
+  color: var(--acid-deep);
 }
 
 /* Proximity badge — the "рядом" promise, made tangible in acid. */

@@ -212,7 +212,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const occ = detail?.occurrences?.[0];
   const address = occ?.address || null;
   const venue = selected.venue || occ?.venue || null;
-  const venueId = occ?.venue_id ?? null;
+  const venueId = occ?.venue_id ?? selected.venue_id ?? null; // map item carries it pre-detail
   const image = safeHttpUrl(detail?.primary_image_url) || "";
   const description = stripHtml(detail?.canonical_description || "");
   const sourceUrl = safeHttpUrl(occ?.source_best_url);
@@ -411,13 +411,14 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
                 {venueId != null && onOpenVenue ? (
                   <button
                     type="button"
-                    className="wall-label__venue"
+                    className="wall-label__place"
                     onClick={() => {
                       haptic("light");
                       onOpenVenue(venueId);
                     }}
                   >
                     {venue}
+                    <span className="wall-label__chev" aria-hidden="true">→</span>
                   </button>
                 ) : (
                   venue

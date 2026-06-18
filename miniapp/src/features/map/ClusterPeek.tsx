@@ -11,17 +11,26 @@ export function ClusterPeek({
   userPos,
   now,
   onSelect,
+  onOpenVenue,
   onClose,
 }: {
   events: EventItem[] | null;
   userPos?: LatLon | null;
   now?: number;
   onSelect: (i: EventItem) => void;
+  onOpenVenue?: (venueId: number) => void;
   onClose: () => void;
 }) {
   const open = !!events && events.length > 0;
   const list = events ?? [];
-  const venue = list.find((e) => e.venue)?.venue ?? null;
+  // Show (and link) the venue ONLY when the whole cluster is one venue. A single map point
+  // can stack several venues in one building, so labelling all of them with the first
+  // venue's name — and its event count — is misleading (the venue page would then show
+  // fewer events than the peek claimed, e.g. "20 · Волшебная лампа" vs 6 on the page).
+  const venueIds = new Set(list.map((e) => e.venue_id).filter((v): v is number => v != null));
+  const oneVenue = venueIds.size === 1;
+  const venue = oneVenue ? list.find((e) => e.venue)?.venue ?? null : null;
+  const venueId = oneVenue ? list.find((e) => e.venue_id != null)?.venue_id ?? null : null;
 
   return (
     <div className={`peek${open ? " peek--open" : ""}`} aria-hidden={!open}>
@@ -31,7 +40,19 @@ export function ClusterPeek({
         <div className="peek__head">
           <span className="peek__title">
             {list.length} {plural(list.length)}
-            {venue ? <span className="peek__venue"> · {venue}</span> : null}
+            {venue ? (
+              <span className="peek__venue">
+                {" · "}
+                {venueId != null && onOpenVenue ? (
+                  <button type="button" className="peek__venuebtn" onClick={() => onOpenVenue(venueId)}>
+                    {venue}
+                    <span className="peek__chev" aria-hidden="true">→</span>
+                  </button>
+                ) : (
+                  venue
+                )}
+              </span>
+            ) : null}
           </span>
           <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}>
             <IconClose size={18} />

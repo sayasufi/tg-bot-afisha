@@ -698,7 +698,7 @@ export function App() {
         />
       </Suspense>
 
-      <ClusterPeek events={selected ? null : peek} userPos={userPos} now={now} onSelect={openEvent} onClose={() => setPeek(null)} />
+      <ClusterPeek events={selected ? null : peek} userPos={userPos} now={now} onSelect={openEvent} onOpenVenue={onOpenVenue} onClose={() => setPeek(null)} />
 
       <RadarPing key={radarNonce} nonce={radarNonce} />
 
