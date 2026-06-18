@@ -90,7 +90,8 @@ html[data-theme="dark"] .sheet-veil {
    the cover; the sheet also swipes left/right between them. */
 .sheet__sibs {
   position: absolute;
-  top: 12px;
+  /* Second row, below the corner action toolbar (top row would overlap its 4 buttons). */
+  top: 54px;
   left: 50%;
   transform: translateX(-50%);
   pointer-events: auto;
@@ -135,7 +136,7 @@ html[data-theme="dark"] .sheet-veil {
 /* One-time "you can swipe between events" hint — a self-fading pill under the counter. */
 .sheet__swipehint {
   position: absolute;
-  top: 58px;
+  top: 100px;
   left: 50%;
   z-index: 8;
   pointer-events: none;
