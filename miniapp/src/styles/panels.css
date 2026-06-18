@@ -1415,6 +1415,10 @@ mark.hl {
   justify-content: flex-end;
   width: 100%;
   border: 0;
+  /* reset the <button> default padding — otherwise the in-flow text/band panel is inset
+     ~6px while the absolute photo fills the whole button (the gradient looked narrower). */
+  padding: 0;
+  margin: 0;
   text-align: left;
   cursor: pointer;
   background: var(--ink);
