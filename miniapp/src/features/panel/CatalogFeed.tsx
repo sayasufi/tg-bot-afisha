@@ -17,7 +17,7 @@ type Card = {
   img: string;
   code: string | null;
   title: string;
-  meta: string;
+  when: string;
   venue: string | null;
   price: string | null;
   free: boolean;
@@ -26,14 +26,13 @@ type Card = {
 
 function derive(item: EventItem, now?: number): Card {
   const nowDate = now != null ? new Date(now) : undefined;
-  const when = formatWhenShort(item.date_start, item.date_end, nowDate);
   const price = priceLabel(item.price_min);
   return {
     item,
     img: safeHttpUrl(item.primary_image_url) || "",
     code: item.code ?? null,
     title: item.title,
-    meta: [when, item.venue].filter(Boolean).join(" · "),
+    when: formatWhenShort(item.date_start, item.date_end, nowDate),
     venue: item.venue ?? null,
     price,
     free: price === "бесплатно",
@@ -41,24 +40,12 @@ function derive(item: EventItem, now?: number): Card {
   };
 }
 
-// Every card is a photo block now; the look is one of several stylish "variants" that
-// rotate so adjacent cards never repeat. Transitions fade to black / white / acid, from the
-// bottom, the right, or the top. The metadata footer is laid out by variant.
-type Variant =
-  | "bottomrow"
-  | "bottomstack"
-  | "sideblack"
-  | "band"
-  | "tall"
-  | "whiteband"
-  | "acidband"
-  | "topband";
-const FULL_VARIANTS: Variant[] = ["bottomrow", "sideblack", "whiteband", "tall", "band", "acidband", "topband"];
-const HALF_VARIANTS: Variant[] = ["bottomstack", "whiteband", "band", "acidband"];
+// Every card is a photo block; the look is one of several variants that rotate so adjacent
+// cards never repeat. Transitions fade to black / white / acid, from bottom / right / top.
+type Variant = "bottom" | "sideblack" | "band" | "tall" | "whiteband" | "acidband" | "topband";
+const FULL_VARIANTS: Variant[] = ["bottom", "sideblack", "whiteband", "tall", "band", "acidband", "topband"];
+const HALF_VARIANTS: Variant[] = ["bottom", "whiteband", "band", "acidband"];
 const ROWS = ["full", "duo", "full", "full", "duo"] as const;
-
-// which variants stack the footer (when over price) vs lay it out as a row.
-const STACK = new Set<Variant>(["bottomstack", "sideblack", "tall"]);
 
 function PhotoCard({
   c,
@@ -71,7 +58,6 @@ function PhotoCard({
   variant: Variant;
   onSelect: (i: EventItem) => void;
 }) {
-  const stack = STACK.has(variant);
   return (
     <button
       type="button"
@@ -100,9 +86,14 @@ function PhotoCard({
           <span className="cat__live">{c.go.kind === "soon" ? c.go.label : "идёт сейчас"}</span>
         )}
         <span className="cat__title">{c.title}</span>
-        <span className={`cat__foot${stack ? " cat__foot--col" : ""}`}>
-          {c.meta && <span className="cat__meta">{c.meta}</span>}
-          {c.price && <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>}
+        <span className="cat__foot">
+          {c.when && <span className="cat__when">{c.when}</span>}
+          {(c.venue || c.price) && (
+            <span className="cat__sub">
+              {c.venue && <span className="cat__venue">{c.venue}</span>}
+              {c.price && <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>}
+            </span>
+          )}
         </span>
       </span>
     </button>
