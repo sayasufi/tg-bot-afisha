@@ -21,6 +21,7 @@ const FavoritesPanel = lazy(() => import("../features/panel/FavoritesPanel").the
 const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m) => ({ default: m.ProfilePanel })));
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
+import { Toaster } from "../features/toast/Toaster";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
@@ -776,6 +777,8 @@ export function App() {
       <ProofFrame />
 
       {!onboarded && <Onboarding onClose={dismissOnboarding} />}
+
+      <Toaster />
     </div>
   );
 }

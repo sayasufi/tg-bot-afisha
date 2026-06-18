@@ -9,6 +9,7 @@ import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconBell, IconClose, IconHeart, IconShare } from "../../lib/icons";
 import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
+import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
 import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
@@ -311,6 +312,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           aria-pressed={isFav}
           onClick={() => {
             haptic("light");
+            showToast(isFav ? "Убрано из избранного" : "Добавлено в избранное", {
+              icon: "heart",
+              tone: isFav ? "muted" : "good",
+            });
             onToggleFav();
           }}
         >
@@ -324,6 +329,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           onClick={() => {
             haptic("light");
             if (!hasReminder) logIntent("reminder", selected.event_id);
+            showToast(hasReminder ? "Напоминание выключено" : "Напомним перед началом", {
+              icon: "bell",
+              tone: hasReminder ? "muted" : "good",
+            });
             onToggleReminder();
           }}
         >
