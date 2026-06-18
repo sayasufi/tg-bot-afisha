@@ -80,7 +80,7 @@ _CATEGORY_LABELS = {
 # "guide to the city" shelf shown above the auto rails (kind=rule; pinned/editorial later).
 _COLLECTIONS = [
     ("date", "Свидание", "вечер вдвоём"),
-    ("free-today", "Бесплатно сегодня", "вход свободный"),
+    ("free", "Бесплатно", "вход свободный"),
     ("last-chance", "Последний шанс", "скоро закроется"),
     ("fresh", "Новинки недели", "только что добавили"),
     ("kids", "С детьми", "куда сходить с ребёнком"),
@@ -143,7 +143,7 @@ class RecommendationService:
         rules = {
             # "Свидание" — a varied evening-out cross-section (the score already favours evening).
             "date": (lambda e: e["c"]["category"] in _DATE_CATS, True),
-            "free-today": (lambda e: e["free"] and (e["live"] or e["ds"] <= today), False),
+            "free": (lambda e: e["free"], True),  # all free upcoming (the only free rail now)
             # "Последний шанс" — a MULTI-day run (ds<de) whose end is within 3 days, not every
             # single-session event happening today.
             "last-chance": (lambda e: e["ds"] < e["de"] and today <= e["de"] <= soon, False),
@@ -436,8 +436,7 @@ class RecommendationService:
         if any(e["views"] > 0 for e in scored):
             add("popular", "Популярное", "Чаще всего открывают", sorted([e for e in scored if e["views"] > 0], key=lambda e: -e["views"]))
 
-        # "Бесплатно".
-        add("free", "Бесплатно", None, [e for e in by_score if e["free"]])
+        # ("Бесплатно" lives in the «Подборки» shelf now — no duplicate auto rail here.)
 
         # "Откройте новое" — strong events OUTSIDE any category you've engaged with.
         usual = set(affinity)

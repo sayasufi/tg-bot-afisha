@@ -641,6 +641,10 @@ mark.hl {
 /* ---------- Рекомендации — horizontal discovery rails ---------- */
 .panelview__scroll--rails {
   padding-top: 14px;
+  /* Frameless, like the list/favorites posters — cards bleed to the screen edge; only the
+     rail heads + shelf kicker keep the 16px gutter (re-applied on those below). */
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* «Подборки» shelf — the curated group of collection rails, between the personal hero and
@@ -650,7 +654,7 @@ mark.hl {
 }
 .recshelf__kicker {
   display: block;
-  margin: 2px 0 14px;
+  margin: 2px 16px 14px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line-soft);
   font-family: var(--mono);
@@ -673,6 +677,7 @@ mark.hl {
   align-items: baseline;
   gap: 10px;
   margin-bottom: 10px;
+  padding: 0 16px; /* the gutter the frameless track no longer carries */
 }
 
 .rail__title {
@@ -711,9 +716,9 @@ mark.hl {
   gap: 10px;
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  /* Stay within the panel's 16px gutters (no edge-to-edge bleed); a small right
-     pad lets the last card breathe before the gutter. */
-  padding: 0 4px 6px 0;
+  /* Edge-to-edge: first card flush at the screen edge (matches the favorites posters),
+     cards scroll off both sides. The 16px gutter lives on the rail head, not here. */
+  padding: 0 0 6px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }

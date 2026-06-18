@@ -30,7 +30,9 @@ export function EventCard({ item, index = 0, userPos, onSelect }: { item: CardIt
         : null;
   const when = formatWhenShort(item.date_start, item.date_end);
   const price = priceLabel(item.price_min);
-  const metaLine = [when, item.venue].filter(Boolean).join(" · ");
+  // On the narrow rail card show just WHEN — the venue truncates to a useless stub here
+  // ("Но…"), and distance already sits top-right. (The full-width list rows keep the venue.)
+  const metaLine = when;
   return (
     <button
       type="button"
