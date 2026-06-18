@@ -274,6 +274,14 @@ html[data-theme="dark"] .vpin--active::before {
   color: var(--bg);
 }
 
+/* The big (black) count markers get an ACID backing plate behind them — the offset reads
+   as a bright acid registration shadow on the bottom-right. */
+.vcluster--big::before {
+  left: 4px;
+  top: 4px;
+  background: var(--acid);
+}
+
 /* ---------- User — surveyor's crosshair ---------- */
 .vyou-wrap {
   background: none;

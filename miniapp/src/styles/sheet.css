@@ -543,24 +543,22 @@ html[data-theme="dark"] .sheet-veil {
   flex-direction: column;
 }
 
-/* All other upcoming sessions, as mono chips under the headline date. */
+/* Other upcoming sessions — a plain vertical list of mono lines under the headline (no
+   chip border/padding: a bordered chip overflows the narrow half-width cell onto the rule). */
 .sheet__dates {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 9px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin-top: 8px;
 }
 .sheet__date-chip {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  border: 1px solid var(--line-soft);
-  padding: 3px 8px;
-  white-space: nowrap;
+  color: var(--ink-dim);
 }
 /* "Можно пойти сейчас" badge on the headline session — the one cinnabar accent
    in the meta block, so "ты ещё успеешь" jumps out above the date. */
