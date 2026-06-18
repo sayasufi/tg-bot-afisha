@@ -17,8 +17,8 @@ function RecRail({ rail, userPos, onSelect }: { rail: Rail; userPos?: LatLon | n
         {rail.subtitle ? <span className="rail__sub">{rail.subtitle}</span> : null}
       </div>
       <div className="rail__track">
-        {rail.items.map((it) => (
-          <EventCard key={`${rail.key}-${it.event_id}`} item={it} userPos={userPos} onSelect={onSelect} />
+        {rail.items.map((it, i) => (
+          <EventCard key={`${rail.key}-${it.event_id}`} item={it} index={i} userPos={userPos} onSelect={onSelect} />
         ))}
       </div>
     </section>

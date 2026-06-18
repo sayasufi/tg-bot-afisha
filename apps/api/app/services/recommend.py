@@ -24,6 +24,7 @@ from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.services.events_service import _venue_open_now
+from core.codes import event_code
 from core.db.models import Event, EventOccurrence, Venue
 from core.redis import get_redis
 
@@ -240,10 +241,10 @@ class RecommendationService:
         # the event_id lead in ORDER BY).
         inner = (
             select(
-                Event.event_id, Event.canonical_title.label("title"), Event.category,
+                Event.event_id, Event.display_no, Event.canonical_title.label("title"), Event.category,
                 Event.created_at, Event.cached_image_url, Event.primary_image_url,
                 EventOccurrence.date_start, EventOccurrence.date_end, EventOccurrence.price_min,
-                Venue.name.label("venue"), Venue.hours_json.label("venue_hours"), lat_col, lon_col,
+                Venue.name.label("venue"), Venue.city.label("city"), Venue.hours_json.label("venue_hours"), lat_col, lon_col,
             )
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
@@ -345,7 +346,8 @@ class RecommendationService:
     def _item(self, e: dict) -> dict:
         c = e["c"]
         return {
-            "event_id": c["event_id"], "title": c["title"], "category": c["category"],
+            "event_id": c["event_id"], "code": event_code(c.get("display_no"), c.get("city")),
+            "title": c["title"], "category": c["category"],
             "date_start": c["date_start"], "date_end": c["date_end"],
             "price_min": float(c["price_min"]) if c["price_min"] is not None else None,
             "venue": c["venue"], "open_now": e.get("open_now"), "lat": c["lat"], "lon": c["lon"],

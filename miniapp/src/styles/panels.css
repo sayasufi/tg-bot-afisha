@@ -723,25 +723,27 @@ mark.hl {
   height: 0;
 }
 
+/* Rail card — a full-bleed poster in the SAME editorial language as the list/favorites rows
+   (photo darkened, type set OVER it), sized for the horizontal rail. */
 .rcard {
+  position: relative;
   flex: 0 0 auto;
   width: 152px;
+  height: 198px;
   scroll-snap-align: start;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: block;
   padding: 0;
-  border: none;
-  background: none;
+  border: 0;
+  overflow: hidden;
+  background: var(--ink);
   text-align: left;
-  color: inherit;
   cursor: pointer;
-  animation: cardIn 0.3s var(--ease-cut) both;
-  animation-delay: calc(var(--i, 0) * 18ms);
+  animation: cardIn 0.34s var(--ease-cut) both;
+  animation-delay: calc(var(--i, 0) * 0.03s);
 }
-
 .rail--hero .rcard {
   width: 208px;
+  height: 234px;
 }
 
 @keyframes cardIn {
@@ -752,190 +754,169 @@ mark.hl {
 }
 
 .rcard__img {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 11;
-  background: var(--vitrine);
-  border: 1px solid var(--line);
-  overflow: hidden;
-  display: block;
-}
-
-.rail--hero .rcard__img {
-  aspect-ratio: 16 / 10;
-}
-
-.rcard__img img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
-  /* Mute the photos so they sit inside the editorial palette instead of shouting. */
-  filter: saturate(0.62) brightness(0.9) contrast(1.02);
+  /* Muted + darkened so the overlaid type always reads (matches the list cards). */
+  filter: saturate(0.6) brightness(0.78) contrast(1.04);
 }
-
-.rcard:active .rcard__img,
-.rcard:focus-visible .rcard__img {
-  border-color: var(--acid);
-}
-
-.rcard:focus-visible {
-  outline: none;
-}
-
-.rcard:focus-visible .rcard__img {
-  outline: 2px solid var(--acid);
-  outline-offset: 2px;
-}
-
-/* Lift the placeholder icon's contrast on the dark wall. */
-html[data-theme="dark"] .rcard__ph {
-  color: var(--ink-dim);
-}
-
-.rcard__ph {
+.rcard__glyph {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  color: var(--cat, var(--ink-faint));
-  opacity: 0.7;
+  color: rgba(244, 244, 239, 0.22);
 }
-
-/* Bottom scrim for legible overlays + a little editorial depth. */
-.rcard__scrim {
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 48%;
-  background: linear-gradient(to top, rgba(8, 7, 5, 0.72), rgba(8, 7, 5, 0));
-  pointer-events: none;
-}
-
-/* Thin category-colour rail along the image bottom (quiet type code). */
-.rcard__img::after {
+/* Legibility scrim — heavy at the bottom (title), a touch at the top (code/distance). */
+.rcard::after {
   content: "";
   position: absolute;
-  inset: auto 0 0 0;
-  height: 3px;
-  background: var(--cat, var(--ink-faint));
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(11, 11, 11, 0.92) 0%,
+    rgba(11, 11, 11, 0.5) 34%,
+    rgba(11, 11, 11, 0.05) 60%,
+    rgba(11, 11, 11, 0.42) 100%
+  );
+  pointer-events: none;
+}
+.rcard:active::after {
+  background: linear-gradient(to top, rgba(11, 11, 11, 0.96), rgba(11, 11, 11, 0.62) 45%, rgba(11, 11, 11, 0.52));
+}
+.rcard:focus-visible {
+  outline: 2px solid var(--acid);
+  outline-offset: -2px;
 }
 
-/* Bottom overlay bar: live badge (left) + price (right) on ONE row so they can never
-   overlap — the live label truncates before it reaches the price. */
-.rcard__tags {
+.rcard__top {
   position: absolute;
-  left: 7px;
-  right: 7px;
-  bottom: 8px;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 8px;
+  padding: 9px 10px;
+}
+.rcard__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.rcard__cat {
+  flex: 0 0 auto;
+  color: rgba(244, 244, 239, 0.95);
+}
+.rcard__code {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(244, 244, 239, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rcard__dist {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(244, 244, 239, 0.85);
+  white-space: nowrap;
 }
 
-/* Live now — a calm pulsing dot + lowercase label (replaces the harsh ИДЁТ box). */
+.rcard__btm {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 0 10px 11px;
+}
 .rcard__live {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-width: 0; /* allow the label to shrink/ellipsis instead of pushing into the price */
+  margin-bottom: 5px;
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.03em;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cinnabar);
 }
-
-.rcard__livetext {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rcard__livedot {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
+.rcard__live::before {
+  content: "";
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--cinnabar);
-  /* Static (see .erow__spark) — pulse only on the focused map pin. */
 }
-
-/* Concrete rgba (not color-mix) so the pulse renders on older Telegram WebViews. */
-@keyframes livePulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 90, 60, 0.55);
-  }
-  70% {
-    box-shadow: 0 0 0 6px rgba(255, 90, 60, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 90, 60, 0);
-  }
+.rcard__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: rgba(244, 244, 239, 0.97);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .rcard,
-  .rcard__livedot {
-    animation: none;
-  }
+.rail--hero .rcard__title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.03em;
+  text-transform: lowercase;
 }
-
-/* Price tag — hugs the right of the bar (margin-left:auto keeps it right even when
-   there's no live badge); never shrinks, so the live label yields first. */
+.rcard__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.rcard__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.01em;
+  color: rgba(244, 244, 239, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .rcard__price {
-  margin-left: auto;
   flex: 0 0 auto;
   white-space: nowrap;
   padding: 1px 6px;
-  background: rgba(8, 7, 5, 0.74);
+  background: rgba(11, 11, 11, 0.72);
   color: #fff;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: 0.01em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
-
 .rcard__price--free {
   background: var(--acid);
   color: var(--on-acid);
   font-weight: 600;
 }
-
-.rcard__title {
-  /* Grotesk, natural case — a card title repeated ×12/rail is NOT a hero; oversized
-     lowercase Unbounded is reserved for the one hero card (below) + the sheet title. */
-  font-family: var(--grotesk);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--ink);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.rail--hero .rcard__title {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.03em;
-  text-transform: lowercase;
-}
-
-.rcard__meta {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.01em;
-  color: var(--ink-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .rcard--skel {
   cursor: default;
   animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rcard {
+    animation: none;
+  }
 }
 
 /* Избранное — a 2-column card grid reusing the rail card. */
