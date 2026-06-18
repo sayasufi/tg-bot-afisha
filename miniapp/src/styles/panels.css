@@ -198,11 +198,15 @@
   z-index: 1400;
   display: flex;
   flex-direction: column;
-  /* Gallery-paper ground: the plaster + a soft vignette so the panel has editorial depth
-     instead of reading as a flat fill (the grain is layered in ::before). */
+  /* Gallery-paper ground (editorial depth, not a flat fill): a warm amber corner glow, a
+     vignette, and a faint catalogue grid over the plaster. Grain is layered in ::before. */
   background:
-    radial-gradient(135% 92% at 50% -6%, transparent 50%, rgba(8, 7, 5, 0.09) 100%),
+    radial-gradient(72% 52% at 12% -4%, rgba(214, 158, 84, 0.1), transparent 56%),
+    radial-gradient(140% 100% at 50% -8%, transparent 44%, rgba(8, 7, 5, 0.14) 100%),
+    linear-gradient(rgba(128, 128, 128, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(128, 128, 128, 0.05) 1px, transparent 1px),
     var(--bg);
+  background-size: auto, auto, 38px 38px, 38px 38px, auto;
   animation: panelIn 0.26s var(--ease-cut) both;
 }
 /* Faint paper grain over the plaster ground (sits below the content; shows in the gutters,
@@ -215,7 +219,7 @@
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
   background-size: 160px 160px;
-  opacity: 0.5;
+  opacity: 0.7;
   mix-blend-mode: soft-light;
 }
 
