@@ -1,5 +1,7 @@
+import json
+
 from aiogram import Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import Message
 
 from apps.bot.bot.formatting import ce
@@ -7,6 +9,7 @@ from apps.bot.bot.keyboards.main import map_reply_keyboard, webapp_keyboard
 from core.config.settings import get_settings
 from core.db.repositories.users import upsert_user
 from core.db.session import SessionLocal
+from core.redis import get_redis
 
 router = Router()
 
@@ -47,9 +50,35 @@ def _map_markup(url: str):
     return map_reply_keyboard(url) or webapp_keyboard(url)
 
 
+async def _handle_report(message: Message, event_id: str) -> None:
+    """A user tapped «сообщить о неточности» on an event (deep link ?start=report_<id>).
+    Record the flag — event + who — so the team can check the data, and acknowledge so the
+    feedback loop visibly closes. Best-effort store (a Redis list the team reads)."""
+    user = message.from_user
+    try:
+        client = get_redis(decode=True)
+        if client is not None:
+            await client.lpush(
+                "reports:inaccuracy",
+                json.dumps({
+                    "event_id": event_id[:64],
+                    "user_id": user.id if user else None,
+                    "username": user.username if user else None,
+                }),
+            )
+            await client.ltrim("reports:inaccuracy", 0, 999)  # keep the last 1000
+    except Exception:
+        pass  # the acknowledgement matters more than the store
+    await message.answer(f"{ce('🔔')} Спасибо! Отметили неточность — проверим данные по этому событию.")
+
+
 @router.message(CommandStart())
-async def start_handler(message: Message) -> None:
+async def start_handler(message: Message, command: CommandObject) -> None:
     _save_user(message)
+    arg = (command.args or "").strip()
+    if arg.startswith("report_"):  # «сообщить о неточности» from an event sheet
+        await _handle_report(message, arg[len("report_"):])
+        return
     url = get_settings().telegram_webapp_url
     await message.answer(WELCOME, reply_markup=_map_markup(url))
 

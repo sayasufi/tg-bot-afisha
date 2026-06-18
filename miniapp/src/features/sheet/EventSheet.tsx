@@ -13,6 +13,21 @@ import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
 import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
 
+// Trust line helpers: the source host ("по данным afisha.ru") and a human freshness date.
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+const ACTUAL_FMT = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
+function formatActualDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : ACTUAL_FMT.format(new Date(t));
+}
+
 type MetroPing = { name: string; meters: number };
 
 type Props = {
@@ -245,6 +260,25 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const ticketLabel =
     priceMin != null && priceMin > 0 ? `Билеты от ${Math.round(priceMin).toLocaleString("ru-RU")} ₽` : "Подробнее";
 
+  // Trust line: where the data is from + when it was last refreshed + a way to flag it wrong.
+  const sourceHost = sourceUrl ? hostOf(sourceUrl) : null;
+  const updatedLabel = formatActualDate(detail?.updated_at);
+  const icsUrl = `${window.location.origin}/v1/events/${selected.event_id}/ics`;
+  const onCalendar = () => {
+    haptic("light");
+    logIntent("calendar", selected.event_id);
+    const wa = getWebApp();
+    if (wa?.openLink) wa.openLink(icsUrl);
+    else window.open(icsUrl, "_blank");
+  };
+  const onReport = () => {
+    haptic("light");
+    const link = `https://t.me/okrestmap_bot?start=report_${selected.event_id}`;
+    const wa = getWebApp();
+    if (wa?.openTelegramLink) wa.openTelegramLink(link);
+    else window.open(link, "_blank");
+  };
+
   const onShare = async () => {
     haptic("light");
     logIntent("share", selected.event_id);
@@ -454,6 +488,24 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               </a>
             )}
           </div>
+        )}
+
+        {occ && (
+          <button type="button" className="sheet__cal" onClick={onCalendar}>
+            <span className="sheet__cal-plus" aria-hidden="true">+</span> в календарь
+          </button>
+        )}
+
+        {(sourceHost || updatedLabel) && (
+          <p className="sheet__trust">
+            {sourceHost && <span>по данным {sourceHost}</span>}
+            {sourceHost && updatedLabel && <span aria-hidden="true"> · </span>}
+            {updatedLabel && <span>актуально на {updatedLabel}</span>}
+            <span aria-hidden="true"> · </span>
+            <button type="button" className="sheet__trust-report" onClick={onReport}>
+              сообщить о неточности
+            </button>
+          </p>
         )}
 
         <SimilarEvents selected={selected} items={items} userPos={userPos} onSelect={onSelect} />

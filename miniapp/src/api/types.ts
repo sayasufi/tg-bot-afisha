@@ -59,5 +59,6 @@ export type EventDetail = {
   subcategory: string;
   age_limit: string;
   primary_image_url: string;
+  updated_at?: string | null; // last refresh — drives the "актуально на" trust line
   occurrences: EventOccurrence[];
 };

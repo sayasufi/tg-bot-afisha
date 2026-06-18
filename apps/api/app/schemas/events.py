@@ -59,6 +59,7 @@ class EventDetailResponse(BaseModel):
     subcategory: str
     age_limit: str
     primary_image_url: str
+    updated_at: datetime | None = None  # last refresh — powers the "актуально на" trust line
     occurrences: list[EventDetailOccurrence]
 
 

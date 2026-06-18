@@ -656,6 +656,7 @@ class EventQueryService:
             "subcategory": head.subcategory,
             "age_limit": head.age_limit,
             "primary_image_url": head.cached_image_url or head.primary_image_url,
+            "updated_at": getattr(head, "updated_at", None),
             "occurrences": occurrences,
         }
 
@@ -673,6 +674,7 @@ class EventQueryService:
                 Event.age_limit,
                 Event.cached_image_url,
                 Event.primary_image_url,
+                Event.updated_at.label("updated_at"),
                 EventOccurrence,
                 Venue.name.label("venue_name"),
                 Venue.address.label("venue_address"),
