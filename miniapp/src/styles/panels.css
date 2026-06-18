@@ -1571,6 +1571,10 @@ mark.hl {
   right: 0;
   top: 0;
   bottom: 0;
-  width: 46%;
+  width: 52%;
   justify-content: center;
+}
+.cat--sideblack .cat__title {
+  font-size: clamp(18px, 5vw, 24px);
+  -webkit-line-clamp: 4;
 }

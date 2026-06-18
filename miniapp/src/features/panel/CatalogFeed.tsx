@@ -44,9 +44,9 @@ function derive(item: EventItem, now?: number): Card {
 // Every card is a photo block now; the look is one of several stylish "variants" that
 // rotate so adjacent cards never repeat. The metadata footer is laid out by variant.
 type Variant = "bottomrow" | "bottomstack" | "sideblack" | "band" | "tall";
-const FULL_VARIANTS: Variant[] = ["bottomrow", "sideblack", "band", "tall", "bottomrow", "band"];
+const FULL_VARIANTS: Variant[] = ["bottomrow", "sideblack", "tall", "band"];
 const HALF_VARIANTS: Variant[] = ["bottomstack", "band", "tall", "bottomstack"];
-const ROWS = ["full", "duo", "full", "duo", "duo"] as const;
+const ROWS = ["full", "duo", "full", "full", "duo"] as const;
 
 // stacked-footer variants show venue over price; row variants show when·venue then price.
 const STACK = new Set<Variant>(["bottomstack", "sideblack", "tall"]);
