@@ -1450,7 +1450,8 @@ mark.hl {
 .cat__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 24%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.9) 100%);
+  /* bigger + smoother fade: clear in the middle, gradual to near-black at the bottom edge */
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0) 18%, rgba(0, 0, 0, 0) 32%, rgba(0, 0, 0, 0.5) 62%, rgba(0, 0, 0, 0.92) 100%);
 }
 .cat--noimg .cat__scrim {
   display: none;
@@ -1534,13 +1535,20 @@ mark.hl {
   gap: 4px;
 }
 .cat__meta {
+  min-width: 0;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.82);
+  /* clamp so a long venue never spills past the card frame */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .cat__price {
+  flex: 0 0 auto;
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
@@ -1550,21 +1558,58 @@ mark.hl {
   white-space: nowrap;
 }
 
-/* ---- Variant: band — a solid black strip across the bottom (photo fades into it) ---- */
-.cat--band .cat__panel {
-  background: linear-gradient(180deg, transparent 0%, var(--ink) 22px);
-  padding-top: 26px;
-}
+/* ---- Variant: band — a big smooth fade to a solid black band at the bottom ---- */
 .cat--band .cat__scrim {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0) 32%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 24%, rgba(0, 0, 0, 0.5) 48%, var(--ink) 82%);
 }
 
-/* ---- Variant: sideblack — smooth fade to solid black on the right; text on the black ---- */
+/* ---- Variant: whiteband — photo fades to a white band at the bottom; dark type on it ---- */
+.cat--whiteband .cat__scrim {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 22%, rgba(255, 255, 255, 0) 44%, var(--plinth) 84%);
+}
+.cat--whiteband .cat__panel {
+  color: var(--ink);
+}
+.cat--whiteband .cat__meta {
+  color: var(--ink-dim);
+}
+.cat--whiteband .cat__price {
+  color: var(--ink);
+}
+
+/* ---- Variant: acidband — photo fades to an acid band at the bottom; ink type on it ---- */
+.cat--acidband .cat__scrim {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 22%, rgba(204, 255, 0, 0) 46%, var(--acid) 84%);
+}
+.cat--acidband .cat__panel {
+  color: var(--on-acid);
+}
+.cat--acidband .cat__meta {
+  color: var(--on-acid);
+  opacity: 0.85;
+}
+.cat--acidband .cat__price {
+  color: var(--on-acid);
+}
+
+/* ---- Variant: topband — fade from the top; title sits at the top, code moves down ---- */
+.cat--topband {
+  justify-content: flex-start;
+}
+.cat--topband .cat__scrim {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.86) 0%, rgba(0, 0, 0, 0.36) 32%, rgba(0, 0, 0, 0) 62%);
+}
+.cat--topband .cat__code {
+  top: auto;
+  bottom: 12px;
+}
+
+/* ---- Variant: sideblack — big smooth fade to solid black on the right; text on it ---- */
 .cat--sideblack {
   justify-content: center;
 }
 .cat--sideblack .cat__scrim {
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 28%, rgba(0, 0, 0, 0.97) 60%, var(--ink) 100%);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 16%, rgba(0, 0, 0, 0.45) 40%, rgba(0, 0, 0, 0.95) 64%, var(--ink) 100%);
 }
 .cat--sideblack .cat__panel {
   position: absolute;

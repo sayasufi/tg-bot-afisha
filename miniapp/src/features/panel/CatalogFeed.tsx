@@ -42,13 +42,22 @@ function derive(item: EventItem, now?: number): Card {
 }
 
 // Every card is a photo block now; the look is one of several stylish "variants" that
-// rotate so adjacent cards never repeat. The metadata footer is laid out by variant.
-type Variant = "bottomrow" | "bottomstack" | "sideblack" | "band" | "tall";
-const FULL_VARIANTS: Variant[] = ["bottomrow", "sideblack", "tall", "band"];
-const HALF_VARIANTS: Variant[] = ["bottomstack", "band", "tall", "bottomstack"];
+// rotate so adjacent cards never repeat. Transitions fade to black / white / acid, from the
+// bottom, the right, or the top. The metadata footer is laid out by variant.
+type Variant =
+  | "bottomrow"
+  | "bottomstack"
+  | "sideblack"
+  | "band"
+  | "tall"
+  | "whiteband"
+  | "acidband"
+  | "topband";
+const FULL_VARIANTS: Variant[] = ["bottomrow", "sideblack", "whiteband", "tall", "band", "acidband", "topband"];
+const HALF_VARIANTS: Variant[] = ["bottomstack", "whiteband", "band", "acidband"];
 const ROWS = ["full", "duo", "full", "full", "duo"] as const;
 
-// stacked-footer variants show venue over price; row variants show when·venue then price.
+// which variants stack the footer (when over price) vs lay it out as a row.
 const STACK = new Set<Variant>(["bottomstack", "sideblack", "tall"]);
 
 function PhotoCard({
@@ -92,7 +101,7 @@ function PhotoCard({
         )}
         <span className="cat__title">{c.title}</span>
         <span className={`cat__foot${stack ? " cat__foot--col" : ""}`}>
-          {(stack ? c.venue : c.meta) && <span className="cat__meta">{stack ? c.venue : c.meta}</span>}
+          {c.meta && <span className="cat__meta">{c.meta}</span>}
           {c.price && <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>}
         </span>
       </span>
