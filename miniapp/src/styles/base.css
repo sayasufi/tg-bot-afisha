@@ -154,25 +154,25 @@ body {
   color: var(--ink-dim);
 }
 
-/* Tappable venue name → opens the venue page. The brand's full acid highlight (same as a
-   search match, mark.hl): a solid acid mark reads unmistakably as "special / tap me" —
-   far louder than a thin underline, and never grey. */
+/* Tappable venue name → opens the venue page. Styled as a clear OUTLINED BUTTON (hairline
+   pill, the brand's flat style) so it unmistakably reads as clickable; fills acid on press. */
 .wall-label__place {
   display: inline;
-  border: 0;
   margin: 0;
-  padding: 1px 5px;
+  padding: 2px 9px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--ink);
+  background: none;
+  color: var(--ink);
   font: inherit;
-  background: var(--acid);
-  color: var(--on-acid);
   cursor: pointer;
-  text-align: left;
-  -webkit-box-decoration-break: clone; /* highlight every line if the name wraps */
+  -webkit-box-decoration-break: clone; /* keep the pill border if the name wraps */
   box-decoration-break: clone;
-  transition: background 0.14s var(--ease-cut);
+  transition: background 0.14s var(--ease-cut), color 0.14s var(--ease-cut);
 }
 .wall-label__place:active {
-  background: var(--acid-deep);
+  background: var(--acid);
+  color: var(--on-acid);
 }
 
 /* Proximity badge — the "рядом" promise, made tangible in acid. */
