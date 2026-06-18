@@ -53,6 +53,9 @@
 }
 
 .peek__title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-family: var(--grotesk);
   font-size: 13px;
   font-weight: 700;
@@ -61,11 +64,13 @@
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .peek__venue {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
   color: var(--ink-dim);
   font-weight: 600;
   text-transform: none;
