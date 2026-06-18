@@ -154,50 +154,32 @@ body {
   color: var(--ink-dim);
 }
 
-/* Tappable venue name → opens the venue page. Styled as a clear OUTLINED BUTTON (hairline
-   pill, the brand's flat style) so it unmistakably reads as clickable; fills acid on press. */
+/* Tappable venue name → opens the venue page. A clear FILLED ACID BUTTON (the brand's flat
+   accent) — the single highlighted element in the sheet; metro/distance below stay plain so
+   they don't compete. Darkens on press. */
 .wall-label__place {
   display: inline;
   margin: 0;
   padding: 2px 9px;
   border: 0;
-  box-shadow: inset 0 0 0 1px var(--ink);
-  background: none;
-  color: var(--ink);
+  background: var(--acid);
+  color: var(--on-acid);
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
-  -webkit-box-decoration-break: clone; /* keep the pill border if the name wraps */
+  -webkit-box-decoration-break: clone; /* keep the fill if the name wraps */
   box-decoration-break: clone;
-  transition: background 0.14s var(--ease-cut), color 0.14s var(--ease-cut);
+  transition: background 0.14s var(--ease-cut);
 }
 .wall-label__place:active {
-  background: var(--acid);
-  color: var(--on-acid);
+  background: var(--acid-deep);
 }
 
-/* Proximity badge — the "рядом" promise, made tangible in acid. */
-.sheet__near {
-  display: inline-block;
-  background: var(--acid);
-  color: var(--on-acid);
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 2px 8px;
-  box-shadow: inset 0 0 0 1px var(--ink);
-}
-
-/* Metro proximity chip in the event sheet — a transit-token "M". */
+/* Metro + proximity are plain values now (the venue button is the sheet's only acid accent). */
+.sheet__near,
 .sheet__metro {
-  display: inline-block;
-  background: var(--ink);
-  color: var(--plinth);
   font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 2px 8px;
+  color: var(--ink);
 }
 
 .kicker {
