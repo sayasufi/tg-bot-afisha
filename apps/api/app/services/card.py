@@ -141,6 +141,79 @@ def render_card(title: str, meta: str, category: str, photo: bytes | None) -> by
     return out.getvalue()
 
 
+# --- reminder cover: photo-DOMINANT with a light VITRINE brand treatment ----------
+# (the share card above is a full poster with the title baked in; a reminder already
+# carries the title in its caption, so here we keep the event photo big and just stamp
+# the brand: an acid spine, a hairline frame, the cinnabar tick, the окрест wordmark, the
+# accession code, and a bottom acid/plaster/cinnabar colour ribbon.)
+RW, RH = 1080, 720
+
+
+def render_reminder_cover(photo: bytes | None, code: str | None) -> bytes:
+    if photo:
+        try:
+            img = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (RW, RH), Image.LANCZOS)
+        except Exception:
+            img = Image.new("RGB", (RW, RH), INK)
+    else:
+        img = Image.new("RGB", (RW, RH), INK)
+    d = ImageDraw.Draw(img, "RGBA")
+    # Bottom legibility gradient (transparent → ink) so the wordmark/code read on any photo.
+    gh = 300
+    for i in range(gh):
+        d.line([(0, RH - gh + i), (RW, RH - gh + i)], fill=(11, 11, 11, int(210 * (i / gh) ** 1.5)))
+    d.rectangle([0, 0, 14, RH], fill=ACID)              # left acid spine (brand stripe)
+    d.rectangle([0, 0, RW - 1, RH - 1], outline=INK, width=4)  # hairline frame
+    d.line([RW - 70, 40, RW - 40, 40], fill=CINNABAR, width=6)  # cinnabar registration tick
+    d.line([RW - 40, 40, RW - 40, 70], fill=CINNABAR, width=6)
+    d.text((44, RH - 92), "окрест", font=_font(52, 800), fill=ACID)  # wordmark
+    if code:
+        cf = _font(36, 600)
+        d.text((RW - 48 - d.textlength(code, font=cf), RH - 80), code, font=cf, fill=PLASTER)
+    # Bottom colour ribbon — "полосы наших цветов": acid · plaster · cinnabar.
+    seg = (RW - 14) / 3
+    for i, col in enumerate((ACID, PLASTER, CINNABAR)):
+        d.rectangle([14 + i * seg, RH - 10, 14 + (i + 1) * seg, RH], fill=col)
+    out = io.BytesIO()
+    img.save(out, "JPEG", quality=88, optimize=True)
+    return out.getvalue()
+
+
+def ensure_reminder_cover(event_id: str, image_url: str, code: str | None) -> str:
+    """Public URL of the branded reminder cover (rendered + cached in MinIO). Empty string
+    if there's no usable image, so the caller can fall back to the raw photo / a text DM."""
+    key = f"reminders/{event_id}.jpg"
+    try:
+        if object_exists(key):
+            return public_url(key)
+    except Exception:
+        pass
+    photo: bytes | None = None
+    try:
+        direct = get_object(f"events/{event_id}.jpg")  # our own cached copy first
+        if direct:
+            photo = direct[0]
+    except Exception:
+        photo = None
+    if photo is None and image_url and is_public_http_url(image_url):
+        try:
+            r = httpx.get(image_url, timeout=8, follow_redirects=False, headers={"User-Agent": "okrest-card/1.0"})
+            r.raise_for_status()
+            photo = r.content
+        except Exception:
+            photo = None
+    if photo is None:
+        return ""
+    try:
+        data = render_reminder_cover(photo, code)
+        ensure_bucket()
+        put_image(key, data, "image/jpeg")
+        return public_url(key)
+    except Exception:
+        logger.warning("reminder cover render failed for %s", event_id, exc_info=True)
+        return ""
+
+
 def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: str) -> str:
     """Return the public URL of the cached card, rendering + storing it if needed."""
     key = f"cards/{event_id}.jpg"

@@ -4,11 +4,13 @@ Finds due saved-event reminders and DMs the user via the bot (a couple hours bef
 event), then stamps sent_at so each fires once. Sends over the raw Telegram HTTP API
 (same approach as the share prepare flow) — no aiogram session lifecycle in the flow.
 """
+import asyncio
 import logging
 from datetime import datetime, timezone
 
 import httpx
 
+from apps.api.app.services.card import ensure_reminder_cover
 from apps.bot.bot.formatting import reminder_caption
 from core.config.settings import get_settings
 from core.db.repositories.reminders import due_reminders, mark_sent
@@ -40,7 +42,19 @@ async def _send_reminders_impl() -> int:
         async with httpx.AsyncClient(timeout=15) as client:
             for r in due:
                 caption = reminder_caption(r, now)
-                image = r.get("image")
+                raw_image = r.get("image")
+                # Brand the cover (acid spine, hairline, окрест wordmark, code, colour ribbon),
+                # rendered+cached in MinIO; fall back to the raw photo if branding fails.
+                image = raw_image
+                if raw_image:
+                    try:
+                        branded = await asyncio.to_thread(
+                            ensure_reminder_cover, r["event_id"], raw_image, r.get("code")
+                        )
+                        if branded:
+                            image = branded
+                    except Exception:
+                        image = raw_image
                 markup = {"inline_keyboard": [[{"text": "смотреть →", "url": _open_url(r["event_id"])}]]}
                 got_response = False
                 ok = False
