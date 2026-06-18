@@ -715,7 +715,9 @@ mark.hl {
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  scroll-snap-type: x proximity;
+  /* mandatory (was proximity): every swipe decelerates and settles on a card instead of
+     flinging across the whole rail — reads as a slower, more controlled scroll. */
+  scroll-snap-type: x mandatory;
   /* Edge-to-edge: first card flush at the screen edge (matches the favorites posters),
      cards scroll off both sides. The 16px gutter lives on the rail head, not here. */
   padding: 0 0 6px;
