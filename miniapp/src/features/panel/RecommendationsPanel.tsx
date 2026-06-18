@@ -11,7 +11,7 @@ import { EventCard } from "./EventCard";
 import { PullHint } from "./PullHint";
 
 function RecRail({ rail, userPos, onSelect }: { rail: Rail; userPos?: LatLon | null; onSelect: (i: EventItem) => void }) {
-  const trackRef = useRailScroll<HTMLDivElement>(0.6); // damped horizontal drag (slower than 1:1)
+  const trackRef = useRailScroll<HTMLDivElement>(0.8); // damped horizontal drag (slightly slower than 1:1)
   return (
     <section className={`rail${rail.key === "for_you" ? " rail--hero" : ""}`}>
       <div className="rail__head">
