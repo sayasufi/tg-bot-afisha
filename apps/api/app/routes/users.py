@@ -17,7 +17,9 @@ from core.db.repositories.users import (
     add_favorites,
     get_settings,
     list_favorite_ids,
+    list_followed_venue_ids,
     set_favorite,
+    set_venue_follow,
     update_settings,
     upsert_user,  # sync — for the low-frequency /location route
     upsert_user_async,
@@ -50,6 +52,12 @@ class FavoriteToggleRequest(BaseModel):
 class ReminderRequest(BaseModel):
     init_data: str
     event_id: str | None = None  # omit (with on) to just LIST the account's reminders
+    on: bool | None = None
+
+
+class VenueFollowRequest(BaseModel):
+    init_data: str
+    venue_id: int | None = None  # omit (just LIST the followed venues) or include to toggle
     on: bool | None = None
 
 
@@ -137,6 +145,18 @@ async def toggle_reminder(payload: ReminderRequest, db: AsyncSession = Depends(g
             await cancel_reminder(db, uid, payload.event_id)
     await db.commit()
     return {"ids": await list_reminder_ids(db, uid)}
+
+
+@router.post("/venues")
+async def toggle_venue_follow(payload: VenueFollowRequest, db: AsyncSession = Depends(get_async_db)):
+    """Follow / unfollow a venue (account-scoped, синхронно по устройствам), or — with no
+    venue_id — just list the followed venue ids. Returns the current id list."""
+    user, uid = _auth(payload.init_data)
+    await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+    if payload.venue_id is not None and payload.on is not None:
+        await set_venue_follow(db, uid, payload.venue_id, payload.on)
+    await db.commit()
+    return {"ids": await list_followed_venue_ids(db, uid)}
 
 
 @router.post("/settings")

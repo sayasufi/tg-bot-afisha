@@ -22,6 +22,7 @@ const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { Toaster } from "../features/toast/Toaster";
+import { VenueSheet } from "../features/venue/VenueSheet";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
@@ -29,6 +30,7 @@ import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { syncFavorites, useFavorites } from "../lib/favorites";
 import { syncReminders, useReminders } from "../lib/reminders";
+import { syncVenueFollows } from "../lib/venueFollows";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
 import { SearchOverlay } from "../features/search/SearchOverlay";
@@ -52,6 +54,7 @@ export function App() {
   useEffect(() => {
     void syncFavorites();
     void syncReminders();
+    void syncVenueFollows();
   }, []);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
@@ -74,6 +77,8 @@ export function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // The venue page (opened by tapping the place in an event sheet); holds the venue id.
+  const [venueId, setVenueId] = useState<number | null>(null);
   // List view ("Списком"): the current map bbox (reported by EventsMap) + the bbox
   // frozen when the list was opened, so the list reflects the area you were looking at.
   const [mapBbox, setMapBbox] = useState<[number, number, number, number] | null>(null);
@@ -408,6 +413,7 @@ export function App() {
   const closeTop = useCallback((): boolean => {
     if (searchOpen) setSearchOpen(false);
     else if (selected) setSelected(null);
+    else if (venueId != null) setVenueId(null);
     else if (peek) setPeek(null);
     else if (filtersOpen) setFiltersOpen(false);
     else if (drawerOpen) setDrawerOpen(false);
@@ -418,14 +424,14 @@ export function App() {
     // (a keyboard Escape otherwise leaves the pill button looking "highlighted").
     (document.activeElement as HTMLElement | null)?.blur?.();
     return true;
-  }, [searchOpen, selected, peek, filtersOpen, drawerOpen, listOpen, view]);
+  }, [searchOpen, selected, venueId, peek, filtersOpen, drawerOpen, listOpen, view]);
 
   // Telegram back button closes whatever is on top (search → sheet → peek → filters →
   // drawer → panel).
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || peek || filtersOpen || drawerOpen || searchOpen || listOpen || view !== "map";
+    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || view !== "map";
     const pop = () => closeTop();
     if (stacked) {
       back.show();
@@ -434,7 +440,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, peek, filtersOpen, drawerOpen, searchOpen, listOpen, view, closeTop]);
+  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, view, closeTop]);
 
   // Esc behaves like tapping the visible × — closes the first-run guide, then the
   // top overlay.
@@ -531,6 +537,15 @@ export function App() {
     setListOpen(false); // the list is a separate overlay — close it too (was the bug)
     setSelected(null);
     setPeek(null); // "На карте" wants the pin in view, not the peek list over it
+  }, []);
+
+  // Tap the venue in an event sheet → open the venue page. Close the event sheet so the
+  // venue is the base; tapping one of its events then opens an event sheet on top of it.
+  const onOpenVenue = useCallback((vid: number) => {
+    haptic("light");
+    setSelected(null);
+    setPeek(null);
+    setVenueId(vid);
   }, []);
 
   // Dismiss the highlight WITH an exit animation: flag it out, then clear after the
@@ -745,8 +760,13 @@ export function App() {
         onToggleReminder={() => selected && rem.toggle(selected.event_id)}
         onSelect={openEvent}
         onShowMap={showOnMap}
+        onOpenVenue={onOpenVenue}
         onClose={() => setSelected(null)}
       />
+
+      {venueId != null && (
+        <VenueSheet venueId={venueId} userPos={userPos} now={now} onSelect={openEvent} onClose={() => setVenueId(null)} />
+      )}
 
       <Suspense fallback={null}>
         {view === "recs" && (

@@ -6,7 +6,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from core.db.models import City, Event, RawEvent, User, UserFavorite
+from core.db.models import City, Event, RawEvent, User, UserFavorite, Venue
+from core.db.models.ref.user_venue_follow import UserVenueFollow
 from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
 
@@ -159,6 +160,37 @@ async def add_favorites(db: AsyncSession, telegram_user_id: int, event_ids: list
         .values([{"telegram_user_id": telegram_user_id, "event_id": e} for e in eids])
         .on_conflict_do_nothing()
     )
+
+
+async def list_followed_venue_ids(db: AsyncSession, telegram_user_id: int) -> list[str]:
+    """Venue ids the user follows (as strings, for the Mini App)."""
+    rows = (
+        await db.execute(select(UserVenueFollow.venue_id).where(UserVenueFollow.telegram_user_id == telegram_user_id))
+    ).scalars().all()
+    return [str(r) for r in rows]
+
+
+async def set_venue_follow(db: AsyncSession, telegram_user_id: int, venue_id: int, on: bool) -> None:
+    """Follow / unfollow one venue (no commit). Inserts only a still-existing venue (FK)."""
+    try:
+        vid = int(venue_id)
+    except (ValueError, TypeError):
+        return
+    if on:
+        if (await db.execute(select(Venue.venue_id).where(Venue.venue_id == vid))).first() is None:
+            return  # venue no longer exists — nothing to follow
+        await db.execute(
+            pg_insert(UserVenueFollow.__table__)
+            .values(telegram_user_id=telegram_user_id, venue_id=vid)
+            .on_conflict_do_nothing()
+        )
+    else:
+        await db.execute(
+            delete(UserVenueFollow).where(
+                UserVenueFollow.telegram_user_id == telegram_user_id,
+                UserVenueFollow.venue_id == vid,
+            )
+        )
 
 
 async def save_forward_message(db: AsyncSession, message_id: int, chat_id: int, payload: dict) -> RawEvent:

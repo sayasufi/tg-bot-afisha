@@ -704,6 +704,7 @@ class EventQueryService:
         occurrences = [
             {
                 "occurrence_id": r.EventOccurrence.occurrence_id,
+                "venue_id": r.EventOccurrence.venue_id,
                 "date_start": r.EventOccurrence.date_start,
                 "date_end": r.EventOccurrence.date_end,
                 "price_min": r.EventOccurrence.price_min,
@@ -719,6 +720,77 @@ class EventQueryService:
             for r in rows
         ]
         return self._event_head(rows[0], rows[0].venue_city, occurrences)
+
+    async def venue_detail(self, venue_id: int):
+        """A venue + its upcoming events — powers the venue page. Events use the same
+        canonical item shape as the map/list, so the client renders them with the existing
+        poster rows. One row per event (soonest-actionable occurrence, future-first)."""
+        lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
+        lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
+        vrow = (await self.db.execute(
+            select(Venue.venue_id, Venue.name, Venue.address, Venue.city, Venue.hours_json, lat_col, lon_col)
+            .where(Venue.venue_id == venue_id)
+        )).first()
+        if not vrow or vrow.name == _PLACEHOLDER_VENUE:
+            return None
+        stmt = (
+            select(
+                Event.event_id.label("event_id"),
+                Event.display_no.label("display_no"),
+                Event.canonical_title.label("title"),
+                Event.category.label("category"),
+                Event.cached_image_url.label("cached_image_url"),
+                Event.primary_image_url.label("primary_image_url"),
+                EventOccurrence.date_start.label("date_start"),
+                EventOccurrence.date_end.label("date_end"),
+                EventOccurrence.price_min.label("price_min"),
+            )
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .where(
+                Event.status == "active",
+                EventOccurrence.venue_id == venue_id,
+                func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= func.date_trunc("day", func.now()),
+            )
+            .distinct(Event.event_id)
+            .order_by(
+                Event.event_id,
+                (EventOccurrence.date_start < func.now()).asc(),
+                EventOccurrence.date_start.asc(),
+            )
+        )
+        rows = (await self.db.execute(stmt)).all()
+        now_msk = datetime.now(_MSK)
+        open_now = _venue_open_now(vrow.hours_json, now_msk)
+        lat = float(vrow.lat) if vrow.lat is not None else None
+        lon = float(vrow.lon) if vrow.lon is not None else None
+        items = [
+            {
+                "event_id": r.event_id,
+                "code": event_code(r.display_no, vrow.city),
+                "title": r.title,
+                "category": r.category,
+                "date_start": r.date_start,
+                "date_end": r.date_end,
+                "price_min": float(r.price_min) if r.price_min is not None else None,
+                "venue": vrow.name,
+                "open_now": open_now,
+                "lat": lat,
+                "lon": lon,
+                "primary_image_url": r.cached_image_url or r.primary_image_url,
+            }
+            for r in rows
+        ]
+        items.sort(key=lambda it: it["date_start"])
+        return {
+            "venue_id": vrow.venue_id,
+            "name": vrow.name,
+            "address": vrow.address or None,
+            "lat": lat,
+            "lon": lon,
+            "open_now": open_now,
+            "hours_text": vrow.hours_json.get("text") if isinstance(vrow.hours_json, dict) else None,
+            "events": items,
+        }
 
     async def nearby(
         self,

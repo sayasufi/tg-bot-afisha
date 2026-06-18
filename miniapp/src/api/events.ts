@@ -1,5 +1,5 @@
 import { API_BASE, getJson, toNum } from "./http";
-import type { City, EventDetail, EventItem, MapResponse } from "./types";
+import type { City, EventDetail, EventItem, MapResponse, VenueDetail } from "./types";
 
 // Hydrate specific events by id (favourites) into the list-item shape — independent of
 // the map's loaded set, so saved events always render and the count can't diverge.
@@ -106,6 +106,12 @@ export async function fetchNearby(
 
 export async function fetchEventDetail(eventId: string, signal?: AbortSignal): Promise<EventDetail> {
   return getJson<EventDetail>(`/v1/events/${eventId}`, signal);
+}
+
+// A venue page: the place + its upcoming events (same EventItem shape as the map/list).
+export async function fetchVenue(venueId: number | string, signal?: AbortSignal): Promise<VenueDetail> {
+  const data = await getJson<VenueDetail>(`/v1/venues/${venueId}`, signal);
+  return { ...data, events: (data.events ?? []).map((x: any) => ({ ...x, price_min: toNum(x.price_min) })) };
 }
 
 export type MetroStation = { name: string; lat: number; lon: number };

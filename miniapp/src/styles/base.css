@@ -154,6 +154,23 @@ body {
   color: var(--ink-dim);
 }
 
+/* Tappable venue name → opens the venue page. Acid underline signals "interactive". */
+.wall-label__venue {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--acid);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.wall-label__venue:active {
+  color: var(--ink-dim);
+}
+
 /* Proximity badge — the "рядом" promise, made tangible in acid. */
 .sheet__near {
   display: inline-block;

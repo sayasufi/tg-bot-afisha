@@ -44,10 +44,11 @@ type Props = {
   onToggleReminder: () => void;
   onSelect: (i: EventItem) => void;
   onShowMap?: () => void;
+  onOpenVenue?: (venueId: number) => void;
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, onSelect, onShowMap, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
   const [swipeHint, setSwipeHint] = useState(false);
@@ -211,6 +212,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const occ = detail?.occurrences?.[0];
   const address = occ?.address || null;
   const venue = selected.venue || occ?.venue || null;
+  const venueId = occ?.venue_id ?? null;
   const image = safeHttpUrl(detail?.primary_image_url) || "";
   const description = stripHtml(detail?.canonical_description || "");
   const sourceUrl = safeHttpUrl(occ?.source_best_url);
@@ -406,7 +408,20 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             <div className="wall-label">
               <span className="wall-label__cap">Где</span>
               <span className="wall-label__val">
-                {venue}
+                {venueId != null && onOpenVenue ? (
+                  <button
+                    type="button"
+                    className="wall-label__venue"
+                    onClick={() => {
+                      haptic("light");
+                      onOpenVenue(venueId);
+                    }}
+                  >
+                    {venue}
+                  </button>
+                ) : (
+                  venue
+                )}
                 {address ? <span className="dim"> · {address}</span> : null}
               </span>
             </div>

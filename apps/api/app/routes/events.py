@@ -188,6 +188,16 @@ async def get_event_detail(event_id: UUID, db: AsyncSession = Depends(get_async_
     return result
 
 
+@router.get("/venues/{venue_id}")
+async def get_venue(venue_id: int, db: AsyncSession = Depends(get_async_db)):
+    """A venue + its upcoming events — the venue page (tap the place in an event sheet)."""
+    service = EventQueryService(db)
+    result = await service.venue_detail(venue_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="venue not found")
+    return Response(orjson.dumps(result), media_type="application/json")
+
+
 @router.get("/categories", response_model=CategoryResponse)
 async def get_categories(db: AsyncSession = Depends(get_async_db)):
     service = EventQueryService(db)

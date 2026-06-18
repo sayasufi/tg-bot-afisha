@@ -37,6 +37,7 @@ class EventMapResponse(BaseModel):
 
 class EventDetailOccurrence(BaseModel):
     occurrence_id: int
+    venue_id: int | None = None  # for the venue page link (tap the place in the sheet)
     date_start: datetime
     date_end: datetime | None
     price_min: Decimal | None

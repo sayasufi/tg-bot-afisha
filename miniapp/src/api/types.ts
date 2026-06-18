@@ -29,6 +29,7 @@ export type MapResponse = {
 
 export type EventOccurrence = {
   occurrence_id: number;
+  venue_id?: number | null; // for the venue page link (tap the place in the sheet)
   date_start: string;
   date_end: string | null;
   price_min: number | null;
@@ -61,4 +62,16 @@ export type EventDetail = {
   primary_image_url: string;
   updated_at?: string | null; // last refresh — drives the "актуально на" trust line
   occurrences: EventOccurrence[];
+};
+
+// A venue page: the place + its upcoming events (events use the EventItem shape).
+export type VenueDetail = {
+  venue_id: number;
+  name: string;
+  address: string | null;
+  lat: number | null;
+  lon: number | null;
+  open_now: boolean | null;
+  hours_text: string | null;
+  events: EventItem[];
 };
