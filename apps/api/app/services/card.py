@@ -164,21 +164,22 @@ def render_reminder_cover(photo: bytes | None, code: str | None) -> bytes:
     img = Image.blend(img, ImageChops.overlay(img, Image.merge("RGB", (noise, noise, noise))), 0.10)
 
     d = ImageDraw.Draw(img, "RGBA")
+    m = W / 1080.0  # scale brand elements to the canvas so they never oversize/overlap
     gh = int(H * 0.5)  # bottom legibility gradient
     for i in range(gh):
         d.line([(0, H - gh + i), (W, H - gh + i)], fill=(11, 11, 11, int(225 * (i / gh) ** 1.6)))
-    d.rectangle([0, 0, 9, H], fill=ACID)  # acid spine
-    d.line([W - 58, 34, W - 34, 34], fill=CINNABAR, width=5)  # cinnabar registration tick
-    d.line([W - 34, 34, W - 34, 58], fill=CINNABAR, width=5)
-    wf = _font(46, 800)
-    d.text((40, H - 96), "окрест", font=wf, fill=ACID)
-    d.rectangle([40, H - 40, 40 + d.textlength("окрест", font=wf), H - 35], fill=ACID)  # acid underline
-    if code:
-        cf = _font(30, 600)
-        d.text((W - 44 - d.textlength(code, font=cf), H - 86), code, font=cf, fill=PLASTER)
-    # Refined baseline registration bar (acid · cinnabar) — the brand stripe, kept thin.
-    d.rectangle([0, H - 6, int(W * 0.7), H], fill=ACID)
-    d.rectangle([int(W * 0.7), H - 6, W, H], fill=CINNABAR)
+    th = max(6, round(8 * m))  # spine + baseline kept the SAME thickness
+    d.rectangle([0, 0, th, H], fill=ACID)  # left acid spine
+    d.rectangle([0, H - th, int(W * 0.78), H], fill=ACID)  # baseline bar (acid · cinnabar accent)
+    d.rectangle([int(W * 0.78), H - th, W, H], fill=CINNABAR)
+    wf = _font(round(48 * m), 800)  # окрест wordmark, bottom-left
+    d.text((round(36 * m), H - round(92 * m)), "окрест", font=wf, fill=ACID)
+    d.rectangle([round(36 * m), H - round(38 * m), round(36 * m) + d.textlength("окрест", font=wf), H - round(33 * m)], fill=ACID)
+    if code:  # accession code as a top-left catalog stamp (ink tab → legible on any photo)
+        cf = _font(round(28 * m), 600)
+        cw = d.textlength(code, font=cf); pad = round(11 * m); x0 = round(28 * m); y0 = round(26 * m)
+        d.rounded_rectangle([x0, y0, x0 + cw + 2 * pad, y0 + round(46 * m)], radius=round(4 * m), fill=(11, 11, 11, 205))
+        d.text((x0 + pad, y0 + round(8 * m)), code, font=cf, fill=ACID)
     out = io.BytesIO()
     img.save(out, "JPEG", quality=92, optimize=True)
     return out.getvalue()
@@ -187,7 +188,7 @@ def render_reminder_cover(photo: bytes | None, code: str | None) -> bytes:
 def ensure_reminder_cover(event_id: str, image_url: str, code: str | None) -> str:
     """Public URL of the branded reminder cover (rendered + cached in MinIO). Empty string
     if there's no usable image, so the caller can fall back to the raw photo / a text DM."""
-    key = f"reminders/v2/{event_id}.jpg"  # v2: 16:9, full-res, grain/darken treatment
+    key = f"reminders/v3/{event_id}.jpg"  # v3: no tick, top-left code stamp, proportional brand
     try:
         if object_exists(key):
             return public_url(key)
