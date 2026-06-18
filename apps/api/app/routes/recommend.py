@@ -1,10 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import orjson
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.schemas.recommend import RecommendationsResponse
 from apps.api.app.services.recommend import RecommendationService
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.cities import city_by_name
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/v1", tags=["recommend"])
 _MAX_PROFILE = 30
 
 
-@router.get("/recommendations", response_model=RecommendationsResponse)
+@router.get("/recommendations")
 async def get_recommendations(
     lat: float | None = Query(default=None, ge=-90, le=90),
     lon: float | None = Query(default=None, ge=-180, le=180),
@@ -27,13 +27,16 @@ async def get_recommendations(
     db: AsyncSession = Depends(get_async_db),
 ):
     service = RecommendationService(db)
-    return await service.feed(
+    result = await service.feed(
         lat, lon,
         interests[:_MAX_PROFILE] if interests else interests,
         recent[:_MAX_PROFILE] if recent else recent,
         per_rail,
         city_by_name(city),
     )
+    # Bypass response_model: the rails are already clean dicts; orjson encodes
+    # datetime/UUID natively and skips the Pydantic re-validation of every RailItem.
+    return Response(orjson.dumps(result), media_type="application/json")
 
 
 class SeenRequest(BaseModel):

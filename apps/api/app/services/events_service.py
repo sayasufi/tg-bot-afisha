@@ -769,13 +769,18 @@ class EventQueryService:
                 "category": event.category,
                 "distance_m": float(distance or 0.0),
                 "date_start": occ.date_start,
-                "price_min": occ.price_min,
+                # float for orjson (Decimal is not natively serialisable); the route ships
+                # these dicts via orjson now, not through a Pydantic response_model.
+                "price_min": float(occ.price_min) if occ.price_min is not None else None,
                 "venue": venue_name,
                 "lat": float(lat) if lat is not None else None,
                 "lon": float(lon) if lon is not None else None,
             }
             for event, occ, venue_name, distance, lat, lon in rows
         ]
+        # Plain dicts now hold everything; release the connection before the response is
+        # encoded/sent instead of keeping it checked out to end-of-request.
+        await self.db.close()
         return {"items": result}
 
     async def categories(self):

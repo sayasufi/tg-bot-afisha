@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.schemas.events import (
     CategoryResponse,
     EventDetailResponse,
-    NearbyResponse,
 )
 from apps.api.app.services.events_service import (
     EventQueryService,
@@ -139,7 +138,7 @@ async def get_cities():
     }
 
 
-@router.get("/events/nearby", response_model=NearbyResponse)
+@router.get("/events/nearby")
 async def get_nearby_events(
     lat: float = Query(ge=-90, le=90),
     lon: float = Query(ge=-180, le=180),
@@ -152,7 +151,11 @@ async def get_nearby_events(
     db: AsyncSession = Depends(get_async_db),
 ):
     service = EventQueryService(db)
-    return await service.nearby(lat, lon, radius_m, date_from, date_to, categories, q, limit)
+    result = await service.nearby(lat, lon, radius_m, date_from, date_to, categories, q, limit)
+    # Bypass response_model (mirrors the map route): the service builds plain dicts, so
+    # orjson encodes them once instead of Pydantic re-validating up to 200 rows per call —
+    # the serialization that pegged the API CPU at the measured ~25 rps knee.
+    return Response(orjson.dumps(result), media_type="application/json")
 
 
 class ByIdsRequest(BaseModel):

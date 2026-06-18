@@ -97,9 +97,14 @@ async def cache_control(request: Request, call_next):
         if path.startswith("/v1/places"):
             response.headers.setdefault("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
         elif path.startswith("/v1/recommendations"):
+            # Per-user (personalised) — MUST stay private so no shared cache serves one
+            # user's feed to another. The non-personal base is cached server-side instead.
             response.headers.setdefault("Cache-Control", "private, max-age=60, stale-while-revalidate=120")
         elif path.startswith("/v1/events/map"):
             response.headers.setdefault("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
+        elif path.startswith("/v1/search"):
+            # Public typeahead — short edge/browser cache so repeated queries skip origin.
+            response.headers.setdefault("Cache-Control", "public, max-age=60, stale-while-revalidate=120")
         elif path.startswith("/v1/events/"):
             response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
     return response

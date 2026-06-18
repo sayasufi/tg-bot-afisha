@@ -9,10 +9,17 @@ from core.config.settings import get_settings
 
 settings = get_settings()
 
-# Modest per-process pool: this module is imported by every uvicorn worker AND every
-# Celery prefork process, so pool_size must stay small to keep total connections under
-# Postgres max_connections (100).
+# Modest per-process pool: this module is imported by every uvicorn worker (the Prefect
+# worker uses the separate NullPool engine below). pool_size stays small so all workers
+# together stay under the Odyssey transaction pool (25) and Postgres max_connections (100).
 _POOL = dict(pool_pre_ping=True, pool_size=5, max_overflow=10, pool_recycle=1800)
+
+# The async API engine adds an explicit pool_timeout: when every connection is checked
+# out, a request waits at most this long for one, then fails fast — instead of
+# SQLAlchemy's 30s default that turned pool pressure under load into 30s hangs and a wall
+# of 500s (QueuePool timeout). Read handlers now release the connection before any
+# CPU-heavy work, so the pool should rarely be contended; this just bounds the worst case.
+_ASYNC_POOL = {**_POOL, "pool_timeout": 10}
 
 # Pin every session to UTC explicitly. Code relies on a UTC session (e.g. the map and
 # event-detail date floor compare a Python UTC-midnight against SQL date_trunc('day',
@@ -41,7 +48,7 @@ def _async_url(url: str) -> str:
 
 
 # Async engine — FastAPI (one long-lived event loop per uvicorn worker → pooled).
-async_engine = create_async_engine(_async_url(settings.database_url), connect_args=_CONNECT, **_POOL)
+async_engine = create_async_engine(_async_url(settings.database_url), connect_args=_CONNECT, **_ASYNC_POOL)
 AsyncSessionLocal = async_sessionmaker(bind=async_engine, autoflush=False, expire_on_commit=False)
 
 # Worker async engine — Celery tasks call asyncio.run() per task, creating a fresh

@@ -13,9 +13,9 @@ A hybrid recommender over one candidate pool, sliced into themed rails:
 The weights below are the tunable "model"; every feature is independent and easy
 to extend (learned weights / collaborative signal later).
 """
-import hashlib
-import json
+import asyncio
 import math
+import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -28,15 +28,29 @@ from core.db.models import Event, EventOccurrence, Venue
 from core.redis import get_redis
 
 _MSK = timezone(timedelta(hours=3))
-_POOL_CAP = 6000
+_POOL_CAP = 2000  # soonest-upcoming events scored into the base pool (was 6000). The rails are
+# soon-biased, so the soonest ~2000 cover the visible feed while keeping the per-request
+# re-rank cheap; the base is cached, so this also bounds the once-per-window recompute.
 _PER_RAIL = 12
 _MIN_RAIL = 4  # themed rails with fewer items are dropped (avoid sparse noise)
 _MAX_RAILS = 7  # hard cap so the feed is a few strong rails, not a wall of relabelled lists
 _NEAR_KM = 8.0
 _RECENT_CAP = 60  # max recent opens the client may send (behavioural profile)
 _VIEWS_KEY = "rec:views"
-_CACHE_PREFIX = "rec:feed:v3:"  # v3: items ship open_now instead of venue_hours
-_CACHE_TTL = 90
+
+# The expensive part of a feed — loading the city pool and scoring every event's
+# NON-PERSONAL features (time-window/soon, live-now, popularity, quality, freshness,
+# open-now) — is identical for every user in a short window. So it's computed once per
+# (city, ~6h context) and cached IN-PROCESS per worker for _BASE_TTL seconds; each request
+# then only applies the cheap per-user delta (category affinity + proximity) and builds the
+# rails. This turns a full re-score-on-every-request (the ~10 rps CPU wall measured under
+# load) into a light re-rank, and — because a base HIT touches no DB at all — removes the
+# 'idle in transaction' connection-hold that exhausted the pool. Per-worker duplication
+# (each worker recomputes its own base) is negligible: one ~scoring pass per worker per
+# _BASE_TTL, vs one per request before.
+_BASE_TTL = 120.0
+_base_cache: dict[str, tuple] = {}  # city_slug -> (monotonic_expiry, today, hour//6, base_entries)
+_base_lock = asyncio.Lock()  # collapse a concurrent base recompute into one (per worker)
 
 # Scoring weights — the "model". Tune here; features are independent.
 _W = {
@@ -87,39 +101,63 @@ class RecommendationService:
         msk = now.astimezone(_MSK)
         today, hour = msk.date(), msk.hour
 
-        key = _CACHE_PREFIX + hashlib.sha256(
-            json.dumps(
-                [
-                    round(lat, 2) if lat is not None else None,
-                    round(lon, 2) if lon is not None else None,
-                    sorted((c, round(w, 2)) for c, w in affinity.items()),
-                    today.isoformat(),
-                    hour // 6,  # context changes ~every 6h
-                    per_rail,
-                    city.slug if city else None,
-                ],
-                sort_keys=True,
-            ).encode()
-        ).hexdigest()
-        # A behavioural profile makes the request near-unique, so caching it would
-        # only bloat Redis with one-hit keys — cache only the shareable (no-recent)
-        # requests. Re-scoring a cache miss is just one pool query + an O(n) pass.
-        use_cache = not recent
-        if use_cache:
-            cached = await self._cache_get(key)
-            if cached is not None:
-                return cached
-
-        pool = await self._load_pool(now, city)
-        views = await self._views()
-        scored = self._score_all(pool, now, today, hour, lat, lon, affinity, views)
-        result = {
+        # 1) Non-personal base score for the city, computed once per window and cached.
+        base = await self._base_scored(now, today, hour, city)
+        # 2) Cheap per-user re-rank (category affinity + proximity) — no DB, no re-scoring.
+        scored = self._personalize(base, lat, lon, affinity)
+        return {
             "rails": self._build_rails(scored, today, lat is not None, affinity, per_rail),
             "total": len(scored),
         }
-        if use_cache:
-            await self._cache_set(key, result)
-        return result
+
+    async def _base_scored(self, now: datetime, today, hour: int, city=None) -> list[dict]:
+        """The shareable, non-personal scored pool for a city — every event's score
+        WITHOUT the per-user interest/proximity terms (those are added per request in
+        `_personalize`). Cached in-process per worker for `_BASE_TTL`s, keyed by city +
+        date + 6h context bucket; recomputed under a lock so a concurrent miss does the
+        pool query + scoring exactly once. A cache hit performs NO DB access."""
+        slug = city.slug if city else "all"
+        hour6 = hour // 6
+        ent = _base_cache.get(slug)
+        if ent and ent[0] > time.monotonic() and ent[1] == today and ent[2] == hour6:
+            return ent[3]
+        async with _base_lock:
+            ent = _base_cache.get(slug)  # re-check: another coroutine may have refreshed it
+            if ent and ent[0] > time.monotonic() and ent[1] == today and ent[2] == hour6:
+                return ent[3]
+            pool = await self._load_pool(now, city)
+            views = await self._views()
+            # Release the DB connection BEFORE the CPU-heavy scoring so it is not held
+            # 'idle in transaction' across the O(n) Python pass (the pool-exhaustion 500s).
+            await self.db.close()
+            base = self._score_all(pool, now, today, hour, None, None, {}, views)
+            _base_cache[slug] = (time.monotonic() + _BASE_TTL, today, hour6, base)
+            return base
+
+    @staticmethod
+    def _personalize(base: list[dict], lat, lon, affinity: dict[str, float]) -> list[dict]:
+        """Apply the per-user terms to a cached base: category affinity (interest) and
+        proximity. Returns NEW entry dicts (the base is shared across requests/workers and
+        must not be mutated). For an anonymous request (no affinity, no location) the base
+        is returned as-is — `_build_rails` never mutates it."""
+        located = lat is not None and lon is not None
+        if not affinity and not located:
+            return base
+        wi, wp = _W["interest"], _W["prox"]
+        out = []
+        for e in base:
+            c = e["c"]
+            score = e["score"]
+            if affinity:
+                a = affinity.get(c["category"])
+                if a:
+                    score += wi * a
+            dist_km = None
+            if located and c["lat"] is not None and c["lon"] is not None:
+                dist_km = _haversine_km(lat, lon, c["lat"], c["lon"])
+                score += wp / (1.0 + dist_km / 2.0)
+            out.append({**e, "score": score, "dist_km": dist_km})
+        return out
 
     @staticmethod
     def _affinity(favs: set[str], recent: list[str]) -> dict[str, float]:
@@ -377,24 +415,5 @@ class RecommendationService:
                 if not added:
                     return
             await client.hincrby(_VIEWS_KEY, str(event_id), 1)
-        except Exception:  # pragma: no cover
-            pass
-
-    async def _cache_get(self, key: str):
-        client = _redis_client()
-        if client is None:
-            return None
-        try:
-            hit = await client.get(key)
-            return json.loads(hit) if hit else None
-        except Exception:  # pragma: no cover
-            return None
-
-    async def _cache_set(self, key: str, value: dict) -> None:
-        client = _redis_client()
-        if client is None:
-            return
-        try:
-            await client.set(key, json.dumps(value, default=str), ex=_CACHE_TTL)
         except Exception:  # pragma: no cover
             pass
