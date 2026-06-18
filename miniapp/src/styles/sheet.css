@@ -185,7 +185,8 @@ html[data-theme="dark"] .sheet-veil {
   /* --line (the frame token) so every block frame matches in dark too (--ink would go
      near-white on the card/photo while the grid/CTA stayed grey). */
   border: 1px solid var(--line);
-  box-shadow: 9px 9px 0 0 var(--acid), 9px 9px 0 1px var(--line);
+  /* Black registration offset (was acid) — a hard ink drop on light, warm-grey on dark. */
+  box-shadow: 9px 9px 0 0 var(--line);
 }
 
 /* afisha — the mounted print: the cover sits in the mat with its OWN hairline frame. */
