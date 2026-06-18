@@ -312,9 +312,11 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>
 
-      {/* afisha — the cover becomes a full-bleed poster: accession code on the
-          frame, category tag bottom-left, "идёт сейчас" live badge bottom-right. */}
-      <div className="sheet__frame">
+      {/* One exhibit card — poster + title + grid + actions all inside a single ink
+          frame with a big acid registration offset. Trust + similar sit below it. */}
+      <div className="sheet__card">
+      {/* afisha — accession code on the frame, category tag bottom-left, live badge bottom-right. */}
+      <div className={`sheet__frame${image ? " sheet__frame--photo" : ""}`}>
         {image ? (
           <img
             ref={imgRef}
@@ -351,12 +353,13 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         )}
       </div>
 
-      <div className="sheet__body">
+      <div className="sheet__head">
         <h2 className="sheet__title">
           <Highlight text={selected.title} query={query} />
         </h2>
+      </div>
 
-        {/* Exhibit grid — each datum its own hairline cell, museum-catalogue style. */}
+      {/* Exhibit grid — each datum its own hairline cell, museum-catalogue style. */}
         <div className="xgrid">
           <div className="xcell">
             <span className="xcell__cap">Когда</span>
@@ -530,7 +533,9 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             <IconShare size={16} />
           </button>
         </div>
+      </div>
 
+      <div className="sheet__after">
         {(sourceHost || updatedLabel) && (
           <p className="sheet__trust">
             {sourceHost && <span>по данным {sourceHost}</span>}

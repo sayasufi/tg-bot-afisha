@@ -14,6 +14,7 @@
   --acid-deep: #a8d400;
   --on-acid: #0b0b0b; /* black always sits on acid */
   --cinnabar: #e63312; /* misregistration ghost, used once */
+  --on-cinnabar: #fff; /* text/dot on the cinnabar urgency badge */
   --radius: 0px;
 
   --display: "Unbounded", system-ui, sans-serif;
@@ -53,6 +54,7 @@ html[data-theme="dark"] {
   --acid-deep: #2200cc;
   --on-acid: #f1ecde;
   --cinnabar: #ff5a3c; /* nudged brighter so it reads on dark */
+  --on-cinnabar: #2a0d04; /* dark text on the brighter dark cinnabar (white would fail) */
   color: var(--ink);
   background: var(--bg);
 }

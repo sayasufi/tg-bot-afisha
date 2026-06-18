@@ -1,20 +1,5 @@
 // Presentation helpers for the event sheet.
 
-// Short museum "accession" codes per category, for the catalogue affect.
-export const CAT_CODE: Record<string, string> = {
-  concert: "КОНЦ",
-  theatre: "ТЕАТР",
-  exhibition: "ВЫСТ",
-  cinema: "КИНО",
-  standup: "СТЕНД",
-  festival: "ФЕСТ",
-  lecture: "ЛЕКЦ",
-  tour: "ЭКСК",
-  party: "ВЕЧЕР",
-  kids: "ДЕТИ",
-  other: "ПРОЧ",
-};
-
 export function stripHtml(text: string): string {
   return text
     .replace(/<[^>]*>/g, " ")

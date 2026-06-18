@@ -34,7 +34,7 @@ html[data-theme="dark"] .sheet-veil {
   max-height: 82dvh;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--plinth);
+  background: var(--bg);
   border-top: 1px solid var(--line);
   border-radius: 0;
   padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
@@ -218,13 +218,20 @@ html[data-theme="dark"] .sheet-veil {
   color: var(--on-acid);
 }
 
-/* afisha — the cover is a full-bleed poster: ink hairline + an acid registration
-   offset (the one acid moment up top). Taller 4:3 so it reads as a playbill. */
+/* The exhibit card — ONE ink frame around poster + title + grid + actions, lifted off
+   the plaster by a big acid registration offset (this is the selected exhibit). */
+.sheet__card {
+  position: relative;
+  margin: 10px 14px 30px;
+  background: var(--plinth);
+  box-shadow: inset 0 0 0 1px var(--ink), 9px 9px 0 var(--acid);
+}
+
+/* afisha — the cover poster, flush to the card's top edge (the card border frames it). */
 .sheet__frame {
   position: relative;
-  margin: 16px 16px 22px;
+  margin: 0;
   background: var(--vitrine);
-  box-shadow: inset 0 0 0 1px var(--ink), 6px 6px 0 var(--acid);
   aspect-ratio: 4 / 3;
   display: grid;
   place-items: center;
@@ -251,6 +258,10 @@ html[data-theme="dark"] .sheet-veil {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.08em;
+  /* Ink by default (legible on the no-image vitrine plate); white only over a photo. */
+  color: var(--ink);
+}
+.sheet__frame--photo .sheet__code {
   color: #fff;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
@@ -267,7 +278,7 @@ html[data-theme="dark"] .sheet-veil {
   height: 26px;
   padding: 0 11px;
   background: var(--cinnabar);
-  color: #fff;
+  color: var(--on-cinnabar);
   font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 600;
@@ -278,7 +289,7 @@ html[data-theme="dark"] .sheet-veil {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--on-cinnabar);
   animation: livePulse 1.5s ease-in-out infinite;
 }
 @keyframes livePulse {
@@ -340,6 +351,10 @@ html[data-theme="dark"] .sheet-veil {
   padding: 0 16px;
 }
 
+/* Title sits between poster and grid, generously padded (the airy band of the card). */
+.sheet__head {
+  padding: 18px 16px 16px;
+}
 .sheet__title {
   font-family: var(--display);
   font-weight: 700;
@@ -347,7 +362,7 @@ html[data-theme="dark"] .sheet-veil {
   line-height: 0.9;
   letter-spacing: -0.045em;
   text-transform: lowercase;
-  margin: 2px 0 16px;
+  margin: 0;
   color: var(--ink);
   overflow-wrap: anywhere;
 }
@@ -359,8 +374,9 @@ html[data-theme="dark"] .sheet-veil {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
-  margin-top: 2px;
-  border: 1px solid var(--line);
+  /* Flush inside the card: the card border is the outer frame, this is the top rule;
+     the 1px gaps (showing the ink bg) are the inner column/row rules. */
+  border-top: 1px solid var(--line);
   background: var(--line);
 }
 .xcell {
@@ -368,7 +384,7 @@ html[data-theme="dark"] .sheet-veil {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  padding: 13px 14px;
+  padding: 16px 16px;
   background: var(--plinth);
 }
 .xcell--wide {
@@ -393,10 +409,18 @@ html[data-theme="dark"] .sheet-veil {
   color: var(--ink);
   overflow-wrap: anywhere;
 }
+/* Price = black text with a thin acid marker swiped under it (the one acid accent in
+   the grid — attention without a plate). */
 .xcell__price {
+  align-self: flex-start;
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  padding-bottom: 1px;
+  background-image: linear-gradient(var(--acid), var(--acid));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 0.32em;
 }
 .xcell__sub {
   font-family: var(--mono);
@@ -448,11 +472,16 @@ html[data-theme="dark"] .sheet-veil {
   color: var(--on-acid);
 }
 
-/* Catalogue action row — favourite / reminder / share, ink-ruled like the grid. */
+/* Catalogue action row — favourite / reminder / share; the card's flush bottom band. */
 .sheet__acts {
   display: flex;
-  margin-top: 14px;
-  border: 1px solid var(--line);
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Below the card, on the plaster: source/trust line + "рядом сейчас". */
+.sheet__after {
+  padding: 16px 16px 0;
 }
 .sheet__act {
   flex: 1 1 0;
@@ -563,10 +592,11 @@ html[data-theme="dark"] .sheet-veil {
   padding: 2px 7px;
 }
 
+/* Description — a padded card section under the grid (rule above, flush sides). */
 .sheet__desc-wrap {
-  margin: 14px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--line-soft);
+  margin: 0;
+  padding: 16px;
+  border-top: 1px solid var(--line);
 }
 
 .sheet__desc {
@@ -602,8 +632,8 @@ html[data-theme="dark"] .sheet-veil {
 .sheet__actions {
   display: flex;
   gap: 0;
-  margin-top: 18px;
-  border: 1px solid var(--line);
+  margin: 0;
+  border-top: 1px solid var(--line);
 }
 
 .btn {
