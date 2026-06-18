@@ -5,7 +5,7 @@ import type { EventItem } from "./types";
 // server-computed distance from you.
 export type RailItem = EventItem & { distance_m?: number | null };
 export type Rail = { key: string; title: string; subtitle?: string | null; items: RailItem[] };
-export type RecommendationsResponse = { rails: Rail[]; total: number };
+export type RecommendationsResponse = { rails: Rail[]; collections: Rail[]; total: number };
 
 export async function fetchRecommendations(
   params: { lat?: number | null; lon?: number | null; interests?: string[]; recent?: string[]; city?: string | null },
@@ -20,11 +20,12 @@ export async function fetchRecommendations(
   for (const c of params.recent ?? []) p.append("recent", c);
   if (params.city) p.set("city", params.city);
   const data = await getJson<RecommendationsResponse>(`/v1/recommendations?${p.toString()}`, signal);
-  const rails = (data.rails ?? []).map((r) => ({
-    ...r,
-    items: (r.items ?? []).map((x: RailItem) => ({ ...x, price_min: toNum(x.price_min) })),
-  }));
-  return { rails, total: data.total ?? 0 };
+  const hydrate = (rs: Rail[] | undefined) =>
+    (rs ?? []).map((r) => ({
+      ...r,
+      items: (r.items ?? []).map((x: RailItem) => ({ ...x, price_min: toNum(x.price_min) })),
+    }));
+  return { rails: hydrate(data.rails), collections: hydrate(data.collections), total: data.total ?? 0 };
 }
 
 // Fire-and-forget engagement ping when an event is opened — feeds the

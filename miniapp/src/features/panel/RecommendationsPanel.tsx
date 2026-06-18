@@ -62,6 +62,7 @@ export function RecommendationsPanel({
   onClose: () => void;
 }) {
   const [rails, setRails] = useState<Rail[]>([]);
+  const [collections, setCollections] = useState<Rail[]>([]);
   const [loading, setLoading] = useState(true);
   const [localNonce, setLocalNonce] = useState(0);
   const ptr = usePullToRefresh(() => setLocalNonce((n) => n + 1));
@@ -78,18 +79,20 @@ export function RecommendationsPanel({
     fetchRecommendations({ lat, lon, interests: interestsKey ? interestsKey.split(",") : [], recent: recentCategories(), city }, ctrl.signal)
       .then((r) => {
         setRails(r.rails);
+        setCollections(r.collections);
         setLoading(false);
       })
       .catch((e) => {
         if (e?.name !== "AbortError") {
           setRails([]);
+          setCollections([]);
           setLoading(false);
         }
       });
     return () => ctrl.abort();
   }, [lat, lon, interestsKey, refreshNonce, localNonce, city]);
 
-  const empty = !loading && rails.length === 0;
+  const empty = !loading && rails.length === 0 && collections.length === 0;
 
   return (
     <div className="panelview">
@@ -103,7 +106,17 @@ export function RecommendationsPanel({
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {loading && rails.length === 0 && <RailSkeleton />}
         {empty && <p className="panelview__empty">пока нечего показать</p>}
-        {rails.map((rail) => (
+        {/* Personal hero leads, then the curated «Подборки» shelf, then the rest. */}
+        {rails[0] && <RecRail key={rails[0].key} rail={rails[0]} userPos={userPos} onSelect={onSelect} />}
+        {collections.length > 0 && (
+          <div className="recshelf">
+            <span className="recshelf__kicker">Подборки</span>
+            {collections.map((rail) => (
+              <RecRail key={rail.key} rail={rail} userPos={userPos} onSelect={onSelect} />
+            ))}
+          </div>
+        )}
+        {rails.slice(1).map((rail) => (
           <RecRail key={rail.key} rail={rail} userPos={userPos} onSelect={onSelect} />
         ))}
       </div>

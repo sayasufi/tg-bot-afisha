@@ -75,6 +75,17 @@ _CATEGORY_LABELS = {
     "party": "Вечеринки", "quest": "Квесты", "kids": "Детям", "other": "Другое",
 }
 
+# Editorial "Подборки" — slug-named, rule-based lenses over the same scored pool: a curated
+# "guide to the city" shelf shown above the auto rails (kind=rule; pinned/editorial later).
+_COLLECTIONS = [
+    ("date", "Свидание", "вечер вдвоём"),
+    ("free-today", "Бесплатно сегодня", "вход свободный"),
+    ("last-chance", "Последний шанс", "скоро закроется"),
+    ("fresh", "Новинки недели", "только что добавили"),
+    ("kids", "С детьми", "куда сходить с ребёнком"),
+]
+_DATE_CATS = {"concert", "theatre", "cinema", "party", "standup"}
+
 def _redis_client():
     # decode_responses=True: recommend stores/reads text counters (rec:views, rec:seen).
     return get_redis(decode=True)
@@ -106,9 +117,48 @@ class RecommendationService:
         # 2) Cheap per-user re-rank (category affinity + proximity) — no DB, no re-scoring.
         scored = self._personalize(base, lat, lon, affinity)
         return {
+            "collections": self._collections(scored, today, now, per_rail),
             "rails": self._build_rails(scored, today, lat is not None, affinity, per_rail),
             "total": len(scored),
         }
+
+    def _collections(self, scored, today, now, per_rail):
+        """The «Подборки» shelf — rule-based editorial lenses over the scored pool. Each is a
+        plain rail (reusing _diverse/_rail); independent of the auto-rail dedup/cap, so a
+        collection can share an item with «Для тебя» (it's a different entry point, like
+        «Рядом»). Sparse collections (< _MIN_RAIL) are dropped."""
+        by_score = sorted(scored, key=lambda e: -e["score"])
+        week_ago = now - timedelta(days=7)
+        soon = today + timedelta(days=3)
+
+        def is_fresh(e) -> bool:
+            cr = e["c"].get("created_at")
+            if cr is None:
+                return False
+            if cr.tzinfo is None:
+                cr = cr.replace(tzinfo=timezone.utc)
+            return cr >= week_ago
+
+        rules = {
+            # "Свидание" — a varied evening-out cross-section (the score already favours evening).
+            "date": (lambda e: e["c"]["category"] in _DATE_CATS, True),
+            "free-today": (lambda e: e["free"] and (e["live"] or e["ds"] <= today), False),
+            # "Последний шанс" — a MULTI-day run (ds<de) whose end is within 3 days, not every
+            # single-session event happening today.
+            "last-chance": (lambda e: e["ds"] < e["de"] and today <= e["de"] <= soon, False),
+            "fresh": (is_fresh, False),
+            "kids": (lambda e: e["c"]["category"] == "kids", True),
+        }
+        out = []
+        for slug, title, sub in _COLLECTIONS:
+            pred, diverse = rules[slug]
+            pool = [e for e in by_score if pred(e)]
+            if diverse:
+                pool = self._diverse(pool, per_rail)
+            rail = self._rail(f"collection:{slug}", title, sub, pool, per_rail)
+            if rail:
+                out.append(rail)
+        return out
 
     async def _base_scored(self, now: datetime, today, hour: int, city=None) -> list[dict]:
         """The shareable, non-personal scored pool for a city — every event's score
