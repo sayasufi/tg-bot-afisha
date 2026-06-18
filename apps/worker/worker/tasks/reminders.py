@@ -16,6 +16,9 @@ from core.db.session import WorkerAsyncSessionLocal
 
 log = logging.getLogger(__name__)
 _BOT_USERNAME = "okrestmap_bot"
+# Full-screen "fire" message effect — free, no Premium needed, private chats only (= our
+# DMs). A reminder is inherently "starting soon", so the urgency animation fits every send.
+_FIRE_EFFECT = "5104841245755180586"
 
 
 def _open_url(event_id: str) -> str:
@@ -49,7 +52,7 @@ async def _send_reminders_impl() -> int:
                         resp = await client.post(
                             f"{base}/sendPhoto",
                             json={"chat_id": r["user_id"], "photo": image, "caption": caption,
-                                  "parse_mode": "HTML", "reply_markup": markup},
+                                  "parse_mode": "HTML", "reply_markup": markup, "message_effect_id": _FIRE_EFFECT},
                         )
                         got_response = True
                         ok = bool(resp.json().get("ok"))
@@ -57,14 +60,16 @@ async def _send_reminders_impl() -> int:
                             resp = await client.post(
                                 f"{base}/sendMessage",
                                 json={"chat_id": r["user_id"], "text": caption, "parse_mode": "HTML",
-                                      "reply_markup": markup, "disable_web_page_preview": True},
+                                      "reply_markup": markup, "disable_web_page_preview": True,
+                                  "message_effect_id": _FIRE_EFFECT},
                             )
                             ok = bool(resp.json().get("ok"))
                     else:
                         resp = await client.post(
                             f"{base}/sendMessage",
                             json={"chat_id": r["user_id"], "text": caption, "parse_mode": "HTML",
-                                  "reply_markup": markup, "disable_web_page_preview": True},
+                                  "reply_markup": markup, "disable_web_page_preview": True,
+                                  "message_effect_id": _FIRE_EFFECT},
                         )
                         got_response = True
                         ok = bool(resp.json().get("ok"))
