@@ -13,7 +13,7 @@ from core.media.storage import ensure_bucket, public_url, put_image
 
 logger = logging.getLogger(__name__)
 
-MAX_WIDTH = 900
+MAX_WIDTH = 1080  # retina-sharp for the full-width poster in the event sheet
 BATCH = 40
 
 
