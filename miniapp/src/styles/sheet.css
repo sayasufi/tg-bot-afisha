@@ -222,7 +222,7 @@ html[data-theme="dark"] .sheet-veil {
    the plaster by a big acid registration offset (this is the selected exhibit). */
 .sheet__card {
   position: relative;
-  margin: 10px 14px 30px;
+  margin: 10px 14px 16px;
   background: var(--plinth);
   /* Everything outlined in ink: a crisp card border + an OUTLINED acid registration plate
      offset behind it (acid fill 9px + its own 1px ink outline) — the print-registration look. */
@@ -522,7 +522,7 @@ html[data-theme="dark"] .sheet-veil {
 
 /* Below the card, on the plaster: source/trust line + "рядом сейчас". */
 .sheet__after {
-  padding: 16px 16px 0;
+  padding: 14px 16px 0;
 }
 .sheet__act {
   flex: 1 1 0;
@@ -719,7 +719,7 @@ html[data-theme="dark"] .sheet-veil {
 
 /* Trust line: where the data comes from, when it was refreshed, and a way to flag it. */
 .sheet__trust {
-  margin: 12px 0 0;
+  margin: 0;
   font-family: var(--mono);
   font-size: 10.5px;
   line-height: 1.55;
