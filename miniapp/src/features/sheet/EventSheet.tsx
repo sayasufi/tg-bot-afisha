@@ -495,7 +495,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           <div className="sheet__actions">
             {sourceUrl && (
               <a
-                className="btn btn--primary"
+                className="btn btn--ghost"
                 href={sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
