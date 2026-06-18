@@ -1412,55 +1412,48 @@ mark.hl {
   position: relative;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   width: 100%;
   border: 0;
   text-align: left;
   cursor: pointer;
-  background: var(--plinth);
-  color: var(--ink);
+  background: var(--ink);
+  color: #fff;
   font: inherit;
   overflow: hidden;
   transition: box-shadow 0.12s var(--ease-cut);
 }
-
-/* ---- Photo blocks: full-bleed cover, text over a scrim ---- */
-.cat--hero,
-.cat--photo,
-.cat--side {
-  justify-content: flex-end;
-  color: #fff;
-}
-.cat--hero {
-  aspect-ratio: 16 / 10;
-}
-.cat--photo {
-  aspect-ratio: 3 / 4;
-}
-.cat--side {
-  aspect-ratio: 16 / 9;
-  justify-content: center;
-  align-items: flex-end;
-}
-.cat--hero:active,
-.cat--photo:active,
-.cat--side:active {
+.cat:active {
   box-shadow: inset 0 0 0 2px var(--acid);
 }
 
+/* aspect by width + variant */
+.cat--full {
+  aspect-ratio: 16 / 10;
+}
+.cat--half {
+  aspect-ratio: 3 / 4;
+}
+.cat--full.cat--tall {
+  aspect-ratio: 4 / 5;
+}
+
+/* cover — darkened + contrast-boosted so type always reads on the photo */
 .cat__img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  filter: brightness(0.72) contrast(1.12) saturate(1.02);
 }
 .cat__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 26%, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.88) 100%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 24%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.9) 100%);
 }
-.cat--side .cat__scrim {
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 28%, rgba(0, 0, 0, 0.84) 86%);
+.cat--noimg .cat__scrim {
+  display: none;
 }
 .cat__glyph {
   position: absolute;
@@ -1497,16 +1490,12 @@ mark.hl {
   text-transform: lowercase;
 }
 
-.cat__btm,
-.cat__sidetext {
+.cat__panel {
   position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
   padding: 14px;
-}
-.cat__sidetext {
-  width: 58%;
 }
 
 .cat__title {
@@ -1521,26 +1510,15 @@ mark.hl {
   -webkit-line-clamp: 3;
   overflow: hidden;
 }
-.cat__title--wide {
-  -webkit-line-clamp: 2;
+.cat--full .cat__title {
+  font-size: clamp(22px, 6.2vw, 30px);
 }
-.cat__title--hero {
-  font-size: clamp(22px, 6.4vw, 30px);
-}
-.cat__title--photo {
+.cat--half .cat__title {
   font-size: 16px;
   line-height: 1.02;
 }
-.cat__title--side {
-  font-size: clamp(19px, 5.4vw, 25px);
-}
-.cat__title--text {
-  font-size: clamp(18px, 5vw, 22px);
-  color: var(--ink);
-}
-.cat__title--wide {
-  font-size: clamp(20px, 5.4vw, 25px);
-  color: var(--ink);
+.cat--full.cat--tall .cat__title {
+  font-size: clamp(26px, 7.5vw, 36px);
 }
 
 .cat__foot {
@@ -1572,73 +1550,27 @@ mark.hl {
   white-space: nowrap;
 }
 
-/* ---- Type blocks: ink-framed white cards, typographic ---- */
-.cat--text,
-.cat--wide {
-  box-shadow: inset 0 0 0 1px var(--ink);
-  padding: 14px;
-  gap: 9px;
-  justify-content: flex-start;
+/* ---- Variant: band — a solid black strip across the bottom (photo fades into it) ---- */
+.cat--band .cat__panel {
+  background: linear-gradient(180deg, transparent 0%, var(--ink) 22px);
+  padding-top: 26px;
 }
-.cat--text:active,
-.cat--wide:active {
-  box-shadow: inset 0 0 0 2px var(--ink);
-}
-.cat--text .cat__code,
-.cat--wide .cat__code {
-  position: static;
-  color: var(--ink-dim);
-  margin-bottom: 2px;
-}
-.cat--text .cat__meta,
-.cat--wide .cat__meta {
-  color: var(--ink-dim);
+.cat--band .cat__scrim {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0) 32%);
 }
 
-.cat__textfoot {
-  margin-top: auto;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 14px;
+/* ---- Variant: sideblack — smooth fade to solid black on the right; text on the black ---- */
+.cat--sideblack {
+  justify-content: center;
 }
-.cat__metacol {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+.cat--sideblack .cat__scrim {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 28%, rgba(0, 0, 0, 0.97) 60%, var(--ink) 100%);
 }
-.cat__pricego {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
-}
-.cat--text .cat__price,
-.cat--wide .cat__price {
-  color: var(--ink);
-}
-.cat__arrow {
-  font-family: var(--mono);
-  font-size: 16px;
-  line-height: 1;
-  color: var(--ink);
-}
-
-.cat__widerow {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.cat__when {
-  flex: 0 0 auto;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink);
-  white-space: nowrap;
-  text-align: right;
+.cat--sideblack .cat__panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 46%;
+  justify-content: center;
 }

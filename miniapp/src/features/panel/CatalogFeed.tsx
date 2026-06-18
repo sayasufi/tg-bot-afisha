@@ -17,9 +17,8 @@ type Card = {
   img: string;
   code: string | null;
   title: string;
-  when: string;
-  venue: string | null;
   meta: string;
+  venue: string | null;
   price: string | null;
   free: boolean;
   go: ReturnType<typeof goNowState>;
@@ -34,142 +33,72 @@ function derive(item: EventItem, now?: number): Card {
     img: safeHttpUrl(item.primary_image_url) || "",
     code: item.code ?? null,
     title: item.title,
-    when,
-    venue: item.venue ?? null,
     meta: [when, item.venue].filter(Boolean).join(" · "),
+    venue: item.venue ?? null,
     price,
     free: price === "бесплатно",
     go: goNowState(item.date_start, item.date_end, item.open_now, nowDate),
   };
 }
 
-// Shared bits ---------------------------------------------------------------
-function Code({ c }: { c: Card }) {
-  return c.code ? (
-    <span className="cat__code">
-      <CategoryIcon cat={c.item.category} size={13} />
-      {c.code}
-    </span>
-  ) : null;
-}
+// Every card is a photo block now; the look is one of several stylish "variants" that
+// rotate so adjacent cards never repeat. The metadata footer is laid out by variant.
+type Variant = "bottomrow" | "bottomstack" | "sideblack" | "band" | "tall";
+const FULL_VARIANTS: Variant[] = ["bottomrow", "sideblack", "band", "tall", "bottomrow", "band"];
+const HALF_VARIANTS: Variant[] = ["bottomstack", "band", "tall", "bottomstack"];
+const ROWS = ["full", "duo", "full", "duo", "duo"] as const;
 
-function Live({ c }: { c: Card }) {
-  return c.go.eligible ? (
-    <span className="cat__live">{c.go.kind === "soon" ? c.go.label : "идёт сейчас"}</span>
-  ) : null;
-}
+// stacked-footer variants show venue over price; row variants show when·venue then price.
+const STACK = new Set<Variant>(["bottomstack", "sideblack", "tall"]);
 
-function Cover({ c }: { c: Card }) {
-  return c.img ? (
-    <>
-      <img className="cat__img" src={c.img} alt="" loading="lazy" decoding="async" />
-      <span className="poster-grain" aria-hidden="true" />
+function PhotoCard({
+  c,
+  width,
+  variant,
+  onSelect,
+}: {
+  c: Card;
+  width: "full" | "half";
+  variant: Variant;
+  onSelect: (i: EventItem) => void;
+}) {
+  const stack = STACK.has(variant);
+  return (
+    <button
+      type="button"
+      className={`cat cat--${width} cat--${variant}${c.img ? "" : " cat--noimg"}`}
+      onClick={() => onSelect(c.item)}
+    >
+      {c.img ? (
+        <>
+          <img className="cat__img" src={c.img} alt="" loading="lazy" decoding="async" />
+          <span className="poster-grain" aria-hidden="true" />
+        </>
+      ) : (
+        <span className="cat__glyph">
+          <CategoryIcon cat={c.item.category} size={52} />
+        </span>
+      )}
       <span className="cat__scrim" aria-hidden="true" />
-    </>
-  ) : (
-    <span className="cat__glyph">
-      <CategoryIcon cat={c.item.category} size={52} />
-    </span>
-  );
-}
-
-// Card variants -------------------------------------------------------------
-function Hero({ c, onSelect }: { c: Card; onSelect: (i: EventItem) => void }) {
-  return (
-    <button type="button" className={`cat cat--hero${c.img ? "" : " cat--noimg"}`} onClick={() => onSelect(c.item)}>
-      <Cover c={c} />
-      <Code c={c} />
-      <span className="cat__btm">
-        <Live c={c} />
-        <span className="cat__title cat__title--hero">{c.title}</span>
-        <span className="cat__foot">
-          {c.meta && <span className="cat__meta">{c.meta}</span>}
-          {c.price && <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>}
+      {c.code && (
+        <span className="cat__code">
+          <CategoryIcon cat={c.item.category} size={13} />
+          {c.code}
         </span>
-      </span>
-    </button>
-  );
-}
-
-function Photo({ c, onSelect }: { c: Card; onSelect: (i: EventItem) => void }) {
-  return (
-    <button type="button" className={`cat cat--photo${c.img ? "" : " cat--noimg"}`} onClick={() => onSelect(c.item)}>
-      <Cover c={c} />
-      <Code c={c} />
-      <span className="cat__btm">
-        <Live c={c} />
-        <span className="cat__title cat__title--photo">{c.title}</span>
-        <span className="cat__foot cat__foot--col">
-          {c.venue && <span className="cat__meta">{c.venue}</span>}
-          {c.price && <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function Text({ c, onSelect }: { c: Card; onSelect: (i: EventItem) => void }) {
-  return (
-    <button type="button" className="cat cat--text" onClick={() => onSelect(c.item)}>
-      <Code c={c} />
-      <span className="cat__title cat__title--text">{c.title}</span>
-      <span className="cat__textfoot">
-        <span className="cat__metacol">
-          {c.when && <span className="cat__meta">{c.when}</span>}
-          {c.venue && <span className="cat__meta">{c.venue}</span>}
-        </span>
-        {c.price && (
-          <span className="cat__pricego">
-            <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>
-            <span className="cat__arrow" aria-hidden="true">→</span>
-          </span>
+      )}
+      <span className="cat__panel">
+        {c.go.eligible && (
+          <span className="cat__live">{c.go.kind === "soon" ? c.go.label : "идёт сейчас"}</span>
         )}
-      </span>
-    </button>
-  );
-}
-
-function Wide({ c, onSelect }: { c: Card; onSelect: (i: EventItem) => void }) {
-  return (
-    <button type="button" className="cat cat--wide" onClick={() => onSelect(c.item)}>
-      <Code c={c} />
-      <span className="cat__widerow">
-        <span className="cat__title cat__title--wide">{c.title}</span>
-        {c.when && <span className="cat__when">{c.when}</span>}
-      </span>
-      <span className="cat__textfoot">
-        <span className="cat__metacol">{c.venue && <span className="cat__meta">{c.venue}</span>}</span>
-        {c.price && (
-          <span className="cat__pricego">
-            <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>
-            <span className="cat__arrow" aria-hidden="true">→</span>
-          </span>
-        )}
-      </span>
-    </button>
-  );
-}
-
-function Side({ c, onSelect }: { c: Card; onSelect: (i: EventItem) => void }) {
-  return (
-    <button type="button" className={`cat cat--side${c.img ? "" : " cat--noimg"}`} onClick={() => onSelect(c.item)}>
-      <Cover c={c} />
-      <Code c={c} />
-      <span className="cat__sidetext">
-        <Live c={c} />
-        <span className="cat__title cat__title--side">{c.title}</span>
-        <span className="cat__foot cat__foot--col">
-          {c.meta && <span className="cat__meta">{c.meta}</span>}
+        <span className="cat__title">{c.title}</span>
+        <span className={`cat__foot${stack ? " cat__foot--col" : ""}`}>
+          {(stack ? c.venue : c.meta) && <span className="cat__meta">{stack ? c.venue : c.meta}</span>}
           {c.price && <span className={`cat__price${c.free ? " cat__price--free" : ""}`}>{c.price}</span>}
         </span>
       </span>
     </button>
   );
 }
-
-// The catalogue rhythm: hero photo → duo[photo + text] → wide text → photo-side, repeating.
-// One flat list of events is grouped into editorial rows that alternate photo / type blocks.
-const PATTERN = ["hero", "duo", "wide", "side"] as const;
 
 export function CatalogFeed({
   items,
@@ -181,51 +110,57 @@ export function CatalogFeed({
   now?: number;
   onSelect: (i: EventItem) => void;
 }) {
-  const rows: { type: string; cards: Card[]; key: string }[] = [];
+  type Slot = { c: Card; variant: Variant };
+  const rows: { kind: "full" | "duo"; slots: Slot[]; key: string }[] = [];
   let i = 0;
-  let p = 0;
+  let r = 0;
+  let fullN = 0;
+  let halfN = 0;
   while (i < items.length) {
-    const type = PATTERN[p % PATTERN.length];
-    if (type === "duo") {
-      const cards = items.slice(i, i + 2).map((it) => derive(it, now));
-      rows.push({ type, cards, key: cards[0].item.event_id });
+    const rt = ROWS[r % ROWS.length];
+    if (rt === "duo" && i + 1 < items.length) {
+      const c1 = derive(items[i], now);
+      const c2 = derive(items[i + 1], now);
+      rows.push({
+        kind: "duo",
+        slots: [
+          { c: c1, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length] },
+          { c: c2, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length] },
+        ],
+        key: c1.item.event_id,
+      });
       i += 2;
     } else {
-      rows.push({ type, cards: [derive(items[i], now)], key: items[i].event_id });
+      const c = derive(items[i], now);
+      rows.push({
+        kind: "full",
+        slots: [{ c, variant: FULL_VARIANTS[fullN++ % FULL_VARIANTS.length] }],
+        key: c.item.event_id,
+      });
       i += 1;
     }
-    p += 1;
+    r += 1;
   }
 
   return (
     <div className="catalog">
-      {rows.map((row, ri) => {
-        const style = { "--i": Math.min(ri, 8) } as CSSProperties;
-        if (row.type === "hero")
-          return (
-            <div className="catalog__row" style={style} key={row.key}>
-              <Hero c={row.cards[0]} onSelect={onSelect} />
-            </div>
-          );
-        if (row.type === "duo")
-          return (
-            <div className="catalog__row catalog__row--duo" style={style} key={row.key}>
-              <Photo c={row.cards[0]} onSelect={onSelect} />
-              {row.cards[1] ? <Text c={row.cards[1]} onSelect={onSelect} /> : null}
-            </div>
-          );
-        if (row.type === "wide")
-          return (
-            <div className="catalog__row" style={style} key={row.key}>
-              <Wide c={row.cards[0]} onSelect={onSelect} />
-            </div>
-          );
-        return (
-          <div className="catalog__row" style={style} key={row.key}>
-            <Side c={row.cards[0]} onSelect={onSelect} />
-          </div>
-        );
-      })}
+      {rows.map((row, ri) => (
+        <div
+          className={`catalog__row${row.kind === "duo" ? " catalog__row--duo" : ""}`}
+          style={{ "--i": Math.min(ri, 8) } as CSSProperties}
+          key={row.key}
+        >
+          {row.slots.map((s) => (
+            <PhotoCard
+              key={s.c.item.event_id}
+              c={s.c}
+              width={row.kind === "duo" ? "half" : "full"}
+              variant={s.variant}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
