@@ -4,7 +4,7 @@ import { fetchEventsByIds, type EventItem } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
 import { IconClose, IconHeart } from "../../lib/icons";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
-import { EventListRow } from "./EventListRow";
+import { CatalogFeed } from "./CatalogFeed";
 import { PullHint } from "./PullHint";
 
 // Favourites — fetched by id from the server (independent of the map's loaded set, so the
@@ -55,9 +55,7 @@ export function FavoritesPanel({
       <div className="panelview__scroll" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {favs.length > 0 ? (
-          favs.map((it, i) => (
-            <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} onSelect={onSelect} />
-          ))
+          <CatalogFeed items={favs} userPos={userPos} onSelect={onSelect} />
         ) : loading ? null : (
           <div className="favempty">
             <IconHeart size={40} className="favempty__glyph" />

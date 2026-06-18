@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchEventsList, type EventItem, type ListSort } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
-import { EventListRow } from "./EventListRow";
+import { CatalogFeed } from "./CatalogFeed";
 
 const PAGE = 20;
 const SORTS: { key: ListSort; label: string }[] = [
@@ -165,9 +165,7 @@ export function ListView({
       </div>
 
       <div className="panelview__scroll" ref={scrollRef}>
-        {items.map((it, i) => (
-          <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} now={now} onSelect={onSelect} />
-        ))}
+        {items.length > 0 && <CatalogFeed items={items} userPos={userPos} now={now} onSelect={onSelect} />}
         {!loading && error && <div className="listview__empty">Не удалось загрузить. Попробуй ещё раз.</div>}
         {!loading && !error && items.length === 0 && <div className="listview__empty">В этой области по фильтрам пусто. Подвинь карту или сними фильтры.</div>}
         {loading && <div className="listview__empty">Загружаем…</div>}
