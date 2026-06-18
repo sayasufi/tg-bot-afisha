@@ -198,11 +198,26 @@ def _ics_dt(d: datetime) -> str:
     return d.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def _build_ics(detail: dict, occ: dict) -> str:
+_ICS_MSK = timezone(timedelta(hours=3))
+
+
+def _ics_when(occ: dict) -> list[str]:
+    """DTSTART/DTEND lines. A real timed session → UTC timestamps (default +2h). An ongoing /
+    all-day run (midnight start, or a multi-day span like an exhibition) → a single ALL-DAY
+    marker on the soonest relevant day — NEVER the whole multi-month run dropped into the
+    calendar. Mirrors the map/reminder 'timed vs ongoing' rule for consistency."""
     start = occ["date_start"]
-    end = occ.get("date_end") or (start + timedelta(hours=2))
-    if end <= start:
-        end = start + timedelta(hours=2)  # guard zero/negative-length runs
+    end = occ.get("date_end")
+    s_msk = start.astimezone(_ICS_MSK)
+    timed = (s_msk.hour != 0 or s_msk.minute != 0) and (end is None or (end - start) <= timedelta(hours=24))
+    if timed:
+        e = end if (end and end > start) else start + timedelta(hours=2)
+        return [f"DTSTART:{_ics_dt(start)}", f"DTEND:{_ics_dt(e)}"]
+    day = max(start, datetime.now(timezone.utc)).astimezone(_ICS_MSK).date()
+    return [f"DTSTART;VALUE=DATE:{day:%Y%m%d}", f"DTEND;VALUE=DATE:{day + timedelta(days=1):%Y%m%d}"]
+
+
+def _build_ics(detail: dict, occ: dict) -> str:
     loc = ", ".join(p for p in (occ.get("venue"), occ.get("address")) if p)
     url = occ.get("source_best_url") or ""
     desc = " · ".join(p for p in (detail.get("code"), "добавлено через окрест", url) if p)
@@ -215,8 +230,7 @@ def _build_ics(detail: dict, occ: dict) -> str:
         "BEGIN:VEVENT",
         f"UID:{detail['event_id']}@okrestmap.ru",
         f"DTSTAMP:{_ics_dt(datetime.now(timezone.utc))}",
-        f"DTSTART:{_ics_dt(start)}",
-        f"DTEND:{_ics_dt(end)}",
+        *_ics_when(occ),
         f"SUMMARY:{_ics_escape(detail['canonical_title'])}",
     ]
     if loc:
