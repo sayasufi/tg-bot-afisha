@@ -306,9 +306,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               </button>
             </div>
           )}
-        <button type="button" className="sheet__close" aria-label="Закрыть" onClick={onClose}>
-          <IconClose size={18} />
-        </button>
         {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>
 
@@ -351,7 +348,8 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             {go.kind === "soon" ? go.label : "идёт сейчас"}
           </span>
         )}
-        {/* Small action icons on the poster — favourite / reminder / share. */}
+        {/* Segmented action toolbar, docked flush to the poster's top-right corner so its top
+            edge meets the start of the photo: favourite / reminder / share / close. */}
         <div className="sheet__pacts">
           <button
             type="button"
@@ -367,7 +365,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               onToggleFav();
             }}
           >
-            <IconHeart filled={isFav} size={15} />
+            <IconHeart filled={isFav} size={16} />
           </button>
           <button
             type="button"
@@ -384,10 +382,13 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               onToggleReminder();
             }}
           >
-            <IconBell filled={hasReminder} size={15} />
+            <IconBell filled={hasReminder} size={16} />
           </button>
           <button type="button" className="sheet__picon" aria-label="Поделиться" onClick={onShare}>
-            <IconShare size={15} />
+            <IconShare size={16} />
+          </button>
+          <button type="button" className="sheet__picon sheet__picon--close" aria-label="Закрыть" onClick={onClose}>
+            <IconClose size={16} />
           </button>
         </div>
       </div>
