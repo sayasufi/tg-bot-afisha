@@ -77,10 +77,10 @@
   border: 0;
   padding: 0;
   font: inherit;
-  color: var(--ink-dim);
+  color: var(--ink); /* body ink, NOT grey — the acid marker carries the "tappable" cue */
   background-image: linear-gradient(var(--acid), var(--acid));
   background-repeat: no-repeat;
-  background-size: 100% 0.28em;
+  background-size: 100% 0.22em;
   background-position: 0 92%;
   cursor: pointer;
   transition: background-size 0.16s var(--ease-cut), color 0.16s var(--ease-cut);

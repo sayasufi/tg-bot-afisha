@@ -164,7 +164,7 @@ body {
   color: var(--ink);
   background-image: linear-gradient(var(--acid), var(--acid));
   background-repeat: no-repeat;
-  background-size: 100% 0.32em;
+  background-size: 100% 0.22em;
   background-position: 0 92%;
   cursor: pointer;
   text-align: left;
