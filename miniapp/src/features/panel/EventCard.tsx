@@ -48,6 +48,7 @@ export function EventCard({ item, index = 0, userPos, onSelect }: { item: CardIt
           <CategoryIcon cat={item.category} size={34} />
         </span>
       )}
+      {img && <span className="poster-grain" aria-hidden="true" />}
       <span className="rcard__top">
         <span className="rcard__tag">
           <CategoryIcon cat={item.category} size={13} className="rcard__cat" />

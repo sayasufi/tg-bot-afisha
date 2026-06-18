@@ -51,6 +51,7 @@ function EventListRowImpl({
           <CategoryIcon cat={item.category} size={44} />
         </span>
       )}
+      {img && <span className="poster-grain" aria-hidden="true" />}
       <span className="lrow__top">
         <span className="lrow__tag">
           <CategoryIcon cat={item.category} size={14} className="lrow__cat" />
