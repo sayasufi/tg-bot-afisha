@@ -71,7 +71,15 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
             EventOccurrence.venue_id,
         )
         .distinct(EventOccurrence.event_id)
-        .order_by(EventOccurrence.event_id, EventOccurrence.date_start.asc())
+        # Future-FIRST, mirroring soonest_start (which set fire_at): describe the soonest
+        # UPCOMING session, not the earliest overall. Otherwise a multi-session run (an
+        # excursion/exhibition whose first date is in the past) gets a date_start <= now and
+        # is wrongly captioned "идёт сейчас" when the next session is still hours away.
+        .order_by(
+            EventOccurrence.event_id,
+            (EventOccurrence.date_start < now).asc(),  # upcoming (false) before past (true)
+            EventOccurrence.date_start.asc(),
+        )
         .subquery()
     )
     rows = (
