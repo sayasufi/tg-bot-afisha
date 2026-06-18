@@ -1147,11 +1147,12 @@ mark.hl {
   transform: translate(1px, 1px);
 }
 
-/* «Площадки» list — a followed-venue row (name + address · count); opens the venue page. */
+/* «Площадки» list — a stylised followed-venue row: name, a category chip (the venue's
+   dominant type) + address, and a separated count plate on the right. Opens the venue page. */
 .vrow {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   padding: 14px 0;
   border: 0;
@@ -1166,20 +1167,76 @@ mark.hl {
 .vrow:active {
   opacity: 0.6;
 }
+.vrow__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .vrow__name {
   font-family: var(--grotesk);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.vrow__meta {
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.4;
+.vrow__sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.vrow__cat {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--grotesk);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--ink-dim);
 }
+.vrow__caticon {
+  color: var(--cat, var(--ink-dim));
+}
+.vrow__addr {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .vrow__count {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  padding: 7px 4px;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.vrow__num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink);
+}
+.vrow__numlabel {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
   color: var(--ink-faint);
 }
 
