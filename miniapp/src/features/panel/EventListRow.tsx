@@ -52,7 +52,10 @@ function EventListRowImpl({
         </span>
       )}
       <span className="lrow__top">
-        {item.code && <span className="lrow__code">{item.code}</span>}
+        <span className="lrow__tag">
+          <CategoryIcon cat={item.category} size={14} className="lrow__cat" />
+          {item.code && <span className="lrow__code">{item.code}</span>}
+        </span>
         {dist && <span className="lrow__dist">{dist}</span>}
       </span>
       <span className="lrow__btm">

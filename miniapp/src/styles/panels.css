@@ -1116,6 +1116,16 @@ html[data-theme="dark"] .rcard__ph {
   padding: 12px 14px;
 }
 /* Accession code kicker — the VITRINE signature, set over the photo. */
+.lrow__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lrow__cat {
+  flex: 0 0 auto;
+  color: rgba(244, 244, 239, 0.92);
+}
 .lrow__code {
   font-family: var(--mono);
   font-size: 10px;
