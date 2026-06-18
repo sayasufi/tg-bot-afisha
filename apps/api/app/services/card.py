@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 import httpx
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 from core.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, get_object, object_exists, public_url, put_image
@@ -146,60 +146,68 @@ def render_card(title: str, meta: str, category: str, photo: bytes | None) -> by
 # carries the title in its caption, so here we keep the event photo big and just stamp
 # the brand: an acid spine, a hairline frame, the cinnabar tick, the окрест wordmark, the
 # accession code, and a bottom acid/plaster/cinnabar colour ribbon.)
-RW, RH = 1080, 720
-
-
 def render_reminder_cover(photo: bytes | None, code: str | None) -> bytes:
-    if photo:
-        try:
-            img = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (RW, RH), Image.LANCZOS)
-        except Exception:
-            img = Image.new("RGB", (RW, RH), INK)
-    else:
-        img = Image.new("RGB", (RW, RH), INK)
+    # 16:9 (shorter than a poster), sized to the SOURCE so we never upscale (blur); a
+    # cinematic editorial pass (slight darken + desaturate + grain + sharpen) sets the
+    # after-dark mood; the brand is restrained edge chrome so the photo stays the hero.
+    try:
+        src = Image.open(io.BytesIO(photo)).convert("RGB") if photo else Image.new("RGB", (1080, 608), INK)
+    except Exception:
+        src = Image.new("RGB", (1080, 608), INK)
+    W = min(1080, src.width)
+    H = round(W * 9 / 16)
+    img = ImageOps.fit(src, (W, H), Image.LANCZOS)
+    img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=90, threshold=2))
+    img = ImageEnhance.Brightness(img).enhance(0.84)
+    img = ImageEnhance.Color(img).enhance(0.90)
+    noise = Image.effect_noise((W, H), 18).convert("L")  # subtle film grain
+    img = Image.blend(img, ImageChops.overlay(img, Image.merge("RGB", (noise, noise, noise))), 0.10)
+
     d = ImageDraw.Draw(img, "RGBA")
-    # Bottom legibility gradient (transparent → ink) so the wordmark/code read on any photo.
-    gh = 300
+    gh = int(H * 0.5)  # bottom legibility gradient
     for i in range(gh):
-        d.line([(0, RH - gh + i), (RW, RH - gh + i)], fill=(11, 11, 11, int(210 * (i / gh) ** 1.5)))
-    d.rectangle([0, 0, 14, RH], fill=ACID)              # left acid spine (brand stripe)
-    d.rectangle([0, 0, RW - 1, RH - 1], outline=INK, width=4)  # hairline frame
-    d.line([RW - 70, 40, RW - 40, 40], fill=CINNABAR, width=6)  # cinnabar registration tick
-    d.line([RW - 40, 40, RW - 40, 70], fill=CINNABAR, width=6)
-    d.text((44, RH - 92), "окрест", font=_font(52, 800), fill=ACID)  # wordmark
+        d.line([(0, H - gh + i), (W, H - gh + i)], fill=(11, 11, 11, int(225 * (i / gh) ** 1.6)))
+    d.rectangle([0, 0, 9, H], fill=ACID)  # acid spine
+    d.line([W - 58, 34, W - 34, 34], fill=CINNABAR, width=5)  # cinnabar registration tick
+    d.line([W - 34, 34, W - 34, 58], fill=CINNABAR, width=5)
+    wf = _font(46, 800)
+    d.text((40, H - 96), "окрест", font=wf, fill=ACID)
+    d.rectangle([40, H - 40, 40 + d.textlength("окрест", font=wf), H - 35], fill=ACID)  # acid underline
     if code:
-        cf = _font(36, 600)
-        d.text((RW - 48 - d.textlength(code, font=cf), RH - 80), code, font=cf, fill=PLASTER)
-    # Bottom colour ribbon — "полосы наших цветов": acid · plaster · cinnabar.
-    seg = (RW - 14) / 3
-    for i, col in enumerate((ACID, PLASTER, CINNABAR)):
-        d.rectangle([14 + i * seg, RH - 10, 14 + (i + 1) * seg, RH], fill=col)
+        cf = _font(30, 600)
+        d.text((W - 44 - d.textlength(code, font=cf), H - 86), code, font=cf, fill=PLASTER)
+    # Refined baseline registration bar (acid · cinnabar) — the brand stripe, kept thin.
+    d.rectangle([0, H - 6, int(W * 0.7), H], fill=ACID)
+    d.rectangle([int(W * 0.7), H - 6, W, H], fill=CINNABAR)
     out = io.BytesIO()
-    img.save(out, "JPEG", quality=88, optimize=True)
+    img.save(out, "JPEG", quality=92, optimize=True)
     return out.getvalue()
 
 
 def ensure_reminder_cover(event_id: str, image_url: str, code: str | None) -> str:
     """Public URL of the branded reminder cover (rendered + cached in MinIO). Empty string
     if there's no usable image, so the caller can fall back to the raw photo / a text DM."""
-    key = f"reminders/{event_id}.jpg"
+    key = f"reminders/v2/{event_id}.jpg"  # v2: 16:9, full-res, grain/darken treatment
     try:
         if object_exists(key):
             return public_url(key)
     except Exception:
         pass
     photo: bytes | None = None
-    try:
-        direct = get_object(f"events/{event_id}.jpg")  # our own cached copy first
-        if direct:
-            photo = direct[0]
-    except Exception:
-        photo = None
-    if photo is None and image_url and is_public_http_url(image_url):
+    # Prefer the ORIGINAL full-res source — the cached copy is downsized to 900px, which
+    # upscaled (= blur) in the 16:9 cover. Fall back to that cache only if the source fails.
+    if image_url and is_public_http_url(image_url):
         try:
             r = httpx.get(image_url, timeout=8, follow_redirects=False, headers={"User-Agent": "okrest-card/1.0"})
             r.raise_for_status()
             photo = r.content
+        except Exception:
+            photo = None
+    if photo is None:
+        try:
+            direct = get_object(f"events/{event_id}.jpg")
+            if direct:
+                photo = direct[0]
         except Exception:
             photo = None
     if photo is None:

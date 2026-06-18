@@ -42,14 +42,15 @@ async def _send_reminders_impl() -> int:
         async with httpx.AsyncClient(timeout=15) as client:
             for r in due:
                 caption = reminder_caption(r, now)
-                raw_image = r.get("image")
-                # Brand the cover (acid spine, hairline, окрест wordmark, code, colour ribbon),
-                # rendered+cached in MinIO; fall back to the raw photo if branding fails.
+                raw_image = r.get("image")  # cached/reliable — the raw-photo fallback
+                # Brand the cover from the ORIGINAL full-res source (acid spine, grain,
+                # окрест wordmark, code), rendered+cached in MinIO; fall back to the raw photo.
                 image = raw_image
-                if raw_image:
+                src_for_brand = r.get("image_primary") or raw_image
+                if src_for_brand:
                     try:
                         branded = await asyncio.to_thread(
-                            ensure_reminder_cover, r["event_id"], raw_image, r.get("code")
+                            ensure_reminder_cover, r["event_id"], src_for_brand, r.get("code")
                         )
                         if branded:
                             image = branded

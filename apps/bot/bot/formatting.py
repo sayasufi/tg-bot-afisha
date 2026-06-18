@@ -14,6 +14,22 @@ CAT_CODE = {
 
 _WEEKDAY_PREP = ["в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу", "в воскресенье"]
 
+# Our VITRINE custom-emoji ids (set "vitrine_by_okrestmap_bot"). ce() wraps a standard
+# emoji so it renders as our acid glyph in bot DMs, with that same emoji as the automatic
+# fallback (shown in push-notification previews, or if the owner's Premium ever lapses).
+CUSTOM_EMOJI = {
+    "🔔": "5305380299666925175",
+    "📍": "5305268063581542808",
+    "⚡": "5305445248162371955",
+    "➡️": "5303493739577122144",
+    "🔴": "5305776145327755759",
+}
+
+
+def ce(emoji: str) -> str:
+    cid = CUSTOM_EMOJI.get(emoji)
+    return f'<tg-emoji emoji-id="{cid}">{emoji}</tg-emoji>' if cid else emoji
+
 CATEGORY_GLYPH = {
     "concert": "🎵",
     "theatre": "🎭",
@@ -140,14 +156,14 @@ def reminder_caption(item: dict, now: datetime | None = None) -> str:
 
     lines = []
     if when:
-        lines.append(f"🔔 <b>{when}</b>\n")
+        lines.append(f"{ce('🔔')} <b>{when}</b>\n")
     lines.append(f"<b>{title}</b>")
     lines.append(f"<code>{sig}</code>")
 
     venue = escape(str(item.get("venue") or "").strip())
     price = item.get("price_min")
     price_str = "бесплатно" if price is not None and float(price) == 0 else (f"от {int(float(price))} ₽" if price is not None else "")
-    wall = [v for v in [venue, f"<code>{price_str}</code>" if price_str else ""] if v]
+    wall = [v for v in [f"{ce('📍')} {venue}" if venue else "", f"<code>{price_str}</code>" if price_str else ""] if v]
     if wall:
         lines.append("\n<blockquote>" + "\n".join(wall) + "</blockquote>")
     return "\n".join(lines)
