@@ -1052,8 +1052,8 @@ mark.hl {
 /* Full-bleed width, but a thin plaster gap (the --bg) shows between cards so each event
    is delineated and the whole list reads as plates on the plaster ground. */
 .listview .panelview__scroll {
-  /* Uniform tight spacing: the side gutters equal the gap between posters — 8px all round. */
-  padding: 8px 8px calc(env(safe-area-inset-bottom) + 24px);
+  /* Catalogue cards bleed to the screen edges — no side gutters; only the bottom inset. */
+  padding: 0 0 calc(env(safe-area-inset-bottom) + 24px);
 }
 
 /* The venue sheet sits ABOVE the panel it can be opened from (recs/favorites, z 1400) but
@@ -1400,7 +1400,7 @@ mark.hl {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px;
+  padding: 8px 0 0;
 }
 .catalog__row--duo {
   display: grid;
