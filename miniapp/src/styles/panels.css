@@ -1576,6 +1576,17 @@ mark.hl {
   white-space: nowrap;
 }
 
+/* Optional full-width hairline between the title and the footer (rotates on/off per card). */
+.cat--ruled .cat__foot {
+  margin: 12px -14px 0;
+  padding: 12px 14px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.26);
+}
+.cat--whiteband.cat--ruled .cat__foot,
+.cat--acidband.cat--ruled .cat__foot {
+  border-top-color: rgba(11, 11, 11, 0.2);
+}
+
 /* ---- Variant: band — a big smooth fade to a solid black band at the bottom ---- */
 .cat--band .cat__scrim {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 24%, rgba(0, 0, 0, 0.5) 48%, var(--ink) 82%);

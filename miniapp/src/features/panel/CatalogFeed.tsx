@@ -46,22 +46,26 @@ type Variant = "bottom" | "sideblack" | "band" | "tall" | "whiteband" | "acidban
 const FULL_VARIANTS: Variant[] = ["bottom", "sideblack", "whiteband", "tall", "band", "acidband", "topband"];
 const HALF_VARIANTS: Variant[] = ["bottom", "whiteband", "band", "acidband"];
 const ROWS = ["full", "duo", "full", "full", "duo"] as const;
+// A hairline rule between title and footer — drawn on some cards, not others (rotates).
+const RULED = [false, true, true, false, true, false];
 
 function PhotoCard({
   c,
   width,
   variant,
+  ruled,
   onSelect,
 }: {
   c: Card;
   width: "full" | "half";
   variant: Variant;
+  ruled: boolean;
   onSelect: (i: EventItem) => void;
 }) {
   return (
     <button
       type="button"
-      className={`cat cat--${width} cat--${variant}${c.img ? "" : " cat--noimg"}`}
+      className={`cat cat--${width} cat--${variant}${ruled ? " cat--ruled" : ""}${c.img ? "" : " cat--noimg"}`}
       onClick={() => onSelect(c.item)}
     >
       {c.img ? (
@@ -110,12 +114,14 @@ export function CatalogFeed({
   now?: number;
   onSelect: (i: EventItem) => void;
 }) {
-  type Slot = { c: Card; variant: Variant };
+  type Slot = { c: Card; variant: Variant; ruled: boolean };
   const rows: { kind: "full" | "duo"; slots: Slot[]; key: string }[] = [];
   let i = 0;
   let r = 0;
   let fullN = 0;
   let halfN = 0;
+  let cardN = 0;
+  const ruled = () => RULED[cardN++ % RULED.length];
   while (i < items.length) {
     const rt = ROWS[r % ROWS.length];
     if (rt === "duo" && i + 1 < items.length) {
@@ -124,8 +130,8 @@ export function CatalogFeed({
       rows.push({
         kind: "duo",
         slots: [
-          { c: c1, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length] },
-          { c: c2, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length] },
+          { c: c1, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length], ruled: ruled() },
+          { c: c2, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length], ruled: ruled() },
         ],
         key: c1.item.event_id,
       });
@@ -134,7 +140,7 @@ export function CatalogFeed({
       const c = derive(items[i], now);
       rows.push({
         kind: "full",
-        slots: [{ c, variant: FULL_VARIANTS[fullN++ % FULL_VARIANTS.length] }],
+        slots: [{ c, variant: FULL_VARIANTS[fullN++ % FULL_VARIANTS.length], ruled: ruled() }],
         key: c.item.event_id,
       });
       i += 1;
@@ -156,6 +162,7 @@ export function CatalogFeed({
               c={s.c}
               width={row.kind === "duo" ? "half" : "full"}
               variant={s.variant}
+              ruled={s.ruled}
               onSelect={onSelect}
             />
           ))}
