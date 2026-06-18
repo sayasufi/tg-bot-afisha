@@ -253,24 +253,12 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const openNow = venueOpenNow(occ?.venue_hours) ?? selected.open_now ?? null;
   const go = goNowState(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end, openNow);
 
-  // The source link is the primary "act on it" click. When the event is paid, frame it
-  // as the ticket action it is ("Билеты от N ₽") instead of an ambiguous "Подробнее" —
-  // the single most monetisable click should read like the action it performs.
-  const priceMin = occ?.price_min ?? selected.price_min;
-  const ticketLabel =
-    priceMin != null && priceMin > 0 ? `Билеты от ${Math.round(priceMin).toLocaleString("ru-RU")} ₽` : "Подробнее";
+  // The source link is the primary "act on it" click — plain "Подробнее".
+  const ticketLabel = "Подробнее";
 
   // Trust line: where the data is from + when it was last refreshed + a way to flag it wrong.
   const sourceHost = sourceUrl ? hostOf(sourceUrl) : null;
   const updatedLabel = formatActualDate(detail?.updated_at);
-  const icsUrl = `${window.location.origin}/v1/events/${selected.event_id}/ics`;
-  const onCalendar = () => {
-    haptic("light");
-    logIntent("calendar", selected.event_id);
-    const wa = getWebApp();
-    if (wa?.openLink) wa.openLink(icsUrl);
-    else window.open(icsUrl, "_blank");
-  };
   const onReport = () => {
     haptic("light");
     const link = `https://t.me/okrestmap_bot?start=report_${selected.event_id}`;
@@ -488,12 +476,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               </a>
             )}
           </div>
-        )}
-
-        {occ && (
-          <button type="button" className="sheet__cal" onClick={onCalendar}>
-            <span className="sheet__cal-plus" aria-hidden="true">+</span> в календарь
-          </button>
         )}
 
         {(sourceHost || updatedLabel) && (

@@ -1,6 +1,6 @@
 import gzip
 import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from uuid import UUID
 
 import orjson
@@ -186,77 +186,6 @@ async def get_event_detail(event_id: UUID, db: AsyncSession = Depends(get_async_
     if not result:
         raise HTTPException(status_code=404, detail="event not found")
     return result
-
-
-# --- "В календарь" (.ics): a real intent action that also re-surfaces okrest at the right
-# moment. iCalendar is a tiny line-based text format, so we build it by hand (no dep). ---
-def _ics_escape(s: str) -> str:
-    return str(s).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
-
-
-def _ics_dt(d: datetime) -> str:
-    return d.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
-_ICS_MSK = timezone(timedelta(hours=3))
-
-
-def _ics_when(occ: dict) -> list[str]:
-    """DTSTART/DTEND lines. A real timed session → UTC timestamps (default +2h). An ongoing /
-    all-day run (midnight start, or a multi-day span like an exhibition) → a single ALL-DAY
-    marker on the soonest relevant day — NEVER the whole multi-month run dropped into the
-    calendar. Mirrors the map/reminder 'timed vs ongoing' rule for consistency."""
-    start = occ["date_start"]
-    end = occ.get("date_end")
-    s_msk = start.astimezone(_ICS_MSK)
-    timed = (s_msk.hour != 0 or s_msk.minute != 0) and (end is None or (end - start) <= timedelta(hours=24))
-    if timed:
-        e = end if (end and end > start) else start + timedelta(hours=2)
-        return [f"DTSTART:{_ics_dt(start)}", f"DTEND:{_ics_dt(e)}"]
-    day = max(start, datetime.now(timezone.utc)).astimezone(_ICS_MSK).date()
-    return [f"DTSTART;VALUE=DATE:{day:%Y%m%d}", f"DTEND;VALUE=DATE:{day + timedelta(days=1):%Y%m%d}"]
-
-
-def _build_ics(detail: dict, occ: dict) -> str:
-    loc = ", ".join(p for p in (occ.get("venue"), occ.get("address")) if p)
-    url = occ.get("source_best_url") or ""
-    desc = " · ".join(p for p in (detail.get("code"), "добавлено через окрест", url) if p)
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//okrest//okrestmap.ru//RU",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        f"UID:{detail['event_id']}@okrestmap.ru",
-        f"DTSTAMP:{_ics_dt(datetime.now(timezone.utc))}",
-        *_ics_when(occ),
-        f"SUMMARY:{_ics_escape(detail['canonical_title'])}",
-    ]
-    if loc:
-        lines.append(f"LOCATION:{_ics_escape(loc)}")
-    if desc:
-        lines.append(f"DESCRIPTION:{_ics_escape(desc)}")
-    if url:
-        lines.append(f"URL:{_ics_escape(url)}")
-    lines += ["END:VEVENT", "END:VCALENDAR"]
-    return "\r\n".join(lines) + "\r\n"  # iCalendar requires CRLF
-
-
-@router.get("/events/{event_id}/ics")
-async def get_event_ics(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
-    """An iCalendar file for the event's soonest upcoming session — the "В календарь" verb.
-    Opening it drops the event (title · time · venue · source link) into the user's calendar."""
-    service = EventQueryService(db)
-    detail = await service.event_detail(event_id)
-    if not detail or not detail.get("occurrences"):
-        raise HTTPException(status_code=404, detail="event not found")
-    body = _build_ics(detail, detail["occurrences"][0])
-    return Response(
-        body,
-        media_type="text/calendar; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="okrest-{event_id}.ics"'},
-    )
 
 
 @router.get("/categories", response_model=CategoryResponse)
