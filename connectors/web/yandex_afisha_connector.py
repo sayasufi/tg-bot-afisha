@@ -484,7 +484,9 @@ class YandexAfishaConnector:
         if not isinstance(image_obj, dict):
             return []
         out: list[dict] = []
-        for key in ("cover", "orig"):
+        # orig (full image) FIRST so it becomes the primary — the s380x220 cover is a tiny
+        # thumbnail that blurs in the poster. The media task downscales orig to MAX_WIDTH.
+        for key in ("orig", "cover"):
             node = image_obj.get(key)
             if isinstance(node, dict) and node.get("url"):
                 out.append({"image": node["url"]})

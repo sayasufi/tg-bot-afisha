@@ -351,6 +351,45 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             {go.kind === "soon" ? go.label : "идёт сейчас"}
           </span>
         )}
+        {/* Small action icons on the poster — favourite / reminder / share. */}
+        <div className="sheet__pacts">
+          <button
+            type="button"
+            className={`sheet__picon${isFav ? " sheet__picon--on" : ""}`}
+            aria-label="В избранное"
+            aria-pressed={isFav}
+            onClick={() => {
+              haptic("light");
+              showToast(isFav ? "Убрано из избранного" : "Добавлено в избранное", {
+                icon: "heart",
+                tone: isFav ? "muted" : "good",
+              });
+              onToggleFav();
+            }}
+          >
+            <IconHeart filled={isFav} size={15} />
+          </button>
+          <button
+            type="button"
+            className={`sheet__picon${hasReminder ? " sheet__picon--on" : ""}`}
+            aria-label={hasReminder ? "Напоминание включено" : "Напомнить о начале"}
+            aria-pressed={hasReminder}
+            onClick={() => {
+              haptic("light");
+              if (!hasReminder) logIntent("reminder", selected.event_id);
+              showToast(hasReminder ? "Напоминание выключено" : "Напомним перед началом", {
+                icon: "bell",
+                tone: hasReminder ? "muted" : "good",
+              });
+              onToggleReminder();
+            }}
+          >
+            <IconBell filled={hasReminder} size={15} />
+          </button>
+          <button type="button" className="sheet__picon" aria-label="Поделиться" onClick={onShare}>
+            <IconShare size={15} />
+          </button>
+        </div>
       </div>
 
       <div className="sheet__head">
@@ -494,45 +533,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           </div>
         )}
 
-        {/* Catalogue action row — favourite / reminder / share (off the poster). */}
-        <div className="sheet__acts">
-          <button
-            type="button"
-            className={`sheet__act${isFav ? " sheet__act--on" : ""}`}
-            aria-pressed={isFav}
-            onClick={() => {
-              haptic("light");
-              showToast(isFav ? "Убрано из избранного" : "Добавлено в избранное", {
-                icon: "heart",
-                tone: isFav ? "muted" : "good",
-              });
-              onToggleFav();
-            }}
-          >
-            <IconHeart filled={isFav} size={16} />
-            {isFav ? "В избранном" : "В избранное"}
-          </button>
-          <button
-            type="button"
-            className={`sheet__act${hasReminder ? " sheet__act--on" : ""}`}
-            aria-pressed={hasReminder}
-            onClick={() => {
-              haptic("light");
-              if (!hasReminder) logIntent("reminder", selected.event_id);
-              showToast(hasReminder ? "Напоминание выключено" : "Напомним перед началом", {
-                icon: "bell",
-                tone: hasReminder ? "muted" : "good",
-              });
-              onToggleReminder();
-            }}
-          >
-            <IconBell filled={hasReminder} size={16} />
-            {hasReminder ? "Напомним" : "Напомнить"}
-          </button>
-          <button type="button" className="sheet__act sheet__act--icon" aria-label="Поделиться" onClick={onShare}>
-            <IconShare size={16} />
-          </button>
-        </div>
       </div>
 
       <div className="sheet__after">

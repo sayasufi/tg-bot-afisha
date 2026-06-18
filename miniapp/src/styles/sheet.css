@@ -222,9 +222,10 @@ html[data-theme="dark"] .sheet-veil {
    the plaster by a big acid registration offset (this is the selected exhibit). */
 .sheet__card {
   position: relative;
-  margin: 10px 14px 30px;
+  margin: 10px 14px 34px;
   background: var(--plinth);
-  box-shadow: inset 0 0 0 1px var(--ink), 9px 9px 0 var(--acid);
+  /* ink frame + acid registration offset + a soft drop shadow lifting the card. */
+  box-shadow: inset 0 0 0 1px var(--ink), 9px 9px 0 var(--acid), 11px 16px 26px rgba(11, 11, 11, 0.18);
 }
 
 /* afisha — the cover poster, flush to the card's top edge (the card border frames it). */
@@ -300,6 +301,37 @@ html[data-theme="dark"] .sheet-veil {
   50% {
     opacity: 0.3;
   }
+}
+
+/* Small action icons on the poster — favourite / reminder / share (top-right, left of
+   the sticky close). Glass over the photo; acid fill when toggled on. */
+.sheet__pacts {
+  position: absolute;
+  top: 12px;
+  right: 50px;
+  z-index: 3;
+  display: inline-flex;
+  gap: 6px;
+}
+.sheet__picon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: rgba(11, 11, 11, 0.46);
+  color: #fff;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition: background 0.12s var(--ease-cut), color 0.12s var(--ease-cut);
+}
+.sheet__picon:active {
+  background: rgba(11, 11, 11, 0.72);
+}
+.sheet__picon--on {
+  background: var(--acid);
+  color: var(--on-acid);
 }
 
 /* Oversized so the parallax drift never reveals the frame edge. */
