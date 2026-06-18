@@ -12,7 +12,7 @@ import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
 import { SimilarEvents } from "./SimilarEvents";
-import { accessionNo, CAT_CODE, formatPrice, stripHtml } from "./sheetFormat";
+import { accessionNo, formatPrice, stripHtml } from "./sheetFormat";
 
 // Trust line helpers: the source host ("по данным afisha.ru") and a human freshness date.
 function hostOf(url: string): string | null {
@@ -230,7 +230,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   // Public catalogue code "MSK-04PN" (unique, stable, URL-ready) + category tag.
   // Falls back to the legacy hashed number only if a cached item predates `code`.
   const code = selected.code || detail?.code || `ОКР·${accessionNo(selected.event_id)}`;
-  const accession = `${code} · ${CAT_CODE[selected.category] || CAT_CODE.other}`;
   const dates = formatWhen(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
   // The soonest session drives the headline (`dates`); show up to 3 more sessions as
   // chips, then a compact "+N" for the rest. Chips list only sessions that HAVEN'T
@@ -307,49 +306,14 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               </button>
             </div>
           )}
-        <button
-          type="button"
-          className={`sheet__icon sheet__icon--fav${isFav ? " sheet__icon--on" : ""}`}
-          aria-label="В избранное"
-          aria-pressed={isFav}
-          onClick={() => {
-            haptic("light");
-            showToast(isFav ? "Убрано из избранного" : "Добавлено в избранное", {
-              icon: "heart",
-              tone: isFav ? "muted" : "good",
-            });
-            onToggleFav();
-          }}
-        >
-          <IconHeart filled={isFav} size={18} />
-        </button>
-        <button
-          type="button"
-          className={`sheet__icon sheet__icon--bell${hasReminder ? " sheet__icon--on" : ""}`}
-          aria-label={hasReminder ? "Напоминание включено" : "Напомнить о начале"}
-          aria-pressed={hasReminder}
-          onClick={() => {
-            haptic("light");
-            if (!hasReminder) logIntent("reminder", selected.event_id);
-            showToast(hasReminder ? "Напоминание выключено" : "Напомним перед началом", {
-              icon: "bell",
-              tone: hasReminder ? "muted" : "good",
-            });
-            onToggleReminder();
-          }}
-        >
-          <IconBell filled={hasReminder} size={18} />
-        </button>
-        <button type="button" className="sheet__icon sheet__icon--share" aria-label="Поделиться" onClick={onShare}>
-          <IconShare size={18} />
-        </button>
         <button type="button" className="sheet__close" aria-label="Закрыть" onClick={onClose}>
           <IconClose size={18} />
         </button>
         {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>
 
-      {/* mounted print */}
+      {/* afisha — the cover becomes a full-bleed poster: accession code on the
+          frame, category tag bottom-left, "идёт сейчас" live badge bottom-right. */}
       <div className="sheet__frame">
         {image ? (
           <img
@@ -373,26 +337,31 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             <i />
           </span>
         )}
+        {image ? <span className="sheet__scrim" aria-hidden="true" /> : null}
+        <span className="sheet__code">{code}</span>
         <span className="sheet__tag">
           <CategoryIcon cat={selected.category} size={13} />
           {meta.label}
         </span>
+        {go.eligible && (
+          <span className="sheet__live">
+            <i className="sheet__live-dot" aria-hidden="true" />
+            {go.kind === "soon" ? go.label : "идёт сейчас"}
+          </span>
+        )}
       </div>
 
       <div className="sheet__body">
-        <span className="kicker">{accession}</span>
         <h2 className="sheet__title">
           <Highlight text={selected.title} query={query} />
         </h2>
 
-        <div className="sheet__meta">
-          <div className="wall-label">
-            <span className="wall-label__cap">Когда</span>
-            {go.eligible && <span className="sheet__gonow">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}
-            <span className="wall-label__val">
-              {dates || "—"}
-              {timeNote && <span className="dim"> · {timeNote}</span>}
-            </span>
+        {/* Exhibit grid — each datum its own hairline cell, museum-catalogue style. */}
+        <div className="xgrid">
+          <div className="xcell">
+            <span className="xcell__cap">Когда</span>
+            <span className="xcell__val">{dates || "—"}</span>
+            {timeNote && <span className="xcell__sub">{timeNote}</span>}
             {moreDates.length > 0 && (
               <div className="sheet__dates" aria-label="Ближайшие даты">
                 {moreDates.map((o) => (
@@ -404,57 +373,72 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               </div>
             )}
           </div>
-          {venue && (
-            <div className="wall-label">
-              <span className="wall-label__cap">Где</span>
-              {venueId != null && onOpenVenue ? (
-                <button
-                  type="button"
-                  className="placecard"
-                  onClick={() => {
-                    haptic("light");
-                    onOpenVenue(venueId);
-                  }}
-                >
-                  <IconPin size={16} className="placecard__pin" />
-                  <span className="placecard__text">
-                    <span className="placecard__name">{venue}</span>
-                    {address ? <span className="placecard__addr">{address}</span> : null}
-                  </span>
-                  <span className="placecard__go" aria-hidden="true" />
-                </button>
-              ) : (
-                <span className="wall-label__val">
-                  {venue}
-                  {address ? <span className="dim"> · {address}</span> : null}
-                </span>
-              )}
-            </div>
-          )}
-          {metro && metro.meters <= 2500 && (
-            <div className="wall-label">
-              <span className="wall-label__cap">Метро</span>
-              <span className="wall-label__val">
-                <span className="sheet__metro">м. {metro.name}</span>
-                <span className="dim"> · {formatDistance(metro.meters)} · {walkMinutes(metro.meters)} мин</span>
-              </span>
-            </div>
-          )}
-          {near && (
-            <div className="wall-label">
-              <span className="wall-label__cap">От тебя</span>
-              <span className="wall-label__val">
-                <span className="sheet__near">{near}</span>
-              </span>
-            </div>
-          )}
-          <div className="wall-label">
-            <span className="wall-label__cap">Цена</span>
-            <span className="wall-label__val">
-              <span className="swipe">{formatPrice(occ?.price_min ?? selected.price_min, occ?.price_max)}</span>
-              {detail?.age_limit ? <span className="badge">{detail.age_limit}</span> : null}
+          <div className="xcell">
+            <span className="xcell__cap">Цена</span>
+            <span className="xcell__val xcell__price">
+              {formatPrice(occ?.price_min ?? selected.price_min, occ?.price_max)}
             </span>
           </div>
+          {venue &&
+            (venueId != null && onOpenVenue ? (
+              <button
+                type="button"
+                className="xcell xcell--wide xcell--place"
+                onClick={() => {
+                  haptic("light");
+                  onOpenVenue(venueId);
+                }}
+              >
+                <span className="xcell__cap">Где</span>
+                <span className="xcell__place">
+                  <IconPin size={15} className="xcell__pin" />
+                  <span className="xcell__placetext">
+                    <span className="xcell__val">{venue}</span>
+                    {address ? <span className="xcell__sub">{address}</span> : null}
+                  </span>
+                  <span className="xcell__go" aria-hidden="true" />
+                </span>
+              </button>
+            ) : (
+              <div className="xcell xcell--wide">
+                <span className="xcell__cap">Где</span>
+                <span className="xcell__val">{venue}</span>
+                {address ? <span className="xcell__sub">{address}</span> : null}
+              </div>
+            ))}
+          {metro && metro.meters <= 2500 && near ? (
+            <>
+              <div className="xcell">
+                <span className="xcell__cap">Метро</span>
+                <span className="xcell__val">м. {metro.name}</span>
+                <span className="xcell__sub">
+                  {formatDistance(metro.meters)} · {walkMinutes(metro.meters)} мин
+                </span>
+              </div>
+              <div className="xcell">
+                <span className="xcell__cap">От тебя</span>
+                <span className="xcell__val">{near}</span>
+              </div>
+            </>
+          ) : metro && metro.meters <= 2500 ? (
+            <div className="xcell xcell--wide">
+              <span className="xcell__cap">Метро</span>
+              <span className="xcell__val">
+                м. {metro.name} · {formatDistance(metro.meters)} · {walkMinutes(metro.meters)} мин
+              </span>
+            </div>
+          ) : near ? (
+            <div className="xcell xcell--wide">
+              <span className="xcell__cap">От тебя</span>
+              <span className="xcell__val">{near}</span>
+            </div>
+          ) : null}
+          {detail?.age_limit ? (
+            <div className="xcell xcell--wide">
+              <span className="xcell__cap">Возраст</span>
+              <span className="xcell__val">{detail.age_limit}</span>
+            </div>
+          ) : null}
         </div>
 
         {description && (
@@ -506,6 +490,46 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             )}
           </div>
         )}
+
+        {/* Catalogue action row — favourite / reminder / share (off the poster). */}
+        <div className="sheet__acts">
+          <button
+            type="button"
+            className={`sheet__act${isFav ? " sheet__act--on" : ""}`}
+            aria-pressed={isFav}
+            onClick={() => {
+              haptic("light");
+              showToast(isFav ? "Убрано из избранного" : "Добавлено в избранное", {
+                icon: "heart",
+                tone: isFav ? "muted" : "good",
+              });
+              onToggleFav();
+            }}
+          >
+            <IconHeart filled={isFav} size={16} />
+            {isFav ? "В избранном" : "В избранное"}
+          </button>
+          <button
+            type="button"
+            className={`sheet__act${hasReminder ? " sheet__act--on" : ""}`}
+            aria-pressed={hasReminder}
+            onClick={() => {
+              haptic("light");
+              if (!hasReminder) logIntent("reminder", selected.event_id);
+              showToast(hasReminder ? "Напоминание выключено" : "Напомним перед началом", {
+                icon: "bell",
+                tone: hasReminder ? "muted" : "good",
+              });
+              onToggleReminder();
+            }}
+          >
+            <IconBell filled={hasReminder} size={16} />
+            {hasReminder ? "Напомним" : "Напомнить"}
+          </button>
+          <button type="button" className="sheet__act sheet__act--icon" aria-label="Поделиться" onClick={onShare}>
+            <IconShare size={16} />
+          </button>
+        </div>
 
         {(sourceHost || updatedLabel) && (
           <p className="sheet__trust">

@@ -12,6 +12,7 @@ miniapp/dist/
 .env.local
 .tmp_*
 *.session
+screens/
 celerybeat-schedule
 
 # Personal browser cookie export — never commit

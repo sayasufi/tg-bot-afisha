@@ -218,16 +218,77 @@ html[data-theme="dark"] .sheet-veil {
   color: var(--on-acid);
 }
 
-/* mounted print */
+/* afisha — the cover is a full-bleed poster: ink hairline + an acid registration
+   offset (the one acid moment up top). Taller 4:3 so it reads as a playbill. */
 .sheet__frame {
   position: relative;
-  margin: 16px;
+  margin: 16px 16px 22px;
   background: var(--vitrine);
-  box-shadow: inset 0 0 0 1px var(--ink);
-  height: 170px;
+  box-shadow: inset 0 0 0 1px var(--ink), 6px 6px 0 var(--acid);
+  aspect-ratio: 4 / 3;
   display: grid;
   place-items: center;
   overflow: hidden;
+}
+
+/* Top + bottom darkening so the code / tag / live badge read on any photo. */
+.sheet__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 22%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0) 32%);
+}
+
+/* Accession code, printed top-left on the poster. */
+.sheet__code {
+  position: absolute;
+  top: 12px;
+  left: 13px;
+  z-index: 2;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* "идёт сейчас" — cinnabar urgency badge, bottom-right (balances the category tag). */
+.sheet__live {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  background: var(--cinnabar);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+.sheet__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: livePulse 1.5s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 /* Oversized so the parallax drift never reveals the frame edge. */
@@ -260,6 +321,7 @@ html[data-theme="dark"] .sheet-veil {
   position: absolute;
   left: 0;
   bottom: 0;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -281,13 +343,153 @@ html[data-theme="dark"] .sheet-veil {
 .sheet__title {
   font-family: var(--display);
   font-weight: 700;
-  font-size: clamp(34px, 11vw, 52px);
-  line-height: 0.92;
-  letter-spacing: -0.04em;
+  font-size: clamp(36px, 12vw, 56px);
+  line-height: 0.9;
+  letter-spacing: -0.045em;
   text-transform: lowercase;
-  margin: 10px 0 12px;
+  margin: 2px 0 16px;
   color: var(--ink);
   overflow-wrap: anywhere;
+}
+
+/* ---------- Exhibit grid — catalogue cells, ink-ruled like a museum label table.
+   Each datum (когда / цена / где / метро / от тебя / возраст) is its own cell; the
+   1px gaps + outer border are the ink rules, cells sit on plinth. ---------- */
+.xgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 2px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.xcell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 13px 14px;
+  background: var(--plinth);
+}
+.xcell--wide {
+  grid-column: 1 / -1;
+}
+.xcell__cap {
+  font-family: var(--grotesk);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.xcell__val {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.xcell__price {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.xcell__sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+
+/* The «Где» cell is itself the tap target → venue page. Pin + chevron mark it as
+   the one interactive cell; flashes acid on press. */
+.xcell--place {
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.13s var(--ease-cut), color 0.13s var(--ease-cut);
+}
+.xcell--place:active {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+.xcell__place {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.xcell__pin {
+  flex: 0 0 auto;
+}
+.xcell__placetext {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.xcell__go {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid var(--ink-faint);
+  border-right: 2px solid var(--ink-faint);
+  transform: rotate(45deg);
+}
+.xcell--place:active .xcell__go {
+  border-color: var(--on-acid);
+}
+.xcell--place:active .xcell__sub {
+  color: var(--on-acid);
+}
+
+/* Catalogue action row — favourite / reminder / share, ink-ruled like the grid. */
+.sheet__acts {
+  display: flex;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+}
+.sheet__act {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 6px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  font-family: var(--grotesk);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.12s var(--ease-cut), color 0.12s var(--ease-cut);
+}
+.sheet__act:last-child {
+  border-right: 0;
+}
+.sheet__act:active {
+  background: var(--vitrine);
+}
+.sheet__act--on {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+.sheet__act--on:active {
+  background: var(--acid-deep);
+}
+.sheet__act--icon {
+  flex: 0 0 56px;
 }
 
 .sheet__meta {
