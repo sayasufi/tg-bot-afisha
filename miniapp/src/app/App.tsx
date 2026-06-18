@@ -19,6 +19,9 @@ const RecommendationsPanel = lazy(() =>
 );
 const FavoritesPanel = lazy(() => import("../features/panel/FavoritesPanel").then((m) => ({ default: m.FavoritesPanel })));
 const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m) => ({ default: m.ProfilePanel })));
+const FollowedVenuesPanel = lazy(() =>
+  import("../features/panel/FollowedVenuesPanel").then((m) => ({ default: m.FollowedVenuesPanel })),
+);
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { Toaster } from "../features/toast/Toaster";
@@ -775,6 +778,7 @@ export function App() {
         {view === "favorites" && (
           <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
         )}
+        {view === "venues" && <FollowedVenuesPanel onOpenVenue={onOpenVenue} onClose={() => setView("map")} />}
         {view === "profile" && (
           <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} favIds={fav.ids} onClose={() => setView("map")} />
         )}

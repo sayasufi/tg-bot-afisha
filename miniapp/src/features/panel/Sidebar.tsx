@@ -5,6 +5,7 @@ const NAV: { key: View; label: string; glyph: string }[] = [
   { key: "map", label: "Карта", glyph: "▦" },
   { key: "recs", label: "Подборка", glyph: "✷" },
   { key: "favorites", label: "Избранное", glyph: "♥" },
+  { key: "venues", label: "Площадки", glyph: "⌂" },
   { key: "profile", label: "Профиль", glyph: "◑" },
 ];
 

@@ -1056,6 +1056,12 @@ mark.hl {
   padding: 8px 8px calc(env(safe-area-inset-bottom) + 24px);
 }
 
+/* The venue sheet sits ABOVE the panel it can be opened from (recs/favorites, z 1400) but
+   below the event sheet (1500), so an event opened from the venue layers on top. */
+.panelview.venuesheet {
+  z-index: 1450;
+}
+
 /* Venue page header — kicker + clean (boxless) close, the venue name, then address + follow.
    Custom (not panelview__head) so a long venue name wraps freely without crowding the X. */
 .venuesheet__head {
@@ -1139,6 +1145,42 @@ mark.hl {
 }
 .venuesheet__follow:active {
   transform: translate(1px, 1px);
+}
+
+/* «Площадки» list — a followed-venue row (name + address · count); opens the venue page. */
+.vrow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.vrow:first-of-type {
+  border-top: 0;
+}
+.vrow:active {
+  opacity: 0.6;
+}
+.vrow__name {
+  font-family: var(--grotesk);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.vrow__meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+.vrow__count {
+  color: var(--ink-faint);
 }
 
 /* List card — the event photo fills the whole tile, darkened, with the title + data set
