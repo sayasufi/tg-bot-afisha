@@ -222,13 +222,16 @@ html[data-theme="dark"] .sheet-veil {
    the plaster by a big acid registration offset (this is the selected exhibit). */
 .sheet__card {
   position: relative;
-  margin: 10px 14px 34px;
+  margin: 10px 14px 30px;
   background: var(--plinth);
-  /* ink frame + acid registration offset + a soft drop shadow lifting the card. */
-  box-shadow: inset 0 0 0 1px var(--ink), 9px 9px 0 var(--acid), 11px 16px 26px rgba(11, 11, 11, 0.18);
+  /* Everything outlined in ink: a crisp card border + an OUTLINED acid registration plate
+     offset behind it (acid fill 9px + its own 1px ink outline) — the print-registration look. */
+  border: 1px solid var(--ink);
+  box-shadow: 9px 9px 0 0 var(--acid), 9px 9px 0 1px var(--ink);
 }
 
-/* afisha — the cover poster, flush to the card's top edge (the card border frames it). */
+/* afisha — the cover poster, flush to the card's top edge. The card border frames its
+   top/sides; an ink border-bottom outlines it from the title band below. */
 .sheet__frame {
   position: relative;
   margin: 0;
@@ -237,6 +240,7 @@ html[data-theme="dark"] .sheet-veil {
   display: grid;
   place-items: center;
   overflow: hidden;
+  border-bottom: 1px solid var(--ink);
 }
 
 /* Top + bottom darkening so the code / tag / live badge read on any photo. */
