@@ -1563,11 +1563,13 @@ mark.hl {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 24%, rgba(0, 0, 0, 0.5) 48%, var(--ink) 82%);
 }
 
-/* ---- Variant: whiteband — photo fades to a white band at the bottom; dark type on it ---- */
+/* ---- Variant: whiteband — photo fades into a solid white band; dark type on it ---- */
 .cat--whiteband .cat__scrim {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 22%, rgba(255, 255, 255, 0) 44%, var(--plinth) 84%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 22%);
 }
 .cat--whiteband .cat__panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--plinth) 44px);
+  padding-top: 48px;
   color: var(--ink);
 }
 .cat--whiteband .cat__meta {
@@ -1577,16 +1579,18 @@ mark.hl {
   color: var(--ink);
 }
 
-/* ---- Variant: acidband — photo fades to an acid band at the bottom; ink type on it ---- */
+/* ---- Variant: acidband — photo fades into a solid acid band; ink type on it ---- */
 .cat--acidband .cat__scrim {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 22%, rgba(204, 255, 0, 0) 46%, var(--acid) 84%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 22%);
 }
 .cat--acidband .cat__panel {
+  background: linear-gradient(180deg, rgba(204, 255, 0, 0) 0%, var(--acid) 44px);
+  padding-top: 48px;
   color: var(--on-acid);
 }
 .cat--acidband .cat__meta {
   color: var(--on-acid);
-  opacity: 0.85;
+  opacity: 0.82;
 }
 .cat--acidband .cat__price {
   color: var(--on-acid);
