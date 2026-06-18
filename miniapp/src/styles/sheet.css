@@ -86,61 +86,11 @@ html[data-theme="dark"] .sheet-veil {
   background: var(--ink);
 }
 
-/* Prev/next among events stacked on one point — a small counter with chevrons over
-   the cover; the sheet also swipes left/right between them. */
-/* When the pin holds several events, the card drops down to free a plaster strip ABOVE it
-   for the prev/next counter — keeps it off the poster and clear of the corner toolbar. */
-.sheet--sibs .sheet__card {
-  margin-top: 52px;
-}
-.sheet__sibs {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  height: 40px; /* fit the 40px nav buttons + match the icon cluster height */
-  padding: 0 2px;
-  background: var(--plinth);
-  border: 1px solid var(--line);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-}
-
-.sheet__sib-count {
-  padding: 0 5px;
-  letter-spacing: 0.04em;
-}
-
-.sheet__sib-nav {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.sheet__sib-nav:disabled {
-  opacity: 0.28;
-}
-
-.sheet__sib-nav:active:not(:disabled) {
-  background: var(--acid);
-}
-
-/* One-time "you can swipe between events" hint — a self-fading pill under the counter. */
+/* Events stacked on one point: no arrows/counter — you just swipe the card left/right.
+   A one-time self-fading pill announces it. */
 .sheet__swipehint {
   position: absolute;
-  top: 96px;
+  top: 64px;
   left: 50%;
   z-index: 8;
   pointer-events: none;

@@ -290,23 +290,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   return (
     <>
       <div className="sheet-veil" onClick={onClose} />
-      <div className={`sheet${hasSiblings ? " sheet--sibs" : ""}`} role="dialog" aria-label={selected.title} ref={sheetRef}>
+      <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
         <div className="sheet__sticky">
           <span className="sheet__grip" />
-          {hasSiblings && siblings && (
-            <div className="sheet__sibs" aria-label="События в этой точке">
-              <button type="button" className="sheet__sib-nav" aria-label="Предыдущее" disabled={sibIndex <= 0} onClick={() => nav(-1)}>
-                ‹
-              </button>
-              <span className="sheet__sib-count">
-                {sibIndex + 1} / {siblings.length}
-              </span>
-              <button type="button" className="sheet__sib-nav" aria-label="Следующее" disabled={sibIndex >= siblings.length - 1} onClick={() => nav(1)}>
-                ›
-              </button>
-            </div>
-          )}
-        {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
+          {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>
 
       {/* One exhibit card — poster + title + grid + actions all inside a single ink
