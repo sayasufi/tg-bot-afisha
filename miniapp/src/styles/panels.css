@@ -715,8 +715,9 @@ mark.hl {
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  /* Native scroll (1:1, smooth momentum) with a gentle snap so cards settle nicely. */
-  scroll-snap-type: x proximity;
+  /* Scroll is JS-damped (useRailScroll, ~0.85× + light inertia); snap off — it would fight
+     the manual scrollLeft. */
+  scroll-snap-type: none;
   /* Edge-to-edge: first card flush at the screen edge (matches the favorites posters),
      cards scroll off both sides. The 16px gutter lives on the rail head, not here. */
   padding: 0 0 6px;

@@ -6,17 +6,19 @@ import { recentCategories } from "../../lib/affinity";
 import { type LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
+import { useRailScroll } from "../../lib/useRailScroll";
 import { EventCard } from "./EventCard";
 import { PullHint } from "./PullHint";
 
 function RecRail({ rail, userPos, onSelect }: { rail: Rail; userPos?: LatLon | null; onSelect: (i: EventItem) => void }) {
+  const trackRef = useRailScroll<HTMLDivElement>(0.85); // gentle damping — a touch slower than native
   return (
     <section className={`rail${rail.key === "for_you" ? " rail--hero" : ""}`}>
       <div className="rail__head">
         <span className="rail__title">{rail.title}</span>
         {rail.subtitle ? <span className="rail__sub">{rail.subtitle}</span> : null}
       </div>
-      <div className="rail__track">
+      <div className="rail__track" ref={trackRef}>
         {rail.items.map((it, i) => (
           <EventCard key={`${rail.key}-${it.event_id}`} item={it} index={i} userPos={userPos} onSelect={onSelect} />
         ))}
