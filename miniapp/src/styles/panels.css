@@ -1576,14 +1576,19 @@ mark.hl {
   white-space: nowrap;
 }
 
-/* Optional full-width hairline between the title and the footer (rotates on/off per card). */
-.cat--ruled .cat__foot {
+/* Optional full-width rule between the title and the footer (rotates: hairline / acid / none). */
+.cat--line-hair .cat__foot,
+.cat--line-acid .cat__foot {
   margin: 12px -14px 0;
   padding: 12px 14px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.26);
 }
-.cat--whiteband.cat--ruled .cat__foot,
-.cat--acidband.cat--ruled .cat__foot {
+.cat--line-acid .cat__foot {
+  border-top-width: 2px;
+  border-top-color: var(--acid);
+}
+.cat--whiteband.cat--line-hair .cat__foot,
+.cat--acidband.cat--line-hair .cat__foot {
   border-top-color: rgba(11, 11, 11, 0.2);
 }
 

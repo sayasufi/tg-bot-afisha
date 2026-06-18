@@ -46,26 +46,28 @@ type Variant = "bottom" | "sideblack" | "band" | "tall" | "whiteband" | "acidban
 const FULL_VARIANTS: Variant[] = ["bottom", "sideblack", "whiteband", "tall", "band", "acidband", "topband"];
 const HALF_VARIANTS: Variant[] = ["bottom", "whiteband", "band", "acidband"];
 const ROWS = ["full", "duo", "full", "full", "duo"] as const;
-// A hairline rule between title and footer — drawn on some cards, not others (rotates).
-const RULED = [false, true, true, false, true, false];
+// A rule between title and footer: none / a hairline / an acid line (rotates). Adjacent duo
+// cards never both get one (enforced below).
+type Line = "none" | "hair" | "acid";
+const LINES: Line[] = ["none", "hair", "none", "acid", "hair", "none", "acid", "hair", "none"];
 
 function PhotoCard({
   c,
   width,
   variant,
-  ruled,
+  line,
   onSelect,
 }: {
   c: Card;
   width: "full" | "half";
   variant: Variant;
-  ruled: boolean;
+  line: Line;
   onSelect: (i: EventItem) => void;
 }) {
   return (
     <button
       type="button"
-      className={`cat cat--${width} cat--${variant}${ruled ? " cat--ruled" : ""}${c.img ? "" : " cat--noimg"}`}
+      className={`cat cat--${width} cat--${variant}${line !== "none" ? ` cat--line-${line}` : ""}${c.img ? "" : " cat--noimg"}`}
       onClick={() => onSelect(c.item)}
     >
       {c.img ? (
@@ -114,24 +116,27 @@ export function CatalogFeed({
   now?: number;
   onSelect: (i: EventItem) => void;
 }) {
-  type Slot = { c: Card; variant: Variant; ruled: boolean };
+  type Slot = { c: Card; variant: Variant; line: Line };
   const rows: { kind: "full" | "duo"; slots: Slot[]; key: string }[] = [];
   let i = 0;
   let r = 0;
   let fullN = 0;
   let halfN = 0;
   let cardN = 0;
-  const ruled = () => RULED[cardN++ % RULED.length];
+  const nextLine = (): Line => LINES[cardN++ % LINES.length];
   while (i < items.length) {
     const rt = ROWS[r % ROWS.length];
     if (rt === "duo" && i + 1 < items.length) {
       const c1 = derive(items[i], now);
       const c2 = derive(items[i + 1], now);
+      // never give BOTH small cards in a duo a line — if the first has one, the second is none
+      const line1 = nextLine();
+      const line2 = line1 !== "none" ? "none" : nextLine();
       rows.push({
         kind: "duo",
         slots: [
-          { c: c1, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length], ruled: ruled() },
-          { c: c2, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length], ruled: ruled() },
+          { c: c1, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length], line: line1 },
+          { c: c2, variant: HALF_VARIANTS[halfN++ % HALF_VARIANTS.length], line: line2 },
         ],
         key: c1.item.event_id,
       });
@@ -140,7 +145,7 @@ export function CatalogFeed({
       const c = derive(items[i], now);
       rows.push({
         kind: "full",
-        slots: [{ c, variant: FULL_VARIANTS[fullN++ % FULL_VARIANTS.length], ruled: ruled() }],
+        slots: [{ c, variant: FULL_VARIANTS[fullN++ % FULL_VARIANTS.length], line: nextLine() }],
         key: c.item.event_id,
       });
       i += 1;
@@ -162,7 +167,7 @@ export function CatalogFeed({
               c={s.c}
               width={row.kind === "duo" ? "half" : "full"}
               variant={s.variant}
-              ruled={s.ruled}
+              line={s.line}
               onSelect={onSelect}
             />
           ))}
