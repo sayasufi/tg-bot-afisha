@@ -42,7 +42,7 @@ export function ClusterPeek({
             {list.length} {plural(list.length)}
             {venue ? (
               <span className="peek__venue">
-                {" · "}
+                <span className="peek__sep" aria-hidden="true">·</span>
                 {venueId != null && onOpenVenue ? (
                   <button type="button" className="peek__venuebtn" onClick={() => onOpenVenue(venueId)}>
                     <IconPin size={12} className="peek__pin" />

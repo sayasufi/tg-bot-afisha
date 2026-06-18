@@ -55,6 +55,7 @@
 .peek__title {
   display: flex;
   align-items: center;
+  gap: 7px;
   min-width: 0;
   font-family: var(--grotesk);
   font-size: 13px;
@@ -70,11 +71,16 @@
 .peek__venue {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   min-width: 0;
   color: var(--ink-dim);
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0;
+}
+.peek__sep {
+  flex: 0 0 auto;
+  color: var(--ink-faint);
 }
 /* Tappable venue name in the peek header → venue page. Acid highlighter swipe under it
    (matches the event sheet's «Где» treatment), filling in on press. */
