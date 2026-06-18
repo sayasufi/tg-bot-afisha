@@ -61,6 +61,7 @@ def _settings_dict(user: User) -> dict:
         "onboarded": user.onboarded,
         "coach": user.coach,
         "swipe_seen": user.swipe_seen,
+        "interests": list(user.interests or []),
     }
 
 
@@ -79,6 +80,7 @@ async def update_settings(
     onboarded: bool | None = None,
     coach: bool | None = None,
     swipe_seen: bool | None = None,
+    interests: list[str] | None = None,
 ) -> dict:
     """Set the provided settings (None = leave unchanged; "" clears city). No commit."""
     user = await db.get(User, telegram_user_id)
@@ -94,6 +96,15 @@ async def update_settings(
         user.coach = bool(coach)
     if swipe_seen is not None:
         user.swipe_seen = bool(swipe_seen)
+    if interests is not None:
+        # De-dupe, keep order, cap (the picker sends a small closed set of category
+        # slugs; the recommend engine filters unknowns, so we just sanitise here).
+        seen: list[str] = []
+        for c in interests:
+            c = str(c)[:32]
+            if c and c not in seen:
+                seen.append(c)
+        user.interests = seen[:20]
     db.add(user)
     return _settings_dict(user)
 

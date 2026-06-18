@@ -61,6 +61,7 @@ class SettingsRequest(BaseModel):
     onboarded: bool | None = None
     coach: bool | None = None
     swipe_seen: bool | None = None
+    interests: list[str] | None = None  # categories picked at onboarding (warms «Для тебя»)
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -143,7 +144,8 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
     """Read, or set-then-read, the account's app settings (theme, city, first-run flags)."""
     user, uid = _auth(payload.init_data)
     changing = any(
-        v is not None for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen)
+        v is not None
+        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests)
     )
     if changing:
         # Only write the user row when actually changing a setting (a pure read on app
@@ -157,6 +159,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
             onboarded=payload.onboarded,
             coach=payload.coach,
             swipe_seen=payload.swipe_seen,
+            interests=payload.interests,
         )
         await db.commit()
     else:

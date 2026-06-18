@@ -458,3 +458,78 @@ html[data-theme="dark"] .aurora::before {
   background: var(--acid-deep);
   box-shadow: none;
 }
+.onboard__cta:disabled {
+  background: var(--line-soft);
+  color: var(--ink-dim);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Interest picker (onboarding step 1) — a grid of category chips, VITRINE flat. */
+.onboard__lede {
+  margin: -10px 0 16px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+.onboard__cats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.onboard__cat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 6px 11px;
+  border: 0;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  transition: box-shadow 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.onboard__cat:active {
+  transform: translateY(0.5px);
+}
+.onboard__cat--active {
+  background: var(--acid);
+  color: var(--on-acid);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.onboard__caticon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--cat, var(--ink));
+}
+.onboard__cat--active .onboard__caticon {
+  color: var(--on-acid);
+}
+.onboard__catlabel {
+  font-family: var(--grotesk);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  text-align: center;
+}
+.onboard__skip {
+  margin-top: 10px;
+  width: 100%;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.onboard__skip:active {
+  color: var(--ink);
+}

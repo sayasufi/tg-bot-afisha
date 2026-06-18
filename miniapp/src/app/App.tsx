@@ -99,6 +99,9 @@ export function App() {
       return true;
     }
   });
+  // Categories the user picked at onboarding — warms «Для тебя» from cold (merged with the
+  // favourite-derived categories below). Hydrated from the account on load.
+  const [pickedInterests, setPickedInterests] = useState<string[]>([]);
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
   // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
@@ -140,6 +143,7 @@ export function App() {
       reconcile("okrest_onboarded", "onboarded", s.onboarded, () => setOnboarded(true));
       reconcile("okrest_coach", "coach", s.coach, () => setCoachSeen(true));
       reconcile("okrest_swipe_seen", "swipe_seen", s.swipe_seen);
+      if (Array.isArray(s.interests) && s.interests.length) setPickedInterests(s.interests);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -245,6 +249,13 @@ export function App() {
     for (const it of items) if (fav.ids.has(it.event_id)) counts.set(it.category, (counts.get(it.category) || 0) + 1);
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
   }, [items, fav.ids]);
+
+  // The affinity that feeds «Для тебя»: favourite-derived categories + the onboarding
+  // picks, de-duped. The picks warm a brand-new account; favourites refine it over time.
+  const recInterests = useMemo(
+    () => [...new Set([...favCategories, ...pickedInterests])],
+    [favCategories, pickedInterests],
+  );
 
   // Nearest metro to the open event — shown in the sheet and pinged on the map.
   const nearMetro = useMemo(() => {
@@ -375,7 +386,7 @@ export function App() {
     };
   }, [queryKey, clusterMode, refreshNonce]);
 
-  const dismissOnboarding = useCallback(() => {
+  const dismissOnboarding = useCallback((interests: string[] = []) => {
     haptic("light");
     try {
       localStorage.setItem("okrest_onboarded", "1");
@@ -384,6 +395,10 @@ export function App() {
     }
     setOnboarded(true);
     pushSetting("onboarded", true); // remember on the account, not just this device
+    if (interests.length) {
+      setPickedInterests(interests);
+      pushSetting("interests", interests); // sync the cold-start taste to the account
+    }
   }, []);
 
   // Close whatever is on top, most-modal first — shared by the Telegram BackButton and
@@ -734,7 +749,7 @@ export function App() {
 
       <Suspense fallback={null}>
         {view === "recs" && (
-          <RecommendationsPanel userPos={userPos} favCategories={favCategories} refreshNonce={refreshNonce} city={currentCity?.slug ?? null} onSelect={openEvent} onClose={() => setView("map")} />
+          <RecommendationsPanel userPos={userPos} favCategories={recInterests} refreshNonce={refreshNonce} city={currentCity?.slug ?? null} onSelect={openEvent} onClose={() => setView("map")} />
         )}
         {view === "favorites" && (
           <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />

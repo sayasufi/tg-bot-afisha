@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String, func, text
+from sqlalchemy import ARRAY, BigInteger, Boolean, DateTime, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db.base import Base
@@ -21,6 +21,9 @@ class User(Base):
     onboarded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     coach: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     swipe_seen: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Categories the user picked at first-run onboarding — warms "Для тебя" from cold so a
+    # brand-new account gets a real personalised feed instead of popularity mislabelled.
+    interests: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default=text("'{}'"))
     # True once the account has merged a device's local favourites (the one-time
     # localStorage migration). After that, a stale never-synced device's `add` list is
     # ignored, so it can't resurrect favourites removed on another device.

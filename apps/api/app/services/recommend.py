@@ -353,8 +353,14 @@ class RecommendationService:
                 rails.append(rail)
 
         # "Для тебя" — a VARIED personalised top (capped per category + venue). Claims
-        # first; min 1 so it always leads.
-        add("for_you", "Для тебя", "Собрано лично для вас", by_score, diverse=True, min_items=1)
+        # first; min 1 so it always leads. When the account is COLD (no affinity at all:
+        # no picked interests, no favourites, no opens) the order is popularity-driven, so
+        # label it honestly rather than pretending it's personal — the interest picker at
+        # onboarding is what flips a new user out of this cold state.
+        if affinity:
+            add("for_you", "Для тебя", "Собрано лично для вас", by_score, diverse=True, min_items=1)
+        else:
+            add("for_you", "Популярное сейчас", "Начните отсюда — дальше подстроюсь под вас", by_score, diverse=True, min_items=1)
 
         # "Рядом" — closest to you. A spatial lens must show the actual nearest, so it is
         # NOT filtered by the seen-set (a 1-2 event overlap with "Для тебя" is fine); it
