@@ -290,7 +290,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   return (
     <>
       <div className="sheet-veil" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
+      <div className={`sheet${hasSiblings ? " sheet--sibs" : ""}`} role="dialog" aria-label={selected.title} ref={sheetRef}>
         <div className="sheet__sticky">
           <span className="sheet__grip" />
           {hasSiblings && siblings && (

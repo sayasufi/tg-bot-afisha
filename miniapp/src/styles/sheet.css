@@ -88,10 +88,14 @@ html[data-theme="dark"] .sheet-veil {
 
 /* Prev/next among events stacked on one point — a small counter with chevrons over
    the cover; the sheet also swipes left/right between them. */
+/* When the pin holds several events, the card drops down to free a plaster strip ABOVE it
+   for the prev/next counter — keeps it off the poster and clear of the corner toolbar. */
+.sheet--sibs .sheet__card {
+  margin-top: 52px;
+}
 .sheet__sibs {
   position: absolute;
-  /* Second row, below the corner action toolbar (top row would overlap its 4 buttons). */
-  top: 54px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   pointer-events: auto;
@@ -136,7 +140,7 @@ html[data-theme="dark"] .sheet-veil {
 /* One-time "you can swipe between events" hint — a self-fading pill under the counter. */
 .sheet__swipehint {
   position: absolute;
-  top: 100px;
+  top: 96px;
   left: 50%;
   z-index: 8;
   pointer-events: none;
