@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.codes import event_code
 from core.db.models import Event, EventOccurrence, Venue
 from core.db.models.ref.event_reminder import EventReminder
 from core.db.models.ref.user import User
@@ -65,6 +66,7 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
         select(
             EventOccurrence.event_id.label("eid"),
             EventOccurrence.date_start,
+            EventOccurrence.date_end,
             EventOccurrence.price_min,
             EventOccurrence.venue_id,
         )
@@ -79,9 +81,14 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
                 EventReminder.event_id,
                 Event.canonical_title,
                 Event.category,
+                Event.display_no,
+                Event.cached_image_url,
+                Event.primary_image_url,
                 soon.c.date_start,
+                soon.c.date_end,
                 soon.c.price_min,
                 Venue.name,
+                Venue.city,
             )
             .join(Event, Event.event_id == EventReminder.event_id)
             .join(User, User.telegram_user_id == EventReminder.telegram_user_id)
@@ -102,9 +109,12 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
             "event_id": str(r[1]),
             "title": r[2],
             "category": r[3],
-            "date_start": r[4].isoformat() if r[4] else None,
-            "price_min": float(r[5]) if r[5] is not None else None,
-            "venue": r[6],
+            "code": event_code(r[4], r[11]),
+            "image": r[5] or r[6] or None,  # cached cover, else the source image
+            "date_start": r[7].isoformat() if r[7] else None,
+            "date_end": r[8].isoformat() if r[8] else None,
+            "price_min": float(r[9]) if r[9] is not None else None,
+            "venue": r[10],
         }
         for r in rows
     ]

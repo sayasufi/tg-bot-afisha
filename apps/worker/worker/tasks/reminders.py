@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from apps.bot.bot.formatting import event_card
+from apps.bot.bot.formatting import reminder_caption
 from core.config.settings import get_settings
 from core.db.repositories.reminders import due_reminders, mark_sent
 from core.db.session import WorkerAsyncSessionLocal
@@ -27,31 +27,47 @@ async def _send_reminders_impl() -> int:
     token = get_settings().telegram_bot_token
     if not token:
         return 0
+    base = f"https://api.telegram.org/bot{token}"
     now = datetime.now(timezone.utc)
     sent = 0
     async with WorkerAsyncSessionLocal() as db:
         due = await due_reminders(db, now)
         if not due:
             return 0
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             for r in due:
-                text = "🔔 <b>Скоро — не пропусти</b>\n\n" + event_card(r)
+                caption = reminder_caption(r, now)
+                image = r.get("image")
+                markup = {"inline_keyboard": [[{"text": "смотреть →", "url": _open_url(r["event_id"])}]]}
                 got_response = False
                 ok = False
                 try:
-                    resp = await client.post(
-                        f"https://api.telegram.org/bot{token}/sendMessage",
-                        json={
-                            "chat_id": r["user_id"],
-                            "text": text,
-                            "parse_mode": "HTML",
-                            "reply_markup": {
-                                "inline_keyboard": [[{"text": "Открыть", "url": _open_url(r["event_id"])}]]
-                            },
-                        },
-                    )
-                    got_response = True
-                    ok = bool(resp.json().get("ok"))
+                    if image:
+                        # The event cover as a photo + the caption — a real VITRINE card,
+                        # not a text list. Fall back to a text message if Telegram can't
+                        # fetch the image (expired/oversized URL) so the reminder still lands.
+                        resp = await client.post(
+                            f"{base}/sendPhoto",
+                            json={"chat_id": r["user_id"], "photo": image, "caption": caption,
+                                  "parse_mode": "HTML", "reply_markup": markup},
+                        )
+                        got_response = True
+                        ok = bool(resp.json().get("ok"))
+                        if not ok:
+                            resp = await client.post(
+                                f"{base}/sendMessage",
+                                json={"chat_id": r["user_id"], "text": caption, "parse_mode": "HTML",
+                                      "reply_markup": markup, "disable_web_page_preview": True},
+                            )
+                            ok = bool(resp.json().get("ok"))
+                    else:
+                        resp = await client.post(
+                            f"{base}/sendMessage",
+                            json={"chat_id": r["user_id"], "text": caption, "parse_mode": "HTML",
+                                  "reply_markup": markup, "disable_web_page_preview": True},
+                        )
+                        got_response = True
+                        ok = bool(resp.json().get("ok"))
                 except Exception:  # transient network/infra → leave unsent, retry next sweep
                     got_response = False
                 # Telegram answered (delivered, OR a permanent 403/400 like blocked/never-started)
