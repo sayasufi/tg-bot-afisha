@@ -182,11 +182,13 @@ html[data-theme="dark"] .sheet-veil {
      the mounted-print look. The photo gets its own hairline frame within the mat. */
   padding: 10px;
   background: var(--plinth);
-  border: 1px solid var(--ink);
-  box-shadow: 9px 9px 0 0 var(--acid), 9px 9px 0 1px var(--ink);
+  /* --line (the frame token) so every block frame matches in dark too (--ink would go
+     near-white on the card/photo while the grid/CTA stayed grey). */
+  border: 1px solid var(--line);
+  box-shadow: 9px 9px 0 0 var(--acid), 9px 9px 0 1px var(--line);
 }
 
-/* afisha — the mounted print: the cover sits in the mat with its OWN hairline ink frame. */
+/* afisha — the mounted print: the cover sits in the mat with its OWN hairline frame. */
 .sheet__frame {
   position: relative;
   margin: 0;
@@ -195,7 +197,7 @@ html[data-theme="dark"] .sheet-veil {
   display: grid;
   place-items: center;
   overflow: hidden;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--line);
 }
 
 /* Top + bottom darkening so the code / tag / live badge read on any photo. */
