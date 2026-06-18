@@ -463,12 +463,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               <span className="xcell__val">{near}</span>
             </div>
           ) : null}
-          {detail?.age_limit ? (
-            <div className="xcell xcell--wide">
-              <span className="xcell__cap">Возраст</span>
-              <span className="xcell__val">{detail.age_limit}</span>
-            </div>
-          ) : null}
         </div>
 
         {description && (
