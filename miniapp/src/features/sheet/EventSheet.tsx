@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
+import { logIntent } from "../../api/intent";
 import { categoryMeta } from "../../lib/categories";
 import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
@@ -235,8 +236,16 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const openNow = venueOpenNow(occ?.venue_hours) ?? selected.open_now ?? null;
   const go = goNowState(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end, openNow);
 
+  // The source link is the primary "act on it" click. When the event is paid, frame it
+  // as the ticket action it is ("Билеты от N ₽") instead of an ambiguous "Подробнее" —
+  // the single most monetisable click should read like the action it performs.
+  const priceMin = occ?.price_min ?? selected.price_min;
+  const ticketLabel =
+    priceMin != null && priceMin > 0 ? `Билеты от ${Math.round(priceMin).toLocaleString("ru-RU")} ₽` : "Подробнее";
+
   const onShare = async () => {
     haptic("light");
+    logIntent("share", selected.event_id);
     const wa = getWebApp();
     // Preferred: send a real photo message (Bot API 8.0 shareMessage) — the card
     // appears as an image in the chat, not a link with a preview.
@@ -396,8 +405,14 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         {(sourceUrl || routeUrl || (onShowMap && lat != null && lon != null)) && (
           <div className="sheet__actions">
             {sourceUrl && (
-              <a className="btn btn--primary" href={sourceUrl} target="_blank" rel="noopener noreferrer">
-                Подробнее
+              <a
+                className="btn btn--primary"
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => logIntent("click", selected.event_id)}
+              >
+                {ticketLabel}
               </a>
             )}
             {onShowMap && lat != null && lon != null && (
@@ -413,7 +428,13 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
               </button>
             )}
             {routeUrl && (
-              <a className="btn btn--ghost" href={routeUrl} target="_blank" rel="noopener noreferrer">
+              <a
+                className="btn btn--ghost"
+                href={routeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => logIntent("route", selected.event_id)}
+              >
                 Маршрут
               </a>
             )}

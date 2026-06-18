@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apps.api.app.services.events_service import _redis_client
 from apps.api.app.routes.events import router as events_router
 from apps.api.app.routes.health import router as health_router
+from apps.api.app.routes.intent import router as intent_router
 from apps.api.app.routes.media import router as media_router
 from apps.api.app.routes.places import router as places_router
 from apps.api.app.routes.recommend import router as recommend_router
@@ -118,3 +119,4 @@ app.include_router(users_router)
 app.include_router(media_router)
 app.include_router(share_router)
 app.include_router(recommend_router)
+app.include_router(intent_router)
