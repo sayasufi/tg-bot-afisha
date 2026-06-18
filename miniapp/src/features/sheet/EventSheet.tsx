@@ -418,7 +418,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
                     }}
                   >
                     {venue}
-                    <span className="wall-label__chev" aria-hidden="true">→</span>
                   </button>
                 ) : (
                   venue

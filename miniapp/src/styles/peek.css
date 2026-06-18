@@ -71,22 +71,23 @@
   text-transform: none;
   letter-spacing: 0;
 }
-/* Tappable venue name in the peek header → opens the venue page (acid arrow = "go there"). */
+/* Tappable venue name in the peek header → venue page. Acid highlighter swipe under it
+   (matches the event sheet's «Где» treatment), filling in on press. */
 .peek__venuebtn {
   border: 0;
-  background: none;
   padding: 0;
   font: inherit;
   color: var(--ink-dim);
+  background-image: linear-gradient(var(--acid), var(--acid));
+  background-repeat: no-repeat;
+  background-size: 100% 0.28em;
+  background-position: 0 92%;
   cursor: pointer;
-}
-.peek__chev {
-  margin-left: 4px;
-  color: var(--acid);
-  font-weight: 700;
+  transition: background-size 0.16s var(--ease-cut), color 0.16s var(--ease-cut);
 }
 .peek__venuebtn:active {
-  color: var(--ink-faint);
+  background-size: 100% 100%;
+  color: var(--on-acid);
 }
 
 .peek__scroll {

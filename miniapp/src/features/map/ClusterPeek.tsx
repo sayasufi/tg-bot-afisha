@@ -46,7 +46,6 @@ export function ClusterPeek({
                 {venueId != null && onOpenVenue ? (
                   <button type="button" className="peek__venuebtn" onClick={() => onOpenVenue(venueId)}>
                     {venue}
-                    <span className="peek__chev" aria-hidden="true">→</span>
                   </button>
                 ) : (
                   venue
