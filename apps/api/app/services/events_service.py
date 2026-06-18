@@ -540,8 +540,9 @@ class EventQueryService:
             )
         elif sort == "price":
             rows_q = rows_q.order_by(nullslast(inner.c.price_min.asc()), inner.c.date_start.asc(), tie)
-        else:  # "date" (default) — soonest first
-            rows_q = rows_q.order_by(inner.c.date_start.asc(), tie)
+        else:  # "date" (default) — soonest UPCOMING first, then ongoing/past (so timed
+            # events with a real start time surface above long-running exhibitions)
+            rows_q = rows_q.order_by((inner.c.date_start < func.now()).asc(), inner.c.date_start.asc(), tie)
         rows = (await self.db.execute(rows_q.limit(limit).offset(offset))).all()
         now_msk = datetime.now(_MSK)
         return {"items": [self._list_item(r, now_msk) for r in rows], "total": int(total)}
