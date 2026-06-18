@@ -116,20 +116,31 @@ export function ListView({
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
 
-  // Infinite scroll: one long-lived observer calls the LATEST loadMore via a ref, so it
-  // isn't torn down + rebuilt on every page append.
+  // Infinite scroll: a sentinel IntersectionObserver PLUS a scroll-position fallback (some
+  // WebViews fire the observer unreliably with a scroll-container root). Both call the LATEST
+  // loadMore via a ref; loadMore's reentrancy guard makes a double-trigger a no-op.
   const canMore = items.length > 0 && items.length < total;
   useEffect(() => {
     if (!canMore) return;
     const root = scrollRef.current;
+    if (!root) return;
     const sentinel = sentinelRef.current;
-    if (!root || !sentinel) return;
-    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMoreRef.current(), {
-      root,
-      rootMargin: "500px",
-    });
-    io.observe(sentinel);
-    return () => io.disconnect();
+    let io: IntersectionObserver | undefined;
+    if (sentinel) {
+      io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMoreRef.current(), {
+        root,
+        rootMargin: "600px",
+      });
+      io.observe(sentinel);
+    }
+    const onScroll = () => {
+      if (root.scrollHeight - root.scrollTop - root.clientHeight < 900) loadMoreRef.current();
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      io?.disconnect();
+      root.removeEventListener("scroll", onScroll);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canMore]);
 
