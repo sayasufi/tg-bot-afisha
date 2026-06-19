@@ -641,6 +641,69 @@ mark.hl {
   color: var(--ink);
 }
 
+/* Settings switch (digest opt-in) — a flat VITRINE toggle: plaster→acid track, ink knob. */
+.profile__switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.profile__switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.profile__switch-label {
+  font-family: var(--grotesk);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.profile__switch--on .profile__switch-label {
+  color: var(--ink);
+}
+.profile__switch-sub {
+  font-family: var(--grotesk);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+.profile__switch-track {
+  flex: none;
+  position: relative;
+  box-sizing: border-box;
+  width: 46px;
+  height: 26px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  transition: background 0.2s var(--ease-cut);
+}
+.profile__switch--on .profile__switch-track {
+  background: var(--acid);
+}
+.profile__switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: var(--ink);
+  transition: transform 0.2s var(--ease-cut);
+}
+.profile__switch--on .profile__switch-knob {
+  transform: translateX(20px);
+}
+
 /* ---------- Рекомендации — horizontal discovery rails ---------- */
 .panelview__scroll--rails {
   /* Same 8px side gutters as the list/favorites posters (heads + tracks inset by these). */

@@ -11,12 +11,16 @@ export function ProfilePanel({
   total,
   city,
   favIds,
+  notifyDigest,
+  onToggleDigest,
   onClose,
 }: {
   user: TgUser | null;
   total: number;
   city: string;
   favIds: Set<string>;
+  notifyDigest: boolean;
+  onToggleDigest: (on: boolean) => void;
   onClose: () => void;
 }) {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
@@ -75,6 +79,22 @@ export function ProfilePanel({
             <b>{city}</b>
           </div>
         </div>
+
+        <button
+          type="button"
+          className={`profile__switch${notifyDigest ? " profile__switch--on" : ""}`}
+          role="switch"
+          aria-checked={notifyDigest}
+          onClick={() => onToggleDigest(!notifyDigest)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Афиша на выходные</span>
+            <span className="profile__switch-sub">Раз в неделю бот пришлёт, что нового рядом и на твоих площадках</span>
+          </span>
+          <span className="profile__switch-track" aria-hidden="true">
+            <span className="profile__switch-knob" />
+          </span>
+        </button>
 
         {taste.length > 0 && (
           <>

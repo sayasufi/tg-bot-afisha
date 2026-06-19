@@ -111,6 +111,13 @@ export function App() {
   // Categories the user picked at onboarding — warms «Для тебя» from cold (merged with the
   // favourite-derived categories below). Hydrated from the account on load.
   const [pickedInterests, setPickedInterests] = useState<string[]>([]);
+  // Weekly digest opt-in (the bot DMs a Friday roundup). Strictly opt-in; hydrated from the
+  // account on load, toggled from the profile.
+  const [notifyDigest, setNotifyDigest] = useState(false);
+  const toggleDigest = useCallback((on: boolean) => {
+    setNotifyDigest(on);
+    pushSetting("notify_digest", on);
+  }, []);
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
   // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
@@ -153,6 +160,7 @@ export function App() {
       reconcile("okrest_coach", "coach", s.coach, () => setCoachSeen(true));
       reconcile("okrest_swipe_seen", "swipe_seen", s.swipe_seen);
       if (Array.isArray(s.interests) && s.interests.length) setPickedInterests(s.interests);
+      if (typeof s.notify_digest === "boolean") setNotifyDigest(s.notify_digest);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -780,7 +788,15 @@ export function App() {
         )}
         {view === "venues" && <FollowedVenuesPanel onOpenVenue={onOpenVenue} onClose={() => setView("map")} />}
         {view === "profile" && (
-          <ProfilePanel user={tgUser} total={total} city={currentCity?.name ?? CITY} favIds={fav.ids} onClose={() => setView("map")} />
+          <ProfilePanel
+            user={tgUser}
+            total={total}
+            city={currentCity?.name ?? CITY}
+            favIds={fav.ids}
+            notifyDigest={notifyDigest}
+            onToggleDigest={toggleDigest}
+            onClose={() => setView("map")}
+          />
         )}
       </Suspense>
 
