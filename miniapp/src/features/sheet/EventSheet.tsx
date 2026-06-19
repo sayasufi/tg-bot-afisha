@@ -425,6 +425,15 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         <h2 className="sheet__title">
           <Highlight text={selected.title} query={query} />
         </h2>
+        {(() => {
+          // Social proof — only over a threshold so a quiet event stays silent (no "1 сохранил").
+          const g = detail?.going_count ?? 0;
+          const s = detail?.saved_count ?? 0;
+          const bits: string[] = [];
+          if (g >= 2) bits.push(`${g} собираются`);
+          if (s >= 3) bits.push(`${s} сохранили`);
+          return bits.length > 0 ? <div className="sheet__social">{bits.join("  ·  ")}</div> : null;
+        })()}
       </div>
 
       {/* Exhibit grid — each datum its own hairline cell, museum-catalogue style. */}

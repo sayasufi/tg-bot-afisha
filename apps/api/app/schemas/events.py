@@ -62,6 +62,8 @@ class EventDetailResponse(BaseModel):
     primary_image_url: str
     updated_at: datetime | None = None  # last refresh — powers the "актуально на" trust line
     occurrences: list[EventDetailOccurrence]
+    going_count: int = 0  # «Я иду» count — social proof, shown over a threshold
+    saved_count: int = 0  # favourites count — social proof, shown over a threshold
 
 
 class NearbyItem(BaseModel):

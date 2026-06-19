@@ -13,7 +13,7 @@ from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.codes import event_code, parse_event_code
-from core.db.models import Event, EventOccurrence, Venue
+from core.db.models import Event, EventGoing, EventOccurrence, UserFavorite, Venue
 from core.redis import get_redis
 
 # The map response (clusters or pins) depends only on (zoom, bbox, filters) and the
@@ -708,13 +708,19 @@ class EventQueryService:
             # is the soonest you can still go to, not an earlier one already past.
             .order_by((EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
         )).all()
+        # Social proof: how many said «Я иду» + how many saved it (the sheet shows each over a
+        # threshold so a quiet event stays silent). Both indexed/tiny — one scalar count each.
+        going = await self.db.scalar(select(func.count()).select_from(EventGoing).where(EventGoing.event_id == event_id)) or 0
+        saved = await self.db.scalar(select(func.count()).select_from(UserFavorite).where(UserFavorite.event_id == event_id)) or 0
         if not rows:
             # No future/ongoing occurrence (or event gone) — still return the event so a
             # deep link / stale tap renders a sheet without dates rather than 404-ing.
             event = await self.db.get(Event, event_id)
             if not event:
                 return None
-            return self._event_head(event, None, [])
+            head = self._event_head(event, None, [])
+            head["going_count"], head["saved_count"] = going, saved
+            return head
         occurrences = [
             {
                 "occurrence_id": r.EventOccurrence.occurrence_id,
@@ -733,7 +739,9 @@ class EventQueryService:
             }
             for r in rows
         ]
-        return self._event_head(rows[0], rows[0].venue_city, occurrences)
+        head = self._event_head(rows[0], rows[0].venue_city, occurrences)
+        head["going_count"], head["saved_count"] = going, saved
+        return head
 
     async def venue_detail(self, venue_id: int):
         """A venue + its upcoming events — powers the venue page. Events use the same
