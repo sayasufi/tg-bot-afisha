@@ -121,6 +121,11 @@
 }
 .gonow-toggle__hint {
   margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.02em;
