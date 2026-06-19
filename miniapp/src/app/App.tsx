@@ -268,6 +268,22 @@ export function App() {
   );
   const shownTotal = (filters.radiusKm && userPos) || filters.goNow ? shownItems.length : total;
 
+  // «Сейчас» list header count: the can-go-now events (the same map pins, via goNowIds) that
+  // fall inside the list's frozen bbox. We compute the FULL total here up front — the list's own
+  // client-side goNow filter only sees the pages loaded so far, so its count would otherwise creep
+  // up as you scroll. Deriving it from goNowIds also keeps the list header and the map in agreement.
+  // bbox = [minLon, minLat, maxLon, maxLat], matching the server's ST_MakeEnvelope (inclusive).
+  const listLiveTotal = useMemo(() => {
+    if (!filters.goNow || !listBbox) return 0;
+    const [w, s, e, n] = listBbox;
+    let c = 0;
+    for (const it of shownItems) {
+      if (it.lat == null || it.lon == null) continue;
+      if (it.lon >= w && it.lon <= e && it.lat >= s && it.lat <= n) c++;
+    }
+    return c;
+  }, [shownItems, listBbox, filters.goNow]);
+
   // Server clustering is used unless a client-side set is in play (radius or
   // "можно пойти") — those sets are small and filtered client-side, so we pin
   // them directly instead of asking the server to grid them.
@@ -815,6 +831,7 @@ export function App() {
         userPos={userPos}
         radiusKm={filters.radiusKm}
         goNow={filters.goNow}
+        liveTotal={listLiveTotal}
         now={now}
         onSelect={openEvent}
         onClose={() => setListOpen(false)}

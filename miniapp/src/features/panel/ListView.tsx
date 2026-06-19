@@ -31,6 +31,7 @@ export function ListView({
   userPos,
   radiusKm,
   goNow,
+  liveTotal,
   now,
   onSelect,
   onClose,
@@ -41,6 +42,10 @@ export function ListView({
   userPos?: LatLon | null;
   radiusKm?: number;
   goNow?: boolean; // «Сейчас» — filter to events you can still get to, client-side like the map
+  // Total can-go-now events in this bbox, computed by the map from goNowIds (the same pins).
+  // The header shows this up front — our own `visible` filter only sees loaded pages, so its
+  // count would creep up as you scroll.
+  liveTotal?: number;
   now?: number;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
@@ -176,7 +181,7 @@ export function ListView({
       <div className="listview__bar">
         <span className="listview__count">
           {goNow
-            ? `${visible.length} ${plural(visible.length, "событие", "события", "событий")} можно сейчас`
+            ? `${liveTotal ?? 0} ${plural(liveTotal ?? 0, "событие", "события", "событий")} можно сейчас`
             : `${total} ${plural(total, "событие", "события", "событий")} в этой области`}
         </span>
         <div className="listview__sorts" role="tablist" aria-label="Сортировка">
