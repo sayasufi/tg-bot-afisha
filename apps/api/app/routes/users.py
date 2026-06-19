@@ -29,6 +29,7 @@ from core.db.repositories.users import (
     update_settings,
     upsert_user,  # sync — for the low-frequency /location route
     upsert_user_async,
+    warm_interests_from,
 )
 from core.db.session import SessionLocal, get_async_db
 
@@ -71,6 +72,11 @@ class GoingRequest(BaseModel):
     init_data: str
     event_id: str | None = None  # omit (just LIST going ids) or include to confirm «Я иду»
     inviter_id: int | None = None  # the sharer who invited me (from the share deep-link), if any
+
+
+class InvitedRequest(BaseModel):
+    init_data: str
+    inviter_id: int  # the sharer whose «Пойдём?» deep-link I opened
 
 
 class SettingsRequest(BaseModel):
@@ -208,6 +214,18 @@ async def toggle_going(payload: GoingRequest, db: AsyncSession = Depends(get_asy
     if notify:
         await _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
     return {"ids": await list_going_ids(db, uid)}
+
+
+@router.post("/invited")
+async def mark_invited(payload: InvitedRequest, db: AsyncSession = Depends(get_async_db)):
+    """A «Пойдём?» invite was opened — attribute the inviter and, if this account is still cold,
+    warm its feed from the inviter's taste (referral cold-start cure). Returns the interests now
+    driving the feed so the Mini App can apply them this session."""
+    user, uid = _auth(payload.init_data)
+    await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+    interests = await warm_interests_from(db, uid, payload.inviter_id)
+    await db.commit()
+    return {"interests": interests}
 
 
 @router.post("/settings")

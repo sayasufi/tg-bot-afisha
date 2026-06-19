@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 
 import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MapCluster, type MetroStation } from "../api/client";
 import { logEventSeen } from "../api/recommend";
+import { markInvited } from "../api/users";
 import { recordOpen } from "../lib/affinity";
 import { EMPTY_FILTERS, Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
@@ -644,7 +645,13 @@ export function App() {
     const inviterId = us > 0 ? Number(raw.slice(us + 1)) : NaN;
     fetchEventDetail(eventId)
       .then((d) => {
-        if (Number.isFinite(inviterId)) setInvite({ eventId: d.event_id, inviterId });
+        if (Number.isFinite(inviterId)) {
+          setInvite({ eventId: d.event_id, inviterId });
+          // Referral warm-start: attribute the inviter + warm a still-cold feed from their taste.
+          void markInvited(inviterId).then((warm) => {
+            if (warm && warm.length) setPickedInterests((prev) => (prev.length ? prev : warm));
+          });
+        }
         const occ = d.occurrences?.[0];
         openEvent({
           event_id: d.event_id,

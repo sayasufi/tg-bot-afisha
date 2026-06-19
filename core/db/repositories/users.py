@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -230,6 +230,39 @@ async def set_going(db: AsyncSession, telegram_user_id: int, event_id: str, invi
         .on_conflict_do_nothing()
     )
     return bool(res.rowcount)  # rows inserted (0 on conflict) → first-time going
+
+
+async def warm_interests_from(db: AsyncSession, user_id: int, inviter_id: int) -> list[str]:
+    """Referral cold-start cure: on a brand-new account's FIRST invite open, attribute the inviter
+    and warm the feed from their taste — their picked interests, else their top favourite categories.
+    Only when this account is still COLD (no interests) and UNATTRIBUTED, so we never override a real
+    taste or re-warp on a later invite. Returns the interests now driving the feed. No commit."""
+    if not inviter_id:
+        return []
+    user = await db.get(User, user_id)
+    if not user:
+        return []
+    if user.interests or user.invited_by is not None or int(inviter_id) == int(user_id):
+        return list(user.interests or [])  # already warmed / attributed / self-invite — leave it
+    user.invited_by = int(inviter_id)
+    inviter = await db.get(User, int(inviter_id))
+    taste: list[str] = list(inviter.interests) if inviter and inviter.interests else []
+    if not taste:
+        rows = (
+            await db.execute(
+                select(Event.category)
+                .join(UserFavorite, UserFavorite.event_id == Event.event_id)
+                .where(UserFavorite.telegram_user_id == int(inviter_id))
+                .group_by(Event.category)
+                .order_by(func.count().desc())
+                .limit(5)
+            )
+        ).scalars().all()
+        taste = [c for c in rows if c]
+    if taste:
+        user.interests = taste[:5]
+    db.add(user)
+    return list(user.interests or [])
 
 
 async def event_title(db: AsyncSession, event_id: str) -> str | None:

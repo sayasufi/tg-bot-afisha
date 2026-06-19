@@ -167,6 +167,26 @@ export async function markGoingRemote(eventId: string, inviterId: number | null)
   }
 }
 
+// «Пойдём?» invite opened → attribute the inviter + warm a cold feed from their taste. Returns
+// the interests now driving the feed (so the app can apply them this session), or null.
+export async function markInvited(inviterId: number): Promise<string[] | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/invited`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, inviter_id: inviterId }),
+      keepalive: true,
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { interests?: string[] };
+    return Array.isArray(j.interests) ? j.interests : null;
+  } catch {
+    return null;
+  }
+}
+
 // Venue follows ("следить за площадкой") — account-scoped like favourites/reminders. Pass
 // nothing to LIST; pass (venueId, on) to toggle. Returns the followed venue-ids, or null.
 export async function syncVenueFollows(): Promise<string[] | null> {

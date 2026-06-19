@@ -37,5 +37,9 @@ class User(Base):
     # missed-run catchup in the same ISO week never double-sends; only a delivered (or permanently
     # failed) send stamps it. NULL = never sent.
     last_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The account that first invited me (a «Пойдём?» share deep-link), set once on the first invite
+    # open. WARMS a brand-new account's feed from the inviter's taste (referral cold-start cure) +
+    # attribution. Plain BigInteger (no FK), like event_going.inviter_id. NULL = organic.
+    invited_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
