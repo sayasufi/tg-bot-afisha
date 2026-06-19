@@ -928,6 +928,7 @@ export function App() {
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
+            onSelect={openEvent}
             onClose={() => setView("map")}
           />
         )}

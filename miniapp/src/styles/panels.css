@@ -346,55 +346,79 @@ mark.hl {
   color: var(--ink-dim);
 }
 
-/* "Твой вкус" — favourite category mix. */
+/* «Твой вкус» — favourite genres as editorial tags. NO multi-colour proportion chart: the
+   per-category rainbow broke the acid+cinnabar system and read as analytics. */
 .taste {
-  margin-top: 22px;
-}
-
-.taste__bar {
-  display: flex;
-  height: 12px;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px var(--ink);
-}
-
-.taste__seg {
-  height: 100%;
-  min-width: 3px;
-}
-
-.taste__seg + .taste__seg {
-  border-left: 1px solid var(--plinth);
-}
-
-.taste__chips {
+  margin-top: 16px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 10px 16px;
 }
-
-.taste__chip {
+.tastetag {
   display: inline-flex;
-  align-items: center;
-  gap: 7px;
+  align-items: baseline;
+  gap: 5px;
   font-family: var(--grotesk);
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 600;
-  color: var(--ink-dim);
-}
-
-.taste__chip b {
-  font-family: var(--mono);
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
   color: var(--ink);
+}
+.tastetag b {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
+/* The leading genre wears the ONE cinnabar accent — your dominant taste, on-system. */
+.tastetag--top,
+.tastetag--top b {
+  color: var(--cinnabar);
+}
 
-.taste__dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--ink);
+/* «Скоро начнётся» — soonest saved events, a tappable ledger that ends the passport with content. */
+.profile__soon {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.profile__soonrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.profile__soonrow:active {
+  background: var(--vitrine);
+}
+.profile__soontitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--grotesk);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: lowercase;
+  color: var(--ink);
+}
+.profile__soonwhen {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cinnabar);
+  white-space: nowrap;
 }
 
 .favempty {
@@ -633,10 +657,11 @@ mark.hl {
 .profile__name {
   font-family: var(--display);
   font-weight: 700;
-  font-size: clamp(24px, 7vw, 34px);
+  /* Bigger than the stat numerals so the eye lands on the PERSON first, not on 7|4|N. */
+  font-size: clamp(30px, 9vw, 42px);
   letter-spacing: -0.04em;
   text-transform: lowercase;
-  line-height: 1;
+  line-height: 0.95;
   color: var(--ink);
 }
 
