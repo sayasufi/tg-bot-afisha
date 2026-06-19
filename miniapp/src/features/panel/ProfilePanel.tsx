@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { fetchEventsByIds, type EventItem } from "../../api/client";
+import { fetchEventsByIds, type City, type EventItem } from "../../api/client";
 import { viewedCount } from "../../lib/affinity";
 import { categoryMeta } from "../../lib/categories";
 import { CategoryIcon, IconClose } from "../../lib/icons";
@@ -10,6 +10,8 @@ import { safeHttpUrl } from "../../lib/url";
 export function ProfilePanel({
   user,
   city,
+  cities,
+  onSelectCity,
   favIds,
   goingCount,
   notifyReminders,
@@ -21,6 +23,8 @@ export function ProfilePanel({
 }: {
   user: TgUser | null;
   city: string;
+  cities: City[];
+  onSelectCity: (slug: string) => void;
   favIds: Set<string>;
   goingCount: number;
   notifyReminders: boolean;
@@ -30,6 +34,7 @@ export function ProfilePanel({
   onOpenFavorites: () => void;
   onClose: () => void;
 }) {
+  const [cityOpen, setCityOpen] = useState(false);
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
@@ -73,9 +78,7 @@ export function ProfilePanel({
           </div>
           <div className="profile__id">
             <div className="profile__name">{name}</div>
-            <div className="profile__handle">
-              {handle} · {city}
-            </div>
+            <div className="profile__handle">{handle}</div>
           </div>
         </div>
 
@@ -84,16 +87,43 @@ export function ProfilePanel({
         <div className="profile__hero profile__hero--3">
           <div className="profile__stat">
             <span className="hero-num">{viewed}</span>
-            <span className="kicker kicker--code">просмотрено</span>
+            <span className="profile__statlabel">просмотрено</span>
           </div>
           <div className="profile__stat">
             <span className="hero-num">{favIds.size}</span>
-            <span className="kicker kicker--code">сохранено</span>
+            <span className="profile__statlabel">сохранено</span>
           </div>
           <div className="profile__stat">
             <span className="hero-num">{goingCount}</span>
-            <span className="kicker kicker--code">иду</span>
+            <span className="profile__statlabel">иду</span>
           </div>
+        </div>
+
+        {/* City — selectable. Only Москва is active today; the picker is ready for more. */}
+        <div className="profile__cityrow">
+          <button type="button" className="profile__city" aria-expanded={cityOpen} onClick={() => setCityOpen((o) => !o)}>
+            <span className="profile__city-name">{city}</span>
+            <span className={`profile__city-chev${cityOpen ? " profile__city-chev--open" : ""}`} aria-hidden="true">›</span>
+          </button>
+          {cityOpen && (
+            <div className="profile__city-list">
+              {cities.map((c) => (
+                <button
+                  key={c.slug}
+                  type="button"
+                  className={`profile__city-opt${c.name === city ? " profile__city-opt--on" : ""}`}
+                  onClick={() => {
+                    onSelectCity(c.slug);
+                    setCityOpen(false);
+                  }}
+                >
+                  <span>{c.name}</span>
+                  {c.name === city && <span aria-hidden="true">✓</span>}
+                </button>
+              ))}
+              {cities.length <= 1 && <span className="profile__city-soon">другие города — скоро</span>}
+            </div>
+          )}
         </div>
 
         {/* «Твой вкус» — a card whose visualisation IS a contact-sheet of your saved-event posters

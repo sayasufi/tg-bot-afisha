@@ -306,19 +306,100 @@ mark.hl {
 }
 
 .profile__stat .hero-num {
+  /* Normal proportional figures (grotesk), not the techy mono — cleaner, like the reference. */
+  font-family: var(--grotesk);
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: clamp(40px, 13vw, 56px);
 }
 
-/* 3-up stat row (сохранено · скоро · city) — tighter cells + a smaller numeral so three fit. */
+/* Clean lowercase stat label — no «// » code-comment prefix; sits quiet under the figure. */
+.profile__statlabel {
+  font-family: var(--grotesk);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: lowercase;
+  color: var(--ink-dim);
+}
+
+/* 3-up stat row (просмотрено · сохранено · иду). */
 .profile__hero--3 {
   grid-template-columns: repeat(3, 1fr);
 }
 .profile__hero--3 .profile__stat {
   padding: 16px 12px 14px;
+  gap: 6px;
 }
 .profile__hero--3 .profile__stat .hero-num {
-  /* A touch smaller than before so the row doesn't out-shout the person's name above it. */
-  font-size: clamp(22px, 7vw, 30px);
+  font-size: clamp(24px, 7.5vw, 32px);
+}
+
+/* City — a selectable row under the stats. Only Москва is active today, so the picker shows a
+   «скоро» note; it's ready to list more cities when they go live. */
+.profile__cityrow {
+  margin-top: 8px;
+}
+.profile__city {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 15px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  cursor: pointer;
+}
+.profile__city-name {
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.profile__city-chev {
+  font-family: var(--grotesk);
+  font-size: 17px;
+  color: var(--ink-faint);
+  transition: transform 0.16s var(--ease-cut);
+}
+.profile__city-chev--open {
+  transform: rotate(90deg);
+}
+.profile__city-list {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line-soft);
+}
+.profile__city-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 2px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--grotesk);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.profile__city-opt--on {
+  color: var(--ink);
+  font-weight: 600;
+}
+.profile__city-soon {
+  display: block;
+  padding: 11px 2px 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
 /* «Твой вкус» — a tappable card whose visualisation IS a contact-sheet of your saved-event

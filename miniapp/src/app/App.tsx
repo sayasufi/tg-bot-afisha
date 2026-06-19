@@ -923,6 +923,8 @@ export function App() {
           <ProfilePanel
             user={tgUser}
             city={currentCity?.name ?? CITY}
+            cities={cities}
+            onSelectCity={selectCity}
             favIds={fav.ids}
             goingCount={going.ids.size}
             notifyReminders={notifyReminders}
