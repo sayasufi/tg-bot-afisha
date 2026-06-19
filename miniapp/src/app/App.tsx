@@ -559,6 +559,8 @@ export function App() {
     haptic("light");
     setView("map"); // closes recs/favorites/profile panels
     setListOpen(false); // the list is a separate overlay — close it too (was the bug)
+    setVenueId(null); // the venue page (opened from «Площадки») was left covering the map
+    setSearchOpen(false); // and a search overlay would too
     setSelected(null);
     setPeek(null); // "На карте" wants the pin in view, not the peek list over it
   }, []);
@@ -789,6 +791,7 @@ export function App() {
         bbox={listBbox}
         userPos={userPos}
         radiusKm={filters.radiusKm}
+        goNow={filters.goNow}
         now={now}
         onSelect={openEvent}
         onClose={() => setListOpen(false)}

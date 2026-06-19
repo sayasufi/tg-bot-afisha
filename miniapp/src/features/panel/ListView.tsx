@@ -1,6 +1,7 @@
 import { type UIEvent, useEffect, useRef, useState } from "react";
 
 import { fetchEventsList, type EventItem, type ListSort } from "../../api/client";
+import { goNowState } from "../../lib/datetime";
 import type { LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
 import { CatalogFeed } from "./CatalogFeed";
@@ -29,6 +30,7 @@ export function ListView({
   bbox,
   userPos,
   radiusKm,
+  goNow,
   now,
   onSelect,
   onClose,
@@ -38,6 +40,7 @@ export function ListView({
   bbox: [number, number, number, number] | null;
   userPos?: LatLon | null;
   radiusKm?: number;
+  goNow?: boolean; // «Сейчас» — filter to events you can still get to, client-side like the map
   now?: number;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
@@ -122,6 +125,17 @@ export function ListView({
   // addEventListener'd handler stranded on a stale node). This observer is a secondary, earlier
   // preloader. Both call the LATEST loadMore via a ref; its guards make double-triggers no-ops.
   const canMore = items.length > 0 && items.length < total;
+  // «Сейчас»: filter to live events client-side with the SAME goNowState the map uses (so the
+  // list and the pins agree) — the list query has no server "now" (open_now is computed per item).
+  const visible = goNow
+    ? items.filter(
+        (it) =>
+          goNowState(it.date_start, it.date_end, it.open_now ?? null, now != null ? new Date(now) : new Date()).eligible,
+      )
+    : items;
+  // A page can hold zero live events, which would dead-end the scroll loader — keep paging until
+  // enough live events surface or a sane scan cap is hit.
+  const searching = !!goNow && visible.length === 0 && canMore && items.length < 300;
   useEffect(() => {
     if (!canMore) return;
     const root = scrollRef.current;
@@ -135,6 +149,13 @@ export function ListView({
     return () => io.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canMore]);
+
+  // Auto-page while «Сейчас» is still hunting for live events across pages.
+  useEffect(() => {
+    if (!goNow || loading || more) return;
+    if (visible.length < 16 && canMore && items.length < 300) loadMoreRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goNow, visible.length, canMore, loading, more, items.length]);
 
   const onScrollLoad = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -154,7 +175,9 @@ export function ListView({
 
       <div className="listview__bar">
         <span className="listview__count">
-          {total} {plural(total, "событие", "события", "событий")} в этой области
+          {goNow
+            ? `${visible.length} ${plural(visible.length, "событие", "события", "событий")} можно сейчас`
+            : `${total} ${plural(total, "событие", "события", "событий")} в этой области`}
         </span>
         <div className="listview__sorts" role="tablist" aria-label="Сортировка">
           {SORTS.map((s) => (
@@ -173,12 +196,20 @@ export function ListView({
       </div>
 
       <div className="panelview__scroll" ref={scrollRef} onScroll={onScrollLoad}>
-        {items.length > 0 && <CatalogFeed items={items} userPos={userPos} now={now} onSelect={onSelect} />}
+        {visible.length > 0 && <CatalogFeed items={visible} userPos={userPos} now={now} onSelect={onSelect} />}
         {!loading && error && <div className="listview__empty">Не удалось загрузить. Попробуй ещё раз.</div>}
-        {!loading && !error && items.length === 0 && <div className="listview__empty">В этой области по фильтрам пусто. Подвинь карту или сними фильтры.</div>}
-        {loading && <div className="listview__empty">Загружаем…</div>}
+        {!loading && !error && visible.length === 0 && !searching && (
+          <div className="listview__empty">
+            {goNow
+              ? "Сейчас застать нечего — сними «сейчас» или подвинь карту."
+              : "В этой области по фильтрам пусто. Подвинь карту или сними фильтры."}
+          </div>
+        )}
+        {(loading || searching) && (
+          <div className="listview__empty">{goNow ? "Ищем, что застать сейчас…" : "Загружаем…"}</div>
+        )}
         {canMore && <div ref={sentinelRef} className="listview__sentinel" aria-hidden="true" />}
-        {more && <div className="listview__empty">Загружаем ещё…</div>}
+        {more && !searching && <div className="listview__empty">Загружаем ещё…</div>}
       </div>
     </div>
   );
