@@ -18,6 +18,9 @@ import { ListView, Sidebar, type View } from "../features/panel";
 const RecommendationsPanel = lazy(() =>
   import("../features/panel/RecommendationsPanel").then((m) => ({ default: m.RecommendationsPanel })),
 );
+const CollectionDetail = lazy(() =>
+  import("../features/panel/CollectionDetail").then((m) => ({ default: m.CollectionDetail })),
+);
 const FavoritesPanel = lazy(() => import("../features/panel/FavoritesPanel").then((m) => ({ default: m.FavoritesPanel })));
 const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m) => ({ default: m.ProfilePanel })));
 const FollowedVenuesPanel = lazy(() =>
@@ -94,6 +97,8 @@ export function App() {
   const [mapBbox, setMapBbox] = useState<[number, number, number, number] | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [listBbox, setListBbox] = useState<[number, number, number, number] | null>(null);
+  // An open «Подборка» detail (opened from the recs grid/«смотреть все»), layered over the recs panel.
+  const [collection, setCollection] = useState<{ slug: string; title: string; subtitle: string | null } | null>(null);
   const [view, setView] = useState<View>("map");
   const [sheetReady, setSheetReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -466,20 +471,41 @@ export function App() {
     else if (filtersOpen) setFiltersOpen(false);
     else if (drawerOpen) setDrawerOpen(false);
     else if (listOpen) setListOpen(false);
+    else if (collection) setCollection(null); // the «Подборка» detail closes back to the recs panel
     else if (view !== "map") setView("map");
     else return false;
     // Drop focus from the trigger so it doesn't keep a focus ring after closing
     // (a keyboard Escape otherwise leaves the pill button looking "highlighted").
     (document.activeElement as HTMLElement | null)?.blur?.();
     return true;
-  }, [searchOpen, selected, venueId, peek, filtersOpen, drawerOpen, listOpen, view]);
+  }, [searchOpen, selected, venueId, peek, filtersOpen, drawerOpen, listOpen, collection, view]);
+
+  // «Подборки» tile / «смотреть все» → the full collection detail (layered over the recs panel).
+  const onOpenCollection = useCallback((slug: string, title: string, subtitle: string | null) => {
+    haptic("light");
+    setCollection({ slug, title, subtitle });
+  }, []);
+  // «По интересам» → close the recs panel and show the map filtered to the tapped category.
+  const onPickCategory = useCallback((category: string) => {
+    haptic("light");
+    setCollection(null);
+    setFilters({ ...EMPTY_FILTERS, categories: [category] });
+    setView("map");
+  }, []);
+  // «ещё» / «все категории» → the map with the filter sheet open, to pick any category.
+  const onAllCategories = useCallback(() => {
+    haptic("light");
+    setCollection(null);
+    setView("map");
+    setFiltersOpen(true);
+  }, []);
 
   // Telegram back button closes whatever is on top (search → sheet → peek → filters →
   // drawer → panel).
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || view !== "map";
+    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || collection != null || view !== "map";
     const pop = () => closeTop();
     if (stacked) {
       back.show();
@@ -488,7 +514,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, view, closeTop]);
+  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, collection, view, closeTop]);
 
   // Esc behaves like tapping the visible × — closes the first-run guide, then the
   // top overlay.
@@ -863,7 +889,30 @@ export function App() {
 
       <Suspense fallback={null}>
         {view === "recs" && (
-          <RecommendationsPanel userPos={userPos} favCategories={recInterests} refreshNonce={refreshNonce} city={currentCity?.slug ?? null} onSelect={openEvent} onClose={() => setView("map")} />
+          <RecommendationsPanel
+            userPos={userPos}
+            favCategories={recInterests}
+            refreshNonce={refreshNonce}
+            city={currentCity?.slug ?? null}
+            onSelect={openEvent}
+            onOpenCollection={onOpenCollection}
+            onPickCategory={onPickCategory}
+            onAllCategories={onAllCategories}
+            onClose={() => setView("map")}
+          />
+        )}
+        {collection && (
+          <CollectionDetail
+            open
+            slug={collection.slug}
+            title={collection.title}
+            subtitle={collection.subtitle}
+            userPos={userPos}
+            interests={recInterests}
+            city={currentCity?.slug ?? null}
+            onSelect={openEvent}
+            onClose={() => setCollection(null)}
+          />
         )}
         {view === "favorites" && (
           <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />

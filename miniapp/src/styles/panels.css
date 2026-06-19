@@ -1003,6 +1003,130 @@ mark.hl {
   }
 }
 
+/* «смотреть все» / «все категории» — a link pushed to the right of a rail/section head.
+   Ink affordance at rest (acid is light), cinnabar on tap. */
+.rail__more {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rail__more:active {
+  color: var(--cinnabar);
+}
+
+/* «Подборки» — a flat hairline grid of collection entry tiles (a table, VITRINE-style, not a
+   card rail). The container draws the top+left frame; each tile its right+bottom hairline. */
+.recgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.reccoll {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 92px;
+  padding: 13px 14px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--plinth);
+  text-align: left;
+  cursor: pointer;
+}
+/* A lone last tile (odd count) spans the row so the grid never shows an empty cell. */
+.reccoll:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.reccoll:active {
+  background: var(--acid);
+}
+.reccoll__title {
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.16;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.reccoll__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.reccoll__n {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.reccoll__arrow {
+  font-family: var(--grotesk);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink);
+}
+.reccoll:active .reccoll__title,
+.reccoll:active .reccoll__n,
+.reccoll:active .reccoll__arrow {
+  color: var(--on-acid);
+}
+
+/* «По интересам» — a hairline grid of category cells (icon + label), same table motif. */
+.reccats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.reccat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 15px 2px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--plinth);
+  color: var(--ink);
+  cursor: pointer;
+}
+.reccat:active {
+  background: var(--acid);
+}
+.reccat__icon {
+  color: var(--ink);
+}
+.reccat__label {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-align: center;
+}
+.reccat:active .reccat__icon,
+.reccat:active .reccat__label {
+  color: var(--on-acid);
+}
+
 /* Избранное — a 2-column card grid reusing the rail card. */
 .card-grid {
   display: grid;
