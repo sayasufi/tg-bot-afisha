@@ -193,7 +193,7 @@
 
 /* Tactile springs — controls dip slightly on press (variant.com micro-feel). */
 .chip:active,
-.csheet__cat:active,
+.fchip:active,
 .daycell:active,
 .seg__btn:active,
 .themetoggle:active {

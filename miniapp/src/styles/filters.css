@@ -83,13 +83,18 @@
    are all the same width, not content-sized. */
 .csheet__presets {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr); /* one row — saves a row vs the old 3-up wrap */
   gap: 8px;
   overflow: visible;
 }
 .csheet__presets .chip {
   justify-content: center;
-  padding: 0 8px; /* fixed width, so trim h-padding to fit "ВЫХОДНЫЕ" */
+  padding: 0 4px; /* fixed quarter-width, trimmed to fit "ВЫХОДНЫЕ" */
+  height: 44px;
+  border-color: var(--line-soft); /* quiet at rest, like the day cells / chips */
+}
+.csheet__presets .chip--active {
+  border-color: var(--ink);
 }
 
 /* "Можно успеть" — a full-width STATE toggle, visually distinct from the date chips.
@@ -336,7 +341,10 @@
   gap: 7px;
   height: 38px;
   padding: 0 13px;
-  border: 1px solid var(--line);
+  /* Soft hairline at rest so the section reads quiet; the chosen chip earns the strong frame.
+     Three states: soft (idle) → ink frame (the «Все»/«Любая» reset state is current) → acid fill
+     (an actual narrowing). So acid ONLY ever signals «you've filtered», never the default. */
+  border: 1px solid var(--line-soft);
   background: var(--plinth);
   color: var(--ink);
   font-family: var(--grotesk);
@@ -353,7 +361,13 @@
   color: var(--ink);
 }
 
-/* Active chip: the single acid fill, framed in ink (acid is light — the ink frame anchors it). */
+/* «Все» / «Любая» when they're the current (no-filter) state: an ink frame says «this is current»
+   WITHOUT the acid accent — acid is reserved for an actual narrowing choice. */
+.fchip--current {
+  border-color: var(--ink);
+}
+
+/* Active chip (a real narrowing): the single acid fill, framed in ink (acid is light). */
 .fchip--active {
   background: var(--acid);
   border-color: var(--ink);

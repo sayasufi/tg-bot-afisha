@@ -202,7 +202,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
           </div>
           <span className="kicker">Категории</span>
           <div className="fchips">
-            <button type="button" className={`fchip${value.categories.length === 0 ? " fchip--active" : ""}`} onClick={() => pick("")}>
+            <button type="button" className={`fchip${value.categories.length === 0 ? " fchip--current" : ""}`} onClick={() => pick("")}>
               <IconGrid size={15} />
               Все
             </button>
@@ -225,7 +225,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
               <button
                 key={bgt.label}
                 type="button"
-                className={`fchip${value.priceMax === bgt.value ? " fchip--active" : ""}`}
+                className={`fchip${value.priceMax === bgt.value ? (bgt.value === "" ? " fchip--current" : " fchip--active") : ""}`}
                 onClick={() => setBudget(bgt.value)}
               >
                 {bgt.label}
@@ -233,22 +233,26 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             ))}
           </div>
 
-          <div className="csheet__radius-head">
-            <span className="kicker">Рядом</span>
-            <span className="csheet__radius-val">{value.radiusKm > 0 ? `до ${String(value.radiusKm).replace(".", ",")} км` : "без ограничений"}</span>
-          </div>
-          {hasLocation ? (
-            <input
-              type="range"
-              className="radius"
-              min={0}
-              max={10}
-              step={0.5}
-              value={value.radiusKm}
-              onChange={(e) => onChange({ ...value, radiusKm: Number(e.target.value) })}
-            />
-          ) : (
-            <p className="csheet__radius-hint">Включи геолокацию на карте, чтобы фильтровать по расстоянию.</p>
+          {/* «Рядом» needs your location to do anything — show it only when we have it, instead of
+             a dead section with an off-screen call to action (you enable location on the map). */}
+          {hasLocation && (
+            <>
+              <div className="csheet__radius-head">
+                <span className="kicker">Рядом</span>
+                <span className="csheet__radius-val">
+                  {value.radiusKm > 0 ? `до ${String(value.radiusKm).replace(".", ",")} км` : "без ограничений"}
+                </span>
+              </div>
+              <input
+                type="range"
+                className="radius"
+                min={0}
+                max={10}
+                step={0.5}
+                value={value.radiusKm}
+                onChange={(e) => onChange({ ...value, radiusKm: Number(e.target.value) })}
+              />
+            </>
           )}
 
           <div className="csheet__foot">
