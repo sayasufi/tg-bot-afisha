@@ -60,13 +60,13 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int, max_lines: int
                 break
     if cur and len(lines) < max_lines:
         lines.append(cur)
-    # Ellipsize the last line if we ran out of room.
-    if lines:
+    # Ellipsize whenever any text was dropped (later words cut to fit max_lines) — not only when
+    # the last line itself overflows; shorten the last line so "…" fits.
+    if lines and len("".join(lines).replace(" ", "")) < len(text.replace(" ", "")):
         last = lines[-1]
         while last and draw.textlength(last + "…", font=font) > max_w:
             last = last[:-1]
-        if len("".join(lines)) < len(text.replace(" ", "")) and last != lines[-1]:
-            lines[-1] = last.rstrip() + "…"
+        lines[-1] = last.rstrip() + "…"
     return lines
 
 
