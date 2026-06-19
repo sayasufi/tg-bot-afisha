@@ -321,54 +321,93 @@ mark.hl {
   font-size: clamp(22px, 7vw, 30px);
 }
 
-/* «Твой вкус» empty state — an inviting slot framed like a catalogue card, not a paragraph of
-   documentation. Shown until the first save fills the taste mix in. */
-.profile__empty {
-  margin-top: 14px;
+/* «Твой вкус» — a tappable card whose visualisation IS a contact-sheet of your saved-event
+   posters (your taste as images). Inverse surface (ink ground, plaster type) so it's the one bold
+   object on the page and pops in BOTH themes; the dominant genres caption it. Tap → Избранное. */
+.tastecard {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 15px 15px 16px;
+  border: 0;
+  background: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.tastecard:active {
+  opacity: 0.92;
+}
+.tastecard__head {
   display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 20px 16px;
-  border: 1px solid var(--line);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+.tastecard__title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--bg);
+}
+.tastecard__chev {
+  font-family: var(--grotesk);
+  font-size: 16px;
+  color: var(--bg);
+  opacity: 0.55;
+}
+.tastecard__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+.tastecard__cell {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+/* Faint placeholder squares for the empty state (a tint of the inverse type colour). */
+.tastecard__cell--empty {
   background: var(--bg);
+  opacity: 0.1;
 }
-.profile__empty-title {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: -0.02em;
-  text-transform: lowercase;
+.tastecard__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.6) brightness(0.82) contrast(1.08);
+}
+.tastecard__glyph {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
   color: var(--ink);
+  opacity: 0.85;
 }
-.profile__empty-text {
+.tastecard__cap {
+  display: block;
+  margin-top: 13px;
+  font-family: var(--grotesk);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: lowercase;
+  color: var(--bg);
+}
+.tastecard__nudge {
+  display: block;
+  margin-bottom: 14px;
   font-family: var(--grotesk);
   font-size: 13px;
   line-height: 1.5;
-  color: var(--ink-dim);
-}
-
-/* «Твой вкус» — favourite genres as editorial tags. NO multi-colour proportion chart: the
-   per-category rainbow broke the acid+cinnabar system and read as analytics. */
-/* «Твой вкус» — genres as proportional DISPLAY words: the type size (set inline) IS the chart —
-   your dominant genre is biggest and wears the one cinnabar accent. No legend, no rainbow, no
-   numbers — a typographic taste statement, baseline-aligned so the varying sizes sit on one line. */
-.taste {
-  margin-top: 14px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 18px;
-}
-.tastetag {
-  font-family: var(--display);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.04;
-  text-transform: lowercase;
-  color: var(--ink);
-}
-.tastetag--top {
-  color: var(--cinnabar);
+  color: var(--bg);
+  opacity: 0.62;
 }
 
 .favempty {

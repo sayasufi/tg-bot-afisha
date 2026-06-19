@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MapCluster, type MetroStation } from "../api/client";
 import { logEventSeen } from "../api/recommend";
 import { markInvited } from "../api/users";
-import { recordOpen } from "../lib/affinity";
+import { recordOpen, recordViewed } from "../lib/affinity";
 import { EMPTY_FILTERS, Filters, type FilterState } from "../features/filters/Filters";
 import { ClusterPeek } from "../features/map/ClusterPeek";
 
@@ -572,6 +572,7 @@ export function App() {
     setFocusOut(false); // cancel any pending dismiss animation
     logEventSeen(i.event_id); // engagement signal for recommendations
     recordOpen(i.category); // behavioural profile for personalised ranking
+    recordViewed(i.event_id); // «просмотрено» counter shown in the profile
   }, []);
 
   // The peek is a map-only overlay: drop it when leaving the map (recs/favorites/
@@ -921,13 +922,14 @@ export function App() {
         {view === "profile" && (
           <ProfilePanel
             user={tgUser}
-            total={total}
             city={currentCity?.name ?? CITY}
             favIds={fav.ids}
+            goingCount={going.ids.size}
             notifyReminders={notifyReminders}
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
+            onOpenFavorites={() => setView("favorites")}
             onClose={() => setView("map")}
           />
         )}

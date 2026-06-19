@@ -1,37 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { fetchEventsByIds, type EventItem } from "../../api/client";
+import { viewedCount } from "../../lib/affinity";
 import { categoryMeta } from "../../lib/categories";
-import { IconClose } from "../../lib/icons";
+import { CategoryIcon, IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
 export function ProfilePanel({
   user,
-  total: _total,
   city,
   favIds,
+  goingCount,
   notifyReminders,
   onToggleReminders,
   notifyDigest,
   onToggleDigest,
+  onOpenFavorites,
   onClose,
 }: {
   user: TgUser | null;
-  total: number;
   city: string;
   favIds: Set<string>;
+  goingCount: number;
   notifyReminders: boolean;
   onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
+  onOpenFavorites: () => void;
   onClose: () => void;
 }) {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
   const handle = user?.username ? `@${user.username}` : "Telegram";
-  // Hydrate the favourites by id (not the map's loaded set) so the taste mix is accurate.
+  // «Просмотрено» — unique events opened on this device (a real behavioural metric, not derivable
+  // from the Избранное list). Read once on open.
+  const [viewed] = useState(() => viewedCount());
+
+  // Hydrate the favourites by id so the taste card shows their posters + genres.
   const [favs, setFavs] = useState<EventItem[]>([]);
   const idsKey = [...favIds].sort().join(",");
   useEffect(() => {
@@ -43,26 +50,13 @@ export function ProfilePanel({
     fetchEventsByIds(ids).then(setFavs);
   }, [idsKey]);
 
-  // «Скоро начнётся» — your SAVED events that start within the next week, soonest first. Drives
-  // both the «скоро» stat and the actionable block below. Honest (date-based); the app tracks no
-  // "visits"/attendance, so we never invent that.
-  const soonList = useMemo(() => {
-    const now = Date.now();
-    const horizon = now + 7 * 86400 * 1000;
-    return favs
-      .filter((f) => {
-        const t = new Date(f.date_start).getTime();
-        return !Number.isNaN(t) && t >= now && t <= horizon;
-      })
-      .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
-  }, [favs]);
-
-  // "Твой вкус" — favourite category mix, ranked.
+  // Ranked favourite genres (for the card caption).
   const taste = useMemo(() => {
     const counts = new Map<string, number>();
     for (const it of favs) counts.set(it.category, (counts.get(it.category) || 0) + 1);
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([key, n]) => ({ key, n, meta: categoryMeta(key) }));
   }, [favs]);
+  const hasTaste = favs.length > 0;
 
   return (
     <div className="panelview">
@@ -85,47 +79,61 @@ export function ProfilePanel({
           </div>
         </div>
 
-        {/* All three stats are about YOU — saved · soon · taste breadth. No standalone city/DB
-            number (that read as «Я · Я · Сервер»); the city lives in the identity line above. */}
+        {/* Real behavioural stats — a viewed → saved → going funnel. Each is something you DID, not
+            a breakdown you could already read off the Избранное list. */}
         <div className="profile__hero profile__hero--3">
+          <div className="profile__stat">
+            <span className="hero-num">{viewed}</span>
+            <span className="kicker kicker--code">просмотрено</span>
+          </div>
           <div className="profile__stat">
             <span className="hero-num">{favIds.size}</span>
             <span className="kicker kicker--code">сохранено</span>
           </div>
           <div className="profile__stat">
-            <span className="hero-num">{soonList.length}</span>
-            <span className="kicker kicker--code">скоро</span>
-          </div>
-          <div className="profile__stat">
-            <span className="hero-num">{taste.length}</span>
-            <span className="kicker kicker--code">категории</span>
+            <span className="hero-num">{goingCount}</span>
+            <span className="kicker kicker--code">иду</span>
           </div>
         </div>
 
-        {/* «Твой вкус» — the cultural passport as editorial genre tags (NOT a multi-colour chart:
-            that broke the acid+cinnabar system). The top genre wears the one cinnabar accent. */}
-        <div className="recs__section recs__section--you">Твой вкус</div>
-        {taste.length > 0 ? (
-          <div className="taste">
-            {taste.slice(0, 6).map((t, i) => {
-              // Type size encodes the mix — your dominant genre is biggest, lesser ones smaller.
-              const size = 18 + Math.round((t.n / taste[0].n) * 16);
-              const isTop = i === 0 && t.n > (taste[1]?.n ?? 0);
-              return (
-                <span key={t.key} className={`tastetag${isTop ? " tastetag--top" : ""}`} style={{ fontSize: `${size}px` }}>
-                  {t.meta.label.toLowerCase()}
-                </span>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="profile__empty">
-            <span className="profile__empty-title">пока пусто</span>
-            <span className="profile__empty-text">
-              Сохраняй события сердечком — и здесь сложится твой культурный профиль: любимые жанры, площадки, ритм города.
-            </span>
-          </div>
-        )}
+        {/* «Твой вкус» — a card whose visualisation IS a contact-sheet of your saved-event posters
+            (your taste as images). Tap → Избранное. Empty → placeholder grid + a nudge. */}
+        <button type="button" className="tastecard" aria-label="Твой вкус — открыть избранное" onClick={onOpenFavorites}>
+          <span className="tastecard__head">
+            <span className="tastecard__title">Твой вкус</span>
+            <span className="tastecard__chev" aria-hidden="true">→</span>
+          </span>
+          {hasTaste ? (
+            <>
+              <span className="tastecard__grid">
+                {favs.slice(0, 6).map((f) => {
+                  const img = safeHttpUrl(f.primary_image_url);
+                  return (
+                    <span key={f.event_id} className="tastecard__cell">
+                      {img ? (
+                        <img className="tastecard__img" src={img} alt="" loading="lazy" decoding="async" />
+                      ) : (
+                        <span className="tastecard__glyph">
+                          <CategoryIcon cat={f.category} size={18} />
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </span>
+              <span className="tastecard__cap">{taste.slice(0, 4).map((t) => t.meta.label.toLowerCase()).join(" · ")}</span>
+            </>
+          ) : (
+            <>
+              <span className="tastecard__nudge">Пока ничего нет. Сохрани несколько событий — и здесь сложится твой культурный профиль.</span>
+              <span className="tastecard__grid">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <span key={i} className="tastecard__cell tastecard__cell--empty" />
+                ))}
+              </span>
+            </>
+          )}
+        </button>
 
         {/* Settings, grouped under their own header below the passport. */}
         <div className="recs__section">Уведомления</div>
