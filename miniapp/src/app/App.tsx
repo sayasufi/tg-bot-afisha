@@ -645,6 +645,15 @@ export function App() {
     const raw: string | undefined =
       wa?.initDataUnsafe?.start_param || new URLSearchParams(window.location.search).get("event") || undefined;
     if (!raw) return;
+    // The Mini App start_param sticks across reloads — without this guard every refresh re-opens
+    // the deep-linked event. Open it once per launch: sessionStorage survives reloads but clears on
+    // a fresh open, so re-tapping the invite still works.
+    try {
+      if (sessionStorage.getItem("okrest_deeplink") === raw) return;
+      sessionStorage.setItem("okrest_deeplink", raw);
+    } catch {
+      /* no storage (private mode) — fall through and open as before */
+    }
     // A share deep-link may carry the inviter: «<event-uuid>_<inviter-id>». The UUID has no '_',
     // so the part before the first '_' is the event id, the rest the inviter's telegram id.
     const us = raw.indexOf("_");
