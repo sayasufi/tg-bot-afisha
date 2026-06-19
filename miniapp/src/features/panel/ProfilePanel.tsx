@@ -135,18 +135,13 @@ export function ProfilePanel({
           </span>
           {hasTaste ? (
             <>
-              <span className="tastecard__grid">
-                {favs.slice(0, 6).map((f) => {
-                  const img = safeHttpUrl(f.primary_image_url);
+              <span className="tastecard__bubbles">
+                {taste.slice(0, 6).map((t) => {
+                  // Bubble diameter scales with the genre's share (biggest = your dominant taste).
+                  const d = 42 + Math.round((t.n / taste[0].n) * 40);
                   return (
-                    <span key={f.event_id} className="tastecard__cell">
-                      {img ? (
-                        <img className="tastecard__img" src={img} alt="" loading="lazy" decoding="async" />
-                      ) : (
-                        <span className="tastecard__glyph">
-                          <CategoryIcon cat={f.category} size={18} />
-                        </span>
-                      )}
+                    <span key={t.key} className="bubble" style={{ width: `${d}px`, height: `${d}px`, background: t.meta.color }}>
+                      <CategoryIcon cat={t.key} size={Math.round(d * 0.42)} />
                     </span>
                   );
                 })}
@@ -156,9 +151,9 @@ export function ProfilePanel({
           ) : (
             <>
               <span className="tastecard__nudge">Пока ничего нет. Сохрани несколько событий — и здесь сложится твой культурный профиль.</span>
-              <span className="tastecard__grid">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <span key={i} className="tastecard__cell tastecard__cell--empty" />
+              <span className="tastecard__bubbles">
+                {[66, 48, 58, 40, 44].map((d, i) => (
+                  <span key={i} className="bubble bubble--empty" style={{ width: `${d}px`, height: `${d}px` }} />
                 ))}
               </span>
             </>

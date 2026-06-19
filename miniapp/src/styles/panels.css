@@ -438,39 +438,28 @@ mark.hl {
   color: var(--bg);
   opacity: 0.55;
 }
-.tastecard__grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 5px;
+/* Bubble chart — one circle per genre, sized by its share, the category icon inside (muted
+   palette, not neon). The biggest bubble = your dominant taste; reads at a glance. */
+.tastecard__bubbles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 92px;
+  padding: 4px 0 2px;
 }
-.tastecard__cell {
-  position: relative;
-  aspect-ratio: 1;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-}
-/* Faint placeholder squares for the empty state (a tint of the inverse type colour). */
-.tastecard__cell--empty {
-  background: var(--bg);
-  opacity: 0.1;
-}
-.tastecard__img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: saturate(0.6) brightness(0.82) contrast(1.08);
-}
-.tastecard__glyph {
-  width: 100%;
-  height: 100%;
+.bubble {
+  flex: 0 0 auto;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--bg);
+  /* Dark category icon on the colour, like the reference (currentColor → CategoryIcon). */
   color: var(--ink);
-  opacity: 0.85;
+}
+.bubble--empty {
+  background: var(--bg);
+  opacity: 0.12;
 }
 .tastecard__cap {
   display: block;
