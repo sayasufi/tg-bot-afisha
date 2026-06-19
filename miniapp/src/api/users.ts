@@ -53,6 +53,7 @@ export type UserSettings = {
   coach?: boolean;
   swipe_seen?: boolean;
   interests?: string[]; // categories picked at onboarding — warms the "Для тебя" feed
+  notify_digest?: boolean; // opt-in to the weekly digest DM (default off)
 };
 
 export async function syncSettings(patch?: Partial<UserSettings>): Promise<UserSettings | null> {

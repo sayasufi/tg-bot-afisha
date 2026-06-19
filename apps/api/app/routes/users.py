@@ -70,6 +70,7 @@ class SettingsRequest(BaseModel):
     coach: bool | None = None
     swipe_seen: bool | None = None
     interests: list[str] | None = None  # categories picked at onboarding (warms «Для тебя»)
+    notify_digest: bool | None = None  # opt-in to the weekly digest DM (default off)
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -165,7 +166,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
     user, uid = _auth(payload.init_data)
     changing = any(
         v is not None
-        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests)
+        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests, payload.notify_digest)
     )
     if changing:
         # Only write the user row when actually changing a setting (a pure read on app
@@ -180,6 +181,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
             coach=payload.coach,
             swipe_seen=payload.swipe_seen,
             interests=payload.interests,
+            notify_digest=payload.notify_digest,
         )
         await db.commit()
     else:

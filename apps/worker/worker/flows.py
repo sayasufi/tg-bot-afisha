@@ -6,7 +6,7 @@ run history/observability UI. The logic lives in ``tasks/*`` and is unchanged.
 """
 from prefect import flow
 
-from apps.worker.worker.tasks import dedup, enrich, fetch, media, normalize, reminders
+from apps.worker.worker.tasks import dedup, digest, enrich, fetch, media, normalize, reminders
 
 _RETRIES = 2
 _RETRY_DELAY = 30  # seconds
@@ -150,3 +150,11 @@ async def send_reminders():
     channel). Idempotent: each reminder row is stamped sent_at after a delivered/permanent
     Telegram response, so a retry never double-sends."""
     return await reminders._send_reminders_impl()
+
+
+@flow(name="send-digest", retries=0, log_prints=True)
+async def send_digest():
+    """Weekly opt-in roundup DM: new at followed venues + the best of the coming weekend.
+    retries=0 on purpose — the cron fires once and there is no per-send dedup, so a retry would
+    double-send; a missed week is the safer failure."""
+    return await digest._send_digest_impl()

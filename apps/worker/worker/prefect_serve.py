@@ -52,6 +52,12 @@ def main() -> None:
         fl.to_deployment(name=fl.name, interval=interval, concurrency_limit=1)
         for fl, interval in _SCHEDULE
     ]
+    # Weekly digest — a CRON, not an interval, so it lands a fixed local time (the weekend-
+    # planning moment) instead of "1 week after this process last restarted". Fri 07:00 UTC =
+    # 10:00 MSK (MSK is a fixed UTC+3, no DST), so a plain UTC cron is stable year-round.
+    deployments.append(
+        flows.send_digest.to_deployment(name=flows.send_digest.name, cron="0 7 * * 5", concurrency_limit=1)
+    )
     serve(*deployments, limit=10)
 
 

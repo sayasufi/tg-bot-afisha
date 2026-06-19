@@ -63,6 +63,7 @@ def _settings_dict(user: User) -> dict:
         "coach": user.coach,
         "swipe_seen": user.swipe_seen,
         "interests": list(user.interests or []),
+        "notify_digest": user.notify_digest,
     }
 
 
@@ -82,6 +83,7 @@ async def update_settings(
     coach: bool | None = None,
     swipe_seen: bool | None = None,
     interests: list[str] | None = None,
+    notify_digest: bool | None = None,
 ) -> dict:
     """Set the provided settings (None = leave unchanged; "" clears city). No commit."""
     user = await db.get(User, telegram_user_id)
@@ -106,6 +108,8 @@ async def update_settings(
             if c and c not in seen:
                 seen.append(c)
         user.interests = seen[:20]
+    if notify_digest is not None:
+        user.notify_digest = bool(notify_digest)
     db.add(user)
     return _settings_dict(user)
 

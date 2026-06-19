@@ -167,3 +167,45 @@ def reminder_caption(item: dict, now: datetime | None = None) -> str:
     if wall:
         lines.append("\n<blockquote>" + "\n".join(wall) + "</blockquote>")
     return "\n".join(lines)
+
+
+_BOT_USERNAME = "okrestmap_bot"
+
+
+def event_deeplink(event_id: str) -> str:
+    """startapp link → opens the Mini App on this event (tappable title in a DM)."""
+    return f"https://t.me/{_BOT_USERNAME}?startapp={event_id}"
+
+
+def weekend_label(sat, sun) -> str:
+    """'20–21 июня', or '31 мая – 1 июня' when the weekend straddles two months."""
+    if sat.month == sun.month:
+        return f"{sat.day}–{sun.day} {_MONTHS[sat.month - 1]}"
+    return f"{sat.day} {_MONTHS[sat.month - 1]} – {sun.day} {_MONTHS[sun.month - 1]}"
+
+
+def _digest_line(item: dict, now: datetime | None) -> str:
+    title = escape(str(item.get("title") or "Событие")[:90])
+    sub = " · ".join(
+        p
+        for p in [when_phrase(item.get("date_start"), item.get("date_end"), now), escape(str(item.get("venue") or "").strip())]
+        if p
+    )
+    line = f'{glyph(item.get("category"))} <a href="{event_deeplink(item["event_id"])}"><b>{title}</b></a>'
+    return f"{line}\n<code>{sub}</code>" if sub else line
+
+
+def digest_message(venue_items: list[dict], weekend_items: list[dict], label: str, now: datetime | None = None) -> str:
+    """The weekly roundup DM: a hero, then 'new at your venues' (the follow loop) + the best of
+    this weekend. Each title is a deep-link that opens the event in the Mini App."""
+    now = now or datetime.now(timezone.utc)
+    lines = [f"{ce('⚡')} <b>афиша на выходные</b>"]
+    if label:
+        lines.append(f"<i>{escape(label)}</i>")
+    if venue_items:
+        lines.append("\n<b>новое на ваших площадках</b>")
+        lines.extend(_digest_line(it, now) for it in venue_items)
+    if weekend_items:
+        lines.append(f"\n{ce('📍')} <b>на выходных рядом</b>")
+        lines.extend(_digest_line(it, now) for it in weekend_items)
+    return "\n".join(lines)
