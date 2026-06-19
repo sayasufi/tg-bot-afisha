@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { fetchEventsByIds, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
@@ -42,6 +42,17 @@ export function ProfilePanel({
     fetchEventsByIds(ids).then(setFavs);
   }, [idsKey]);
 
+  // «Скоро» — how many of your SAVED events start within the next week. An actionable, honest
+  // nudge to come back (the app tracks no "visits"/attendance, so we never invent that metric).
+  const soonCount = useMemo(() => {
+    const now = Date.now();
+    const horizon = now + 7 * 86400 * 1000;
+    return favs.filter((f) => {
+      const t = new Date(f.date_start).getTime();
+      return !Number.isNaN(t) && t >= now && t <= horizon;
+    }).length;
+  }, [favs]);
+
   // "Твой вкус" — the category mix of your favourites, as a proportion bar.
   const taste = (() => {
     const counts = new Map<string, number>();
@@ -49,6 +60,7 @@ export function ProfilePanel({
     const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
     return ranked.map(([key, n]) => ({ key, n, meta: categoryMeta(key), pct: (n / favs.length) * 100 }));
   })();
+
   return (
     <div className="panelview">
       <header className="panelview__head">
@@ -67,23 +79,55 @@ export function ProfilePanel({
             <div className="profile__handle">{user?.username ? `@${user.username}` : "Telegram"}</div>
           </div>
         </div>
-        <div className="profile__hero">
-          <div className="profile__stat">
-            <span className="hero-num">{total}</span>
-            <span className="kicker kicker--code">событий в городе</span>
-          </div>
+
+        {/* Personal stats lead (saved · soon); the city + its count are folded in as the third cell,
+            so there's no standalone vanity "7269 в городе" and no separate «Город» row. */}
+        <div className="profile__hero profile__hero--3">
           <div className="profile__stat">
             <span className="hero-num">{favIds.size}</span>
-            <span className="kicker kicker--code">в избранном</span>
+            <span className="kicker kicker--code">сохранено</span>
           </div>
-        </div>
-        <div className="profile__rows">
-          <div className="profile__row">
-            <span>Город</span>
-            <b>{city}</b>
+          <div className="profile__stat">
+            <span className="hero-num">{soonCount}</span>
+            <span className="kicker kicker--code">скоро</span>
+          </div>
+          <div className="profile__stat">
+            <span className="hero-num">{total}</span>
+            <span className="kicker kicker--code">{city}</span>
           </div>
         </div>
 
+        {/* «Твой вкус» — the cultural-passport block, ALWAYS shown (mix or an inviting empty state)
+            and ABOVE the settings, so the profile reads as "who you are", not just toggles. */}
+        <div className="recs__section recs__section--you">Твой вкус</div>
+        {taste.length > 0 ? (
+          <div className="taste">
+            <div className="taste__bar">
+              {taste.map((t) => (
+                <span key={t.key} className="taste__seg" style={{ width: `${t.pct}%`, background: t.meta.color }} title={t.meta.label} />
+              ))}
+            </div>
+            <div className="taste__chips">
+              {taste.slice(0, 5).map((t) => (
+                <span key={t.key} className="taste__chip">
+                  <span className="taste__dot" style={{ background: t.meta.color }} />
+                  {t.meta.label}
+                  <b>{t.n}</b>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="profile__empty">
+            <span className="profile__empty-title">пока пусто</span>
+            <span className="profile__empty-text">
+              Сохраняй события сердечком — и здесь сложится твой культурный профиль: любимые жанры, площадки, ритм города.
+            </span>
+          </div>
+        )}
+
+        {/* Settings, grouped under their own header below the passport. */}
+        <div className="recs__section">Уведомления</div>
         <button
           type="button"
           className={`profile__switch${notifyReminders ? " profile__switch--on" : ""}`}
@@ -115,34 +159,6 @@ export function ProfilePanel({
             <span className="profile__switch-knob" />
           </span>
         </button>
-
-        {taste.length > 0 && (
-          <>
-            <div className="recs__section">Твой вкус</div>
-            <div className="taste">
-              <div className="taste__bar">
-                {taste.map((t) => (
-                  <span key={t.key} className="taste__seg" style={{ width: `${t.pct}%`, background: t.meta.color }} title={t.meta.label} />
-                ))}
-              </div>
-              <div className="taste__chips">
-                {taste.slice(0, 4).map((t) => (
-                  <span key={t.key} className="taste__chip">
-                    <span className="taste__dot" style={{ background: t.meta.color }} />
-                    {t.meta.label}
-                    <b>{t.n}</b>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {taste.length === 0 && (
-          <p className="panelview__hint">
-            Отмечай события сердечком в карточке — они соберутся во вкладке «Избранное», а здесь сложится твой вкус. Город определяется по геолокации прямо в карте.
-          </p>
-        )}
       </div>
     </div>
   );

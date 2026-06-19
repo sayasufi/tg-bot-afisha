@@ -309,6 +309,43 @@ mark.hl {
   font-size: clamp(40px, 13vw, 56px);
 }
 
+/* 3-up stat row (сохранено · скоро · city) — tighter cells + a smaller numeral so three fit. */
+.profile__hero--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.profile__hero--3 .profile__stat {
+  padding: 16px 12px 14px;
+}
+.profile__hero--3 .profile__stat .hero-num {
+  font-size: clamp(26px, 8vw, 34px);
+}
+
+/* «Твой вкус» empty state — an inviting slot framed like a catalogue card, not a paragraph of
+   documentation. Shown until the first save fills the taste mix in. */
+.profile__empty {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 20px 16px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.profile__empty-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+  color: var(--ink);
+}
+.profile__empty-text {
+  font-family: var(--grotesk);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
 /* "Твой вкус" — favourite category mix. */
 .taste {
   margin-top: 22px;
