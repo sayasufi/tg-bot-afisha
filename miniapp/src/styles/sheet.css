@@ -368,9 +368,13 @@ html[data-theme="dark"] .sheet-veil {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
-  margin: 0 0 14px;
-  /* A complete bordered table in the mat: full ink frame + 1px gaps as the inner rules. */
-  border: 1px solid var(--line);
+  /* Integrated into the card, NOT a separate boxed table: break out of the 10px mat so the
+     card's own border is the grid's left/right frame; only top + bottom are the grid's rules,
+     and the 1px gaps are the inner rules. */
+  margin: 0 -10px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   background: var(--line);
 }
 .xcell {
@@ -602,9 +606,9 @@ html[data-theme="dark"] .sheet-veil {
   padding: 2px 7px;
 }
 
-/* Description — a plain text block in the mat between the framed grid and CTA. */
+/* Description — a plain inset text block between the full-bleed grid and CTA. */
 .sheet__desc-wrap {
-  margin: 0 0 14px;
+  margin: 14px 0;
   padding: 0;
 }
 
@@ -641,8 +645,11 @@ html[data-theme="dark"] .sheet-veil {
 .sheet__actions {
   display: flex;
   gap: 0;
-  margin: 0;
-  border: 1px solid var(--line);
+  /* Integrated into the card like the grid: break out of the mat (incl. the bottom) so the row
+     meets the card's bottom + side borders; only the top is its own rule, btns divide it. */
+  margin: 0 -10px -10px;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
 .btn {
