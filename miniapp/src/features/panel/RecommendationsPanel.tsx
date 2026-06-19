@@ -218,7 +218,6 @@ export function RecommendationsPanel({
           <section className="rail">
             <div className="rail__head">
               <span className="rail__title">По интересам</span>
-              <span className="rail__sub">выберите категорию</span>
               <button type="button" className="rail__more" onClick={onAllCategories}>
                 все категории →
               </button>

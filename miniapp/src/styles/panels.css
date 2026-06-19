@@ -745,15 +745,19 @@ mark.hl {
 }
 
 .rail__title {
+  flex: 0 0 auto; /* the label never wraps or shrinks — only the subtitle gives way when tight */
   font-family: var(--grotesk);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .rail__sub {
+  flex: 0 1 auto; /* shrinks + ellipsises first so the title and the «смотреть все» link stay intact */
+  min-width: 0;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.02em;
