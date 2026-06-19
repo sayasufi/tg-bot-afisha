@@ -24,9 +24,12 @@ router = APIRouter(prefix="/v1/share", tags=["share"])
 BOT_USERNAME = "okrestmap_bot"
 
 
-def _open_url(event_id) -> str:
-    # startapp deep link → opens the Mini App with this event as the start param.
-    return f"https://t.me/{BOT_USERNAME}?startapp={event_id}"
+def _open_url(event_id, inviter=None) -> str:
+    # startapp deep link → opens the Mini App on this event. With an inviter it becomes an
+    # answerable invite (the App shows «тебя зовут» + «Я иду»); the inviter id is appended after
+    # the UUID, which contains no '_', so the App splits the start param on '_'.
+    param = f"{event_id}_{inviter}" if inviter else f"{event_id}"
+    return f"https://t.me/{BOT_USERNAME}?startapp={param}"
 
 _MONTHS = [
     "января", "февраля", "марта", "апреля", "мая", "июня",
@@ -202,7 +205,7 @@ async def prepare(payload: PrepareRequest, db: AsyncSession = Depends(get_async_
         "thumbnail_url": photo_url,
         "caption": caption[:1024],
         "parse_mode": "HTML",
-        "reply_markup": {"inline_keyboard": [[{"text": "Открыть в Окрест", "url": _open_url(payload.event_id)}]]},
+        "reply_markup": {"inline_keyboard": [[{"text": "Открыть в Окрест", "url": _open_url(payload.event_id, uid)}]]},
     }
     try:
         async with httpx.AsyncClient(timeout=10) as client:

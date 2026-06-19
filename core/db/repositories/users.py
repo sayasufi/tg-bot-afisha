@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from core.db.models import City, Event, RawEvent, User, UserFavorite, Venue
+from core.db.models.ref.event_going import EventGoing
 from core.db.models.ref.user_venue_follow import UserVenueFollow
 from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
@@ -195,6 +196,42 @@ async def set_venue_follow(db: AsyncSession, telegram_user_id: int, venue_id: in
                 UserVenueFollow.venue_id == vid,
             )
         )
+
+
+async def list_going_ids(db: AsyncSession, telegram_user_id: int) -> list[str]:
+    """Event ids the user said «Я иду» to — drives the button's confirmed state."""
+    rows = (
+        await db.execute(select(EventGoing.event_id).where(EventGoing.telegram_user_id == telegram_user_id))
+    ).scalars().all()
+    return [str(r) for r in rows]
+
+
+async def set_going(db: AsyncSession, telegram_user_id: int, event_id: str, inviter_id: int | None = None) -> bool:
+    """Mark the user as going (idempotent — re-confirming is a no-op). Returns True only on the
+    FIRST insert, so the caller DMs the inviter exactly once. No commit. Inserts only a still-
+    existing event (FK); a self-invite (inviter == self) is stored as no inviter."""
+    try:
+        eid = uuid.UUID(str(event_id))
+    except (ValueError, TypeError):
+        return False
+    if (await db.execute(select(Event.event_id).where(Event.event_id == eid))).first() is None:
+        return False  # event no longer exists
+    inv = int(inviter_id) if inviter_id and int(inviter_id) != telegram_user_id else None
+    res = await db.execute(
+        pg_insert(EventGoing.__table__)
+        .values(telegram_user_id=telegram_user_id, event_id=eid, inviter_id=inv)
+        .on_conflict_do_nothing()
+    )
+    return bool(res.rowcount)  # rows inserted (0 on conflict) → first-time going
+
+
+async def event_title(db: AsyncSession, event_id: str) -> str | None:
+    """The event's title — for the inviter-notification DM. None if the event is gone."""
+    try:
+        eid = uuid.UUID(str(event_id))
+    except (ValueError, TypeError):
+        return None
+    return await db.scalar(select(Event.canonical_title).where(Event.event_id == eid))
 
 
 async def save_forward_message(db: AsyncSession, message_id: int, chat_id: int, payload: dict) -> RawEvent:

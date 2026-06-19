@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
+from html import escape
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.services.geo import reverse_city
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.cities import city_by_name
+from core.config.settings import get_settings as get_app_settings
 from core.db.repositories.reminders import (
     cancel_reminder,
     list_reminder_ids,
@@ -15,10 +18,13 @@ from core.db.repositories.reminders import (
 )
 from core.db.repositories.users import (
     add_favorites,
+    event_title,
     get_settings,
     list_favorite_ids,
     list_followed_venue_ids,
+    list_going_ids,
     set_favorite,
+    set_going,
     set_venue_follow,
     update_settings,
     upsert_user,  # sync — for the low-frequency /location route
@@ -59,6 +65,12 @@ class VenueFollowRequest(BaseModel):
     init_data: str
     venue_id: int | None = None  # omit (just LIST the followed venues) or include to toggle
     on: bool | None = None
+
+
+class GoingRequest(BaseModel):
+    init_data: str
+    event_id: str | None = None  # omit (just LIST going ids) or include to confirm «Я иду»
+    inviter_id: int | None = None  # the sharer who invited me (from the share deep-link), if any
 
 
 class SettingsRequest(BaseModel):
@@ -158,6 +170,44 @@ async def toggle_venue_follow(payload: VenueFollowRequest, db: AsyncSession = De
         await set_venue_follow(db, uid, payload.venue_id, payload.on)
     await db.commit()
     return {"ids": await list_followed_venue_ids(db, uid)}
+
+
+async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
+    """DM the inviter that someone accepted their «Пойдём?» — best-effort, never blocks the
+    response. The inviter started the bot (they shared from the Mini App), so the DM is allowed."""
+    token = get_app_settings().telegram_bot_token
+    if not token or not inviter_id:
+        return
+    text = f"🎉 <b>{escape(name or 'Кто-то')}</b> идёт с тобой\n{escape(title or 'на событие')}"
+    markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": int(inviter_id), "text": text, "parse_mode": "HTML",
+                      "reply_markup": markup, "disable_web_page_preview": True},
+            )
+    except Exception:
+        pass  # the going is already recorded; the nudge is best-effort
+
+
+@router.post("/going")
+async def toggle_going(payload: GoingRequest, db: AsyncSession = Depends(get_async_db)):
+    """Confirm «Я иду» on an event (idempotent), or — with no event_id — just list going ids.
+    On the FIRST confirmation that carries an inviter, DM the inviter that you're coming."""
+    user, uid = _auth(payload.init_data)
+    await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+    notify: tuple[int, str] | None = None
+    if payload.event_id is not None:
+        first_time = await set_going(db, uid, payload.event_id, payload.inviter_id)
+        if first_time and payload.inviter_id and int(payload.inviter_id) != uid:
+            title = await event_title(db, payload.event_id)
+            notify = (int(payload.inviter_id), title or "")
+    await db.commit()
+    # Send the nudge AFTER the commit so the going is durable even if Telegram is slow/down.
+    if notify:
+        await _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
+    return {"ids": await list_going_ids(db, uid)}
 
 
 @router.post("/settings")

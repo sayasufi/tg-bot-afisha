@@ -6,6 +6,7 @@ from core.db.models.events.raw_event import RawEvent
 from core.db.models.events.source_run import SourceRun
 from core.db.models.events.venue import Venue
 from core.db.models.ref.city import City
+from core.db.models.ref.event_going import EventGoing
 from core.db.models.ref.event_reminder import EventReminder
 from core.db.models.ref.map_place import MapPlace
 from core.db.models.ref.source import Source
@@ -18,6 +19,7 @@ __all__ = [
     "City",
     "Event",
     "EventCandidate",
+    "EventGoing",
     "EventOccurrence",
     "EventReminder",
     "EventSource",
