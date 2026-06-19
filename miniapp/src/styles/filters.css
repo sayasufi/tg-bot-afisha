@@ -426,6 +426,10 @@
   border: 0;
   background: var(--acid);
   color: var(--on-acid);
+  /* Acid is a LIGHT colour — anchor it with the cinnabar registration-offset (same
+     ghost as .venuesheet__follow / .onboard__cta--ready) so the primary CTA reads
+     instead of washing out on the light plaster. */
+  box-shadow: 2px 2px 0 var(--cinnabar);
   font-family: var(--grotesk);
   font-weight: 600;
   font-size: 13px;
@@ -433,6 +437,7 @@
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+  transition: transform 0.1s var(--ease-cut), box-shadow 0.1s var(--ease-cut);
 }
 
 .csheet__reset:active {
@@ -441,5 +446,7 @@
 
 .csheet__apply:active {
   background: var(--acid-deep);
+  box-shadow: none;
+  transform: translate(2px, 2px);
 }
 

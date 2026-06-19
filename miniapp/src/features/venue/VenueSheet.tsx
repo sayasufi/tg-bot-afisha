@@ -33,6 +33,8 @@ export function VenueSheet({
 }) {
   const [venue, setVenue] = useState<VenueDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const follows = useVenueFollows();
   const id = String(venueId);
   const followed = follows.has(id);
@@ -40,13 +42,22 @@ export function VenueSheet({
   useEffect(() => {
     setVenue(null);
     setLoading(true);
+    setError(false);
     const ctrl = new AbortController();
     fetchVenue(venueId, ctrl.signal)
-      .then(setVenue)
-      .catch(() => undefined)
-      .finally(() => setLoading(false));
+      .then((v) => {
+        setVenue(v);
+        setLoading(false);
+      })
+      // A failed load is NOT "no upcoming events" — show a retry instead of a false empty.
+      .catch((e) => {
+        if (e?.name !== "AbortError") {
+          setLoading(false);
+          setError(true);
+        }
+      });
     return () => ctrl.abort();
-  }, [venueId]);
+  }, [venueId, reloadNonce]);
 
   const onFollow = () => {
     haptic("light");
@@ -89,7 +100,14 @@ export function VenueSheet({
         </div>
       </div>
       <div className="panelview__scroll">
-        {loading && !venue ? null : events.length > 0 ? (
+        {loading && !venue ? null : error ? (
+          <div className="favempty">
+            <p className="panelview__hint">Не удалось загрузить площадку. Попробуй ещё раз.</p>
+            <button type="button" className="btn btn--primary" onClick={() => setReloadNonce((n) => n + 1)}>
+              Повторить
+            </button>
+          </div>
+        ) : events.length > 0 ? (
           events.map((it, i) => (
             <EventListRow key={it.event_id} item={it} index={i} userPos={userPos} now={now} onSelect={onSelect} />
           ))

@@ -38,6 +38,8 @@ _MAX_RAILS = 7  # hard cap so the feed is a few strong rails, not a wall of rela
 _NEAR_KM = 8.0
 _RECENT_CAP = 60  # max recent opens the client may send (behavioural profile)
 _VIEWS_KEY = "rec:views"
+_INTENT_KEY = "intent:event"  # higher-value actions (route/click/share)
+_INTENT_W = 4  # one intent hit ≈ this many opens when blended into popularity
 
 # The expensive part of a feed — loading the city pool and scoring every event's
 # NON-PERSONAL features (time-window/soon, live-now, popularity, quality, freshness,
@@ -264,12 +266,22 @@ class RecommendationService:
         return [dict(r) for r in rows]
 
     async def _views(self) -> dict[str, int]:
+        """Effective popularity per event: rec:views (an open) BLENDED with intent:event
+        (route/click/share — higher-value actions, see routes/intent.py), each intent hit
+        weighted _INTENT_W opens. Best-effort — either hash may be absent."""
         client = _redis_client()
         if client is None:
             return {}
         try:
-            raw = await client.hgetall(_VIEWS_KEY)
-            return {k: int(v) for k, v in raw.items() if str(v).isdigit()}
+            pipe = client.pipeline()
+            pipe.hgetall(_VIEWS_KEY)
+            pipe.hgetall(_INTENT_KEY)
+            views_raw, intent_raw = await pipe.execute()
+            out: dict[str, int] = {k: int(v) for k, v in (views_raw or {}).items() if str(v).isdigit()}
+            for k, v in (intent_raw or {}).items():
+                if str(v).isdigit():
+                    out[k] = out.get(k, 0) + _INTENT_W * int(v)
+            return out
         except Exception:  # pragma: no cover
             return {}
 

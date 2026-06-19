@@ -42,21 +42,26 @@ def prune(apply: bool) -> dict:
         now = datetime.now(timezone.utc)
         until = now + timedelta(days=_OCCURRENCE_LOOKAHEAD_DAYS)
         now_ts = int(now.timestamp())
+        until_ts = int(until.timestamp())
         eids = [r[0] for r in db.execute(text(_EVENTS)).all()]
         ev_pruned = occ_pruned = 0
         for eid in eids:
+            # Bucket every date to the MINUTE (epoch // 60). A sub-minute drift between
+            # ingests (Yandex vs the stored occurrence) must NOT make the same logical
+            # session count as both present-in-raw and stale — that would delete a
+            # still-valid future occurrence. Match on the minute on BOTH sides.
             cur = set()
             for (payload,) in db.execute(text(_RAWS), {"e": str(eid)}).all():
                 for start, _end in _payload_session_dates(payload, now, until):
-                    cur.add(int(start.timestamp()))
+                    cur.add(int(start.timestamp()) // 60)
             if not cur:
                 continue  # no authoritative raw dates (LLM/ldjson source) — leave it
             occs = db.execute(text(_OCCS), {"e": str(eid)}).all()
             # Only prune when the event still has a real current date (guards against
             # a transient empty/parse-failed raw wiping every occurrence).
-            if not any(int(ts) in cur for _oid, ts in occs):
+            if not any(int(ts) // 60 in cur for _oid, ts in occs):
                 continue
-            stale = [oid for oid, ts in occs if now_ts <= int(ts) <= int(until.timestamp()) and int(ts) not in cur]
+            stale = [oid for oid, ts in occs if now_ts <= int(ts) <= until_ts and int(ts) // 60 not in cur]
             if not stale:
                 continue
             db.execute(text("delete from events.event_occurrences where occurrence_id = any(:ids)"), {"ids": stale})

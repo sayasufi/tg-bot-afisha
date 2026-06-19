@@ -156,7 +156,8 @@ class KudaGoConnector:
             "Accept-Language": "ru,en;q=0.8",
         }
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=20.0, pool=20.0)
-        async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
+        # SSRF guard: don't follow redirects into internal space.
+        async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=False) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             data = response.json()

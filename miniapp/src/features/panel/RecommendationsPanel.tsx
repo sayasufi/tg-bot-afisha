@@ -66,8 +66,10 @@ export function RecommendationsPanel({
   const [rails, setRails] = useState<Rail[]>([]);
   const [collections, setCollections] = useState<Rail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [localNonce, setLocalNonce] = useState(0);
-  const ptr = usePullToRefresh(() => setLocalNonce((n) => n + 1));
+  const retry = () => setLocalNonce((n) => n + 1);
+  const ptr = usePullToRefresh(retry);
 
   // Re-fetch when location, interests, or a refresh signal changes. The string
   // key avoids refetching on every render from the userPos array identity.
@@ -77,6 +79,7 @@ export function RecommendationsPanel({
 
   useEffect(() => {
     setLoading(true);
+    setError(false);
     const ctrl = new AbortController();
     fetchRecommendations({ lat, lon, interests: interestsKey ? interestsKey.split(",") : [], recent: recentCategories(), city }, ctrl.signal)
       .then((r) => {
@@ -86,15 +89,17 @@ export function RecommendationsPanel({
       })
       .catch((e) => {
         if (e?.name !== "AbortError") {
+          // A failed fetch is NOT an empty result — surface a retry, don't render "пусто".
           setRails([]);
           setCollections([]);
           setLoading(false);
+          setError(true);
         }
       });
     return () => ctrl.abort();
   }, [lat, lon, interestsKey, refreshNonce, localNonce, city]);
 
-  const empty = !loading && rails.length === 0 && collections.length === 0;
+  const empty = !loading && !error && rails.length === 0 && collections.length === 0;
 
   return (
     <div className="panelview">
@@ -107,6 +112,14 @@ export function RecommendationsPanel({
       <div className="panelview__scroll panelview__scroll--rails" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {loading && rails.length === 0 && <RailSkeleton />}
+        {error && (
+          <div className="favempty">
+            <p className="panelview__hint">Не удалось загрузить подборку. Попробуй ещё раз.</p>
+            <button type="button" className="btn btn--primary" onClick={retry}>
+              Повторить
+            </button>
+          </div>
+        )}
         {empty && <p className="panelview__empty">пока нечего показать</p>}
         {/* Personal hero leads, then the curated «Подборки» shelf, then the rest. */}
         {rails[0] && <RecRail key={rails[0].key} rail={rails[0]} userPos={userPos} onSelect={onSelect} />}

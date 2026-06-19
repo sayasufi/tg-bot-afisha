@@ -186,9 +186,15 @@ def weekend_label(sat, sun) -> str:
 
 def _digest_line(item: dict, now: datetime | None) -> str:
     title = escape(str(item.get("title") or "Событие")[:90])
+    # Accession code · when · venue — same signature grammar as reminder_caption, so a digest
+    # row and a reminder for the same event read identically (the code is escaped + monospaced).
     sub = " · ".join(
         p
-        for p in [when_phrase(item.get("date_start"), item.get("date_end"), now), escape(str(item.get("venue") or "").strip())]
+        for p in [
+            escape(str(item.get("code") or "").strip()),
+            when_phrase(item.get("date_start"), item.get("date_end"), now),
+            escape(str(item.get("venue") or "").strip()),
+        ]
         if p
     )
     line = f'{glyph(item.get("category"))} <a href="{event_deeplink(item["event_id"])}"><b>{title}</b></a>'

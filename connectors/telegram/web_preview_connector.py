@@ -103,7 +103,7 @@ class TelegramWebPreviewConnector:
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(connect=10, read=30, write=10, pool=10),
-            follow_redirects=True,
+            follow_redirects=False,  # SSRF guard: don't follow redirects into internal space
             headers={
                 "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
                 "Accept-Language": "ru,en;q=0.8",

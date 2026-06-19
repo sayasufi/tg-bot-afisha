@@ -273,8 +273,9 @@ html[data-theme="dark"] .sheet-veil {
   border-bottom: 1px solid var(--ink);
 }
 .sheet__picon {
-  width: 38px;
-  height: 38px;
+  /* 44px min touch target (was 38px); glyph stays centred via place-items. */
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border: 0;
@@ -678,10 +679,17 @@ html[data-theme="dark"] .sheet-veil {
 .btn--primary {
   background: var(--acid);
   color: var(--on-acid);
+  /* Acid washes out on light — give the primary the same cinnabar registration-offset
+     anchor as .venuesheet__follow / .onboard__cta--ready. The offset reads against the
+     plaster below the card's flush bottom edge. */
+  box-shadow: 2px 2px 0 var(--cinnabar);
+  transition: transform 0.1s var(--ease-cut), box-shadow 0.1s var(--ease-cut);
 }
 
 .btn--primary:active {
   background: var(--acid-deep);
+  box-shadow: none;
+  transform: translate(2px, 2px);
 }
 
 .btn--ghost {

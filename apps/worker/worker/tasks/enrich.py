@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import math
 import re
 import time
@@ -23,6 +24,8 @@ from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.geocoding.service import GeocodingService
 from pipeline.llm.service import LLMService
 
+
+_log = logging.getLogger(__name__)
 
 _UNKNOWN_VENUE = "Unknown venue"  # placeholder when a source gives no venue name
 
@@ -94,80 +97,89 @@ async def _enrich_impl() -> dict:
             if not candidate:
                 continue
 
-            venue_name = (candidate.venue or "").strip() or _UNKNOWN_VENUE
-            address = (candidate.address or "").strip()
-            geo = None
-            venue = None
-            lat = lon = None
-            provider = ""
-            confidence = 0.0
+            # Isolate each candidate: one that deterministically raises (bad payload,
+            # geocoder/LLM blow-up) must not become a permanent head-of-line block for
+            # every candidate ordered after it. Log with the id, roll back the failed
+            # transaction so the session is usable, and move on.
+            try:
+                venue_name = (candidate.venue or "").strip() or _UNKNOWN_VENUE
+                address = (candidate.address or "").strip()
+                geo = None
+                venue = None
+                lat = lon = None
+                provider = ""
+                confidence = 0.0
 
-            raw = await get_raw(db, candidate.raw_id)
-            # City comes from the event's source (multi-city), not a global default.
-            city_cfg = city_for_source_config(raw.source.config_json if raw and raw.source else None)
-            city = city_cfg.name
-            country = city_cfg.country
-            src = _source_coords(raw.raw_payload_json if raw else None)
+                raw = await get_raw(db, candidate.raw_id)
+                # City comes from the event's source (multi-city), not a global default.
+                city_cfg = city_for_source_config(raw.source.config_json if raw and raw.source else None)
+                city = city_cfg.name
+                country = city_cfg.country
+                src = _source_coords(raw.raw_payload_json if raw else None)
 
-            if src:
-                # 0) Exact coordinates from the source — most accurate, no geocoding.
-                lat, lon = src
-                provider, confidence = "source", 0.95
-            else:
-                # 1) Source address: geocode it (street/house level) — but NOT a
-                # city/country-only address, which only yields the city centroid.
-                if address and not _is_city_level_only(address, city, country):
-                    geo = await geocoder.geocode(address, city_hint=city)
+                if src:
+                    # 0) Exact coordinates from the source — most accurate, no geocoding.
+                    lat, lon = src
+                    provider, confidence = "source", 0.95
+                else:
+                    # 1) Source address: geocode it (street/house level) — but NOT a
+                    # city/country-only address, which only yields the city centroid.
+                    if address and not _is_city_level_only(address, city, country):
+                        geo = await geocoder.geocode(address, city_hint=city)
 
-                # 2) Local venue cache: venue + city -> known address/coords.
-                if not geo and not address and venue_name != _UNKNOWN_VENUE:
-                    cached_venue = await find_cached_venue(db, venue_name, city, country)
-                    if cached_venue:
-                        venue = cached_venue
-                        address = cached_venue.address
+                    # 2) Local venue cache: venue + city -> known address/coords.
+                    if not geo and not address and venue_name != _UNKNOWN_VENUE:
+                        cached_venue = await find_cached_venue(db, venue_name, city, country)
+                        if cached_venue:
+                            venue = cached_venue
+                            address = cached_venue.address
 
-                # 3) OSM-first fallback for missing address.
-                if not geo and venue is None and not address and venue_name != _UNKNOWN_VENUE:
-                    geo = await geocoder.geocode_venue_osm_first(venue_name, city_hint=city)
-                    if geo and geo.normalized_address:
-                        address = geo.normalized_address
+                    # 3) OSM-first fallback for missing address.
+                    if not geo and venue is None and not address and venue_name != _UNKNOWN_VENUE:
+                        geo = await geocoder.geocode_venue_osm_first(venue_name, city_hint=city)
+                        if geo and geo.normalized_address:
+                            address = geo.normalized_address
 
-                if geo:
-                    lat, lon, provider, confidence = geo.lat, geo.lon, geo.provider, geo.confidence
+                    if geo:
+                        lat, lon, provider, confidence = geo.lat, geo.lon, geo.provider, geo.confidence
 
-            if venue is None:
-                venue = await get_or_create_venue(
-                    db,
-                    name=venue_name,
-                    address=address,
-                    city=city,
-                    country=country,
-                    lat=lat,
-                    lon=lon,
-                    provider=provider,
-                    confidence=confidence,
-                )
-            candidate.venue_id = venue.venue_id
-            # Category: trust the structured source's own label first (Yandex
-            # type / KudaGo category), since the LLM over-fires 'lecture' on any
-            # mention of a master-class. Only ask the LLM when the source gave
-            # nothing usable (untyped events, Telegram free text) — which also
-            # skips the ~20s LLM round-trip for the common, well-typed case.
-            source_name = raw.source.name if raw and raw.source else ""
-            category = map_source_category(candidate.tags_json, source_name)
-            if category is None:
-                classify = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
-                category = classify.category
-                candidate.tags_json = list(set(candidate.tags_json + classify.tags))
-            # Tag the resolved category — INCLUDING "other" — so dedup treats the
-            # candidate as already classified and doesn't pay for a second LLM
-            # classify of the same event.
-            if category:
-                candidate.tags_json.append(f"category:{category}")
-            db.add(candidate)
-            db.add(venue)
-            await db.commit()
-            enriched += 1
+                if venue is None:
+                    venue = await get_or_create_venue(
+                        db,
+                        name=venue_name,
+                        address=address,
+                        city=city,
+                        country=country,
+                        lat=lat,
+                        lon=lon,
+                        provider=provider,
+                        confidence=confidence,
+                    )
+                candidate.venue_id = venue.venue_id
+                # Category: trust the structured source's own label first (Yandex
+                # type / KudaGo category), since the LLM over-fires 'lecture' on any
+                # mention of a master-class. Only ask the LLM when the source gave
+                # nothing usable (untyped events, Telegram free text) — which also
+                # skips the ~20s LLM round-trip for the common, well-typed case.
+                source_name = raw.source.name if raw and raw.source else ""
+                category = map_source_category(candidate.tags_json, source_name)
+                if category is None:
+                    classify = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
+                    category = classify.category
+                    candidate.tags_json = list(set(candidate.tags_json + classify.tags))
+                # Tag the resolved category — INCLUDING "other" — so dedup treats the
+                # candidate as already classified and doesn't pay for a second LLM
+                # classify of the same event.
+                if category:
+                    candidate.tags_json.append(f"category:{category}")
+                db.add(candidate)
+                db.add(venue)
+                await db.commit()
+                enriched += 1
+            except Exception:
+                _log.exception("enrich: candidate %s failed, skipping", candidate_id)
+                await db.rollback()
+                continue
         return {"enriched": enriched}
 
 

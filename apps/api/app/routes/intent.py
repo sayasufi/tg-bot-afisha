@@ -49,13 +49,15 @@ async def log_intent(payload: IntentRequest) -> Response:
                 except Exception:  # invalid/expired initData → count the action, not the user
                     uid = None
             pipe = client.pipeline()
-            pipe.incr(f"intent:act:{kind}:{day}")
+            pipe.incr(f"intent:act:{kind}:{day}")  # aggregate counter stays fail-open
             pipe.expire(f"intent:act:{kind}:{day}", _ACT_TTL)
             if uid is not None:
                 pipe.sadd(f"intent:wau:{week}", str(uid))
                 pipe.expire(f"intent:wau:{week}", _WAU_TTL)
-            if payload.event_id:
-                pipe.hincrby("intent:event", payload.event_id, 1)
+                # Per-event hash feeds ranking → only a VERIFIED uid may increment it,
+                # else it is write-spammable and poisons popularity (mirror recommend.py).
+                if payload.event_id:
+                    pipe.hincrby("intent:event", payload.event_id, 1)
             await pipe.execute()
         except Exception:  # pragma: no cover — telemetry is best-effort
             pass

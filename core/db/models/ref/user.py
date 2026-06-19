@@ -32,5 +32,10 @@ class User(Base):
     # consent; this is a global mute). The weekly digest is strictly opt-in (default off).
     notify_reminders: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     notify_digest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Per-send ledger for the weekly digest — the instant we last DM'd this user a digest.
+    # opted_in_users() filters on it (NULL or < this week's start) so a redeploy/manual re-run/
+    # missed-run catchup in the same ISO week never double-sends; only a delivered (or permanently
+    # failed) send stamps it. NULL = never sent.
+    last_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -22,10 +22,12 @@ export function FavoritesPanel({
 }) {
   const [favs, setFavs] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const idsKey = [...favIds].sort().join(",");
 
   const load = () => {
     const ids = idsKey ? idsKey.split(",") : [];
+    setError(false);
     if (!ids.length) {
       setFavs([]);
       setLoading(false);
@@ -33,8 +35,15 @@ export function FavoritesPanel({
     }
     setLoading(true);
     fetchEventsByIds(ids, userPos ?? null)
-      .then(setFavs)
-      .finally(() => setLoading(false));
+      .then((r) => {
+        setFavs(r);
+        setLoading(false);
+      })
+      // A failed fetch is NOT an empty favourites list — keep the count, show a retry.
+      .catch(() => {
+        setLoading(false);
+        setError(true);
+      });
   };
   // Mounted only while the favourites view is open; (re)fetch on open and when the set changes.
   useEffect(() => {
@@ -56,7 +65,14 @@ export function FavoritesPanel({
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {favs.length > 0 ? (
           <CatalogFeed items={favs} userPos={userPos} onSelect={onSelect} />
-        ) : loading ? null : (
+        ) : loading ? null : error ? (
+          <div className="favempty">
+            <p className="panelview__hint">Не удалось загрузить избранное. Попробуй ещё раз.</p>
+            <button type="button" className="btn btn--primary" onClick={load}>
+              Повторить
+            </button>
+          </div>
+        ) : (
           <div className="favempty">
             <IconHeart size={40} className="favempty__glyph" />
             <p className="panelview__hint">

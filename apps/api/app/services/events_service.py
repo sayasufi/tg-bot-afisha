@@ -32,6 +32,9 @@ _MAP_CACHE_TTL = 180
 # HGETALL the whole engagement hash on every request (it accumulates forever, no TTL).
 _VIEWS_TTL = 30.0
 _views_cache: tuple[float, dict] | None = None
+# Each intent:event hit (route/click/share) is worth this many opens when blended into the
+# effective popularity — high-value actions should outweigh a passive view.
+_INTENT_W = 4
 
 
 def _redis_client() -> aioredis.Redis | None:
@@ -616,8 +619,10 @@ class EventQueryService:
         return {"items": [self._list_item(r, now_msk) for r in rows]}
 
     async def _views_counts(self) -> dict:
-        """rec:views parsed to {event_id: count}, cached in-process for _VIEWS_TTL so the
-        popularity sort doesn't HGETALL the whole (unbounded, no-TTL) hash per request."""
+        """Effective popularity per event = rec:views (an open) BLENDED with intent:event
+        (route/click/share — higher-value actions worth more per hit, see routes/intent.py).
+        Cached in-process for _VIEWS_TTL so the popularity sort doesn't HGETALL the
+        (unbounded, no-TTL) hashes per request. Best-effort — either hash may be missing."""
         global _views_cache
         now = time.monotonic()
         if _views_cache is not None and _views_cache[0] > now:
@@ -626,14 +631,20 @@ class EventQueryService:
         client = _redis_client()
         if client is not None:
             try:
-                raw = await client.hgetall("rec:views")
-                for k, v in raw.items():
-                    key = k.decode() if isinstance(k, bytes) else k
-                    val = v.decode() if isinstance(v, bytes) else v
-                    try:
-                        data[UUID(str(key))] = int(val)
-                    except (ValueError, AttributeError):
-                        continue
+                pipe = client.pipeline()
+                pipe.hgetall("rec:views")
+                pipe.hgetall("intent:event")
+                views_raw, intent_raw = await pipe.execute()
+                # views first (weight 1), then add intent (weight _INTENT_W) onto the same key.
+                for raw, weight in ((views_raw, 1), (intent_raw, _INTENT_W)):
+                    for k, v in (raw or {}).items():
+                        key = k.decode() if isinstance(k, bytes) else k
+                        val = v.decode() if isinstance(v, bytes) else v
+                        try:
+                            eid = UUID(str(key))
+                            data[eid] = data.get(eid, 0) + weight * int(val)
+                        except (ValueError, AttributeError):
+                            continue
             except Exception:  # pragma: no cover - cache is best-effort
                 pass
         _views_cache = (now + _VIEWS_TTL, data)

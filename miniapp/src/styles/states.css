@@ -282,6 +282,18 @@ html[data-theme="dark"] .aurora::before {
   margin-top: 8px;
 }
 
+/* Acid is a LIGHT colour — the primary EmptyState CTA needs the same cinnabar
+   registration-offset / ink anchor as .venuesheet__follow / .onboard__cta--ready so it
+   doesn't wash out on the plaster card (the ink border alone reads flat). */
+.emptystate__btn.btn--primary {
+  box-shadow: 2px 2px 0 var(--cinnabar);
+  transition: transform 0.1s var(--ease-cut), box-shadow 0.1s var(--ease-cut);
+}
+.emptystate__btn.btn--primary:active {
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
 .coach {
   position: fixed;
   right: 84px;

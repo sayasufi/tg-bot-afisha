@@ -1685,7 +1685,9 @@ mark.hl {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 22%);
 }
 .cat--whiteband .cat__panel {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--plinth) 44px);
+  /* Same fix as acidband: derive the transparent stop from --plinth so the fade tracks
+     the surface token (dark plinth at night) instead of a hardcoded white. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--plinth) 0%, transparent) 0%, var(--plinth) 44px);
   padding-top: 48px;
   color: var(--ink);
 }
@@ -1701,7 +1703,10 @@ mark.hl {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 22%);
 }
 .cat--acidband .cat__panel {
-  background: linear-gradient(180deg, rgba(204, 255, 0, 0) 0%, var(--acid) 44px);
+  /* Transparent stop derived from --acid (NOT a hardcoded chartreuse) so it inverts
+     cleanly in dark — where --acid is #3300ff, a literal rgba(204,255,0,0) start fades
+     through muddy chartreuse. color-mix keeps the fade in the actual accent's hue. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--acid) 0%, transparent) 0%, var(--acid) 44px);
   padding-top: 48px;
   color: var(--on-acid);
 }

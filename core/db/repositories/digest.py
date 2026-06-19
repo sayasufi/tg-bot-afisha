@@ -4,10 +4,9 @@ Builds, per opted-in user, a single bundled roundup: what's newly listed at the 
 they follow (closes the 2.3 follow loop) + the best of this coming weekend in their city.
 All read-only query composition; the Prefect flow in apps/worker formats + sends it.
 """
-import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.cities import city_by_slug, region_predicate_sql
@@ -24,14 +23,16 @@ _NEW_WINDOW = timedelta(days=8)
 
 
 def weekend_window(now: datetime) -> tuple[datetime, datetime, datetime, datetime]:
-    """The upcoming Sat+Sun as (sat_date, sun_date, start_utc, end_utc). Computed in Moscow
-    time so 'this weekend' means the local calendar weekend; on Sat/Sun it's the current one."""
+    """The upcoming Sat+Sun as (sat_date, sun_date, start_utc, end_exclusive_utc). Computed in
+    Moscow time so 'this weekend' means the local calendar weekend; on Sat/Sun it's the current
+    one. The end is HALF-OPEN — Monday 00:00 MSK (exclusive) — so callers gate with `< end`."""
     today = now.astimezone(_MSK).date()
     sat = today + timedelta(days=(5 - today.weekday()) % 7)  # Mon..Fri → coming Sat; Sat → today
     sun = sat + timedelta(days=1)
+    mon = sun + timedelta(days=1)
     start = datetime(sat.year, sat.month, sat.day, 0, 0, 0, tzinfo=_MSK).astimezone(timezone.utc)
-    end = datetime(sun.year, sun.month, sun.day, 23, 59, 59, tzinfo=_MSK).astimezone(timezone.utc)
-    return sat, sun, start, end
+    end_exclusive = datetime(mon.year, mon.month, mon.day, 0, 0, 0, tzinfo=_MSK).astimezone(timezone.utc)
+    return sat, sun, start, end_exclusive
 
 
 def _item(row) -> dict:
@@ -57,19 +58,25 @@ _COLS = (
 )
 
 
-async def opted_in_users(db: AsyncSession) -> list[dict]:
-    """Accounts that opted into the weekly digest (strictly opt-in; default off)."""
+async def opted_in_users(db: AsyncSession, since: datetime) -> list[dict]:
+    """Accounts that opted into the weekly digest (strictly opt-in; default off) AND haven't
+    already been sent this week's digest — idempotency guard against redeploy/manual re-run/
+    missed-run catchup: only users with no stamp, or a stamp older than this week's start."""
     rows = (
         await db.execute(
-            select(User.telegram_user_id, User.city_slug, User.interests).where(User.notify_digest.is_(True))
+            select(User.telegram_user_id, User.city_slug, User.interests).where(
+                User.notify_digest.is_(True),
+                (User.last_digest_sent_at.is_(None)) | (User.last_digest_sent_at < since),
+            )
         )
     ).all()
     return [{"user_id": r[0], "city_slug": r[1], "interests": list(r[2] or [])} for r in rows]
 
 
 async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, limit: int = 4) -> list[dict]:
-    """Freshly-listed UPCOMING events at the venues the user follows — the 'new at your places'
-    section. New = Event.created_at within the weekly window; upcoming = a session still ahead."""
+    """Freshly-listed events still LIVE at the venues the user follows — the 'new at your places'
+    section. New = Event.created_at within the weekly window; live = a session whose run hasn't
+    ended (coalesce(date_end, date_start) >= now), so ongoing exhibitions/long runs are kept."""
     venue_ids = (
         await db.execute(select(UserVenueFollow.venue_id).where(UserVenueFollow.telegram_user_id == user_id))
     ).scalars().all()
@@ -84,8 +91,17 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
             EventOccurrence.venue_id,
         )
         .distinct(EventOccurrence.event_id)
-        .where(EventOccurrence.date_start >= now, EventOccurrence.venue_id.in_(venue_ids))
-        .order_by(EventOccurrence.event_id, EventOccurrence.date_start.asc())
+        # Live = run not yet ended; future-FIRST (mirroring reminders) so the rendered session
+        # is the soonest UPCOMING one (or the ongoing one), not an earlier already-past date.
+        .where(
+            func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= now,
+            EventOccurrence.venue_id.in_(venue_ids),
+        )
+        .order_by(
+            EventOccurrence.event_id,
+            (EventOccurrence.date_start < now).asc(),  # upcoming (false) before past (true)
+            EventOccurrence.date_start.asc(),
+        )
         .subquery()
     )
     rows = (
@@ -101,11 +117,13 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
     return [_item(r) for r in rows]
 
 
-async def weekend_events(
-    db: AsyncSession, city_slug: str | None, interests: list[str], exclude_ids: list[str], now: datetime, limit: int = 5
+async def weekend_pool(
+    db: AsyncSession, city_slug: str | None, now: datetime, limit: int = 60
 ) -> list[dict]:
-    """The best of this coming weekend in the user's city — popularity-first, filtered to the
-    user's interests if they picked any, and minus anything already in the followed-venue list."""
+    """The weekend pool for a city — every active event whose run OVERLAPS the coming weekend,
+    region-guarded, WITHOUT any interest filter. Fetched ONCE per distinct city (then ranked
+    per-user in memory). An event overlaps the window if it starts before the (half-open) end
+    AND its run hasn't finished before the start: date_start < end AND coalesce(end, start) >= start."""
     _, _, start, end = weekend_window(now)
     soon = (
         select(
@@ -116,8 +134,17 @@ async def weekend_events(
             EventOccurrence.venue_id,
         )
         .distinct(EventOccurrence.event_id)
-        .where(EventOccurrence.date_start >= start, EventOccurrence.date_start <= end)
-        .order_by(EventOccurrence.event_id, EventOccurrence.date_start.asc())
+        .where(
+            EventOccurrence.date_start < end,
+            func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= start,
+        )
+        # Future-FIRST so the rendered session is the soonest weekend one (or ongoing), not a
+        # past midnight date that happens to share the event_id.
+        .order_by(
+            EventOccurrence.event_id,
+            (EventOccurrence.date_start < now).asc(),
+            EventOccurrence.date_start.asc(),
+        )
         .subquery()
     )
     q = (
@@ -126,22 +153,48 @@ async def weekend_events(
         .join(Venue, Venue.venue_id == soon.c.venue_id)
         # Region guard (the app's single source for it) — keeps the digest to the user's city.
         .where(Event.status == "active", text(region_predicate_sql(city_by_slug(city_slug))))
+        # Soonest-first as a stable, sensible pre-order; the real ranking (rec:views) is applied
+        # in rank_weekend, NOT popularity_score (a dead, always-0 column).
+        .order_by(soon.c.date_start.asc())
+        .limit(limit)
     )
-    if interests:
-        q = q.where(Event.category.in_(interests))
-    exclude = [uuid.UUID(x) for x in exclude_ids if x]
-    if exclude:
-        q = q.where(Event.event_id.not_in(exclude))
-    q = q.order_by(Event.popularity_score.desc(), soon.c.date_start.asc()).limit(limit)
     rows = (await db.execute(q)).all()
     return [_item(r) for r in rows]
 
 
-async def build_digest(db: AsyncSession, user: dict, now: datetime) -> tuple[list[dict], list[dict]]:
-    """(followed-venue items, weekend items) for one opted-in user. Either may be empty; the
-    caller skips the send when both are."""
-    venue_items = await new_at_followed_venues(db, user["user_id"], now)
-    weekend_items = await weekend_events(
-        db, user.get("city_slug"), user.get("interests") or [], [e["event_id"] for e in venue_items], now
+def rank_weekend(
+    pool: list[dict],
+    interests: list[str],
+    exclude_ids: list[str],
+    view_counts: dict,
+    limit: int = 5,
+) -> list[dict]:
+    """Pure, per-user ranking of a (shared) weekend pool: filter to the user's interests if they
+    picked any, drop anything already shown in their followed-venue list, then sort by the LIVE
+    rec:views signal (DESC) and soonest start (ASC) as the tiebreak. Top N."""
+    wanted = set(interests or [])
+    skip = {x for x in (exclude_ids or []) if x}
+    items = [
+        it
+        for it in pool
+        if it["event_id"] not in skip and (not wanted or (it.get("category") in wanted))
+    ]
+    items.sort(
+        key=lambda it: (
+            -int(view_counts.get(it["event_id"], 0) or 0),
+            it.get("date_start") or "",
+        )
     )
-    return venue_items, weekend_items
+    return items[:limit]
+
+
+async def mark_digest_sent(db: AsyncSession, user_ids: list[int]) -> None:
+    """Stamp last_digest_sent_at=now() for the users Telegram actually answered for (one bulk
+    UPDATE), so a redeploy/manual re-run/catchup this same week skips them — the per-send ledger."""
+    ids = [int(x) for x in user_ids if x is not None]
+    if not ids:
+        return
+    await db.execute(
+        text("UPDATE ref.users SET last_digest_sent_at = now() WHERE telegram_user_id = ANY(:ids)"),
+        {"ids": ids},
+    )

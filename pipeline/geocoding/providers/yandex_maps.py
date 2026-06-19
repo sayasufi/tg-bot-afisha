@@ -53,7 +53,7 @@ class YandexMapsScraper:
         params = {"text": search_text}
         headers = {"User-Agent": self.USER_AGENT, "Accept-Language": "ru,en;q=0.9"}
         try:
-            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=False) as client:  # SSRF guard: no redirects into internal space
                 for url in self.SEARCH_URLS:
                     response = await client.get(url, params=params, headers=headers)
                     if response.status_code >= 400 or not response.text or self._is_captcha_page(response.text):
@@ -85,7 +85,7 @@ class YandexMapsScraper:
         headers = {"User-Agent": self.USER_AGENT, "Accept-Language": "ru,en;q=0.9"}
 
         try:
-            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=False) as client:  # SSRF guard: no redirects into internal space
                 for url in self.SEARCH_URLS:
                     response = await client.get(url, params=params, headers=headers)
                     if response.status_code >= 400 or not response.text or self._is_captcha_page(response.text):
@@ -212,7 +212,7 @@ class YandexMapsScraper:
         headers = {"User-Agent": self.USER_AGENT, "Accept-Language": "ru,en;q=0.9"}
         reached = False  # got a real (non-captcha, <400) page from at least one endpoint
         try:
-            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=False) as client:  # SSRF guard: no redirects into internal space
                 for url in self.SEARCH_URLS:
                     response = await client.get(url, params=params, headers=headers)
                     if response.status_code >= 400 or not response.text or self._is_captcha_page(response.text):

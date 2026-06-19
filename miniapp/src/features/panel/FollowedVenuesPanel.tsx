@@ -38,18 +38,26 @@ export function FollowedVenuesPanel({
   const idsKey = [...follows.ids].sort().join(",");
   const [venues, setVenues] = useState<VenueDetail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const load = () => {
     const ids = idsKey ? idsKey.split(",") : [];
+    setError(false);
     if (!ids.length) {
       setVenues([]);
       setLoading(false);
       return;
     }
     setLoading(true);
+    // Per-id .catch keeps the panel resilient to a single bad venue, but if EVERY fetch
+    // failed (a real outage) that's an error, not "you follow nothing" — surface a retry.
     Promise.all(ids.map((id) => fetchVenue(id).catch(() => null)))
-      .then((res) => setVenues(res.filter((v): v is VenueDetail => !!v)))
-      .finally(() => setLoading(false));
+      .then((res) => {
+        const ok = res.filter((v): v is VenueDetail => !!v);
+        setVenues(ok);
+        setError(ok.length === 0);
+        setLoading(false);
+      });
   };
   useEffect(() => {
     load();
@@ -102,7 +110,14 @@ export function FollowedVenuesPanel({
               </button>
             );
           })
-        ) : loading ? null : (
+        ) : loading ? null : error ? (
+          <div className="favempty">
+            <p className="panelview__hint">Не удалось загрузить площадки. Попробуй ещё раз.</p>
+            <button type="button" className="btn btn--primary" onClick={load}>
+              Повторить
+            </button>
+          </div>
+        ) : (
           <div className="favempty">
             <span className="favempty__glyph" aria-hidden="true" style={{ fontSize: 38, lineHeight: 1 }}>
               ⌂

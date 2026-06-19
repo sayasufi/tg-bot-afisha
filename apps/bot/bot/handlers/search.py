@@ -1,4 +1,5 @@
 import logging
+from html import escape
 
 from aiogram import Router
 from aiogram.filters import Command
@@ -28,11 +29,14 @@ async def search_handler(message: Message) -> None:
         await message.answer("⚠️ Поиск временно недоступен, попробуй позже.")
         return
 
+    # parse_mode=HTML is set globally → escape the raw user query in every branch
+    # before interpolating it, or "<b>" in a query injects markup (mirror formatting.py).
+    safe_query = escape(query)
     if not items:
-        await message.answer(f"😕 По запросу «{query}» ничего не нашлось.\nПопробуй другое слово или открой карту целиком.")
+        await message.answer(f"😕 По запросу «{safe_query}» ничего не нашлось.\nПопробуй другое слово или открой карту целиком.")
         return
 
     settings = get_settings()
     cards = "\n\n".join(event_card(item) for item in items)
-    text = f"🔎 Нашёл по запросу «<b>{query}</b>»:\n\n{cards}"
+    text = f"🔎 Нашёл по запросу «<b>{safe_query}</b>»:\n\n{cards}"
     await message.answer(text, reply_markup=webapp_keyboard(settings.telegram_webapp_url))

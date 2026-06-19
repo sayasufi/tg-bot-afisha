@@ -12,6 +12,7 @@ from core.db.models.ref.source import Source
 from core.db.models.ref.telegram_channel import TelegramChannel
 from core.db.models.ref.user import User
 from core.db.models.ref.user_favorite import UserFavorite
+from core.db.models.ref.user_venue_follow import UserVenueFollow
 
 __all__ = [
     "City",
@@ -27,5 +28,6 @@ __all__ = [
     "TelegramChannel",
     "User",
     "UserFavorite",
+    "UserVenueFollow",
     "Venue",
 ]

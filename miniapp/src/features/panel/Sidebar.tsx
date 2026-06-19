@@ -51,7 +51,8 @@ export function Sidebar({
           type="button"
           className={`themetoggle${dark ? " themetoggle--dark" : ""}`}
           onClick={onToggleTheme}
-          aria-pressed={dark}
+          role="switch"
+          aria-checked={dark}
         >
           <span className="themetoggle__label">
             <span className="themetoggle__glyph">{dark ? "☾" : "☀"}</span>

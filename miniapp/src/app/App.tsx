@@ -90,6 +90,9 @@ export function App() {
   const [view, setView] = useState<View>("map");
   const [sheetReady, setSheetReady] = useState(false);
   const [loading, setLoading] = useState(true);
+  // A failed map fetch (server/network), distinct from a genuinely empty result — drives a
+  // retry overlay instead of the "Тишина в зале" empty card.
+  const [mapError, setMapError] = useState(false);
   const [radarNonce, setRadarNonce] = useState(0);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [coachSeen, setCoachSeen] = useState(() => {
@@ -316,6 +319,7 @@ export function App() {
   // (which doesn't change a server param) never refetches.
   useEffect(() => {
     setLoading(true);
+    setMapError(false);
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       fetchMapEvents(new URLSearchParams(query), ctrl.signal)
@@ -327,9 +331,12 @@ export function App() {
         })
         .catch((e) => {
           if (e?.name !== "AbortError") {
+            // A failed fetch is NOT an empty map — flag the error so we show a retry,
+            // not the "Тишина в зале" empty card.
             setItems([]);
             setTotal(0);
             setLoading(false);
+            setMapError(true);
           }
         });
     }, 280);
@@ -716,7 +723,24 @@ export function App() {
       <LoadingBar show={loading && view === "map"} />
       <MapShimmer show={loading && items.length === 0 && view === "map" && !selected} />
 
-      {view === "map" && !selected && !filtersOpen && !drawerOpen && !loading && shownItems.length === 0 && (
+      {/* A failed fetch shows a retry overlay; a genuinely empty result shows the EmptyState. */}
+      {view === "map" && !selected && !filtersOpen && !drawerOpen && !loading && mapError && (
+        <div className="emptystate" role="alert">
+          <span className="dotfield" aria-hidden="true" />
+          <div className="emptystate__card">
+            <span className="kicker kicker--code emptystate__kicker">Окрест</span>
+            <div className="emptystate__title serif">
+              Связь <em>прервалась</em>
+            </div>
+            <p className="emptystate__text">Не удалось загрузить события. Попробуй ещё раз.</p>
+            <button type="button" className="btn btn--primary emptystate__btn" onClick={onRefresh}>
+              Повторить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {view === "map" && !selected && !filtersOpen && !drawerOpen && !loading && !mapError && shownItems.length === 0 && (
         <EmptyState
           filters={filters}
           radiusActive={!!filters.radiusKm && !!userPos}

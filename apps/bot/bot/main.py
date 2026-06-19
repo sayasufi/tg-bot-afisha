@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from apps.bot.bot.handlers import fallback, forwarded, search, start
+from apps.bot.bot.middlewares.throttle import ThrottleMiddleware
 from core.config.settings import get_settings
 from core.logging.setup import setup_logging
 
@@ -49,6 +50,9 @@ async def main() -> None:
 
     bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
+    # Outer so it runs before any handler/router filter — protects the unauthenticated
+    # forward path (forwarded.py → ingestion/LLM) from a single chat flooding it.
+    dp.message.outer_middleware(ThrottleMiddleware())
     dp.include_router(start.router)
     dp.include_router(search.router)
     dp.include_router(forwarded.router)

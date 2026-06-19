@@ -14,59 +14,59 @@ _RETRY_DELAY = 30  # seconds
 
 # --- fetch (sources) ---------------------------------------------------------
 
-@flow(name="fetch-kudago", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="fetch-kudago", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_kudago():
     return await fetch._fetch_kudago_impl()
 
 
-@flow(name="fetch-kudago-full-scan", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="fetch-kudago-full-scan", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_kudago_full_scan():
     return await fetch._fetch_kudago_full_scan_impl()
 
 
-@flow(name="fetch-yandex-afisha", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="fetch-yandex-afisha", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_yandex_afisha():
     return await fetch._fetch_yandex_impl()
 
 
-@flow(name="fetch-yandex-afisha-full-scan", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="fetch-yandex-afisha-full-scan", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_yandex_afisha_full_scan():
     return await fetch._fetch_yandex_full_scan_impl()
 
 
-@flow(name="fetch-afisha-ru", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="fetch-afisha-ru", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_afisha_ru():
     return await fetch._fetch_afisha_impl()
 
 
-@flow(name="fetch-afisha-ru-full-scan", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="fetch-afisha-ru-full-scan", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_afisha_ru_full_scan():
     return await fetch._fetch_afisha_full_scan_impl()
 
 
-@flow(name="fetch-telegram-public", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="fetch-telegram-public", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_telegram_public():
     return await fetch._fetch_telegram_impl()
 
 
 # --- pipeline (normalize -> enrich -> dedup) ---------------------------------
 
-@flow(name="normalize-raw", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="normalize-raw", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 async def normalize_raw():
     return await normalize._normalize_impl()
 
 
-@flow(name="enrich-candidates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="enrich-candidates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 async def enrich_candidates():
     return await enrich._enrich_impl()
 
 
-@flow(name="dedup-candidates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="dedup-candidates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 async def dedup_candidates():
     return await dedup._dedup_impl()
 
 
-@flow(name="dedup-llm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="dedup-llm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 async def dedup_llm():
     """LLM-assisted dedup of same-venue+same-time pairs the rules can't resolve
     (declension/initials/wrapper-word variants). Cached + blocked, so cheap in
@@ -74,17 +74,17 @@ async def dedup_llm():
     return await dedup._dedup_llm_impl(apply=True)
 
 
-@flow(name="merge-duplicate-venues", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="merge-duplicate-venues", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 def merge_duplicate_venues():
     return dedup._merge_venues_impl()
 
 
-@flow(name="merge-duplicate-events", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="merge-duplicate-events", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 def merge_duplicate_events():
     return dedup._merge_events_impl()
 
 
-@flow(name="expire-past-events", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="expire-past-events", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
 def expire_past_events():
     """Lifecycle: first prune phantom future dates (a session a source no longer
     lists — the add-only upsert never deletes them), THEN expire events whose last
@@ -99,7 +99,7 @@ def expire_past_events():
     return {"pruned": pruned, "expired": expired}
 
 
-@flow(name="resolve-afisha-dates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="resolve-afisha-dates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
 async def resolve_afisha_dates():
     """Fill exact dates for afisha-ONLY multi-show events (Yandex covers the rest in
     bulk). Small, polite, idempotent — only the few hundred events not on Yandex."""
@@ -108,7 +108,7 @@ async def resolve_afisha_dates():
     return await resolve(apply=True)
 
 
-@flow(name="self-heal-dedup", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="self-heal-dedup", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
 def self_heal_dedup():
     """Runs frequently to close the small window where two sources put one event
     at two not-yet-merged venue rows. Order matters: collapse the duplicate
@@ -127,24 +127,24 @@ def self_heal_dedup():
 
 # --- enrichment side-jobs ----------------------------------------------------
 
-@flow(name="backfill-venues-osm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="backfill-venues-osm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
 async def backfill_venues_osm():
     return await enrich._backfill_venues_osm_impl()
 
 
-@flow(name="resolve-venue-hours", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="resolve-venue-hours", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
 def resolve_venue_hours():
     return enrich._resolve_venue_hours_impl()
 
 
-@flow(name="cache-event-images", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, log_prints=True)
+@flow(name="cache-event-images", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
 def cache_event_images():
     return media._cache_event_images_impl()
 
 
 # --- re-engagement (outbound) ------------------------------------------------
 
-@flow(name="send-reminders", retries=1, retry_delay_seconds=15, log_prints=True)
+@flow(name="send-reminders", retries=1, retry_delay_seconds=15, timeout_seconds=300, log_prints=True)
 async def send_reminders():
     """DM users a bot reminder for saved events whose start is near (the first outbound
     channel). Idempotent: each reminder row is stamped sent_at after a delivered/permanent
@@ -152,9 +152,10 @@ async def send_reminders():
     return await reminders._send_reminders_impl()
 
 
-@flow(name="send-digest", retries=0, log_prints=True)
+@flow(name="send-digest", retries=1, retry_delay_seconds=30, timeout_seconds=300, log_prints=True)
 async def send_digest():
     """Weekly opt-in roundup DM: new at followed venues + the best of the coming weekend.
-    retries=0 on purpose — the cron fires once and there is no per-send dedup, so a retry would
-    double-send; a missed week is the safer failure."""
+    Idempotent via a per-user last_digest_sent_at ledger (stamped on any Telegram response,
+    checked against this ISO-week's start), so retries=1 is safe — a retry only re-sends to
+    users a transient failure left unstamped, never a duplicate."""
     return await digest._send_digest_impl()

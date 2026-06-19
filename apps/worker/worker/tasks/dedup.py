@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from sqlalchemy import select
 
@@ -6,6 +7,8 @@ from core.db.models import EventCandidate, EventSource, RawEvent, Source
 from core.db.repositories.ingestion import dedup_and_upsert_event, get_venue
 from core.db.session import WorkerAsyncSessionLocal
 from pipeline.llm.service import LLMService
+
+_log = logging.getLogger(__name__)
 
 _CLASSIFY_CONCURRENCY = 4  # parallel in-flight LLM classify calls during dedup
 
@@ -46,31 +49,40 @@ async def _dedup_impl() -> dict:
 
         decisions = {"auto-merge": 0, "new-event": 0, "needs-review": 0}
         for candidate, raw, source in rows:
-            category = "other"
-            subcategory = ""
-            tags: list[str] = []
-            classification = classified.get(candidate.candidate_id)
-            if classification is not None:
-                category = classification.category
-                subcategory = classification.subcategory
-                tags = classification.tags
-            else:
-                for tag in candidate.tags_json:
-                    if tag.startswith("category:"):
-                        category = tag.split(":", 1)[1]
-            venue = await get_venue(db, candidate.venue_id) if candidate.venue_id else None
-            decision = await dedup_and_upsert_event(
-                db,
-                candidate=candidate,
-                source_id=source.source_id,
-                raw_id=raw.raw_id,
-                category=category,
-                subcategory=subcategory,
-                tags=tags,
-                venue=venue,
-                llm=llm,  # write-time LLM judge for same-venue+time look-alikes
-            )
-            decisions[decision.decision] += 1
+            # Isolate each candidate: one that deterministically raises (e.g. a bad
+            # write-time judge call, a constraint blow-up) must not become a permanent
+            # head-of-line block for every candidate ordered after it. Log with the id,
+            # roll back the failed transaction so the session is usable, and continue.
+            try:
+                category = "other"
+                subcategory = ""
+                tags: list[str] = []
+                classification = classified.get(candidate.candidate_id)
+                if classification is not None:
+                    category = classification.category
+                    subcategory = classification.subcategory
+                    tags = classification.tags
+                else:
+                    for tag in candidate.tags_json:
+                        if tag.startswith("category:"):
+                            category = tag.split(":", 1)[1]
+                venue = await get_venue(db, candidate.venue_id) if candidate.venue_id else None
+                decision = await dedup_and_upsert_event(
+                    db,
+                    candidate=candidate,
+                    source_id=source.source_id,
+                    raw_id=raw.raw_id,
+                    category=category,
+                    subcategory=subcategory,
+                    tags=tags,
+                    venue=venue,
+                    llm=llm,  # write-time LLM judge for same-venue+time look-alikes
+                )
+                decisions[decision.decision] += 1
+            except Exception:
+                _log.exception("dedup: candidate %s failed, skipping", candidate.candidate_id)
+                await db.rollback()
+                continue
         return decisions
 
 
