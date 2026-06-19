@@ -33,6 +33,7 @@ import { categoryMeta } from "../lib/categories";
 import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { syncFavorites, useFavorites } from "../lib/favorites";
+import { syncGoing, useGoing } from "../lib/going";
 import { syncReminders, useReminders } from "../lib/reminders";
 import { syncVenueFollows } from "../lib/venueFollows";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
@@ -53,12 +54,16 @@ export function App() {
   const [tgUser] = useState(() => getUser());
   const fav = useFavorites();
   const rem = useReminders();
+  const going = useGoing();
+  // Who invited me here (from a share deep-link «<event>_<inviter>») — drives the «Я иду» banner.
+  const [invite, setInvite] = useState<{ eventId: string; inviterId: number } | null>(null);
   // Pull this account's favourites + reminders from the server once on open (favourites
   // also merge this device's local hearts in on first run) so they sync across devices.
   useEffect(() => {
     void syncFavorites();
     void syncReminders();
     void syncVenueFollows();
+    void syncGoing();
   }, []);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
@@ -627,11 +632,17 @@ export function App() {
   // ?event=<id> query — e.g. when a shared card is tapped.
   useEffect(() => {
     const wa = getWebApp() as any;
-    const param: string | undefined =
+    const raw: string | undefined =
       wa?.initDataUnsafe?.start_param || new URLSearchParams(window.location.search).get("event") || undefined;
-    if (!param) return;
-    fetchEventDetail(param)
+    if (!raw) return;
+    // A share deep-link may carry the inviter: «<event-uuid>_<inviter-id>». The UUID has no '_',
+    // so the part before the first '_' is the event id, the rest the inviter's telegram id.
+    const us = raw.indexOf("_");
+    const eventId = us > 0 ? raw.slice(0, us) : raw;
+    const inviterId = us > 0 ? Number(raw.slice(us + 1)) : NaN;
+    fetchEventDetail(eventId)
       .then((d) => {
+        if (Number.isFinite(inviterId)) setInvite({ eventId: d.event_id, inviterId });
         const occ = d.occurrences?.[0];
         openEvent({
           event_id: d.event_id,
@@ -794,6 +805,9 @@ export function App() {
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
         hasReminder={!!selected && rem.has(selected.event_id)}
         onToggleReminder={() => selected && rem.toggle(selected.event_id)}
+        invitedBy={invite && selected?.event_id === invite.eventId ? invite.inviterId : null}
+        isGoing={!!selected && going.has(selected.event_id)}
+        onGoing={() => selected && going.mark(selected.event_id, invite?.inviterId ?? null)}
         onSelect={openEvent}
         onShowMap={showOnMap}
         onOpenVenue={onOpenVenue}

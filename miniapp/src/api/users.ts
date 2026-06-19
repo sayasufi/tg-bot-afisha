@@ -130,6 +130,43 @@ export async function toggleReminderRemote(eventId: string, on: boolean): Promis
   }
 }
 
+// «Я иду» / RSVP (the «Пойдём?» loop) — account-scoped. List the going event-ids, or confirm
+// going to one (with the inviter from the share deep-link, so the bot DMs them). Returns ids.
+export async function syncGoing(): Promise<string[] | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/going`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { ids?: string[] };
+    return Array.isArray(j.ids) ? j.ids : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function markGoingRemote(eventId: string, inviterId: number | null): Promise<string[] | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/going`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, event_id: eventId, inviter_id: inviterId ?? undefined }),
+      keepalive: true,
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { ids?: string[] };
+    return Array.isArray(j.ids) ? j.ids : null;
+  } catch {
+    return null;
+  }
+}
+
 // Venue follows ("следить за площадкой") — account-scoped like favourites/reminders. Pass
 // nothing to LIST; pass (venueId, on) to toggle. Returns the followed venue-ids, or null.
 export async function syncVenueFollows(): Promise<string[] | null> {

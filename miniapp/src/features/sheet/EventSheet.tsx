@@ -50,13 +50,16 @@ type Props = {
   onToggleFav: () => void;
   hasReminder: boolean;
   onToggleReminder: () => void;
+  invitedBy: number | null; // inviter id when this event was opened via a «Пойдём?» share
+  isGoing: boolean;
+  onGoing: () => void;
   onSelect: (i: EventItem) => void;
   onShowMap?: () => void;
   onOpenVenue?: (venueId: number) => void;
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, invitedBy, isGoing, onGoing, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
   const [datesOpen, setDatesOpen] = useState(false);
@@ -303,6 +306,13 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     showToast("Ссылка готова к отправке", { icon: "share" });
   };
 
+  const handleGoing = () => {
+    if (isGoing) return;
+    haptic("medium");
+    onGoing();
+    showToast("Ты идёшь! Сообщили пригласившему", { tone: "good" });
+  };
+
   return (
     <>
       <div className="sheet-veil" onClick={onClose} />
@@ -310,6 +320,20 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         <div className="sheet__sticky">
           {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>
+
+      {invitedBy != null && (
+        <div className="sheet__invite">
+          <span className="sheet__invite-kicker">🎉 тебя зовут сюда</span>
+          <button
+            type="button"
+            className={`sheet__invite-cta${isGoing ? " sheet__invite-cta--on" : ""}`}
+            onClick={handleGoing}
+            aria-pressed={isGoing}
+          >
+            {isGoing ? "идёшь ✓" : "я иду"}
+          </button>
+        </div>
+      )}
 
       {/* One exhibit card — poster + title + grid + actions all inside a single ink
           frame with a big acid registration offset. Trust + similar sit below it. */}

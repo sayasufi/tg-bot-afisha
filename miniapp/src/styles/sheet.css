@@ -167,6 +167,54 @@ html[data-theme="dark"] .sheet-veil {
   color: var(--on-acid);
 }
 
+/* «Пойдём?» invite strip — shown above the card when the event was opened from a shared
+   invite. A cinnabar registration offset makes it the celebratory thing that catches the eye. */
+.sheet__invite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 14px 0;
+  padding: 12px 14px;
+  background: var(--plinth);
+  border: 1px solid var(--line);
+  box-shadow: 5px 5px 0 0 var(--cinnabar);
+}
+.sheet__invite-kicker {
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.sheet__invite-cta {
+  flex: none;
+  padding: 10px 18px;
+  border: 1px solid var(--ink);
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--grotesk);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--cinnabar);
+  transition:
+    transform 0.12s var(--ease-cut),
+    box-shadow 0.12s var(--ease-cut);
+}
+.sheet__invite-cta:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.sheet__invite-cta--on {
+  background: var(--plinth);
+  color: var(--ink);
+  box-shadow: none;
+  cursor: default;
+}
+
 /* The exhibit card — ONE ink frame around poster + title + grid + actions, lifted off
    the plaster by a big acid registration offset (this is the selected exhibit). */
 .sheet__card {
