@@ -188,10 +188,17 @@ class RecommendationService:
         Sparse collections (< _MIN_RAIL) are dropped."""
         by_score = sorted(scored, key=lambda e: -e["score"])
         rules = self._collection_rules(today, now)
+        # A «Подборка» that matches ~the whole catalogue isn't a curated lens — drop it. Guards the
+        # degenerate "Новинки недели" = every event when a fresh catalogue load stamps all created_at
+        # recently; self-heals once the data ages (and legitimately-broad lenses like Свидание ~62%
+        # stay well under the bar). Skipped entirely for tiny pools (small cities) to avoid false drops.
+        big = 0.7 * len(scored) if len(scored) >= 200 else len(scored) + 1
         out = []
         for slug, title, sub in _COLLECTIONS:
             pred, diverse = rules[slug]
             matching = [e for e in by_score if pred(e)]
+            if len(matching) >= big:
+                continue
             pool = self._diverse(matching, per_rail) if diverse else matching
             rail = self._rail(f"collection:{slug}", title, sub, pool, per_rail)
             if rail:
