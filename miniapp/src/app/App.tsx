@@ -24,6 +24,7 @@ const FollowedVenuesPanel = lazy(() =>
 );
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
+import { OfflineBanner } from "../features/offline/OfflineBanner";
 import { Toaster } from "../features/toast/Toaster";
 import { VenueSheet } from "../features/venue/VenueSheet";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
@@ -843,6 +844,7 @@ export function App() {
       {!onboarded && <Onboarding onClose={dismissOnboarding} />}
 
       <Toaster />
+      <OfflineBanner />
     </div>
   );
 }

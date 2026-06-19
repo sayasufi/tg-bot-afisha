@@ -68,7 +68,7 @@ export function FollowedVenuesPanel({
   return (
     <div className="panelview">
       <header className="panelview__head">
-        <h2>Площадки</h2>
+        <h2>площадки</h2>
         <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
           <IconClose size={18} />
         </button>

@@ -286,15 +286,21 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     // Preferred: send a real photo message (Bot API 8.0 shareMessage) — the card
     // appears as an image in the chat, not a link with a preview.
     if (wa?.initData && typeof wa.shareMessage === "function") {
-      const prepared = await prepareShare(selected.event_id);
-      if (prepared.ok && prepared.id) {
-        wa.shareMessage(prepared.id);
-        return;
+      try {
+        const prepared = await prepareShare(selected.event_id);
+        if (prepared.ok && prepared.id) {
+          wa.shareMessage(prepared.id);
+          showToast("Карточка готова — выберите чат", { icon: "share" });
+          return;
+        }
+      } catch {
+        /* couldn't prepare the photo card — fall through to the link share */
       }
     }
     // Fallback (older clients / no photo): share the branded OG page link.
     const shareUrl = `${window.location.origin}/v1/share/${selected.event_id}`;
     shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: shareUrl });
+    showToast("Ссылка готова к отправке", { icon: "share" });
   };
 
   return (

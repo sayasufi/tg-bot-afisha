@@ -56,7 +56,7 @@ export function FavoritesPanel({
   return (
     <div className="panelview listview">
       <header className="panelview__head">
-        <h2>Избранное</h2>
+        <h2>избранное</h2>
         <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
           <IconClose size={18} />
         </button>
