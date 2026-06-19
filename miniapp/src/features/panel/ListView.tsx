@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type UIEvent, useEffect, useRef, useState } from "react";
 
 import { fetchEventsList, type EventItem, type ListSort } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
@@ -97,9 +97,10 @@ export function ListView({
 
   const loadingMoreRef = useRef(false);
   const loadMore = () => {
-    // Synchronous reentrancy guard (state would be stale within a tick), and never page
-    // while a sort/filter reload is in flight (old offset under a new sort).
-    if (loadingMoreRef.current || loading) return;
+    // Synchronous reentrancy guard (state would be stale within a tick); never page while a
+    // sort/filter reload is in flight (old offset under a new sort); stop when all are loaded
+    // (the onScroll handler fires every tick, so this must short-circuit cheaply).
+    if (loadingMoreRef.current || loading || (total > 0 && items.length >= total)) return;
     loadingMoreRef.current = true;
     setMore(true);
     fetchEventsList(build(items.length))
@@ -116,33 +117,29 @@ export function ListView({
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
 
-  // Infinite scroll: a sentinel IntersectionObserver PLUS a scroll-position fallback (some
-  // WebViews fire the observer unreliably with a scroll-container root). Both call the LATEST
-  // loadMore via a ref; loadMore's reentrancy guard makes a double-trigger a no-op.
+  // Infinite scroll: the React onScroll prop on the scroll div (below) is the primary loader —
+  // React keeps it attached across re-renders (e.g. a theme toggle, which used to leave an
+  // addEventListener'd handler stranded on a stale node). This observer is a secondary, earlier
+  // preloader. Both call the LATEST loadMore via a ref; its guards make double-triggers no-ops.
   const canMore = items.length > 0 && items.length < total;
   useEffect(() => {
     if (!canMore) return;
     const root = scrollRef.current;
-    if (!root) return;
     const sentinel = sentinelRef.current;
-    let io: IntersectionObserver | undefined;
-    if (sentinel) {
-      io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMoreRef.current(), {
-        root,
-        rootMargin: "600px",
-      });
-      io.observe(sentinel);
-    }
-    const onScroll = () => {
-      if (root.scrollHeight - root.scrollTop - root.clientHeight < 900) loadMoreRef.current();
-    };
-    root.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      io?.disconnect();
-      root.removeEventListener("scroll", onScroll);
-    };
+    if (!root || !sentinel) return;
+    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMoreRef.current(), {
+      root,
+      rootMargin: "600px",
+    });
+    io.observe(sentinel);
+    return () => io.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canMore]);
+
+  const onScrollLoad = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 900) loadMoreRef.current();
+  };
 
   if (!open) return null;
 
@@ -175,7 +172,7 @@ export function ListView({
         </div>
       </div>
 
-      <div className="panelview__scroll" ref={scrollRef}>
+      <div className="panelview__scroll" ref={scrollRef} onScroll={onScrollLoad}>
         {items.length > 0 && <CatalogFeed items={items} userPos={userPos} now={now} onSelect={onSelect} />}
         {!loading && error && <div className="listview__empty">Не удалось загрузить. Попробуй ещё раз.</div>}
         {!loading && !error && items.length === 0 && <div className="listview__empty">В этой области по фильтрам пусто. Подвинь карту или сними фильтры.</div>}
