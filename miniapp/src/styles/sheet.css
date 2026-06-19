@@ -410,14 +410,24 @@ html[data-theme="dark"] .sheet-veil {
   overflow-wrap: anywhere;
 }
 
-/* Social proof — a quiet mono line under the title (only shown over a threshold). */
+/* Social proof — compact icon + count badges (идут / saved), only shown over a threshold. */
 .sheet__social {
-  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 11px;
+}
+.sheet__social-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+.sheet__social-stat svg {
   color: var(--cinnabar);
 }
 

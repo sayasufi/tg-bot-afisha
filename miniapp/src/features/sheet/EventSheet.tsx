@@ -6,7 +6,7 @@ import { categoryMeta } from "../../lib/categories";
 import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
-import { CategoryIcon, IconBell, IconClose, IconHeart, IconPin, IconShare } from "../../lib/icons";
+import { CategoryIcon, IconBell, IconClose, IconGoing, IconHeart, IconPin, IconShare } from "../../lib/icons";
 import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
@@ -426,13 +426,26 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           <Highlight text={selected.title} query={query} />
         </h2>
         {(() => {
-          // Social proof — only over a threshold so a quiet event stays silent (no "1 сохранил").
+          // Social proof — compact icon + count, only over a threshold so a quiet event stays silent.
           const g = detail?.going_count ?? 0;
           const s = detail?.saved_count ?? 0;
-          const bits: string[] = [];
-          if (g >= 2) bits.push(`${g} собираются`);
-          if (s >= 3) bits.push(`${s} сохранили`);
-          return bits.length > 0 ? <div className="sheet__social">{bits.join("  ·  ")}</div> : null;
+          if (g < 2 && s < 3) return null;
+          return (
+            <div className="sheet__social">
+              {g >= 2 && (
+                <span className="sheet__social-stat" title={`${g} идут`}>
+                  <IconGoing size={13} />
+                  {g}
+                </span>
+              )}
+              {s >= 3 && (
+                <span className="sheet__social-stat" title={`${s} сохранили`}>
+                  <IconHeart size={13} filled />
+                  {s}
+                </span>
+              )}
+            </div>
+          );
         })()}
       </div>
 

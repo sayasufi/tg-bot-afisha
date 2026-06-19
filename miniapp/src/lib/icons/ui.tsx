@@ -79,6 +79,16 @@ export function IconHeart({ size = 18, className, filled = false }: UiProps & { 
   );
 }
 
+// «Идут» — a single figure; next to a count it reads as people going.
+export function IconGoing({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <circle cx="12" cy="7" r="3.2" />
+      <path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+    </svg>
+  );
+}
+
 // Reminder bell — outline by default, filled when a reminder is armed.
 export function IconBell({ size = 18, className, filled = false }: UiProps & { filled?: boolean }) {
   return (
