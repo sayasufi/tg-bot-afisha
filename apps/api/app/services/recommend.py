@@ -125,12 +125,39 @@ class RecommendationService:
             "total": len(scored),
         }
 
-    def _collections(self, scored, today, now, per_rail):
-        """The «Подборки» shelf — rule-based editorial lenses over the scored pool. Each is a
-        plain rail (reusing _diverse/_rail); independent of the auto-rail dedup/cap, so a
-        collection can share an item with «Для тебя» (it's a different entry point, like
-        «Рядом»). Sparse collections (< _MIN_RAIL) are dropped."""
+    async def collection(self, slug, lat, lon, interests, recent, city, limit, offset) -> dict:
+        """Full, paginated list of ONE «Подборка» — the detail screen behind a grid tile. Uses
+        the SAME cached scored pool as the feed, so the detail agrees with the shelf preview;
+        returns the collection's true total (for «N событий») plus the requested page of items.
+        Unknown slug → an empty collection (404-ish without leaking which slugs exist)."""
+        meta = next((c for c in _COLLECTIONS if c[0] == slug), None)
+        if meta is None:
+            return {"key": f"collection:{slug}", "title": slug, "subtitle": None, "count": 0, "items": []}
+        _, title, sub = meta
+        favs = {c for c in (interests or []) if c in _CATEGORY_LABELS}
+        recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][:_RECENT_CAP]
+        affinity = self._affinity(favs, recent)
+        now = datetime.now(timezone.utc)
+        msk = now.astimezone(_MSK)
+        today, hour = msk.date(), msk.hour
+        base = await self._base_scored(now, today, hour, city)
+        scored = self._personalize(base, lat, lon, affinity)
         by_score = sorted(scored, key=lambda e: -e["score"])
+        pred, _diverse = self._collection_rules(today, now)[slug]
+        # The detail shows the FULL collection (no per-category diversity cap — that's only a
+        # teaser device for the shelf preview), so the count and the list always agree.
+        matching = [e for e in by_score if pred(e)]
+        page = matching[offset : offset + limit]
+        return {
+            "key": f"collection:{slug}", "title": title, "subtitle": sub,
+            "count": len(matching), "items": [self._item(e) for e in page],
+        }
+
+    @staticmethod
+    def _collection_rules(today, now):
+        """The «Подборки» predicate set — shared by the shelf (`_collections`) and the
+        full-collection endpoint (`collection`) so they can never drift. slug -> (predicate
+        over a scored entry, diverse-cap-the-preview?)."""
         week_ago = now - timedelta(days=7)
         soon = today + timedelta(days=3)
 
@@ -142,7 +169,7 @@ class RecommendationService:
                 cr = cr.replace(tzinfo=timezone.utc)
             return cr >= week_ago
 
-        rules = {
+        return {
             # "Свидание" — a varied evening-out cross-section (the score already favours evening).
             "date": (lambda e: e["c"]["category"] in _DATE_CATS, True),
             "free": (lambda e: e["free"], True),  # all free upcoming (the only free rail now)
@@ -152,14 +179,23 @@ class RecommendationService:
             "fresh": (is_fresh, False),
             "kids": (lambda e: e["c"]["category"] == "kids", True),
         }
+
+    def _collections(self, scored, today, now, per_rail):
+        """The «Подборки» shelf — rule-based editorial lenses over the scored pool. Each is a
+        plain rail (reusing _diverse/_rail) carrying a `count` (the TRUE number of matching
+        events, for the grid tile) plus a capped preview; independent of the auto-rail dedup/cap,
+        so a collection can share an item with «Для тебя» (a different entry point, like «Рядом»).
+        Sparse collections (< _MIN_RAIL) are dropped."""
+        by_score = sorted(scored, key=lambda e: -e["score"])
+        rules = self._collection_rules(today, now)
         out = []
         for slug, title, sub in _COLLECTIONS:
             pred, diverse = rules[slug]
-            pool = [e for e in by_score if pred(e)]
-            if diverse:
-                pool = self._diverse(pool, per_rail)
+            matching = [e for e in by_score if pred(e)]
+            pool = self._diverse(matching, per_rail) if diverse else matching
             rail = self._rail(f"collection:{slug}", title, sub, pool, per_rail)
             if rail:
+                rail["count"] = len(matching)  # true total for "N событий", not the capped preview
                 out.append(rail)
         return out
 

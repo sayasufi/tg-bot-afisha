@@ -24,6 +24,7 @@ class Rail(BaseModel):
     key: str
     title: str
     subtitle: str | None = None
+    count: int | None = None  # collections carry the TRUE total (for "N событий"); rails omit it
     items: list[RailItem]
 
 

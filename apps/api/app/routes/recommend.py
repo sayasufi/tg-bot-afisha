@@ -39,6 +39,29 @@ async def get_recommendations(
     return Response(orjson.dumps(result), media_type="application/json")
 
 
+@router.get("/recommendations/collection/{slug}")
+async def get_collection(
+    slug: str,
+    lat: float | None = Query(default=None, ge=-90, le=90),
+    lon: float | None = Query(default=None, ge=-180, le=180),
+    interests: list[str] | None = Query(default=None),
+    recent: list[str] | None = Query(default=None),
+    limit: int = Query(default=24, ge=1, le=60),
+    offset: int = Query(default=0, ge=0),
+    city: str | None = Query(default=None, max_length=120),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Full, paginated «Подборка» behind a grid tile — title + subtitle + true count + a page of
+    items, drawn from the same cached scored pool as the feed."""
+    result = await RecommendationService(db).collection(
+        slug, lat, lon,
+        interests[:_MAX_PROFILE] if interests else interests,
+        recent[:_MAX_PROFILE] if recent else recent,
+        city_by_name(city), limit, offset,
+    )
+    return Response(orjson.dumps(result), media_type="application/json")
+
+
 class SeenRequest(BaseModel):
     init_data: str | None = None
 
