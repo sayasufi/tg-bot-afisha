@@ -300,8 +300,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         /* couldn't prepare the photo card — fall through to the link share */
       }
     }
-    // Fallback (older clients / no photo): share the branded OG page link.
-    const shareUrl = `${window.location.origin}/v1/share/${selected.event_id}`;
+    // Fallback (older clients / no shareMessage): share the branded OG page link — carry MY id as
+    // ?ref so the page's «Открыть» button is still a «Пойдём?» invite deep-link («<event>_<me>»).
+    const me = (getWebApp() as any)?.initDataUnsafe?.user?.id;
+    const shareUrl = `${window.location.origin}/v1/share/${selected.event_id}${me ? `?ref=${me}` : ""}`;
     shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: shareUrl });
     showToast("Ссылка готова к отправке", { icon: "share" });
   };

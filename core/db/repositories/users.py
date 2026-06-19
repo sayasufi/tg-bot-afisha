@@ -13,17 +13,20 @@ from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
 
 def upsert_user(db: Session, telegram_user_id: int, username: str | None = None, first_name: str | None = None) -> User:
-    """Create or refresh a bot user (profile + last-active). No db.refresh — callers don't
-    read the server-default columns back, so it's a wasted round-trip."""
-    user = db.get(User, telegram_user_id)
-    if not user:
-        user = User(telegram_user_id=telegram_user_id)
-    user.username = username
-    user.first_name = first_name
-    user.last_active_at = datetime.now(timezone.utc)
-    db.add(user)
+    """Create or refresh a bot user (profile + last-active). ON CONFLICT DO UPDATE so a brand-new
+    account opened concurrently (bot /start + the app's burst of requests) can't race into a
+    duplicate-key 500 — the loser updates instead of erroring."""
+    now = datetime.now(timezone.utc)
+    db.execute(
+        pg_insert(User.__table__)
+        .values(telegram_user_id=telegram_user_id, username=username, first_name=first_name, last_active_at=now)
+        .on_conflict_do_update(
+            index_elements=["telegram_user_id"],
+            set_={"username": username, "first_name": first_name, "last_active_at": now},
+        )
+    )
     db.commit()
-    return user
+    return db.get(User, telegram_user_id)
 
 
 def get_or_create_city(db: Session, name: str, country: str = "RU") -> City:
@@ -45,15 +48,19 @@ def get_or_create_city(db: Session, name: str, country: str = "RU") -> City:
 async def upsert_user_async(
     db: AsyncSession, telegram_user_id: int, username: str | None = None, first_name: str | None = None
 ) -> User:
-    """Create or refresh a bot user (profile + last-active). No commit."""
-    user = await db.get(User, telegram_user_id)
-    if not user:
-        user = User(telegram_user_id=telegram_user_id)
-    user.username = username
-    user.first_name = first_name
-    user.last_active_at = datetime.now(timezone.utc)
-    db.add(user)
-    return user
+    """Create or refresh a bot user (profile + last-active), no commit. ON CONFLICT DO UPDATE so
+    the burst of open-time requests for a brand-new account can't race into a duplicate-key 500 —
+    the losers update instead of erroring (the old get-then-insert raced on the unique PK)."""
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        pg_insert(User.__table__)
+        .values(telegram_user_id=telegram_user_id, username=username, first_name=first_name, last_active_at=now)
+        .on_conflict_do_update(
+            index_elements=["telegram_user_id"],
+            set_={"username": username, "first_name": first_name, "last_active_at": now},
+        )
+    )
+    return await db.get(User, telegram_user_id)
 
 
 def _settings_dict(user: User) -> dict:

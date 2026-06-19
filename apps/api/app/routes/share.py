@@ -110,7 +110,7 @@ _PAGE = """<!doctype html>
 
 
 @router.get("/{event_id}", response_class=HTMLResponse)
-async def share(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
+async def share(event_id: UUID, ref: int | None = None, db: AsyncSession = Depends(get_async_db)):
     row = (
         await db.execute(
             select(Event, EventOccurrence, Venue.name.label("venue"))
@@ -145,9 +145,11 @@ async def share(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
         .replace("__IMAGE__", escape(og_image))
         .replace("__URL__", escape(f"{base}/v1/share/{event_id}"))
         .replace("__COVERSTYLE__", cover_style)
-        .replace("__BOT__", _open_url(event_id))
+        .replace("__BOT__", _open_url(event_id, ref))
     )
-    return HTMLResponse(html, headers={"Cache-Control": "public, max-age=600"})
+    # Don't shared-cache the invite variant (the button differs per inviter); the plain page can.
+    cache = "no-store" if ref else "public, max-age=600"
+    return HTMLResponse(html, headers={"Cache-Control": cache})
 
 
 class PrepareRequest(BaseModel):
