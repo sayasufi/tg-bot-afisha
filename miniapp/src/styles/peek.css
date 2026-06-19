@@ -95,19 +95,14 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* Tappable venue name → venue page; an acid highlighter swipe fills in on press. */
+/* Tappable venue name → venue page. Plain at rest (matches the reference); an acid highlighter
+   swipe fills in only on press. */
 .peek__venue--btn {
   border: 0;
   padding: 0;
   background: none;
   cursor: pointer;
   transition: color 0.13s var(--ease-cut);
-}
-.peek__venue--btn .peek__venuename {
-  box-shadow: inset 0 -2px 0 var(--acid);
-}
-.peek__venue--btn:active {
-  color: var(--ink);
 }
 .peek__venue--btn:active .peek__venuename {
   box-shadow: inset 0 -1em 0 var(--acid);
