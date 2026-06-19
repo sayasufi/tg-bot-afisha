@@ -7,14 +7,13 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
-from apps.bot.bot.handlers import fallback, forwarded, search, start
+from apps.bot.bot.handlers import fallback, forwarded, start
 from apps.bot.bot.middlewares.throttle import ThrottleMiddleware
 from core.config.settings import get_settings
 from core.logging.setup import setup_logging
 
 COMMANDS = [
     BotCommand(command="start", description="Открыть карту"),
-    BotCommand(command="search", description="Поиск события по названию"),
     BotCommand(command="help", description="Как это работает"),
 ]
 
@@ -54,7 +53,6 @@ async def main() -> None:
     # forward path (forwarded.py → ingestion/LLM) from a single chat flooding it.
     dp.message.outer_middleware(ThrottleMiddleware())
     dp.include_router(start.router)
-    dp.include_router(search.router)
     dp.include_router(forwarded.router)
     dp.include_router(fallback.router)  # catch-all — must stay last
 

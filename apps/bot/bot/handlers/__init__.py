@@ -1,3 +1,3 @@
-from apps.bot.bot.handlers import forwarded, search, start
+from apps.bot.bot.handlers import forwarded, start
 
-__all__ = ["start", "search", "forwarded"]
+__all__ = ["start", "forwarded"]
