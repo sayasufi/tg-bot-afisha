@@ -170,7 +170,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
           >
             <span className="chip__livedot" aria-hidden="true" />
             <span className="gonow-toggle__label">Сейчас</span>
-            <span className="gonow-toggle__hint">идёт или открыто прямо сейчас</span>
+            <span className="gonow-toggle__hint">идёт или открыто</span>
             <span className="gonow-toggle__sw" aria-hidden="true">
               <span className="gonow-toggle__knob" />
             </span>
