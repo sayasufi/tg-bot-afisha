@@ -317,7 +317,8 @@ mark.hl {
   padding: 16px 12px 14px;
 }
 .profile__hero--3 .profile__stat .hero-num {
-  font-size: clamp(26px, 8vw, 34px);
+  /* A touch smaller than before so the row doesn't out-shout the person's name above it. */
+  font-size: clamp(22px, 7vw, 30px);
 }
 
 /* «Твой вкус» empty state — an inviting slot framed like a catalogue card, not a paragraph of
@@ -348,77 +349,26 @@ mark.hl {
 
 /* «Твой вкус» — favourite genres as editorial tags. NO multi-colour proportion chart: the
    per-category rainbow broke the acid+cinnabar system and read as analytics. */
+/* «Твой вкус» — genres as proportional DISPLAY words: the type size (set inline) IS the chart —
+   your dominant genre is biggest and wears the one cinnabar accent. No legend, no rainbow, no
+   numbers — a typographic taste statement, baseline-aligned so the varying sizes sit on one line. */
 .taste {
-  margin-top: 16px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-}
-.tastetag {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  font-family: var(--grotesk);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  text-transform: lowercase;
-  color: var(--ink);
-}
-.tastetag b {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-/* The leading genre wears the ONE cinnabar accent — your dominant taste, on-system. */
-.tastetag--top,
-.tastetag--top b {
-  color: var(--cinnabar);
-}
-
-/* «Скоро начнётся» — soonest saved events, a tappable ledger that ends the passport with content. */
-.profile__soon {
   margin-top: 14px;
   display: flex;
-  flex-direction: column;
-}
-.profile__soonrow {
-  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 14px;
-  width: 100%;
-  padding: 13px 0;
-  border: 0;
-  border-bottom: 1px solid var(--line-soft);
-  background: none;
-  text-align: left;
-  cursor: pointer;
+  gap: 4px 18px;
 }
-.profile__soonrow:active {
-  background: var(--vitrine);
-}
-.profile__soontitle {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--grotesk);
-  font-size: 14px;
-  font-weight: 600;
+.tastetag {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
   text-transform: lowercase;
   color: var(--ink);
 }
-.profile__soonwhen {
-  flex: 0 0 auto;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.tastetag--top {
   color: var(--cinnabar);
-  white-space: nowrap;
 }
 
 .favempty {

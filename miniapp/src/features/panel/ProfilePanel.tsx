@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { fetchEventsByIds, type EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
-import { formatWhenShort } from "../../lib/datetime";
 import { IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
@@ -16,7 +15,6 @@ export function ProfilePanel({
   onToggleReminders,
   notifyDigest,
   onToggleDigest,
-  onSelect,
   onClose,
 }: {
   user: TgUser | null;
@@ -27,7 +25,6 @@ export function ProfilePanel({
   onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
-  onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
@@ -110,12 +107,16 @@ export function ProfilePanel({
         <div className="recs__section recs__section--you">Твой вкус</div>
         {taste.length > 0 ? (
           <div className="taste">
-            {taste.slice(0, 6).map((t, i) => (
-              <span key={t.key} className={`tastetag${i === 0 ? " tastetag--top" : ""}`}>
-                {t.meta.label.toLowerCase()}
-                <b>{t.n}</b>
-              </span>
-            ))}
+            {taste.slice(0, 6).map((t, i) => {
+              // Type size encodes the mix — your dominant genre is biggest, lesser ones smaller.
+              const size = 18 + Math.round((t.n / taste[0].n) * 16);
+              const isTop = i === 0 && t.n > (taste[1]?.n ?? 0);
+              return (
+                <span key={t.key} className={`tastetag${isTop ? " tastetag--top" : ""}`} style={{ fontSize: `${size}px` }}>
+                  {t.meta.label.toLowerCase()}
+                </span>
+              );
+            })}
           </div>
         ) : (
           <div className="profile__empty">
@@ -124,22 +125,6 @@ export function ProfilePanel({
               Сохраняй события сердечком — и здесь сложится твой культурный профиль: любимые жанры, площадки, ритм города.
             </span>
           </div>
-        )}
-
-        {/* «Скоро начнётся» — your soonest saved events, tappable. Ends the passport with content +
-            a reason to act, not with settings. */}
-        {soonList.length > 0 && (
-          <>
-            <div className="recs__section">Скоро начнётся</div>
-            <div className="profile__soon">
-              {soonList.slice(0, 3).map((ev) => (
-                <button key={ev.event_id} type="button" className="profile__soonrow" onClick={() => onSelect(ev)}>
-                  <span className="profile__soontitle">{ev.title}</span>
-                  <span className="profile__soonwhen">{formatWhenShort(ev.date_start, ev.date_end)}</span>
-                </button>
-              ))}
-            </div>
-          </>
         )}
 
         {/* Settings, grouped under their own header below the passport. */}
