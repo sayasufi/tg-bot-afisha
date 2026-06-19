@@ -174,7 +174,7 @@ html[data-theme="dark"] .sheet-veil {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 10px 14px 0;
+  margin: 10px 19px 0 14px; /* right margin carries the 5px shadow so the strip+shadow centres too */
   padding: 12px 14px;
   background: var(--plinth);
   border: 1px solid var(--line);
@@ -219,7 +219,9 @@ html[data-theme="dark"] .sheet-veil {
    the plaster by a big acid registration offset (this is the selected exhibit). */
 .sheet__card {
   position: relative;
-  margin: 10px 14px 16px;
+  /* Right margin carries the extra 9px of the shadow's x-offset so the card+shadow unit CENTRES:
+     the card's left edge and the shadow's right edge sit the same 14px from each screen edge. */
+  margin: 10px 23px 16px 14px;
   /* Passe-partout: a plaster mat (padding) frames the content inside the card's ink border —
      the mounted-print look. The photo gets its own hairline frame within the mat. */
   padding: 10px;
