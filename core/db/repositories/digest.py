@@ -20,6 +20,11 @@ _MSK = timezone(timedelta(hours=3))
 # so a freshly-listed event is never missed at the boundary, and a long-running exhibition
 # isn't re-announced every single week.
 _NEW_WINDOW = timedelta(days=8)
+# Effectively "all weekend candidates": the pool is fetched once per city and ranked in Python
+# by rec:views, so this cap only bounds a pathological data state (Moscow is ~1.4k now). Ordered
+# upcoming-first, so if the cap is ever hit it sheds plentiful ongoing runs — never the scarce
+# timed weekend events (concerts/shows) users actually plan around.
+_POOL_CAP = 3000
 
 
 def weekend_window(now: datetime) -> tuple[datetime, datetime, datetime, datetime]:
@@ -118,7 +123,7 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
 
 
 async def weekend_pool(
-    db: AsyncSession, city_slug: str | None, now: datetime, limit: int = 60
+    db: AsyncSession, city_slug: str | None, now: datetime, limit: int = _POOL_CAP
 ) -> list[dict]:
     """The weekend pool for a city — every active event whose run OVERLAPS the coming weekend,
     region-guarded, WITHOUT any interest filter. Fetched ONCE per distinct city (then ranked
@@ -153,9 +158,10 @@ async def weekend_pool(
         .join(Venue, Venue.venue_id == soon.c.venue_id)
         # Region guard (the app's single source for it) — keeps the digest to the user's city.
         .where(Event.status == "active", text(region_predicate_sql(city_by_slug(city_slug))))
-        # Soonest-first as a stable, sensible pre-order; the real ranking (rec:views) is applied
-        # in rank_weekend, NOT popularity_score (a dead, always-0 column).
-        .order_by(soon.c.date_start.asc())
+        # Upcoming-first, then soonest: a stable pre-order whose ONLY effect is which rows survive
+        # the cap — keep the scarce timed weekend events over plentiful ongoing runs. The real
+        # ranking (rec:views) is applied in rank_weekend, NOT popularity_score (a dead 0 column).
+        .order_by((soon.c.date_start < now).asc(), soon.c.date_start.asc())
         .limit(limit)
     )
     rows = (await db.execute(q)).all()
