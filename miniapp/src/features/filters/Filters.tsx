@@ -1,10 +1,19 @@
-import { useMemo, type CSSProperties } from "react";
+import { useMemo } from "react";
 
 import { CATEGORIES, categoryMeta, categoryOrder } from "../../lib/categories";
 import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
 import { CategoryIcon, IconClose, IconGrid, IconMenu, IconSearch } from "../../lib/icons";
 import { haptic, hapticSelection } from "../../lib/telegram";
 import { useCountUp } from "../../lib/useCountUp";
+
+// Budget as quick preset chips (the pattern every strong filter mockup used) instead of a free
+// numeric field — faster to tap and on-brand. value maps straight onto priceMax ("" = no limit).
+const BUDGETS: { label: string; value: string }[] = [
+  { label: "Бесплатно", value: "0" },
+  { label: "до 1000 ₽", value: "1000" },
+  { label: "до 3000 ₽", value: "3000" },
+  { label: "Любая", value: "" },
+];
 
 export type FilterState = {
   q: string;
@@ -90,6 +99,10 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
     // Picking a day turns "Сейчас" off (mutually exclusive).
     onChange(activeDay === iso ? { ...value, goNow: false, dateFrom: "", dateTo: "" } : { ...value, goNow: false, dateFrom: iso, dateTo: iso });
   };
+  const setBudget = (v: string) => {
+    hapticSelection();
+    onChange({ ...value, priceMax: v });
+  };
 
   return (
     <>
@@ -158,6 +171,9 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
             <span className="chip__livedot" aria-hidden="true" />
             <span className="gonow-toggle__label">Сейчас</span>
             <span className="gonow-toggle__hint">идёт или открыто прямо сейчас</span>
+            <span className="gonow-toggle__sw" aria-hidden="true">
+              <span className="gonow-toggle__knob" />
+            </span>
           </button>
 
           <span className="kicker">Когда</span>
@@ -184,36 +200,38 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
               </button>
             ))}
           </div>
-          <span className="kicker">Категория</span>
-          <div className="csheet__grid">
-            <button type="button" className={`csheet__cat${value.categories.length === 0 ? " csheet__cat--active" : ""}`} onClick={() => pick("")}>
-              <IconGrid className="csheet__cat-all" size={18} />
+          <span className="kicker">Категории</span>
+          <div className="fchips">
+            <button type="button" className={`fchip${value.categories.length === 0 ? " fchip--active" : ""}`} onClick={() => pick("")}>
+              <IconGrid size={15} />
               Все
             </button>
             {CATEGORIES.map((c) => (
               <button
                 key={c.key}
                 type="button"
-                className={`csheet__cat${value.categories.includes(c.key) ? " csheet__cat--active" : ""}`}
-                style={{ "--cat": c.color } as CSSProperties}
+                className={`fchip${value.categories.includes(c.key) ? " fchip--active" : ""}`}
                 onClick={() => pick(c.key)}
               >
-                <CategoryIcon cat={c.key} size={17} />
+                <CategoryIcon cat={c.key} size={15} />
                 {c.label}
               </button>
             ))}
           </div>
 
-          <span className="kicker">Цена до, ₽</span>
-          <label className="panel__field panel__field--solo">
-            <input
-              type="number"
-              inputMode="numeric"
-              placeholder="любая"
-              value={value.priceMax}
-              onChange={(e) => onChange({ ...value, priceMax: e.target.value })}
-            />
-          </label>
+          <span className="kicker">Бюджет</span>
+          <div className="fchips">
+            {BUDGETS.map((bgt) => (
+              <button
+                key={bgt.label}
+                type="button"
+                className={`fchip${value.priceMax === bgt.value ? " fchip--active" : ""}`}
+                onClick={() => setBudget(bgt.value)}
+              >
+                {bgt.label}
+              </button>
+            ))}
+          </div>
 
           <div className="csheet__radius-head">
             <span className="kicker">Рядом</span>

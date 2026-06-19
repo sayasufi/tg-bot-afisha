@@ -136,6 +136,32 @@
 .gonow-toggle:active {
   background: var(--vitrine);
 }
+/* Flat on/off switch on the right — the knob slides + turns cinnabar (the live ink) when on,
+   so the state is unmistakable next to the cinnabar frame. */
+.gonow-toggle__sw {
+  flex: 0 0 auto;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border: 1px solid var(--ink);
+  background: var(--plinth);
+}
+.gonow-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--ink);
+  transition: transform 0.16s var(--ease-cut), background 0.16s var(--ease-cut);
+}
+.gonow-toggle--on .gonow-toggle__sw {
+  border-color: var(--cinnabar);
+}
+.gonow-toggle--on .gonow-toggle__knob {
+  transform: translateX(18px);
+  background: var(--cinnabar);
+}
 
 .csheet__dates {
   display: grid;
@@ -290,46 +316,54 @@
 }
 
 
-.csheet__grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* Categories + budget as compact chips — wrapping pills (icon + label), the single acid fill
+   when active. The chip flow roughly halves the category section's height vs the old 2-up grid,
+   which is the lever for the (tall) sheet; comfortable 38px tap targets keep it easy to hit. */
+.fchips {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.csheet__cat {
-  display: flex;
+.fchip {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 48px;
-  padding: 0 16px;
+  gap: 7px;
+  height: 38px;
+  padding: 0 13px;
   border: 1px solid var(--line);
   background: var(--plinth);
   color: var(--ink);
   font-family: var(--grotesk);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   cursor: pointer;
+  transition: background 0.13s var(--ease-cut), border-color 0.13s var(--ease-cut), color 0.13s var(--ease-cut);
 }
 
-.csheet__cat svg {
+.fchip svg {
   flex: 0 0 auto;
-  color: var(--cat, var(--ink));
+  color: var(--ink);
 }
 
-.csheet__cat-all {
-  /* sized via the icon's size prop; colour handled by .csheet__cat svg */
-  flex: 0 0 auto;
-}
-
-.csheet__cat--active {
+/* Active chip: the single acid fill, framed in ink (acid is light — the ink frame anchors it). */
+.fchip--active {
   background: var(--acid);
+  border-color: var(--ink);
   color: var(--on-acid);
 }
 
-.csheet__cat--active svg {
+.fchip--active svg {
   color: var(--on-acid);
+}
+
+.fchip:active {
+  background: var(--vitrine);
+}
+.fchip--active:active {
+  background: var(--acid-deep);
 }
 
 .panel__field--solo {
