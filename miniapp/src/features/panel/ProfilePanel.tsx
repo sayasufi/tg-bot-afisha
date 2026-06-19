@@ -11,6 +11,8 @@ export function ProfilePanel({
   total,
   city,
   favIds,
+  notifyReminders,
+  onToggleReminders,
   notifyDigest,
   onToggleDigest,
   onClose,
@@ -19,6 +21,8 @@ export function ProfilePanel({
   total: number;
   city: string;
   favIds: Set<string>;
+  notifyReminders: boolean;
+  onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
   onClose: () => void;
@@ -79,6 +83,22 @@ export function ProfilePanel({
             <b>{city}</b>
           </div>
         </div>
+
+        <button
+          type="button"
+          className={`profile__switch${notifyReminders ? " profile__switch--on" : ""}`}
+          role="switch"
+          aria-checked={notifyReminders}
+          onClick={() => onToggleReminders(!notifyReminders)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Напоминания</span>
+            <span className="profile__switch-sub">Бот пишет перед началом событий, где ты нажал колокол. Выключи, чтобы приглушить все разом</span>
+          </span>
+          <span className="profile__switch-track" aria-hidden="true">
+            <span className="profile__switch-knob" />
+          </span>
+        </button>
 
         <button
           type="button"

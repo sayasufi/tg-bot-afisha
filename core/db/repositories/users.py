@@ -71,6 +71,7 @@ def _settings_dict(user: User) -> dict:
         "coach": user.coach,
         "swipe_seen": user.swipe_seen,
         "interests": list(user.interests or []),
+        "notify_reminders": user.notify_reminders,
         "notify_digest": user.notify_digest,
     }
 
@@ -91,6 +92,7 @@ async def update_settings(
     coach: bool | None = None,
     swipe_seen: bool | None = None,
     interests: list[str] | None = None,
+    notify_reminders: bool | None = None,
     notify_digest: bool | None = None,
 ) -> dict:
     """Set the provided settings (None = leave unchanged; "" clears city). No commit."""
@@ -116,6 +118,8 @@ async def update_settings(
             if c and c not in seen:
                 seen.append(c)
         user.interests = seen[:20]
+    if notify_reminders is not None:
+        user.notify_reminders = bool(notify_reminders)
     if notify_digest is not None:
         user.notify_digest = bool(notify_digest)
     db.add(user)

@@ -121,6 +121,12 @@ export function App() {
   // Categories the user picked at onboarding — warms «Для тебя» from cold (merged with the
   // favourite-derived categories below). Hydrated from the account on load.
   const [pickedInterests, setPickedInterests] = useState<string[]>([]);
+  // Reminder DMs — default ON (the per-event bell is the consent); this is a global mute.
+  const [notifyReminders, setNotifyReminders] = useState(true);
+  const toggleReminders = useCallback((on: boolean) => {
+    setNotifyReminders(on);
+    pushSetting("notify_reminders", on);
+  }, []);
   // Weekly digest opt-in (the bot DMs a Friday roundup). Strictly opt-in; hydrated from the
   // account on load, toggled from the profile.
   const [notifyDigest, setNotifyDigest] = useState(false);
@@ -170,6 +176,7 @@ export function App() {
       reconcile("okrest_coach", "coach", s.coach, () => setCoachSeen(true));
       reconcile("okrest_swipe_seen", "swipe_seen", s.swipe_seen);
       if (Array.isArray(s.interests) && s.interests.length) setPickedInterests(s.interests);
+      if (typeof s.notify_reminders === "boolean") setNotifyReminders(s.notify_reminders);
       if (typeof s.notify_digest === "boolean") setNotifyDigest(s.notify_digest);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -842,6 +849,8 @@ export function App() {
             total={total}
             city={currentCity?.name ?? CITY}
             favIds={fav.ids}
+            notifyReminders={notifyReminders}
+            onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
             onClose={() => setView("map")}
