@@ -6,12 +6,15 @@ sent over the raw Telegram HTTP API like the reminder sweep. Idempotent within a
 per-user ledger (ref.users.last_digest_sent_at) so a redeploy / manual re-run / missed-run
 catchup never double-sends; only a thrown (transient) send leaves a user unstamped.
 """
+import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from apps.bot.bot.formatting import digest_message, weekend_label
+from apps.api.app.services.card import render_digest_poster
+from apps.bot.bot.formatting import digest_caption, digest_message, weekend_label, when_phrase
 from core.config.settings import get_settings
 from core.db.repositories.digest import (
     mark_digest_sent,
@@ -22,6 +25,7 @@ from core.db.repositories.digest import (
     weekend_window,
 )
 from core.db.session import WorkerAsyncSessionLocal
+from core.http_safety import is_public_http_url
 from core.redis import get_redis
 
 log = logging.getLogger(__name__)
@@ -73,10 +77,26 @@ async def _send_digest_impl() -> int:
         # only run the personal followed-venues query + an in-memory rank.
         view_counts = await _view_counts()
         pools: dict[str | None, list[dict]] = {}
+        covers: dict[str, bytes | None] = {}  # url -> bytes; weekend covers repeat across users
         # Users Telegram answered for (ok OR a permanent failure) — stamped once at the end so a
         # re-run this week skips them. A thrown (transient) send leaves the user out of this list.
         responded: list[int] = []
         async with httpx.AsyncClient(timeout=15) as client:
+
+            async def cover(url: str | None) -> bytes | None:
+                """Cover bytes for a poster tile — SSRF-guarded, no redirects, cached per sweep."""
+                if not url or not is_public_http_url(url):
+                    return None
+                if url not in covers:
+                    try:
+                        r = await client.get(url, timeout=8, follow_redirects=False,
+                                             headers={"User-Agent": "okrest-card/1.0"})
+                        r.raise_for_status()
+                        covers[url] = r.content
+                    except Exception:
+                        covers[url] = None
+                return covers[url]
+
             for u in users:
                 city = u.get("city_slug")
                 if city not in pools:
@@ -90,18 +110,36 @@ async def _send_digest_impl() -> int:
                 )
                 if not venue_items and not weekend_items:
                     continue  # nothing fresh for this user this week — stay quiet
-                text = digest_message(venue_items, weekend_items, label, now)
+                # Build the poster: combined items (followed-venue first), covers fetched (cached),
+                # a when-phrase per tile. Render off the event loop (PIL is CPU-bound).
+                poster_items = [
+                    {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now),
+                     "photo": await cover(it.get("image"))}
+                    for it in (venue_items + weekend_items)[:6]
+                ]
+                poster: bytes | None = None
                 try:
-                    resp = await client.post(
-                        f"{base}/sendMessage",
-                        json={
-                            "chat_id": u["user_id"],
-                            "text": text,
-                            "parse_mode": "HTML",
-                            "reply_markup": markup,
-                            "disable_web_page_preview": True,
-                        },
-                    )
+                    poster = await asyncio.to_thread(render_digest_poster, poster_items, label)
+                except Exception:
+                    poster = None
+                try:
+                    if poster:
+                        # Poster as a photo + a light caption (tappable titles): the poster already
+                        # carries code · when · venue, so the caption stays short.
+                        resp = await client.post(
+                            f"{base}/sendPhoto",
+                            data={"chat_id": str(u["user_id"]),
+                                  "caption": digest_caption(venue_items, weekend_items, label),
+                                  "parse_mode": "HTML", "reply_markup": json.dumps(markup)},
+                            files={"photo": ("digest.jpg", poster, "image/jpeg")},
+                        )
+                    else:  # render/cover unavailable → the text roundup still lands
+                        resp = await client.post(
+                            f"{base}/sendMessage",
+                            json={"chat_id": u["user_id"], "parse_mode": "HTML", "reply_markup": markup,
+                                  "text": digest_message(venue_items, weekend_items, label, now),
+                                  "disable_web_page_preview": True},
+                        )
                 except Exception:  # transient network/infra → leave unstamped, retry next run
                     continue
                 # Telegram answered (delivered, OR a permanent 403/400 like blocked/never-started)

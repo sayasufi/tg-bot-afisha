@@ -42,12 +42,16 @@ def weekend_window(now: datetime) -> tuple[datetime, datetime, datetime, datetim
 
 def _item(row) -> dict:
     """Shared row → bot-item dict (same column order in both queries)."""
-    event_id, title, category, display_no, date_start, date_end, price_min, venue_name, venue_city = row
+    (event_id, title, category, display_no, cached_img, primary_img,
+     date_start, date_end, price_min, venue_name, venue_city) = row
     return {
         "event_id": str(event_id),
         "title": title,
         "category": category,
         "code": event_code(display_no, venue_city),
+        # Cover for the digest poster: the ORIGINAL source first (full-res, not the 900px cache),
+        # so the poster tile isn't upscaled-blurry; fall back to our cached copy.
+        "image": primary_img or cached_img or None,
         "date_start": date_start.isoformat() if date_start else None,
         "date_end": date_end.isoformat() if date_end else None,
         "price_min": float(price_min) if price_min is not None else None,
@@ -60,6 +64,8 @@ _COLS = (
     Event.canonical_title,
     Event.category,
     Event.display_no,
+    Event.cached_image_url,
+    Event.primary_image_url,
 )
 
 

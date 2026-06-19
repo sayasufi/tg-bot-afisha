@@ -223,6 +223,85 @@ def ensure_reminder_cover(event_id: str, image_url: str, code: str | None) -> st
         return ""
 
 
+# --- weekly digest poster: a VITRINE contact-sheet of the weekend's covers -----------
+def _digest_tile(w: int, h: int, item: dict) -> Image.Image:
+    """One catalogue tile: the cover (darkened, cover-fit), a bottom scrim, the accession code
+    top-left, and the when + title bottom — the EventListRow look as a flat image."""
+    photo = item.get("photo")
+    tile = Image.new("RGB", (w, h), INK)
+    if photo:
+        try:
+            ph = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (w, h), Image.LANCZOS)
+            ph = ImageEnhance.Brightness(ph).enhance(0.66)
+            ph = ImageEnhance.Color(ph).enhance(0.9)
+            tile.paste(ph, (0, 0))
+        except Exception:
+            pass
+    d = ImageDraw.Draw(tile, "RGBA")
+    gh = int(h * 0.66)  # bottom legibility gradient
+    for i in range(gh):
+        d.line([(0, h - gh + i), (w, h - gh + i)], fill=(11, 11, 11, int(225 * (i / gh) ** 1.5)))
+    pad = 16
+    code = (item.get("code") or "").strip()
+    if code:
+        cf = _font(23, 600)
+        cw = d.textlength(code, font=cf)
+        d.rounded_rectangle([14, 14, 14 + cw + 18, 14 + 36], radius=3, fill=(11, 11, 11, 205))
+        d.text((14 + 9, 14 + 7), code, font=cf, fill=ACID)
+    title = (item.get("title") or "Событие").strip()
+    tf = _font(27, 800)
+    lines = _wrap(d, title, tf, w - 2 * pad, 2)
+    lh = 32
+    ty = h - pad - len(lines) * lh
+    when = (item.get("when") or "").upper().strip()
+    if when:
+        wf = _font(16, 600)
+        ww = w - 2 * pad
+        while when and d.textlength(when + "…", font=wf) > ww:
+            when = when[:-1]
+        d.text((pad, ty - 25), when.rstrip(), font=wf, fill=ACID)
+    for ln in lines:
+        d.text((pad, ty), ln, font=tf, fill=(255, 255, 255))
+        ty += lh
+    d.rectangle([0, 0, w - 1, h - 1], outline=INK, width=2)
+    return tile
+
+
+def render_digest_poster(items: list[dict], label: str) -> bytes:
+    """The weekly digest as ONE poster: окрест header + 'афиша на выходные' + the dates, then a
+    2-column contact sheet of up to 6 weekend covers. items: {code,title,when,photo:bytes|None}."""
+    img = Image.new("RGB", (W, H), PLASTER)
+    d = ImageDraw.Draw(img)
+    M = 30
+    # header — wordmark, title, dates, acid rule
+    _pin(d, M + 14, 54, 17)
+    d.text((M + 42, 34), "окрест", font=_font(38, 800), fill=INK)
+    d.line([W - M - 26, 42, W - M, 42], fill=CINNABAR, width=4)
+    d.line([W - M, 42, W - M, 68], fill=CINNABAR, width=4)
+    tf = _font(76, 800)
+    d.text((M, 104), "афиша на", font=tf, fill=INK)
+    d.text((M, 186), "выходные", font=tf, fill=INK)
+    d.text((M, 286), (label or "").upper(), font=_font(30, 600), fill=CINNABAR)
+    d.rectangle([M, 340, W - M, 347], fill=ACID)
+    # grid
+    items = [it for it in items if it][:6]
+    cols = 2
+    rows = max(1, (len(items) + 1) // 2)
+    gut = 12
+    gy0 = 366
+    tw = (W - 2 * M - gut) // 2
+    th = ((H - 78) - gy0 - gut * (rows - 1)) // rows
+    for i, it in enumerate(items):
+        r, c = divmod(i, cols)
+        img.paste(_digest_tile(tw, th, it), (M + c * (tw + gut), gy0 + r * (th + gut)))
+    # footer + outer frame
+    d.text((M, H - 56), "СОБЫТИЯ РЯДОМ · @okrestmap_bot", font=_font(21, 600), fill=INK_DIM)
+    d.rectangle([14, 14, W - 15, H - 15], outline=INK, width=3)
+    out = io.BytesIO()
+    img.save(out, "JPEG", quality=90, optimize=True)
+    return out.getvalue()
+
+
 def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: str) -> str:
     """Return the public URL of the cached card, rendering + storing it if needed."""
     key = f"cards/{event_id}.jpg"

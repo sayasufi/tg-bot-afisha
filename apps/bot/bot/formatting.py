@@ -215,3 +215,21 @@ def digest_message(venue_items: list[dict], weekend_items: list[dict], label: st
         lines.append(f"\n{ce('📍')} <b>на выходных рядом</b>")
         lines.extend(_digest_line(it, now) for it in weekend_items)
     return "\n".join(lines)
+
+
+def digest_caption(venue_items: list[dict], weekend_items: list[dict], label: str) -> str:
+    """Caption UNDER the digest poster: the poster already shows code · when · venue, so the
+    caption stays light — a hero line + tappable titles only (each a deep-link into the event)."""
+    lines = [f"{ce('⚡')} <b>афиша на выходные</b> · {escape(label)}" if label else f"{ce('⚡')} <b>афиша на выходные</b>"]
+
+    def block(head: str, items: list[dict]) -> None:
+        if not items:
+            return
+        lines.append(f"\n<b>{head}</b>")
+        for it in items:
+            title = escape(str(it.get("title") or "Событие")[:80])
+            lines.append(f'{glyph(it.get("category"))} <a href="{event_deeplink(it["event_id"])}">{title}</a>')
+
+    block("новое на ваших площадках", venue_items)
+    block("на выходных рядом", weekend_items)
+    return "\n".join(lines)
