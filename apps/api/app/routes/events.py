@@ -189,10 +189,11 @@ async def get_event_detail(event_id: UUID, db: AsyncSession = Depends(get_async_
 
 
 @router.get("/venues/{venue_id}")
-async def get_venue(venue_id: int, db: AsyncSession = Depends(get_async_db)):
-    """A venue + its upcoming events — the venue page (tap the place in an event sheet)."""
+async def get_venue(venue_id: int, since: datetime | None = None, db: AsyncSession = Depends(get_async_db)):
+    """A venue + its upcoming events — the venue page (tap the place in an event sheet). `since` (the
+    «Площадки» list's last-visit timestamp) drives «+N новых» = events listed here since you last looked."""
     service = EventQueryService(db)
-    result = await service.venue_detail(venue_id)
+    result = await service.venue_detail(venue_id, since)
     if not result:
         raise HTTPException(status_code=404, detail="venue not found")
     return Response(orjson.dumps(result), media_type="application/json")

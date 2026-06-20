@@ -109,8 +109,11 @@ export async function fetchEventDetail(eventId: string, signal?: AbortSignal): P
 }
 
 // A venue page: the place + its upcoming events (same EventItem shape as the map/list).
-export async function fetchVenue(venueId: number | string, signal?: AbortSignal): Promise<VenueDetail> {
-  const data = await getJson<VenueDetail>(`/v1/venues/${venueId}`, signal);
+export async function fetchVenue(venueId: number | string, signal?: AbortSignal, since?: string): Promise<VenueDetail> {
+  // `since` (the «Площадки» list's last-visit timestamp) → server returns new_count = events listed
+  // here since then («+N новых»).
+  const q = since ? `?since=${encodeURIComponent(since)}` : "";
+  const data = await getJson<VenueDetail>(`/v1/venues/${venueId}${q}`, signal);
   return { ...data, events: (data.events ?? []).map((x: any) => ({ ...x, price_min: toNum(x.price_min) })) };
 }
 

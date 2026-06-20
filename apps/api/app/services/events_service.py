@@ -99,8 +99,6 @@ _PLACEHOLDER_VENUE = "Unknown venue"
 # All current cities are UTC+3 (Europe/Moscow, no DST since 2014). Used to compute the
 # venue "open now" signal in the venues' own wall-clock time.
 _MSK = timezone(timedelta(hours=3))
-# «+N новых» window for the «Площадки» list — events listed at a followed venue within this many days.
-_NEW_AT_VENUE_DAYS = 7
 
 # Search-as-you-type helpers --------------------------------------------------
 # A query that looks like a public event code ("MSK-04PN", "msk04pn", "04PN"): 2-4
@@ -753,7 +751,7 @@ class EventQueryService:
         head["saved_count"] = saved
         return head
 
-    async def venue_detail(self, venue_id: int):
+    async def venue_detail(self, venue_id: int, since: datetime | None = None):
         """A venue + its upcoming events — powers the venue page. Events use the same
         canonical item shape as the map/list, so the client renders them with the existing
         poster rows. One row per event (soonest-actionable occurrence, future-first)."""
@@ -814,10 +812,10 @@ class EventQueryService:
             for r in rows
         ]
         items.sort(key=lambda it: it["date_start"])
-        # «+N новых» — events newly LISTED at this venue in the last week (still live). Mirrors the
-        # weekly digest's «новое на ваших площадках» signal, surfaced in-app on the «Площадки» list.
-        new_cutoff = datetime.now(timezone.utc) - timedelta(days=_NEW_AT_VENUE_DAYS)
-        new_count = sum(1 for r in rows if r.created_at and r.created_at >= new_cutoff)
+        # «+N новых» = events listed at this venue SINCE the caller last looked (the «Площадки» list
+        # passes its previous-visit timestamp). Relative to the user — not a fixed window — so it's
+        # meaningful even on a young catalogue and shows nothing on a first visit (since=None → 0).
+        new_count = sum(1 for r in rows if r.created_at and r.created_at > since) if since else 0
         return {
             "venue_id": vrow.venue_id,
             "name": vrow.name,

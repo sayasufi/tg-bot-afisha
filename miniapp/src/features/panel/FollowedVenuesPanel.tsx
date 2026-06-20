@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { fetchVenue, type VenueDetail } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
@@ -9,6 +9,8 @@ import { haptic } from "../../lib/telegram";
 import { useVenueFollows } from "../../lib/venueFollows";
 import { usePullToRefresh } from "../../lib/usePullToRefresh";
 import { PullHint } from "./PullHint";
+
+const SEEN_KEY = "okrest_venues_seen"; // last time this device opened «Площадки» — drives «+N новых»
 
 function plural(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10;
@@ -32,6 +34,16 @@ export function FollowedVenuesPanel({
   const [venues, setVenues] = useState<VenueDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // The «+N новых» baseline: when this device last opened the panel. Captured ONCE (so it survives the
+  // re-fetch on the same open), sent to the server, then advanced after the list renders.
+  const [seenAt] = useState<string | undefined>(() => {
+    try {
+      return localStorage.getItem(SEEN_KEY) || undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const seenWritten = useRef(false);
 
   const load = () => {
     const ids = idsKey ? idsKey.split(",") : [];
@@ -44,12 +56,22 @@ export function FollowedVenuesPanel({
     setLoading(true);
     // Per-id .catch keeps the panel resilient to a single bad venue, but if EVERY fetch
     // failed (a real outage) that's an error, not "you follow nothing" — surface a retry.
-    Promise.all(ids.map((id) => fetchVenue(id).catch(() => null)))
+    Promise.all(ids.map((id) => fetchVenue(id, undefined, seenAt).catch(() => null)))
       .then((res) => {
         const ok = res.filter((v): v is VenueDetail => !!v);
         setVenues(ok);
         setError(ok.length === 0);
         setLoading(false);
+        // Advance the baseline once the list actually rendered, so next open counts only what's
+        // listed AFTER this visit (a failed load leaves it, so nothing «new» is silently skipped).
+        if (ok.length && !seenWritten.current) {
+          seenWritten.current = true;
+          try {
+            localStorage.setItem(SEEN_KEY, new Date().toISOString());
+          } catch {
+            /* ignore */
+          }
+        }
       });
   };
   useEffect(() => {
@@ -87,10 +109,9 @@ export function FollowedVenuesPanel({
                 <span className="vrow__body">
                   <span className="vrow__top">
                     <span className="vrow__name">{v.name}</span>
-                    {/* Show «+N новых» only as a genuine DELTA (some — not all — events are new). While the
-                        whole catalogue is freshly ingested (every event «new»), this stays dormant and
-                        self-activates as venues accumulate older events. */}
-                    {newN > 0 && newN < v.events.length && (
+                    {/* «+N новых» = events listed here since YOUR last visit (server counts vs the
+                        last-seen timestamp). Nothing on a first visit; meaningful regardless of catalogue age. */}
+                    {newN > 0 && (
                       <span className="vrow__new">+{newN} {plural(newN, "новое", "новых", "новых")}</span>
                     )}
                   </span>
