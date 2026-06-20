@@ -12,6 +12,7 @@ import httpx
 
 from apps.api.app.services.card import ensure_reminder_cover
 from apps.bot.bot.formatting import reminder_caption
+from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.reminders import due_reminders, mark_sent
 from core.db.session import WorkerAsyncSessionLocal
@@ -26,6 +27,39 @@ _FIRE_EFFECT = "5104841245755180586"
 def _open_url(event_id: str) -> str:
     # startapp deep link → opens the Mini App on this event.
     return f"https://t.me/{_BOT_USERNAME}?startapp={event_id}"
+
+
+async def _send_reminder(client, base, r, caption, image, markup) -> str:
+    """Send one reminder (photo with a text fallback), with a single 429/5xx wait+retry. Returns
+    'ok' | 'permanent' (deliver-failed for good → stamp, no retry) | 'retry' (transient → do NOT stamp)."""
+    text_payload = {
+        "chat_id": r["user_id"], "text": caption, "parse_mode": "HTML",
+        "reply_markup": markup, "disable_web_page_preview": True, "message_effect_id": _FIRE_EFFECT,
+    }
+    for attempt in range(2):
+        try:
+            if image:
+                resp = await client.post(
+                    f"{base}/sendPhoto",
+                    json={"chat_id": r["user_id"], "photo": image, "caption": caption, "parse_mode": "HTML",
+                          "reply_markup": markup, "message_effect_id": _FIRE_EFFECT},
+                )
+                data = resp.json()
+                if classify(data) == "permanent":
+                    # Photo rejected (expired/oversized URL) — try the text form before giving up.
+                    resp = await client.post(f"{base}/sendMessage", json=text_payload)
+                    data = resp.json()
+            else:
+                resp = await client.post(f"{base}/sendMessage", json=text_payload)
+                data = resp.json()
+        except Exception:
+            return "retry"  # transient network/infra → leave unsent, next sweep retries
+        verdict = classify(data)
+        if verdict != "retry":
+            return verdict
+        if attempt == 0:
+            await asyncio.sleep(retry_after(data))  # flood-wait → wait once, then retry
+    return "retry"
 
 
 async def _send_reminders_impl() -> int:
@@ -57,46 +91,16 @@ async def _send_reminders_impl() -> int:
                     except Exception:
                         image = raw_image
                 markup = {"inline_keyboard": [[{"text": "смотреть →", "url": _open_url(r["event_id"])}]]}
-                got_response = False
-                ok = False
-                try:
-                    if image:
-                        # The event cover as a photo + the caption — a real VITRINE card,
-                        # not a text list. Fall back to a text message if Telegram can't
-                        # fetch the image (expired/oversized URL) so the reminder still lands.
-                        resp = await client.post(
-                            f"{base}/sendPhoto",
-                            json={"chat_id": r["user_id"], "photo": image, "caption": caption,
-                                  "parse_mode": "HTML", "reply_markup": markup, "message_effect_id": _FIRE_EFFECT},
-                        )
-                        got_response = True
-                        ok = bool(resp.json().get("ok"))
-                        if not ok:
-                            resp = await client.post(
-                                f"{base}/sendMessage",
-                                json={"chat_id": r["user_id"], "text": caption, "parse_mode": "HTML",
-                                      "reply_markup": markup, "disable_web_page_preview": True,
-                                  "message_effect_id": _FIRE_EFFECT},
-                            )
-                            ok = bool(resp.json().get("ok"))
-                    else:
-                        resp = await client.post(
-                            f"{base}/sendMessage",
-                            json={"chat_id": r["user_id"], "text": caption, "parse_mode": "HTML",
-                                  "reply_markup": markup, "disable_web_page_preview": True,
-                                  "message_effect_id": _FIRE_EFFECT},
-                        )
-                        got_response = True
-                        ok = bool(resp.json().get("ok"))
-                except Exception:  # transient network/infra → leave unsent, retry next sweep
-                    got_response = False
-                # Telegram answered (delivered, OR a permanent 403/400 like blocked/never-started)
-                # → stamp sent so we don't retry forever. Only a thrown request retries.
-                if got_response:
-                    await mark_sent(db, r["user_id"], r["event_id"])
-                    if ok:
-                        sent += 1
-            await db.commit()
+                result = await _send_reminder(client, base, r, caption, image, markup)
+                if result == "retry":
+                    continue  # 429 / transient → leave unstamped; the next sweep retries it
+                # Delivered OR permanently undeliverable (blocked / never started) → stamp ONCE and
+                # commit NOW, so a flow retry or a mid-sweep crash can't re-send to anyone already done.
+                await mark_sent(db, r["user_id"], r["event_id"])
+                await db.commit()
+                if result == "ok":
+                    sent += 1
+                await asyncio.sleep(PACE)  # stay under Telegram's flood threshold
     if sent:
         log.info("sent %s reminders", sent)
     return sent

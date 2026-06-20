@@ -15,6 +15,7 @@ import httpx
 
 from apps.api.app.services.card import render_digest_poster
 from apps.bot.bot.formatting import digest_caption, digest_message, weekend_label, when_phrase
+from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.digest import (
     mark_digest_sent,
@@ -57,6 +58,43 @@ async def _view_counts() -> dict:
         return {}
 
 
+async def _send_digest_one(client, base, user_id, poster, caption_html, text_html, markup) -> str:
+    """Send one digest (poster photo with a text fallback), with a single 429/5xx wait+retry.
+    Returns 'ok' | 'permanent' (stamp, no retry) | 'retry' (transient → do NOT stamp)."""
+    for attempt in range(2):
+        try:
+            if poster:
+                resp = await client.post(
+                    f"{base}/sendPhoto",
+                    data={"chat_id": str(user_id), "caption": caption_html,
+                          "parse_mode": "HTML", "reply_markup": json.dumps(markup)},
+                    files={"photo": ("digest.jpg", poster, "image/jpeg")},
+                )
+                data = resp.json()
+                if classify(data) == "permanent":  # poster rejected → the text roundup still lands
+                    resp = await client.post(
+                        f"{base}/sendMessage",
+                        json={"chat_id": user_id, "parse_mode": "HTML", "reply_markup": markup,
+                              "text": text_html, "disable_web_page_preview": True},
+                    )
+                    data = resp.json()
+            else:
+                resp = await client.post(
+                    f"{base}/sendMessage",
+                    json={"chat_id": user_id, "parse_mode": "HTML", "reply_markup": markup,
+                          "text": text_html, "disable_web_page_preview": True},
+                )
+                data = resp.json()
+        except Exception:
+            return "retry"  # transient network/infra
+        verdict = classify(data)
+        if verdict != "retry":
+            return verdict
+        if attempt == 0:
+            await asyncio.sleep(retry_after(data))  # flood-wait → wait once, then retry
+    return "retry"
+
+
 async def _send_digest_impl() -> int:
     token = get_settings().telegram_bot_token
     if not token:
@@ -78,9 +116,6 @@ async def _send_digest_impl() -> int:
         view_counts = await _view_counts()
         pools: dict[str | None, list[dict]] = {}
         covers: dict[str, bytes | None] = {}  # url -> bytes; weekend covers repeat across users
-        # Users Telegram answered for (ok OR a permanent failure) — stamped once at the end so a
-        # re-run this week skips them. A thrown (transient) send leaves the user out of this list.
-        responded: list[int] = []
         async with httpx.AsyncClient(timeout=15) as client:
 
             async def cover(url: str | None) -> bytes | None:
@@ -122,33 +157,23 @@ async def _send_digest_impl() -> int:
                     poster = await asyncio.to_thread(render_digest_poster, poster_items, label)
                 except Exception:
                     poster = None
-                try:
-                    if poster:
-                        # Poster as a photo + a light caption (tappable titles): the poster already
-                        # carries code · when · venue, so the caption stays short.
-                        resp = await client.post(
-                            f"{base}/sendPhoto",
-                            data={"chat_id": str(u["user_id"]),
-                                  "caption": digest_caption(venue_items, weekend_items, label),
-                                  "parse_mode": "HTML", "reply_markup": json.dumps(markup)},
-                            files={"photo": ("digest.jpg", poster, "image/jpeg")},
-                        )
-                    else:  # render/cover unavailable → the text roundup still lands
-                        resp = await client.post(
-                            f"{base}/sendMessage",
-                            json={"chat_id": u["user_id"], "parse_mode": "HTML", "reply_markup": markup,
-                                  "text": digest_message(venue_items, weekend_items, label, now),
-                                  "disable_web_page_preview": True},
-                        )
-                except Exception:  # transient network/infra → leave unstamped, retry next run
-                    continue
-                # Telegram answered (delivered, OR a permanent 403/400 like blocked/never-started)
-                # → record the user so we stamp them and don't re-send this week.
-                responded.append(u["user_id"])
-                if resp.json().get("ok"):
+                # Poster as a photo + a light caption (tappable titles); the poster already carries
+                # code · when · venue, so the caption stays short. Text roundup is the fallback.
+                result = await _send_digest_one(
+                    client, base, u["user_id"], poster,
+                    digest_caption(venue_items, weekend_items, label),
+                    digest_message(venue_items, weekend_items, label, now),
+                    markup,
+                )
+                if result == "retry":
+                    continue  # 429 / transient → leave unstamped; the next run retries it
+                # Delivered OR permanently undeliverable → stamp NOW and commit, so a flow retry or a
+                # mid-sweep crash can't re-send this week's roundup to anyone already done.
+                await mark_digest_sent(db, [u["user_id"]])
+                await db.commit()
+                if result == "ok":
                     sent += 1
-        await mark_digest_sent(db, responded)
-        await db.commit()
+                await asyncio.sleep(PACE)  # stay under Telegram's flood threshold
     if sent:
         log.info("sent %s digests", sent)
     return sent

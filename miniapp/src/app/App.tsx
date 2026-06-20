@@ -34,6 +34,7 @@ import { VenueSheet } from "../features/venue/VenueSheet";
 import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
+import { rangeFor } from "../lib/datePresets";
 import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { syncFavorites, useFavorites } from "../lib/favorites";
@@ -702,6 +703,16 @@ export function App() {
     const us = raw.indexOf("_");
     const eventId = us > 0 ? raw.slice(0, us) : raw;
     const inviterId = us > 0 ? Number(raw.slice(us + 1)) : NaN;
+    // A non-UUID start_param is a KEYWORD route, not an event id (e.g. the weekly digest's
+    // «weekend» CTA). Opening it as an event 422s and silently dumps the user on the default map.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId);
+    if (!isUuid) {
+      if (eventId === "weekend") {
+        setFilters((prev) => ({ ...prev, goNow: false, ...rangeFor("weekend") }));
+        setView("map");
+      }
+      return;
+    }
     fetchEventDetail(eventId)
       .then((d) => {
         if (Number.isFinite(inviterId)) {

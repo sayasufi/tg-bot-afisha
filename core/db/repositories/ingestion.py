@@ -357,6 +357,52 @@ async def get_venue(db: AsyncSession, venue_id: int) -> Venue | None:
     return await db.get(Venue, venue_id)
 
 
+async def _upsert_occurrences(db: AsyncSession, event: Event, candidate: EventCandidate, venue: Venue | None, raw_id: int) -> None:
+    """Upsert this raw's sessions onto the event, idempotent on (event_id, date_start, venue_id): an
+    event with several showtimes becomes several occurrences. Sources without a `dates` list keep
+    their single primary date; NEVER fall back to now() (that stamps a future event as 'today'); no
+    date at all → no occurrence. Run on BOTH first ingest AND re-ingest, so a changed raw (added
+    sessions / shifted time / new price) propagates to an existing event instead of freezing forever."""
+    raw = await get_raw(db, raw_id)
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(days=_OCCURRENCE_LOOKAHEAD_DAYS)
+    sessions = _payload_session_dates(raw.raw_payload_json if raw else None, now, until)
+    if not sessions and candidate.date_start:
+        sessions = [(candidate.date_start, candidate.date_end)]
+    occ_venue_id = venue.venue_id if venue else None
+    venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
+    for occ_start, occ_end in sessions:
+        occurrence = (await db.execute(
+            select(EventOccurrence).where(
+                and_(
+                    EventOccurrence.event_id == event.event_id,
+                    EventOccurrence.date_start == occ_start,
+                    venue_filter,
+                )
+            )
+        )).scalars().first()
+        if occurrence:
+            occurrence.date_end = occ_end
+            occurrence.price_min = candidate.price_min
+            occurrence.price_max = candidate.price_max
+            occurrence.currency = candidate.currency
+            occurrence.source_best_url = candidate.source_url
+        else:
+            db.add(
+                EventOccurrence(
+                    event_id=event.event_id,
+                    venue_id=occ_venue_id,
+                    date_start=occ_start,
+                    date_end=occ_end,
+                    price_min=candidate.price_min,
+                    price_max=candidate.price_max,
+                    currency=candidate.currency,
+                    source_best_url=candidate.source_url,
+                )
+            )
+    await db.flush()
+
+
 async def dedup_and_upsert_event(
     db: AsyncSession,
     candidate: EventCandidate,
@@ -371,6 +417,10 @@ async def dedup_and_upsert_event(
     existing_source_link = (await db.execute(select(EventSource).where(EventSource.raw_id == raw_id))).scalar_one_or_none()
     if existing_source_link:
         existing_event = await db.get(Event, existing_source_link.event_id)
+        if existing_event is not None:
+            # Re-ingest of a raw whose content changed: already mapped to an event, so skip re-dedup,
+            # but DO refresh its occurrences — otherwise dates/prices are frozen after the first ingest.
+            await _upsert_occurrences(db, existing_event, candidate, venue, raw_id)
         return MatchDecision(
             decision="auto-merge",
             score=1.0,
@@ -460,52 +510,8 @@ async def dedup_and_upsert_event(
         await db.refresh(event)
         decision = MatchDecision(decision="new-event", score=0.0, matched_event_id=str(event.event_id))
 
-    # One occurrence per in-window session: an event with several showtimes (e.g.
-    # 16 & 23 June, 21:00) becomes several occurrences. Sources without a `dates`
-    # list keep the single primary date. Upsert on (event_id, date_start, venue_id)
-    # so re-ingesting updates instead of duplicating.
-    raw = await get_raw(db, raw_id)
-    now = datetime.now(timezone.utc)
-    until = now + timedelta(days=_OCCURRENCE_LOOKAHEAD_DAYS)
-    sessions = _payload_session_dates(raw.raw_payload_json if raw else None, now, until)
-    if not sessions and candidate.date_start:
-        # Sources without a `dates` list (LLM/ldjson) keep their single primary date.
-        # NEVER fall back to now() — that stamps a real future event as "happening
-        # today" with a bogus time. No date at all → no occurrence (the event simply
-        # isn't placed on the map until a dated session is seen).
-        sessions = [(candidate.date_start, candidate.date_end)]
-    occ_venue_id = venue.venue_id if venue else None
-    venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
-    for occ_start, occ_end in sessions:
-        occurrence = (await db.execute(
-            select(EventOccurrence).where(
-                and_(
-                    EventOccurrence.event_id == event.event_id,
-                    EventOccurrence.date_start == occ_start,
-                    venue_filter,
-                )
-            )
-        )).scalars().first()
-        if occurrence:
-            occurrence.date_end = occ_end
-            occurrence.price_min = candidate.price_min
-            occurrence.price_max = candidate.price_max
-            occurrence.currency = candidate.currency
-            occurrence.source_best_url = candidate.source_url
-        else:
-            db.add(
-                EventOccurrence(
-                    event_id=event.event_id,
-                    venue_id=occ_venue_id,
-                    date_start=occ_start,
-                    date_end=occ_end,
-                    price_min=candidate.price_min,
-                    price_max=candidate.price_max,
-                    currency=candidate.currency,
-                    source_best_url=candidate.source_url,
-                )
-            )
-    await db.flush()
+    # One occurrence per in-window session, idempotent on (event_id, date_start, venue_id).
+    await _upsert_occurrences(db, event, candidate, venue, raw_id)
 
     db.add(
         EventSource(
