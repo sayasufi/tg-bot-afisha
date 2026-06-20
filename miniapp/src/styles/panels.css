@@ -441,6 +441,7 @@ mark.hl {
 
 /* Blob cluster — absolutely-positioned irregular кляксы overlapping into an organic, chaotic mass. */
 .tastecard__blobs {
+  display: block; /* span needs a box for height + to anchor the absolute blobs */
   position: relative;
   height: 178px;
   overflow: hidden;
