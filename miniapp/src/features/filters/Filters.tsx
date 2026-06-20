@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CATEGORIES, categoryMeta, categoryOrder } from "../../lib/categories";
 import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey } from "../../lib/datePresets";
@@ -102,6 +102,18 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   const setBudget = (v: string) => {
     hapticSelection();
     onChange({ ...value, priceMax: v });
+  };
+  // Radius slider: the thumb follows a LOCAL value instantly, but the committed filter (which
+  // re-runs the haversine filter over the whole city set + re-renders every pin) is debounced —
+  // otherwise dragging fired that O(n) work on every input tick and stuttered.
+  const [radiusLocal, setRadiusLocal] = useState(value.radiusKm);
+  const radiusTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => setRadiusLocal(value.radiusKm), [value.radiusKm]);
+  useEffect(() => () => clearTimeout(radiusTimer.current), []);
+  const onRadius = (v: number) => {
+    setRadiusLocal(v); // instant thumb + label
+    clearTimeout(radiusTimer.current);
+    radiusTimer.current = setTimeout(() => onChange({ ...value, radiusKm: v }), 110);
   };
 
   return (
@@ -240,7 +252,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
               <div className="csheet__radius-head">
                 <span className="kicker">Рядом</span>
                 <span className="csheet__radius-val">
-                  {value.radiusKm > 0 ? `до ${String(value.radiusKm).replace(".", ",")} км` : "без ограничений"}
+                  {radiusLocal > 0 ? `до ${String(radiusLocal).replace(".", ",")} км` : "без ограничений"}
                 </span>
               </div>
               <input
@@ -249,8 +261,8 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
                 min={0}
                 max={10}
                 step={0.5}
-                value={value.radiusKm}
-                onChange={(e) => onChange({ ...value, radiusKm: Number(e.target.value) })}
+                value={radiusLocal}
+                onChange={(e) => onRadius(Number(e.target.value))}
               />
             </>
           )}
