@@ -771,6 +771,22 @@ html[data-theme="dark"] .sheet-veil {
   background: var(--vitrine);
 }
 
+/* «Я иду» — the north-star intent, so it's the filled (acid) action in the row; once you're going it
+   relaxes to a quiet confirmed state with an acid check. */
+.btn--going {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+
+.btn--going:active {
+  background: var(--acid-deep);
+}
+
+.btn--going-on {
+  background: var(--plinth);
+  color: var(--ink);
+}
+
 /* Trust line: where the data comes from, when it was refreshed, and a way to flag it. */
 .sheet__trust {
   margin: 0;

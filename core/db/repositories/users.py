@@ -236,6 +236,20 @@ async def set_going(db: AsyncSession, telegram_user_id: int, event_id: str, invi
     return bool(res.rowcount)  # rows inserted (0 on conflict) → first-time going
 
 
+async def cancel_going(db: AsyncSession, telegram_user_id: int, event_id: str) -> None:
+    """Un-RSVP — remove the «Я иду» row (no commit). No-op if it was never set or the id is junk."""
+    try:
+        eid = uuid.UUID(str(event_id))
+    except (ValueError, TypeError):
+        return
+    await db.execute(
+        delete(EventGoing).where(
+            EventGoing.telegram_user_id == telegram_user_id,
+            EventGoing.event_id == eid,
+        )
+    )
+
+
 async def warm_interests_from(db: AsyncSession, user_id: int, inviter_id: int) -> list[str]:
     """Referral cold-start cure: on a brand-new account's FIRST invite open, attribute the inviter
     and warm the feed from their taste — their picked interests, else their top favourite categories.

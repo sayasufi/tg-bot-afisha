@@ -150,14 +150,19 @@ export async function syncGoing(): Promise<string[] | null> {
   }
 }
 
-export async function markGoingRemote(eventId: string, inviterId: number | null, sig: string | null = null): Promise<string[] | null> {
+export async function markGoingRemote(
+  eventId: string,
+  inviterId: number | null,
+  sig: string | null = null,
+  on = true,
+): Promise<string[] | null> {
   const init = initData();
   if (!init) return null;
   try {
     const r = await fetch(`${API_BASE}/v1/users/going`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, event_id: eventId, inviter_id: inviterId ?? undefined, sig: sig ?? undefined }),
+      body: JSON.stringify({ init_data: init, event_id: eventId, on, inviter_id: inviterId ?? undefined, sig: sig ?? undefined }),
       keepalive: true,
     });
     if (!r.ok) return null;

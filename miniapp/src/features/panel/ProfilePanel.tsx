@@ -31,6 +31,7 @@ export function ProfilePanel({
   notifyDigest,
   onToggleDigest,
   onOpenFavorites,
+  onOpenGoing,
   onClose,
 }: {
   user: TgUser | null;
@@ -44,6 +45,7 @@ export function ProfilePanel({
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
   onOpenFavorites: () => void;
+  onOpenGoing: () => void;
   onClose: () => void;
 }) {
   const [cityOpen, setCityOpen] = useState(false);
@@ -101,14 +103,14 @@ export function ProfilePanel({
             <span className="hero-num">{viewed}</span>
             <span className="profile__statlabel">просмотрено</span>
           </div>
-          <div className="profile__stat">
+          <button type="button" className="profile__stat profile__stat--tap" onClick={onOpenFavorites}>
             <span className="hero-num">{favIds.size}</span>
             <span className="profile__statlabel">сохранено</span>
-          </div>
-          <div className="profile__stat">
+          </button>
+          <button type="button" className="profile__stat profile__stat--tap" onClick={onOpenGoing}>
             <span className="hero-num">{goingCount}</span>
             <span className="profile__statlabel">иду</span>
-          </div>
+          </button>
         </div>
 
         {/* City — selectable. Only Москва is active today; the picker is ready for more. */}

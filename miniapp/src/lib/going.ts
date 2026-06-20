@@ -2,9 +2,9 @@ import { useSyncExternalStore } from "react";
 
 import { markGoingRemote, syncGoing as syncRemote } from "../api/users";
 
-// «Я иду» / RSVP set, synced per Telegram account (mirrors reminders/favourites). Going is set
-// ONCE here — accepting a «Пойдём?» invite; there's no un-going UI yet. localStorage is an
-// instant cache + offline fallback; the server is the source of truth once synced.
+// «Я иду» / RSVP set, synced per Telegram account (mirrors reminders/favourites). Toggleable:
+// markGoing (RSVP, optionally attributing a «Пойдём?» inviter) / unmarkGoing (cancel). localStorage
+// is an instant cache + offline fallback; the server is the source of truth once synced.
 const KEY = "afisha_going";
 
 function read(): Set<string> {
@@ -47,12 +47,28 @@ export function markGoing(id: string, inviterId: number | null, sig: string | nu
   next.add(id);
   setLocal(next); // optimistic — the button flips instantly
   const seq = ++mutationSeq;
-  markGoingRemote(id, inviterId, sig)
+  markGoingRemote(id, inviterId, sig, true)
     .then((ids) => {
       if (ids && seq === mutationSeq) setLocal(new Set(ids));
     })
     .catch(() => {
       /* the local mark stands; the next sync reconciles */
+    });
+}
+
+// Cancel an RSVP — un-«я иду». Optimistic + mutationSeq-guarded like markGoing/favourites.
+export function unmarkGoing(id: string): void {
+  if (!going.has(id)) return; // not going — nothing to cancel
+  const next = new Set(going);
+  next.delete(id);
+  setLocal(next); // optimistic — the button flips off instantly
+  const seq = ++mutationSeq;
+  markGoingRemote(id, null, null, false)
+    .then((ids) => {
+      if (ids && seq === mutationSeq) setLocal(new Set(ids));
+    })
+    .catch(() => {
+      /* the local un-mark stands; the next sync reconciles */
     });
 }
 
@@ -88,5 +104,6 @@ export function useGoing() {
     ids,
     has: (id: string) => ids.has(id),
     mark: markGoing,
+    unmark: unmarkGoing,
   };
 }

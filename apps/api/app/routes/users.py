@@ -19,6 +19,7 @@ from core.db.repositories.reminders import (
 )
 from core.db.repositories.users import (
     add_favorites,
+    cancel_going,
     event_title,
     get_settings,
     list_favorite_ids,
@@ -71,7 +72,8 @@ class VenueFollowRequest(BaseModel):
 
 class GoingRequest(BaseModel):
     init_data: str
-    event_id: str | None = None  # omit (just LIST going ids) or include to confirm «Я иду»
+    event_id: str | None = None  # omit (just LIST going ids) or include to confirm/cancel «Я иду»
+    on: bool = True  # True = I'm going (default, back-compat), False = cancel my RSVP
     inviter_id: int | None = None  # the sharer who invited me (from the share deep-link), if any
     sig: str | None = None  # HMAC over (event_id, inviter_id) — proves the inviter wasn't forged
 
@@ -202,15 +204,35 @@ async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_i
         pass  # the going is already recorded; the nudge is best-effort
 
 
+async def _arm_going_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
+    """When a user first confirms «я иду», arm the same pre-event reminder the bell would. Respects
+    the user's global reminder mute; shares the (user, event) reminder row so a later manual bell is a
+    safe upsert. Best-effort — no soonest session → no reminder."""
+    settings = await get_settings(db, uid)
+    if settings.get("notify_reminders") is False:
+        return  # globally muted → don't arm
+    start = await soonest_start(db, event_id)
+    if start is None:
+        return
+    now = datetime.now(timezone.utc)
+    fire_at = max(now + timedelta(seconds=45), start - _REMINDER_LEAD)  # same formula as the bell
+    await set_reminder(db, uid, event_id, fire_at)
+
+
 @router.post("/going")
 async def toggle_going(payload: GoingRequest, db: AsyncSession = Depends(get_async_db)):
-    """Confirm «Я иду» on an event (idempotent), or — with no event_id — just list going ids.
-    On the FIRST confirmation that carries an inviter, DM the inviter that you're coming."""
+    """Confirm or cancel «Я иду» on an event (idempotent), or — with no event_id — just list going ids.
+    A first confirmation auto-arms a pre-event reminder and, on a signed invite, DMs the inviter."""
     user, uid = _auth(payload.init_data)
     await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
     notify: tuple[int, str] | None = None
-    if payload.event_id is not None:
+    if payload.event_id is not None and payload.on:
         first_time = await set_going(db, uid, payload.event_id, payload.inviter_id)
+        if first_time:
+            # Committing to an event auto-arms the pre-event reminder (so you can't forget what you
+            # signed up for). Gated by the user's global reminder mute; the bell reflects it and is
+            # the per-event opt-out (tap to disarm without un-going).
+            await _arm_going_reminder(db, uid, payload.event_id)
         # DM the inviter ONLY on a genuine SIGNED invite (a forged inviter_id can't be replayed to
         # spam DMs), never to yourself, and never if they've globally muted notifications.
         if (
@@ -223,6 +245,8 @@ async def toggle_going(payload: GoingRequest, db: AsyncSession = Depends(get_asy
             if recip and recip.get("notify_reminders") is not False:
                 title = await event_title(db, payload.event_id)
                 notify = (int(payload.inviter_id), title or "")
+    elif payload.event_id is not None and not payload.on:
+        await cancel_going(db, uid, payload.event_id)  # un-RSVP (the reminder is left alone)
     await db.commit()
     # Send the nudge AFTER the commit so the going is durable even if Telegram is slow/down.
     if notify:

@@ -22,6 +22,7 @@ const CollectionDetail = lazy(() =>
   import("../features/panel/CollectionDetail").then((m) => ({ default: m.CollectionDetail })),
 );
 const FavoritesPanel = lazy(() => import("../features/panel/FavoritesPanel").then((m) => ({ default: m.FavoritesPanel })));
+const GoingPanel = lazy(() => import("../features/panel/GoingPanel").then((m) => ({ default: m.GoingPanel })));
 const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m) => ({ default: m.ProfilePanel })));
 const FollowedVenuesPanel = lazy(() =>
   import("../features/panel/FollowedVenuesPanel").then((m) => ({ default: m.FollowedVenuesPanel })),
@@ -897,6 +898,7 @@ export function App() {
           const inv = invite && invite.eventId === selected.event_id ? invite : null;
           going.mark(selected.event_id, inv?.inviterId ?? null, inv?.sig ?? null);
         }}
+        onUnGoing={() => selected && going.unmark(selected.event_id)}
         onSelect={openEvent}
         onShowMap={showOnMap}
         onOpenVenue={onOpenVenue}
@@ -937,6 +939,9 @@ export function App() {
         {view === "favorites" && (
           <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
         )}
+        {view === "going" && (
+          <GoingPanel goingIds={going.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
+        )}
         {view === "venues" && <FollowedVenuesPanel onOpenVenue={onOpenVenue} onClose={() => setView("map")} />}
         {view === "profile" && (
           <ProfilePanel
@@ -951,6 +956,7 @@ export function App() {
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
             onOpenFavorites={() => setView("favorites")}
+            onOpenGoing={() => setView("going")}
             onClose={() => setView("map")}
           />
         )}
@@ -960,6 +966,7 @@ export function App() {
         open={drawerOpen}
         view={view}
         favCount={fav.ids.size}
+        goingCount={going.ids.size}
         theme={theme}
         onToggleTheme={toggleTheme}
         onClose={() => setDrawerOpen(false)}

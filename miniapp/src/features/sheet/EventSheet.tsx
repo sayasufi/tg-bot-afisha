@@ -54,13 +54,14 @@ type Props = {
   invitedBy: number | null; // inviter id when this event was opened via a «Пойдём?» share
   isGoing: boolean;
   onGoing: () => void;
+  onUnGoing: () => void; // cancel the RSVP (toggle «я иду» off)
   onSelect: (i: EventItem) => void;
   onShowMap?: () => void;
   onOpenVenue?: (venueId: number) => void;
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, invitedBy, isGoing, onGoing, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, invitedBy, isGoing, onGoing, onUnGoing, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
   const [datesOpen, setDatesOpen] = useState(false);
@@ -311,8 +312,12 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   };
 
   const handleGoing = () => {
-    if (isGoing) return;
     haptic("medium");
+    if (isGoing) {
+      onUnGoing();
+      showToast("Отменил — больше не идёшь", { tone: "muted" });
+      return;
+    }
     onGoing();
     // Notify-copy only when there's actually an inviter to ping; otherwise it's a plain RSVP.
     showToast(invitedBy != null ? "Ты идёшь! Сообщили пригласившему" : "Ты идёшь ✓", { tone: "good" });
@@ -414,17 +419,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             }}
           >
             <IconBell filled={hasReminder} size={16} />
-          </button>
-          {/* «Я иду» — always reachable here, not only on a «Пойдём?» invite. The strongest intent
-              signal we can collect, one tap from any event. */}
-          <button
-            type="button"
-            className={`sheet__picon${isGoing ? " sheet__picon--on" : ""}`}
-            aria-label={isGoing ? "Идёшь" : "Я иду"}
-            aria-pressed={isGoing}
-            onClick={handleGoing}
-          >
-            <IconGoing size={16} />
           </button>
           <button type="button" className="sheet__picon" aria-label="Поделиться" onClick={onShare}>
             <IconShare size={16} />
@@ -558,8 +552,17 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           </div>
         )}
 
-        {(sourceUrl || routeUrl || (onShowMap && lat != null && lon != null)) && (
-          <div className="sheet__actions">
+        {/* «Я иду» is always the first, labelled action (the app's north-star intent) — RSVP/cancel
+            with one tap. Ticket / map / route follow when available. */}
+        <div className="sheet__actions">
+            <button
+              type="button"
+              className={`btn btn--going${isGoing ? " btn--going-on" : ""}`}
+              aria-pressed={isGoing}
+              onClick={handleGoing}
+            >
+              {isGoing ? "идёшь ✓" : "я иду"}
+            </button>
             {sourceUrl && (
               <a
                 className="btn btn--ghost"
@@ -594,8 +597,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
                 Маршрут
               </a>
             )}
-          </div>
-        )}
+        </div>
 
       </div>
 

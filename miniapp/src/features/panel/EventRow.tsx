@@ -5,6 +5,7 @@ import { formatWhenShort, goNowState } from "../../lib/datetime";
 import { distanceLabel, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon } from "../../lib/icons";
+import { GoingBadge } from "./GoingBadge";
 
 export function EventRow({
   item,
@@ -48,6 +49,7 @@ export function EventRow({
       <span className="erow__body">
         <span className="erow__title">
           <Highlight text={item.title} query={query} />
+          <GoingBadge eventId={item.event_id} className="erow__going" />
         </span>
         <span className="erow__meta">
           {query && item.code && <span className="erow__code">{item.code}</span>}

@@ -5,6 +5,7 @@ import { formatWhenShort, goNowState } from "../../lib/datetime";
 import { distanceLabel, type LatLon } from "../../lib/distance";
 import { CategoryIcon } from "../../lib/icons";
 import { safeHttpUrl } from "../../lib/url";
+import { GoingBadge } from "./GoingBadge";
 
 function priceLabel(p: number | null | undefined): string | null {
   if (p == null) return null;
@@ -57,6 +58,7 @@ function EventListRowImpl({
           <CategoryIcon cat={item.category} size={14} className="lrow__cat" />
           {item.code && <span className="lrow__code">{item.code}</span>}
         </span>
+        <GoingBadge eventId={item.event_id} className="lrow__going" />
         {dist && <span className="lrow__dist">{dist}</span>}
       </span>
       <span className="lrow__btm">

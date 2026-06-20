@@ -305,6 +305,42 @@ mark.hl {
   gap: 10px;
 }
 
+/* Tappable stat (сохранено / иду) → jumps into its list. Reset the button chrome, keep the layout. */
+.profile__stat--tap {
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+.profile__stat--tap:active {
+  background: var(--plinth);
+}
+
+/* «Ты идёшь» badge — acid square (the brand mark) on cards/rows you've RSVP'd to. */
+.going-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: var(--acid);
+  color: var(--on-acid);
+  border: 1px solid var(--line);
+  flex: none;
+  vertical-align: middle;
+}
+.cat__going {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+.erow__going {
+  margin-left: 6px;
+}
+
 .profile__stat .hero-num {
   /* Normal proportional figures (grotesk), not the techy mono — cleaner, like the reference. */
   font-family: var(--grotesk);

@@ -5,6 +5,7 @@ import { formatWhenShort, goNowState } from "../../lib/datetime";
 import type { LatLon } from "../../lib/distance";
 import { CategoryIcon } from "../../lib/icons";
 import { safeHttpUrl } from "../../lib/url";
+import { GoingBadge } from "./GoingBadge";
 
 function priceLabel(p: number | null | undefined): string | null {
   if (p == null) return null;
@@ -81,6 +82,7 @@ function PhotoCard({
         </span>
       )}
       <span className="cat__scrim" aria-hidden="true" />
+      <GoingBadge eventId={c.item.event_id} className="cat__going" />
       {c.code && (
         <span className="cat__code">
           <CategoryIcon cat={c.item.category} size={13} />
