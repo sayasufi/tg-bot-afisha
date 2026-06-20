@@ -7,6 +7,9 @@ from pipeline.normalizer.rules import RuleBasedNormalizer
 TODAY = date(2026, 6, 15)
 # Past the listing horizon, derived from the real constant so the test survives lookahead changes.
 OUT_OF_WINDOW = (TODAY + timedelta(days=_LOOKAHEAD_DAYS + 30)).isoformat()
+# A near-future date relative to the REAL clock — the end-to-end normalize step filters by real now(),
+# so a hardcoded date would rot the day it passes. Derived so the test stays green over time.
+SOON = (date.today() + timedelta(days=10)).isoformat()
 
 
 class _FakeResponse:
@@ -206,11 +209,11 @@ def test_build_records_maps_to_pipeline_payload_end_to_end() -> None:
                 "tickets": [{"price": {"currency": "rub", "min": 200000, "max": 500000}}],
             },
             "scheduleInfo": {
-                "dates": ["2026-06-20"],
-                "dateStarted": "2026-06-20",
-                "dateEnd": "2026-06-20",
+                "dates": [SOON],
+                "dateStarted": SOON,
+                "dateEnd": SOON,
                 "permanent": False,
-                "regularity": {"singleShowtime": "2026-06-20T19:00:00"},
+                "regularity": {"singleShowtime": f"{SOON}T19:00:00"},
                 "onlyPlace": {"id": "p1", "title": "Лужники", "address": "ул. Лужники, 24", "coordinates": {"latitude": 55.71, "longitude": 37.55}, "metro": [{"name": "Спортивная"}]},
             },
         }

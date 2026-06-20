@@ -25,13 +25,11 @@ export function ProfilePanel({
   cities,
   onSelectCity,
   favIds,
-  goingCount,
   notifyReminders,
   onToggleReminders,
   notifyDigest,
   onToggleDigest,
   onOpenFavorites,
-  onOpenGoing,
   onClose,
 }: {
   user: TgUser | null;
@@ -39,13 +37,11 @@ export function ProfilePanel({
   cities: City[];
   onSelectCity: (slug: string) => void;
   favIds: Set<string>;
-  goingCount: number;
   notifyReminders: boolean;
   onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
   onOpenFavorites: () => void;
-  onOpenGoing: () => void;
   onClose: () => void;
 }) {
   const [cityOpen, setCityOpen] = useState(false);
@@ -96,9 +92,9 @@ export function ProfilePanel({
           </div>
         </div>
 
-        {/* Real behavioural stats — a viewed → saved → going funnel. Each is something you DID, not
-            a breakdown you could already read off the Избранное list. */}
-        <div className="profile__hero profile__hero--3">
+        {/* Real behavioural stats — a viewed → saved funnel. Each is something you DID, not a
+            breakdown you could already read off the Избранное list. */}
+        <div className="profile__hero profile__hero--2">
           <div className="profile__stat">
             <span className="hero-num">{viewed}</span>
             <span className="profile__statlabel">просмотрено</span>
@@ -106,10 +102,6 @@ export function ProfilePanel({
           <button type="button" className="profile__stat profile__stat--tap" onClick={onOpenFavorites}>
             <span className="hero-num">{favIds.size}</span>
             <span className="profile__statlabel">сохранено</span>
-          </button>
-          <button type="button" className="profile__stat profile__stat--tap" onClick={onOpenGoing}>
-            <span className="hero-num">{goingCount}</span>
-            <span className="profile__statlabel">иду</span>
           </button>
         </div>
 

@@ -13,7 +13,7 @@ from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.codes import event_code, parse_event_code
-from core.db.models import Event, EventGoing, EventOccurrence, UserFavorite, Venue
+from core.db.models import Event, EventOccurrence, UserFavorite, Venue
 from core.redis import get_redis
 
 # The map response (clusters or pins) depends only on (zoom, bbox, filters) and the
@@ -717,9 +717,8 @@ class EventQueryService:
             # is the soonest you can still go to, not an earlier one already past.
             .order_by((EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
         )).all()
-        # Social proof: how many said «Я иду» + how many saved it (the sheet shows each over a
-        # threshold so a quiet event stays silent). Both indexed/tiny — one scalar count each.
-        going = await self.db.scalar(select(func.count()).select_from(EventGoing).where(EventGoing.event_id == event_id)) or 0
+        # Social proof: how many saved it (the sheet shows it over a threshold so a quiet event stays
+        # silent). Indexed/tiny — one scalar count.
         saved = await self.db.scalar(select(func.count()).select_from(UserFavorite).where(UserFavorite.event_id == event_id)) or 0
         if not rows:
             # No future/ongoing occurrence (or event gone) — still return the event so a
@@ -728,7 +727,7 @@ class EventQueryService:
             if not event:
                 return None
             head = self._event_head(event, None, [])
-            head["going_count"], head["saved_count"] = going, saved
+            head["saved_count"] = saved
             return head
         occurrences = [
             {
@@ -749,7 +748,7 @@ class EventQueryService:
             for r in rows
         ]
         head = self._event_head(rows[0], rows[0].venue_city, occurrences)
-        head["going_count"], head["saved_count"] = going, saved
+        head["saved_count"] = saved
         return head
 
     async def venue_detail(self, venue_id: int):

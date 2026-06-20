@@ -19,15 +19,11 @@ from core.db.repositories.reminders import (
 )
 from core.db.repositories.users import (
     add_favorites,
-    cancel_going,
     event_title,
     get_settings,
-    mark_inviter_notified,
     list_favorite_ids,
     list_followed_venue_ids,
-    list_going_ids,
     set_favorite,
-    set_going,
     set_venue_follow,
     update_settings,
     upsert_user,  # sync — for the low-frequency /location route
@@ -35,6 +31,7 @@ from core.db.repositories.users import (
     warm_interests_from,
 )
 from core.db.session import SessionLocal, get_async_db
+from core.redis import get_redis
 
 # Remind this long before the soonest session starts.
 _REMINDER_LEAD = timedelta(hours=2)
@@ -57,6 +54,8 @@ class FavoriteToggleRequest(BaseModel):
     init_data: str
     event_id: str
     on: bool
+    inviter_id: int | None = None  # set when favouriting via a «Пойдём?» invite (→ DM the inviter)
+    sig: str | None = None  # HMAC over (event_id, inviter_id) — proves the inviter wasn't forged
 
 
 class ReminderRequest(BaseModel):
@@ -69,14 +68,6 @@ class VenueFollowRequest(BaseModel):
     init_data: str
     venue_id: int | None = None  # omit (just LIST the followed venues) or include to toggle
     on: bool | None = None
-
-
-class GoingRequest(BaseModel):
-    init_data: str
-    event_id: str | None = None  # omit (just LIST going ids) or include to confirm/cancel «Я иду»
-    on: bool = True  # True = I'm going (default, back-compat), False = cancel my RSVP
-    inviter_id: int | None = None  # the sharer who invited me (from the share deep-link), if any
-    sig: str | None = None  # HMAC over (event_id, inviter_id) — proves the inviter wasn't forged
 
 
 class InvitedRequest(BaseModel):
@@ -146,11 +137,35 @@ async def sync_favorites(payload: FavoritesSyncRequest, db: AsyncSession = Depen
 
 @router.post("/favorites")
 async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Depends(get_async_db)):
-    """Heart / un-heart one event for the account; returns the updated full list."""
+    """Heart / un-heart one event. Favouriting also arms its pre-event reminder (unless reminders are
+    globally muted), and — when it carries a signed «Пойдём?» invite — DMs the inviter once."""
     user, uid = _auth(payload.init_data)
     await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-    await set_favorite(db, uid, payload.event_id, payload.on)
+    newly = await set_favorite(db, uid, payload.event_id, payload.on)
+    notify: tuple[int, str] | None = None
+    if payload.on:
+        await _arm_reminder(db, uid, payload.event_id)
+        # Invite accept: first favourite via a genuine SIGNED «Пойдём?» link → DM the inviter (once,
+        # Redis-deduped; a forged inviter can't replay it). Never to yourself or a muted inviter.
+        if (
+            newly
+            and payload.inviter_id
+            and int(payload.inviter_id) != uid
+            and invite_verify(payload.event_id, payload.inviter_id, payload.sig)
+        ):
+            recip = await get_settings(db, int(payload.inviter_id))
+            if (
+                recip
+                and recip.get("notify_reminders") is not False
+                and await _invite_dm_once(uid, payload.event_id, int(payload.inviter_id))
+            ):
+                title = await event_title(db, payload.event_id)
+                notify = (int(payload.inviter_id), title or "")
+    else:
+        await cancel_reminder(db, uid, payload.event_id)  # un-fav → drop its reminder
     await db.commit()
+    if notify:
+        await _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
     return {"ids": await list_favorite_ids(db, uid)}
 
 
@@ -187,12 +202,12 @@ async def toggle_venue_follow(payload: VenueFollowRequest, db: AsyncSession = De
 
 
 async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
-    """DM the inviter that someone accepted their «Пойдём?» — best-effort, never blocks the
-    response. The inviter started the bot (they shared from the Mini App), so the DM is allowed."""
+    """DM the inviter that someone accepted their «Пойдём?» (added it to favourites) — best-effort,
+    never blocks the response. The inviter started the bot (they shared from the Mini App)."""
     token = get_app_settings().telegram_bot_token
     if not token or not inviter_id:
         return
-    text = f"🎉 <b>{escape(name or 'Кто-то')}</b> идёт с тобой\n{escape(title or 'на событие')}"
+    text = f"🎉 <b>{escape(name or 'Кто-то')}</b> принял твоё приглашение\n{escape(title or 'на событие')}"
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
     try:
         async with httpx.AsyncClient(timeout=8) as client:
@@ -202,63 +217,43 @@ async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_i
                       "reply_markup": markup, "disable_web_page_preview": True},
             )
     except Exception:
-        pass  # the going is already recorded; the nudge is best-effort
+        pass  # the favourite is already recorded; the nudge is best-effort
 
 
-async def _arm_going_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
-    """When a user first confirms «я иду», arm the same pre-event reminder the bell would. Respects
-    the user's global reminder mute; shares the (user, event) reminder row so a later manual bell is a
-    safe upsert. Best-effort — no soonest session → no reminder."""
+async def _arm_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
+    """Arm the pre-event reminder for one favourited event — UNLESS reminders are globally muted.
+    Reminders are now driven by favourites (no per-event bell). Best-effort: no soonest session → none."""
     settings = await get_settings(db, uid)
     if settings.get("notify_reminders") is False:
-        return  # globally muted → don't arm
+        return
     start = await soonest_start(db, event_id)
     if start is None:
         return
     now = datetime.now(timezone.utc)
-    fire_at = max(now + timedelta(seconds=45), start - _REMINDER_LEAD)  # same formula as the bell
+    fire_at = max(now + timedelta(seconds=45), start - _REMINDER_LEAD)
     await set_reminder(db, uid, event_id, fire_at)
 
 
-@router.post("/going")
-async def toggle_going(payload: GoingRequest, db: AsyncSession = Depends(get_async_db)):
-    """Confirm or cancel «Я иду» on an event (idempotent), or — with no event_id — just list going ids.
-    A first confirmation auto-arms a pre-event reminder and, on a signed invite, DMs the inviter."""
-    user, uid = _auth(payload.init_data)
-    await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-    notify: tuple[int, str] | None = None
-    if payload.event_id is not None and payload.on:
-        first_time = await set_going(db, uid, payload.event_id, payload.inviter_id)
-        if first_time:
-            # Committing to an event auto-arms the pre-event reminder (so you can't forget what you
-            # signed up for). Gated by the user's global reminder mute; the bell reflects it and is
-            # the per-event opt-out (tap to disarm without un-going).
-            await _arm_going_reminder(db, uid, payload.event_id)
-        # DM the inviter ONLY on a genuine SIGNED invite (a forged inviter_id can't be replayed to
-        # spam DMs), never to yourself, and never if they've globally muted notifications.
-        if (
-            first_time
-            and payload.inviter_id
-            and int(payload.inviter_id) != uid
-            and invite_verify(payload.event_id, payload.inviter_id, payload.sig)
-        ):
-            recip = await get_settings(db, int(payload.inviter_id))
-            # Durable once-only guard: a cancel + re-RSVP must NOT re-DM the inviter (the going row
-            # is deleted on cancel, so first_time alone would re-fire). The notice ledger survives it.
-            if (
-                recip
-                and recip.get("notify_reminders") is not False
-                and await mark_inviter_notified(db, uid, payload.event_id, int(payload.inviter_id))
-            ):
-                title = await event_title(db, payload.event_id)
-                notify = (int(payload.inviter_id), title or "")
-    elif payload.event_id is not None and not payload.on:
-        await cancel_going(db, uid, payload.event_id)  # un-RSVP (the reminder is left alone)
-    await db.commit()
-    # Send the nudge AFTER the commit so the going is durable even if Telegram is slow/down.
-    if notify:
-        await _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
-    return {"ids": await list_going_ids(db, uid)}
+async def _arm_all_favorite_reminders(db: AsyncSession, uid: int) -> None:
+    """Arm reminders for every currently-favourited event — run when the user switches the profile
+    notifications toggle ON, so reminders cover everything they'd already saved while it was off."""
+    now = datetime.now(timezone.utc)
+    for fid in await list_favorite_ids(db, uid):
+        start = await soonest_start(db, fid)
+        if start is not None:
+            await set_reminder(db, uid, fid, max(now + timedelta(seconds=45), start - _REMINDER_LEAD))
+
+
+async def _invite_dm_once(invitee_id: int, event_id: str, inviter_id: int) -> bool:
+    """Redis NX guard: True only the first time we'd DM `inviter_id` about `invitee_id` accepting the
+    invite to `event_id` — so a fav/un-fav/re-fav loop can't re-spam. Best-effort (Redis down → allow)."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    try:
+        return bool(await client.set(f"invite:dm:{inviter_id}:{invitee_id}:{event_id}", "1", nx=True, ex=120 * 24 * 3600))
+    except Exception:
+        return True
 
 
 @router.post("/invited")
@@ -302,6 +297,10 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
             notify_reminders=payload.notify_reminders,
             notify_digest=payload.notify_digest,
         )
+        # Turning notifications ON arms reminders for everything already in favourites (they're now the
+        # single reminder source). Turning OFF needs nothing — delivery is gated on notify_reminders.
+        if payload.notify_reminders is True:
+            await _arm_all_favorite_reminders(db, uid)
         await db.commit()
     else:
         settings = await get_settings(db, uid)

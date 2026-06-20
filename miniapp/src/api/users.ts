@@ -75,94 +75,21 @@ export async function syncSettings(patch?: Partial<UserSettings>): Promise<UserS
   }
 }
 
-export async function toggleFavoriteRemote(eventId: string, on: boolean): Promise<string[] | null> {
+// Heart / un-heart. Favouriting also arms the event's reminder server-side (if profile notifications
+// are on). When done via a «Пойдём?» invite, pass (inviter, sig) so the bot DMs the inviter once.
+export async function toggleFavoriteRemote(
+  eventId: string,
+  on: boolean,
+  inviter?: number | null,
+  sig?: string | null,
+): Promise<string[] | null> {
   const init = initData();
   if (!init) return null;
   try {
     const r = await fetch(`${API_BASE}/v1/users/favorites`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, event_id: eventId, on }),
-      keepalive: true,
-    });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { ids?: string[] };
-    return Array.isArray(j.ids) ? j.ids : null;
-  } catch {
-    return null;
-  }
-}
-
-// Event reminders (the bot DMs the user ~2h before a saved event). Like favourites, the
-// reminder set is account-scoped. Pass nothing to just LIST; pass (eventId, on) to toggle.
-// Returns the account's active reminder event-ids, or null outside Telegram / on error.
-export async function syncReminders(): Promise<string[] | null> {
-  const init = initData();
-  if (!init) return null;
-  try {
-    const r = await fetch(`${API_BASE}/v1/users/reminders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init }),
-    });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { ids?: string[] };
-    return Array.isArray(j.ids) ? j.ids : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function toggleReminderRemote(eventId: string, on: boolean): Promise<string[] | null> {
-  const init = initData();
-  if (!init) return null;
-  try {
-    const r = await fetch(`${API_BASE}/v1/users/reminders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, event_id: eventId, on }),
-      keepalive: true,
-    });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { ids?: string[] };
-    return Array.isArray(j.ids) ? j.ids : null;
-  } catch {
-    return null;
-  }
-}
-
-// «Я иду» / RSVP (the «Пойдём?» loop) — account-scoped. List the going event-ids, or confirm
-// going to one (with the inviter from the share deep-link, so the bot DMs them). Returns ids.
-export async function syncGoing(): Promise<string[] | null> {
-  const init = initData();
-  if (!init) return null;
-  try {
-    const r = await fetch(`${API_BASE}/v1/users/going`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init }),
-    });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { ids?: string[] };
-    return Array.isArray(j.ids) ? j.ids : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function markGoingRemote(
-  eventId: string,
-  inviterId: number | null,
-  sig: string | null = null,
-  on = true,
-): Promise<string[] | null> {
-  const init = initData();
-  if (!init) return null;
-  try {
-    const r = await fetch(`${API_BASE}/v1/users/going`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, event_id: eventId, on, inviter_id: inviterId ?? undefined, sig: sig ?? undefined }),
+      body: JSON.stringify({ init_data: init, event_id: eventId, on, inviter_id: inviter ?? undefined, sig: sig ?? undefined }),
       keepalive: true,
     });
     if (!r.ok) return null;

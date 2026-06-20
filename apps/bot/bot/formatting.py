@@ -166,17 +166,13 @@ def _digest_line(item: dict, now: datetime | None) -> str:
     return f"{line}\n<code>{sub}</code>" if sub else line
 
 
-def digest_message(going_items: list[dict], venue_items: list[dict], weekend_items: list[dict], label: str, now: datetime | None = None) -> str:
-    """The weekly roundup DM: a hero, then 'ты идёшь в эти выходные' (your own RSVPs — the most
-    relevant block), 'new at your venues' (the follow loop) + the best of this weekend. Each title
-    is a deep-link that opens the event in the Mini App."""
+def digest_message(venue_items: list[dict], weekend_items: list[dict], label: str, now: datetime | None = None) -> str:
+    """The weekly roundup DM: a hero, then 'new at your venues' (the follow loop) + the best of this
+    weekend. Each title is a deep-link that opens the event in the Mini App."""
     now = now or datetime.now(timezone.utc)
     lines = [f"{ce('⚡')} <b>афиша на выходные</b>"]
     if label:
         lines.append(f"<i>{escape(label)}</i>")
-    if going_items:
-        lines.append(f"\n{ce('✅')} <b>ты идёшь в эти выходные</b>")
-        lines.extend(_digest_line(it, now) for it in going_items)
     if venue_items:
         lines.append("\n<b>новое на ваших площадках</b>")
         lines.extend(_digest_line(it, now) for it in venue_items)
@@ -186,7 +182,7 @@ def digest_message(going_items: list[dict], venue_items: list[dict], weekend_ite
     return "\n".join(lines)
 
 
-def digest_caption(going_items: list[dict], venue_items: list[dict], weekend_items: list[dict], label: str) -> str:
+def digest_caption(venue_items: list[dict], weekend_items: list[dict], label: str) -> str:
     """Caption UNDER the digest poster: the poster already shows code · when · venue, so the
     caption stays light — a hero line + tappable titles only (each a deep-link into the event)."""
     lines = [f"{ce('⚡')} <b>афиша на выходные</b> · {escape(label)}" if label else f"{ce('⚡')} <b>афиша на выходные</b>"]
@@ -199,7 +195,6 @@ def digest_caption(going_items: list[dict], venue_items: list[dict], weekend_ite
             title = escape(str(it.get("title") or "Событие")[:80])
             lines.append(f'{glyph(it.get("category"))} <a href="{event_deeplink(it["event_id"])}">{title}</a>')
 
-    block("ты идёшь в эти выходные", going_items)
     block("новое на ваших площадках", venue_items)
     block("на выходных рядом", weekend_items)
     return "\n".join(lines)

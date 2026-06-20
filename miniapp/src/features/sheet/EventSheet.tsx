@@ -7,7 +7,7 @@ import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, 
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { Highlight } from "../../lib/highlight";
-import { CategoryIcon, IconBell, IconClose, IconGoing, IconHeart, IconPin, IconShare } from "../../lib/icons";
+import { CategoryIcon, IconClose, IconHeart, IconPin, IconShare } from "../../lib/icons";
 import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
@@ -49,19 +49,15 @@ type Props = {
   metro?: MetroPing | null;
   isFav: boolean;
   onToggleFav: () => void;
-  hasReminder: boolean;
-  onToggleReminder: () => void;
   invitedBy: number | null; // inviter id when this event was opened via a «Пойдём?» share
-  isGoing: boolean;
-  onGoing: () => void;
-  onUnGoing: () => void; // cancel the RSVP (toggle «я иду» off)
+  onAccept: () => void; // accept the invite → favourite it (+ DM the inviter)
   onSelect: (i: EventItem) => void;
   onShowMap?: () => void;
   onOpenVenue?: (venueId: number) => void;
   onClose: () => void;
 };
 
-export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, hasReminder, onToggleReminder, invitedBy, isGoing, onGoing, onUnGoing, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
+export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, invitedBy, onAccept, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
   const [datesOpen, setDatesOpen] = useState(false);
@@ -311,16 +307,11 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     showToast("Ссылка готова к отправке", { icon: "share" });
   };
 
-  const handleGoing = () => {
+  const handleAccept = () => {
+    if (isFav) return; // already saved — nothing to do
     haptic("medium");
-    if (isGoing) {
-      onUnGoing();
-      showToast("Отменил — больше не идёшь", { tone: "muted" });
-      return;
-    }
-    onGoing();
-    // Notify-copy only when there's actually an inviter to ping; otherwise it's a plain RSVP.
-    showToast(invitedBy != null ? "Ты идёшь! Сообщили пригласившему" : "Ты идёшь ✓", { tone: "good" });
+    onAccept();
+    showToast("Добавил в избранное! Сообщили пригласившему", { tone: "good" });
   };
 
   return (
@@ -336,11 +327,11 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           <span className="sheet__invite-kicker">🎉 тебя зовут сюда</span>
           <button
             type="button"
-            className={`sheet__invite-cta${isGoing ? " sheet__invite-cta--on" : ""}`}
-            onClick={handleGoing}
-            aria-pressed={isGoing}
+            className={`sheet__invite-cta${isFav ? " sheet__invite-cta--on" : ""}`}
+            onClick={handleAccept}
+            aria-pressed={isFav}
           >
-            {isGoing ? "идёшь ✓" : "я иду"}
+            {isFav ? "в избранном ✓" : "я иду"}
           </button>
         </div>
       )}
@@ -385,7 +376,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           </span>
         )}
         {/* Segmented action toolbar, docked flush to the poster's top-right corner so its top
-            edge meets the start of the photo: favourite / reminder / share / close. */}
+            edge meets the start of the photo: favourite / share / close. */}
         <div className="sheet__pacts">
           <button
             type="button"
@@ -403,34 +394,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           >
             <IconHeart filled={isFav} size={16} />
           </button>
-          <button
-            type="button"
-            className={`sheet__picon${hasReminder ? " sheet__picon--on" : ""}`}
-            aria-label={hasReminder ? "Напоминание включено" : "Напомнить о начале"}
-            aria-pressed={hasReminder}
-            onClick={() => {
-              haptic("light");
-              if (!hasReminder) logIntent("reminder", selected.event_id);
-              showToast(hasReminder ? "Напоминание выключено" : "Напомним перед началом", {
-                icon: "bell",
-                tone: hasReminder ? "muted" : "good",
-              });
-              onToggleReminder();
-            }}
-          >
-            <IconBell filled={hasReminder} size={16} />
-          </button>
-          {/* «Я иду» — toggle RSVP right here with the other quick actions; the walking figure reads
-              as "going". Tapping again cancels. */}
-          <button
-            type="button"
-            className={`sheet__picon${isGoing ? " sheet__picon--on" : ""}`}
-            aria-label={isGoing ? "Идёшь — отменить" : "Я иду"}
-            aria-pressed={isGoing}
-            onClick={handleGoing}
-          >
-            <IconGoing size={16} />
-          </button>
           <button type="button" className="sheet__picon" aria-label="Поделиться" onClick={onShare}>
             <IconShare size={16} />
           </button>
@@ -445,24 +408,15 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           <Highlight text={selected.title} query={query} />
         </h2>
         {(() => {
-          // Social proof — compact icon + count, only over a threshold so a quiet event stays silent.
-          const g = detail?.going_count ?? 0;
+          // Social proof — how many saved it, only over a threshold so a quiet event stays silent.
           const s = detail?.saved_count ?? 0;
-          if (g < 2 && s < 3) return null;
+          if (s < 3) return null;
           return (
             <div className="sheet__social">
-              {g >= 2 && (
-                <span className="sheet__social-stat" title={`${g} идут`}>
-                  <IconGoing size={13} />
-                  {g}
-                </span>
-              )}
-              {s >= 3 && (
-                <span className="sheet__social-stat" title={`${s} сохранили`}>
-                  <IconHeart size={13} filled />
-                  {s}
-                </span>
-              )}
+              <span className="sheet__social-stat" title={`${s} сохранили`}>
+                <IconHeart size={13} filled />
+                {s}
+              </span>
             </div>
           );
         })()}

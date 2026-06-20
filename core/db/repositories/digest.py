@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.cities import city_by_slug, region_predicate_sql
 from core.codes import event_code
 from core.db.models import Event, EventOccurrence, Venue
-from core.db.models.ref.event_going import EventGoing
 from core.db.models.ref.user import User
 from core.db.models.ref.user_venue_follow import UserVenueFollow
 
@@ -122,50 +121,6 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
             .join(soon, soon.c.eid == Event.event_id)
             .join(Venue, Venue.venue_id == soon.c.venue_id)
             .where(Event.status == "active", Event.created_at >= now - _NEW_WINDOW)
-            .order_by(soon.c.date_start.asc())
-            .limit(limit)
-        )
-    ).all()
-    return [_item(r) for r in rows]
-
-
-async def going_this_weekend(db: AsyncSession, user_id: int, now: datetime, limit: int = 4) -> list[dict]:
-    """Events the user already RSVP'd to («Я иду») whose session overlaps the coming weekend — the
-    most relevant possible digest block: their OWN commitments, surfaced at the Friday planning
-    moment. Same window/overlap logic + item shape as weekend_pool, filtered to the going set."""
-    going_ids = (
-        await db.execute(select(EventGoing.event_id).where(EventGoing.telegram_user_id == user_id))
-    ).scalars().all()
-    if not going_ids:
-        return []
-    _, _, start, end = weekend_window(now)
-    soon = (
-        select(
-            EventOccurrence.event_id.label("eid"),
-            EventOccurrence.date_start,
-            EventOccurrence.date_end,
-            EventOccurrence.price_min,
-            EventOccurrence.venue_id,
-        )
-        .distinct(EventOccurrence.event_id)
-        .where(
-            EventOccurrence.event_id.in_(going_ids),
-            EventOccurrence.date_start < end,
-            func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= start,
-        )
-        .order_by(
-            EventOccurrence.event_id,
-            (EventOccurrence.date_start < now).asc(),
-            EventOccurrence.date_start.asc(),
-        )
-        .subquery()
-    )
-    rows = (
-        await db.execute(
-            select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, Venue.name, Venue.city)
-            .join(soon, soon.c.eid == Event.event_id)
-            .join(Venue, Venue.venue_id == soon.c.venue_id)
-            .where(Event.status == "active")
             .order_by(soon.c.date_start.asc())
             .limit(limit)
         )

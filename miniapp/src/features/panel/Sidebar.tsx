@@ -8,7 +8,6 @@ const NAV: { key: View; label: string; glyph: string }[] = [
   { key: "map", label: "Карта", glyph: "▦" },
   { key: "recs", label: "Подборка", glyph: "✷" },
   { key: "favorites", label: "Избранное", glyph: "♥" },
-  { key: "going", label: "Я иду", glyph: "✓" },
   { key: "venues", label: "Площадки", glyph: "⌂" },
   { key: "profile", label: "Профиль", glyph: "◑" },
 ];
@@ -17,7 +16,6 @@ export function Sidebar({
   open,
   view,
   favCount = 0,
-  goingCount = 0,
   theme = "light",
   onToggleTheme,
   onSelect,
@@ -26,14 +24,13 @@ export function Sidebar({
   open: boolean;
   view: View;
   favCount?: number;
-  goingCount?: number;
   theme?: ThemeName;
   onToggleTheme?: () => void;
   onSelect: (v: View) => void;
   onClose: () => void;
 }) {
   const dark = theme === "dark";
-  const navCount: Partial<Record<View, number>> = { favorites: favCount, going: goingCount };
+  const navCount: Partial<Record<View, number>> = { favorites: favCount };
   const panelRef = useRef<HTMLElement>(null);
   useFocusTrap(panelRef, open); // contain keyboard focus in the menu while it's open
   return (

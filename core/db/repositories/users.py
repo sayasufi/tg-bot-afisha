@@ -1,13 +1,12 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from core.db.models import City, Event, RawEvent, User, UserFavorite, Venue
-from core.db.models.ref.event_going import EventGoing
 from core.db.models.ref.user_venue_follow import UserVenueFollow
 from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
@@ -134,27 +133,29 @@ async def list_favorite_ids(db: AsyncSession, telegram_user_id: int) -> list[str
     return [str(r) for r in rows]
 
 
-async def set_favorite(db: AsyncSession, telegram_user_id: int, event_id: str, on: bool) -> None:
-    """Heart / un-heart one event (no commit). Inserts only a still-existing event (FK)."""
+async def set_favorite(db: AsyncSession, telegram_user_id: int, event_id: str, on: bool) -> bool:
+    """Heart / un-heart one event (no commit). Inserts only a still-existing event (FK). Returns True
+    only when on=True actually inserted a NEW favourite (so the caller can DM an inviter exactly once)."""
     try:
         eid = uuid.UUID(str(event_id))
     except (ValueError, TypeError):
-        return
+        return False
     if on:
         if (await db.execute(select(Event.event_id).where(Event.event_id == eid))).first() is None:
-            return  # event no longer exists — nothing to favourite
-        await db.execute(
+            return False  # event no longer exists — nothing to favourite
+        res = await db.execute(
             pg_insert(UserFavorite.__table__)
             .values(telegram_user_id=telegram_user_id, event_id=eid)
             .on_conflict_do_nothing()
         )
-    else:
-        await db.execute(
-            delete(UserFavorite).where(
-                UserFavorite.telegram_user_id == telegram_user_id,
-                UserFavorite.event_id == eid,
-            )
+        return bool(res.rowcount)
+    await db.execute(
+        delete(UserFavorite).where(
+            UserFavorite.telegram_user_id == telegram_user_id,
+            UserFavorite.event_id == eid,
         )
+    )
+    return False
 
 
 async def add_favorites(db: AsyncSession, telegram_user_id: int, event_ids: list[str]) -> None:
@@ -207,66 +208,6 @@ async def set_venue_follow(db: AsyncSession, telegram_user_id: int, venue_id: in
                 UserVenueFollow.venue_id == vid,
             )
         )
-
-
-async def list_going_ids(db: AsyncSession, telegram_user_id: int) -> list[str]:
-    """Event ids the user said «Я иду» to — drives the button's confirmed state."""
-    rows = (
-        await db.execute(select(EventGoing.event_id).where(EventGoing.telegram_user_id == telegram_user_id))
-    ).scalars().all()
-    return [str(r) for r in rows]
-
-
-async def set_going(db: AsyncSession, telegram_user_id: int, event_id: str, inviter_id: int | None = None) -> bool:
-    """Mark the user as going (idempotent — re-confirming is a no-op). Returns True only on the
-    FIRST insert, so the caller DMs the inviter exactly once. No commit. Inserts only a still-
-    existing event (FK); a self-invite (inviter == self) is stored as no inviter."""
-    try:
-        eid = uuid.UUID(str(event_id))
-    except (ValueError, TypeError):
-        return False
-    if (await db.execute(select(Event.event_id).where(Event.event_id == eid))).first() is None:
-        return False  # event no longer exists
-    inv = int(inviter_id) if inviter_id and int(inviter_id) != telegram_user_id else None
-    res = await db.execute(
-        pg_insert(EventGoing.__table__)
-        .values(telegram_user_id=telegram_user_id, event_id=eid, inviter_id=inv)
-        .on_conflict_do_nothing()
-    )
-    return bool(res.rowcount)  # rows inserted (0 on conflict) → first-time going
-
-
-async def cancel_going(db: AsyncSession, telegram_user_id: int, event_id: str) -> None:
-    """Un-RSVP — remove the «Я иду» row (no commit). No-op if it was never set or the id is junk.
-    Deliberately does NOT clear the inviter-notice ledger, so re-RSVPing can't re-DM the inviter."""
-    try:
-        eid = uuid.UUID(str(event_id))
-    except (ValueError, TypeError):
-        return
-    await db.execute(
-        delete(EventGoing).where(
-            EventGoing.telegram_user_id == telegram_user_id,
-            EventGoing.event_id == eid,
-        )
-    )
-
-
-async def mark_inviter_notified(db: AsyncSession, invitee_id: int, event_id: str, inviter_id: int) -> bool:
-    """Record (durably) that we've DMed `inviter_id` about `invitee_id` going to `event_id`. Returns
-    True ONLY on the first insert, so the inviter is pinged at most once per (invitee, event, inviter)
-    — surviving any cancel/re-RSVP cycle (the going row gets deleted on cancel; this ledger doesn't)."""
-    try:
-        eid = uuid.UUID(str(event_id))
-    except (ValueError, TypeError):
-        return False
-    res = await db.execute(
-        text(
-            "INSERT INTO ref.event_going_notice (telegram_user_id, event_id, inviter_id) "
-            "VALUES (:u, :e, :i) ON CONFLICT DO NOTHING"
-        ),
-        {"u": int(invitee_id), "e": str(eid), "i": int(inviter_id)},
-    )
-    return bool(res.rowcount)
 
 
 async def warm_interests_from(db: AsyncSession, user_id: int, inviter_id: int) -> list[str]:

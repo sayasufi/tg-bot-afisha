@@ -22,7 +22,6 @@ const CollectionDetail = lazy(() =>
   import("../features/panel/CollectionDetail").then((m) => ({ default: m.CollectionDetail })),
 );
 const FavoritesPanel = lazy(() => import("../features/panel/FavoritesPanel").then((m) => ({ default: m.FavoritesPanel })));
-const GoingPanel = lazy(() => import("../features/panel/GoingPanel").then((m) => ({ default: m.GoingPanel })));
 const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m) => ({ default: m.ProfilePanel })));
 const FollowedVenuesPanel = lazy(() =>
   import("../features/panel/FollowedVenuesPanel").then((m) => ({ default: m.FollowedVenuesPanel })),
@@ -39,8 +38,6 @@ import { rangeFor } from "../lib/datePresets";
 import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { syncFavorites, useFavorites } from "../lib/favorites";
-import { syncGoing, useGoing } from "../lib/going";
-import { syncReminders, useReminders } from "../lib/reminders";
 import { syncVenueFollows } from "../lib/venueFollows";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
@@ -59,17 +56,13 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
   const fav = useFavorites();
-  const rem = useReminders();
-  const going = useGoing();
-  // Who invited me here (from a share deep-link «<event>_<inviter>») — drives the «Я иду» banner.
+  // Who invited me here (from a share deep-link «<event>_<inviter>_<sig>») — drives the invite banner.
   const [invite, setInvite] = useState<{ eventId: string; inviterId: number; sig: string } | null>(null);
-  // Pull this account's favourites + reminders from the server once on open (favourites
-  // also merge this device's local hearts in on first run) so they sync across devices.
+  // Pull this account's favourites + venue follows from the server once on open (favourites also
+  // merge this device's local hearts in on first run) so they sync across devices.
   useEffect(() => {
     void syncFavorites();
-    void syncReminders();
     void syncVenueFollows();
-    void syncGoing();
   }, []);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
@@ -888,20 +881,13 @@ export function App() {
         metro={nearMetro}
         isFav={!!selected && fav.has(selected.event_id)}
         onToggleFav={() => selected && fav.toggle(selected.event_id)}
-        hasReminder={!!selected && rem.has(selected.event_id)}
-        onToggleReminder={() => selected && rem.toggle(selected.event_id)}
         invitedBy={invite && selected?.event_id === invite.eventId ? invite.inviterId : null}
-        isGoing={!!selected && going.has(selected.event_id)}
-        onGoing={() => {
+        onAccept={() => {
           if (!selected) return;
-          // Only attribute the inviter (and its sig) when the invite is for THIS event.
+          // Accepting a «Пойдём?» invite = favourite it + attribute the inviter (the bot DMs them).
           const inv = invite && invite.eventId === selected.event_id ? invite : null;
-          going.mark(selected.event_id, inv?.inviterId ?? null, inv?.sig ?? null);
-          // «Я иду» also arms the pre-event reminder (the server does too) so the bell flips on at
-          // once — unless reminders are globally muted, or it's already armed.
-          if (notifyReminders && !rem.has(selected.event_id)) rem.toggle(selected.event_id);
+          if (inv) fav.accept(selected.event_id, inv.inviterId, inv.sig);
         }}
-        onUnGoing={() => selected && going.unmark(selected.event_id)}
         onSelect={openEvent}
         onShowMap={showOnMap}
         onOpenVenue={onOpenVenue}
@@ -942,9 +928,6 @@ export function App() {
         {view === "favorites" && (
           <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
         )}
-        {view === "going" && (
-          <GoingPanel goingIds={going.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
-        )}
         {view === "venues" && <FollowedVenuesPanel onOpenVenue={onOpenVenue} onClose={() => setView("map")} />}
         {view === "profile" && (
           <ProfilePanel
@@ -953,13 +936,11 @@ export function App() {
             cities={cities}
             onSelectCity={selectCity}
             favIds={fav.ids}
-            goingCount={going.ids.size}
             notifyReminders={notifyReminders}
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
             onOpenFavorites={() => setView("favorites")}
-            onOpenGoing={() => setView("going")}
             onClose={() => setView("map")}
           />
         )}
@@ -969,7 +950,6 @@ export function App() {
         open={drawerOpen}
         view={view}
         favCount={fav.ids.size}
-        goingCount={going.ids.size}
         theme={theme}
         onToggleTheme={toggleTheme}
         onClose={() => setDrawerOpen(false)}

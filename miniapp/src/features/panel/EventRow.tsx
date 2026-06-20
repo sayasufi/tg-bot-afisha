@@ -5,7 +5,6 @@ import { formatWhenShort, goNowState } from "../../lib/datetime";
 import { distanceLabel, type LatLon } from "../../lib/distance";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon } from "../../lib/icons";
-import { GoingBadge } from "./GoingBadge";
 
 export function EventRow({
   item,
@@ -59,7 +58,6 @@ export function EventRow({
           {item.venue ? ` · ${item.venue}` : ""}
         </span>
       </span>
-      <GoingBadge eventId={item.event_id} className="erow__going" />
       {dist && <span className="erow__dist">{dist}</span>}
     </button>
   );

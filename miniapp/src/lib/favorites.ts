@@ -63,6 +63,25 @@ export function toggleFavorite(id: string): void {
     });
 }
 
+// «Пойдём?» invite accepted → favourite the event AND attribute the inviter so the bot DMs them once
+// (server-deduped). Ensures favourited; harmless if already so (the server's "newly added" check
+// stops a duplicate DM).
+export function acceptInvite(id: string, inviter: number, sig: string): void {
+  if (!favs.has(id)) {
+    const next = new Set(favs);
+    next.add(id);
+    setLocal(next); // optimistic
+  }
+  const seq = ++mutationSeq;
+  toggleFavoriteRemote(id, true, inviter, sig)
+    .then((ids) => {
+      if (ids && seq === mutationSeq) setLocal(new Set(ids));
+    })
+    .catch(() => {
+      /* the local add stands; next sync reconciles */
+    });
+}
+
 let syncing = false;
 
 // Pull the account's favourites (merging this device's local ones on its first run).
@@ -111,5 +130,6 @@ export function useFavorites() {
     ids,
     has: (id: string) => ids.has(id),
     toggle: toggleFavorite,
+    accept: acceptInvite,
   };
 }

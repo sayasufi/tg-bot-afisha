@@ -63,7 +63,6 @@ export type EventDetail = {
   primary_image_url: string;
   updated_at?: string | null; // last refresh — drives the "актуально на" trust line
   occurrences: EventOccurrence[];
-  going_count?: number; // «Я иду» count — social proof
   saved_count?: number; // favourites count — social proof
 };
 
