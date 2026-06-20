@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties } from "react";
 
-import { fetchVenue, type EventItem, type VenueDetail } from "../../api/client";
+import { fetchVenue, type VenueDetail } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
+import { formatWhenShort } from "../../lib/datetime";
 import { IconClose } from "../../lib/icons";
 import { CategoryIcon } from "../../lib/icons/category";
 import { haptic } from "../../lib/telegram";
@@ -15,14 +16,6 @@ function plural(n: number, one: string, few: string, many: string): string {
   if (m10 === 1 && m100 !== 11) return one;
   if (m10 >= 2 && m10 <= 4 && !(m100 >= 12 && m100 <= 14)) return few;
   return many;
-}
-
-// The venue's dominant category (most events) — drives the row's category chip.
-function topCategory(events: EventItem[]): string | null {
-  if (!events.length) return null;
-  const counts = new Map<string, number>();
-  for (const e of events) counts.set(e.category, (counts.get(e.category) || 0) + 1);
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
 // «Площадки» — the venues the user follows. Each row opens the venue page. (Venue headers
@@ -77,8 +70,10 @@ export function FollowedVenuesPanel({
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {venues.length > 0 ? (
           venues.map((v) => {
-            const top = topCategory(v.events);
-            const cat = top ? categoryMeta(top) : null;
+            // v.events is sorted soonest-first by the API → the next/ongoing event at this venue.
+            const next = v.events[0] ?? null;
+            const cat = next ? categoryMeta(next.category) : null;
+            const newN = v.new_count ?? 0;
             return (
               <button
                 key={v.venue_id}
@@ -90,16 +85,26 @@ export function FollowedVenuesPanel({
                 }}
               >
                 <span className="vrow__body">
-                  <span className="vrow__name">{v.name}</span>
-                  <span className="vrow__sub">
-                    {cat && (
-                      <span className="vrow__cat" style={{ "--cat": cat.color } as CSSProperties}>
-                        <CategoryIcon cat={top} size={13} className="vrow__caticon" />
-                        {cat.label}
-                      </span>
-                    )}
-                    <span className="vrow__addr">{v.address || "Площадка"}</span>
+                  <span className="vrow__top">
+                    <span className="vrow__name">{v.name}</span>
+                    {newN > 0 && <span className="vrow__new">+{newN} {plural(newN, "новое", "новых", "новых")}</span>}
                   </span>
+                  {next ? (
+                    <span className="vrow__next">
+                      {cat && (
+                        <span className="vrow__cat" style={{ "--cat": cat.color } as CSSProperties}>
+                          <CategoryIcon cat={next.category} size={13} className="vrow__caticon" />
+                          {cat.label}
+                        </span>
+                      )}
+                      <span className="vrow__nexttitle">{next.title}</span>
+                      <span className="vrow__nextdate">{formatWhenShort(next.date_start, next.date_end)}</span>
+                    </span>
+                  ) : (
+                    <span className="vrow__next">
+                      <span className="vrow__addr">{v.address || "Площадка"}</span>
+                    </span>
+                  )}
                 </span>
                 {v.events.length > 0 && (
                   <span className="vrow__count">

@@ -74,6 +74,7 @@ export type VenueDetail = {
   lat: number | null;
   lon: number | null;
   open_now: boolean | null;
+  new_count?: number; // events newly listed at this venue in the last week («+N новых»)
   hours_text: string | null;
   events: EventItem[];
 };

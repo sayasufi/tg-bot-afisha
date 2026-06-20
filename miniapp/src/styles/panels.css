@@ -1613,7 +1613,15 @@ mark.hl {
   flex-direction: column;
   gap: 6px;
 }
+.vrow__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .vrow__name {
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: var(--grotesk);
   font-size: 15px;
   font-weight: 600;
@@ -1623,7 +1631,21 @@ mark.hl {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.vrow__sub {
+/* «+N новых» — acid signal that fresh events were listed here this week (mirrors the digest). */
+.vrow__new {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--grotesk);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px var(--ink);
+}
+/* Nearest/ongoing event at the venue — category · title · date. */
+.vrow__next {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1643,6 +1665,22 @@ mark.hl {
 }
 .vrow__caticon {
   color: var(--cat, var(--ink-dim));
+}
+.vrow__nexttitle {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--grotesk);
+  font-size: 12px;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vrow__nextdate {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
 }
 .vrow__addr {
   flex: 1 1 auto;

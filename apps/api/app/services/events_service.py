@@ -99,6 +99,8 @@ _PLACEHOLDER_VENUE = "Unknown venue"
 # All current cities are UTC+3 (Europe/Moscow, no DST since 2014). Used to compute the
 # venue "open now" signal in the venues' own wall-clock time.
 _MSK = timezone(timedelta(hours=3))
+# «+N новых» window for the «Площадки» list — events listed at a followed venue within this many days.
+_NEW_AT_VENUE_DAYS = 7
 
 # Search-as-you-type helpers --------------------------------------------------
 # A query that looks like a public event code ("MSK-04PN", "msk04pn", "04PN"): 2-4
@@ -771,6 +773,7 @@ class EventQueryService:
                 Event.category.label("category"),
                 Event.cached_image_url.label("cached_image_url"),
                 Event.primary_image_url.label("primary_image_url"),
+                Event.created_at.label("created_at"),
                 EventOccurrence.date_start.label("date_start"),
                 EventOccurrence.date_end.label("date_end"),
                 EventOccurrence.price_min.label("price_min"),
@@ -811,6 +814,10 @@ class EventQueryService:
             for r in rows
         ]
         items.sort(key=lambda it: it["date_start"])
+        # «+N новых» — events newly LISTED at this venue in the last week (still live). Mirrors the
+        # weekly digest's «новое на ваших площадках» signal, surfaced in-app on the «Площадки» list.
+        new_cutoff = datetime.now(timezone.utc) - timedelta(days=_NEW_AT_VENUE_DAYS)
+        new_count = sum(1 for r in rows if r.created_at and r.created_at >= new_cutoff)
         return {
             "venue_id": vrow.venue_id,
             "name": vrow.name,
@@ -818,6 +825,7 @@ class EventQueryService:
             "lat": lat,
             "lon": lon,
             "open_now": open_now,
+            "new_count": new_count,
             "hours_text": vrow.hours_json.get("text") if isinstance(vrow.hours_json, dict) else None,
             "events": items,
         }
