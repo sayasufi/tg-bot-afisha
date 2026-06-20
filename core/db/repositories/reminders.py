@@ -3,11 +3,16 @@
 A user taps "Напомнить" on an event; we schedule a fire time (a couple hours before the
 soonest session) and a Prefect sweep DMs them via the bot. All async (API + worker paths).
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# A reminder fires only within this many hours of its scheduled time. Past that it's stale: the event
+# has effectively started, so a late "starts soon" DM is noise. This also caps catch-up after worker
+# downtime and — crucially — stops a muted user's parked reminders from BURST-firing when they unmute.
+_FIRE_GRACE_HOURS = 6
 
 from core.codes import event_code
 from core.db.models import Event, EventOccurrence, Venue
@@ -105,6 +110,7 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
             .where(
                 EventReminder.sent_at.is_(None),
                 EventReminder.fire_at <= now,
+                EventReminder.fire_at >= now - timedelta(hours=_FIRE_GRACE_HOURS),  # never fire stale
                 User.notify_reminders.is_(True),
                 Event.status == "active",
             )
@@ -127,6 +133,19 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
         }
         for r in rows
     ]
+
+
+async def reap_stale_reminders(db: AsyncSession, now: datetime) -> int:
+    """Stamp (as sent) every undelivered reminder whose fire time passed more than the grace window
+    ago — the user was muted, or the sweep was down. Without this they linger as sent_at=NULL and
+    (a) burst-fire the instant a muted user unmutes, (b) keep the event's bell falsely armed forever."""
+    cutoff = now - timedelta(hours=_FIRE_GRACE_HOURS)
+    result = await db.execute(
+        update(EventReminder)
+        .where(EventReminder.sent_at.is_(None), EventReminder.fire_at < cutoff)
+        .values(sent_at=func.now())
+    )
+    return result.rowcount or 0
 
 
 async def mark_sent(db: AsyncSession, user_id: int, event_id: str) -> None:

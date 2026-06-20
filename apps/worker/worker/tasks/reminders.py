@@ -14,7 +14,7 @@ from apps.api.app.services.card import ensure_reminder_cover
 from apps.bot.bot.formatting import reminder_caption
 from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
-from core.db.repositories.reminders import due_reminders, mark_sent
+from core.db.repositories.reminders import due_reminders, mark_sent, reap_stale_reminders
 from core.db.session import WorkerAsyncSessionLocal
 
 log = logging.getLogger(__name__)
@@ -70,6 +70,10 @@ async def _send_reminders_impl() -> int:
     now = datetime.now(timezone.utc)
     sent = 0
     async with WorkerAsyncSessionLocal() as db:
+        # Clear reminders whose time passed long ago (muted user / past downtime) so they neither
+        # burst-fire on unmute nor keep the bell armed. Then send the genuinely-due ones.
+        if await reap_stale_reminders(db, now):
+            await db.commit()
         due = await due_reminders(db, now)
         if not due:
             return 0
