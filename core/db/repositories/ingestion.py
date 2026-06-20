@@ -387,6 +387,7 @@ async def _upsert_occurrences(db: AsyncSession, event: Event, candidate: EventCa
             occurrence.price_max = candidate.price_max
             occurrence.currency = candidate.currency
             occurrence.source_best_url = candidate.source_url
+            occurrence.last_seen_at = now  # re-seen this sweep → freshness stamp for stale-pruning
         else:
             db.add(
                 EventOccurrence(
@@ -398,6 +399,7 @@ async def _upsert_occurrences(db: AsyncSession, event: Event, candidate: EventCa
                     price_max=candidate.price_max,
                     currency=candidate.currency,
                     source_best_url=candidate.source_url,
+                    last_seen_at=now,
                 )
             )
     await db.flush()

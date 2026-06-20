@@ -109,7 +109,7 @@ class RecommendationService:
 
     async def feed(self, lat, lon, interests, recent, per_rail: int = _PER_RAIL, city=None) -> dict:
         favs = {c for c in (interests or []) if c in _CATEGORY_LABELS}
-        recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][:_RECENT_CAP]
+        recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][-_RECENT_CAP:]  # keep the FRESHEST opens
         affinity = self._affinity(favs, recent)
         now = datetime.now(timezone.utc)
         msk = now.astimezone(_MSK)
@@ -135,14 +135,16 @@ class RecommendationService:
             return {"key": f"collection:{slug}", "title": slug, "subtitle": None, "count": 0, "items": []}
         _, title, sub = meta
         favs = {c for c in (interests or []) if c in _CATEGORY_LABELS}
-        recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][:_RECENT_CAP]
+        recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][-_RECENT_CAP:]  # keep the FRESHEST opens
         affinity = self._affinity(favs, recent)
         now = datetime.now(timezone.utc)
         msk = now.astimezone(_MSK)
         today, hour = msk.date(), msk.hour
         base = await self._base_scored(now, today, hour, city)
         scored = self._personalize(base, lat, lon, affinity)
-        by_score = sorted(scored, key=lambda e: -e["score"])
+        # event_id as a stable secondary key → a fully canonical order, so paging the collection
+        # (offset/limit) can't duplicate or skip an item when several share the same score.
+        by_score = sorted(scored, key=lambda e: (-e["score"], str(e["c"]["event_id"])))
         pred, _diverse = self._collection_rules(today, now)[slug]
         # The detail shows the FULL collection (no per-category diversity cap — that's only a
         # teaser device for the shelf preview), so the count and the list always agree.
