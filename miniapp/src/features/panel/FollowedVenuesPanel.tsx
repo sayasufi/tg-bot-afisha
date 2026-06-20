@@ -87,7 +87,12 @@ export function FollowedVenuesPanel({
                 <span className="vrow__body">
                   <span className="vrow__top">
                     <span className="vrow__name">{v.name}</span>
-                    {newN > 0 && <span className="vrow__new">+{newN} {plural(newN, "новое", "новых", "новых")}</span>}
+                    {/* Show «+N новых» only as a genuine DELTA (some — not all — events are new). While the
+                        whole catalogue is freshly ingested (every event «new»), this stays dormant and
+                        self-activates as venues accumulate older events. */}
+                    {newN > 0 && newN < v.events.length && (
+                      <span className="vrow__new">+{newN} {plural(newN, "новое", "новых", "новых")}</span>
+                    )}
                   </span>
                   {next ? (
                     <span className="vrow__next">
