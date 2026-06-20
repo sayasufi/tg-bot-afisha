@@ -408,16 +408,17 @@ mark.hl {
 .tastecard {
   display: block;
   width: 100%;
-  margin-top: 16px;
-  padding: 14px 15px 16px;
+  margin-top: 18px;
+  padding: 0;
   border: 0;
-  background: var(--plinth);
-  box-shadow: inset 0 0 0 1px var(--line);
+  /* Same plaster ground as the rest of the tab — no white card, no frame; the cluster sits on
+     the page. (Circles fill with this same colour so overlaps still occlude cleanly.) */
+  background: var(--bg);
   text-align: left;
   cursor: pointer;
 }
 .tastecard:active {
-  background: var(--bg);
+  opacity: 0.7;
 }
 .tastecard__head {
   display: flex;
@@ -453,7 +454,7 @@ mark.hl {
   transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 1px solid var(--line);
-  background: var(--plinth);
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   align-items: center;

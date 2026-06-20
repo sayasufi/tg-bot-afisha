@@ -7,16 +7,13 @@ import { CategoryIcon, IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
-const fract = (x: number) => x - Math.floor(x);
-// Deterministic cluster position (% of the box) for circle i of n: the dominant genre sits central,
-// the rest ring around it (even angles + a stable jitter) so they touch/overlap into a tidy
-// «constellation». White-filled circles then occlude cleanly where they meet.
-function clusterPos(i: number, n: number): { x: number; y: number } {
-  if (i === 0) return { x: 50, y: 46 };
-  const around = Math.max(1, n - 1);
-  const angle = ((i - 1) / around) * Math.PI * 2 - Math.PI / 2.4 + (fract(Math.sin(i * 12.9) * 4137) - 0.5) * 0.5;
-  const jr = fract(Math.sin(i * 53.1) * 1733);
-  return { x: 50 + Math.cos(angle) * (26 + jr * 6), y: 46 + Math.sin(angle) * (31 + jr * 7) };
+// Position (% of the box) for circle i, by share rank — a phyllotaxis SPIRAL (golden angle): the
+// dominant genre leads up-left, the rest spiral outward, touching/overlapping. Plaster-filled
+// circles then occlude cleanly where they meet.
+function clusterPos(i: number): { x: number; y: number } {
+  const angle = -2.4 + i * 2.39996; // golden angle
+  const r = 13.5 * Math.sqrt(i + 0.55);
+  return { x: 50 + Math.cos(angle) * r * 1.12, y: 44 + Math.sin(angle) * r };
 }
 
 const eventsBasis = (n: number) => `основано на ${n} ${n === 1 ? "сохранённом событии" : "сохранённых событиях"}`;
@@ -152,7 +149,7 @@ export function ProfilePanel({
               <span className="tastecard__cluster">
                 {taste.slice(0, 6).map((t, i, arr) => {
                   const d = 54 + Math.round((t.n / arr[0].n) * 32); // 54..86px, by genre share
-                  const pos = clusterPos(i, arr.length);
+                  const pos = clusterPos(i);
                   const top = i === 0;
                   return (
                     <span
@@ -178,7 +175,7 @@ export function ProfilePanel({
               <span className="tastecard__nudge">Пока ничего нет. Сохрани несколько событий — и здесь сложится твой культурный профиль.</span>
               <span className="tastecard__cluster">
                 {[80, 60, 66, 54, 58].map((d, i) => {
-                  const pos = clusterPos(i, 5);
+                  const pos = clusterPos(i);
                   return (
                     <span key={i} className="tcircle tcircle--empty" style={{ width: `${d}px`, height: `${d}px`, left: `${pos.x}%`, top: `${pos.y}%` }} />
                   );
