@@ -130,8 +130,8 @@
   margin-top: auto;
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 60px;
+  gap: 14px;
+  height: 76px;
   padding: 0 6px;
   border: 0;
   border-top: 1px solid var(--line);
@@ -144,8 +144,8 @@
   background: var(--plinth);
 }
 .drawer__avatar {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border-radius: 50%;
   background: var(--vitrine) center/cover no-repeat;
@@ -154,15 +154,29 @@
   place-items: center;
   font-family: var(--grotesk);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 17px;
   color: var(--ink-dim);
+}
+.drawer__account-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 .drawer__handle {
   font-family: var(--grotesk);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--ink);
+}
+.drawer__account-cap {
+  font-family: var(--grotesk);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 .drawer__account-go {
   margin-left: auto;

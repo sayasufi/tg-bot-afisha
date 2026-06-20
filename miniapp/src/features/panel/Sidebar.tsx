@@ -76,7 +76,10 @@ export function Sidebar({
           >
             {avatarUrl ? "" : initial}
           </span>
-          <span className="drawer__handle">{handle}</span>
+          <span className="drawer__account-id">
+            <span className="drawer__handle">{handle}</span>
+            <span className="drawer__account-cap">профиль</span>
+          </span>
           <span className="drawer__account-go" aria-hidden="true">›</span>
         </button>
         <div className="drawer__foot">события рядом с тобой</div>
