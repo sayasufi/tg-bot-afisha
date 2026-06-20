@@ -82,7 +82,6 @@ export function Sidebar({
           </span>
           <span className="drawer__account-go" aria-hidden="true">›</span>
         </button>
-        <div className="drawer__foot">события рядом с тобой</div>
       </aside>
     </div>
   );
