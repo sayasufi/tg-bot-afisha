@@ -1706,10 +1706,10 @@ mark.hl {
 }
 .vrow__num {
   font-family: var(--display);
-  font-weight: 800;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 16px;
   line-height: 1;
-  color: var(--ink);
+  color: var(--ink-dim); /* total count is metadata — let the event title win the contrast */
 }
 .vrow__numlabel {
   margin-top: 3px;
@@ -1718,16 +1718,17 @@ mark.hl {
   letter-spacing: 0.04em;
   color: var(--ink-faint);
 }
-/* Frames the screen as «places you follow», not «a list of venues» — once, at the top. */
+/* Frames the screen as «places you follow», not «a list of venues» — once, at the top.
+   Reads as an intentional eyebrow (ink-dim, 600), not a stray service line. */
 .vrow__lede {
   margin: 0;
   padding: 2px 0 10px;
   font-family: var(--mono);
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink-dim);
 }
 
 /* List card — the event photo fills the whole tile, darkened, with the title + data set
