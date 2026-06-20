@@ -650,7 +650,7 @@ mark.hl {
 }
 
 .erow__live {
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
   font-weight: 700;
 }
 
@@ -1109,7 +1109,7 @@ mark.hl {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
 }
 .rcard__live::before {
   content: "";
@@ -1196,7 +1196,7 @@ mark.hl {
   cursor: pointer;
 }
 .rail__more:active {
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
 }
 
 /* «Подборки» — a flat hairline grid of collection entry tiles (a table, VITRINE-style, not a
@@ -1705,7 +1705,7 @@ mark.hl {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
 }
 .lrow__live::before {
   content: "";

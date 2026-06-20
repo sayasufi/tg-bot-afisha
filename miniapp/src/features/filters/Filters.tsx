@@ -5,6 +5,7 @@ import { PRESETS, matchPreset, nextDays, rangeFor, summarizeDate, type PresetKey
 import { CategoryIcon, IconClose, IconGrid, IconMenu, IconSearch } from "../../lib/icons";
 import { haptic, hapticSelection } from "../../lib/telegram";
 import { useCountUp } from "../../lib/useCountUp";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 
 // Budget as quick preset chips (the pattern every strong filter mockup used) instead of a free
 // numeric field — faster to tap and on-brand. value maps straight onto priceMax ("" = no limit).
@@ -108,6 +109,8 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
   // otherwise dragging fired that O(n) work on every input tick and stuttered.
   const [radiusLocal, setRadiusLocal] = useState(value.radiusKm);
   const radiusTimer = useRef<ReturnType<typeof setTimeout>>();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open); // contain keyboard focus in the filter sheet while it's open
   useEffect(() => setRadiusLocal(value.radiusKm), [value.radiusKm]);
   useEffect(() => () => clearTimeout(radiusTimer.current), []);
   const onRadius = (v: number) => {
@@ -143,7 +146,7 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
       {/* Unified filter sheet — bottom-anchored. */}
       <div className={`csheet${open ? " csheet--open" : ""}`} aria-hidden={!open}>
         <button type="button" className="csheet__scrim" aria-label="Закрыть" tabIndex={-1} onClick={close} />
-        <div className="csheet__panel" role="dialog" aria-modal="true">
+        <div className="csheet__panel" role="dialog" aria-modal="true" ref={panelRef} tabIndex={-1}>
           <span className="csheet__grip" />
           <div className="csheet__head">
             <button type="button" className="icon-btn" aria-label="Закрыть" onClick={close}>

@@ -524,8 +524,10 @@ class EventQueryService:
             .order_by(Event.event_id, (EventOccurrence.date_start < func.now()).asc(), EventOccurrence.date_start.asc())
             .subquery()
         )
-        total = await self.db.scalar(select(func.count()).select_from(inner)) or 0
-        rows_q = select(inner)
+        # One query, not two: COUNT(*) OVER () rides along with the page, so the grand total comes
+        # back with the rows (the window count is evaluated over the full result set, before
+        # LIMIT/OFFSET). The old separate COUNT re-scanned the whole filtered/joined set every call.
+        rows_q = select(inner, func.count().over().label("total_count"))
         # Every sort ends with event_id — a unique, stable tiebreaker so events sharing the
         # sort key keep a fixed relative order across pages (OFFSET pagination otherwise
         # skips/duplicates rows when ties reshuffle between page 0 and page 1).
@@ -547,8 +549,15 @@ class EventQueryService:
             # events with a real start time surface above long-running exhibitions)
             rows_q = rows_q.order_by((inner.c.date_start < func.now()).asc(), inner.c.date_start.asc(), tie)
         rows = (await self.db.execute(rows_q.limit(limit).offset(offset))).all()
+        if rows:
+            total = int(rows[0]._mapping["total_count"])
+        else:
+            # Empty page — an over-paged request (offset past the end) or genuinely no matches. The
+            # window count rode on the rows, so with none we fall back to a plain COUNT to keep the
+            # reported total honest rather than a misleading 0.
+            total = int(await self.db.scalar(select(func.count()).select_from(inner)) or 0)
         now_msk = datetime.now(_MSK)
-        return {"items": [self._list_item(r, now_msk) for r in rows], "total": int(total)}
+        return {"items": [self._list_item(r, now_msk) for r in rows], "total": total}
 
     @staticmethod
     def _list_item(r, now_msk: datetime) -> dict:

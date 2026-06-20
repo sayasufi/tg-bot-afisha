@@ -21,7 +21,9 @@ class Venue(Base, TimestampMixin):
     address: Mapped[str] = mapped_column(String(500), default="", nullable=False)
     city: Mapped[str] = mapped_column(String(120), default="", nullable=False)
     country: Mapped[str] = mapped_column(String(8), default="", nullable=False)
-    geom = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
+    # spatial_index=False: the gist index is declared explicitly above (ix_venues_geom). Without this,
+    # GeoAlchemy ALSO auto-creates idx_venues_geom — a duplicate gist(geom) (see migration 0025).
+    geom = mapped_column(Geography(geometry_type="POINT", srid=4326, spatial_index=False), nullable=True)
     geocode_provider: Mapped[str] = mapped_column(String(32), default="", nullable=False)
     geocode_confidence: Mapped[float] = mapped_column(nullable=False, default=0.0)
     # Opening hours, source-agnostic (resolved via Yandex Maps by name+coords):

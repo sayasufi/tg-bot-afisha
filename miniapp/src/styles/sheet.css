@@ -430,7 +430,7 @@ html[data-theme="dark"] .sheet-veil {
   color: var(--ink-dim);
 }
 .sheet__social-stat svg {
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
 }
 
 /* ---------- Exhibit grid — catalogue cells, ink-ruled like a museum label table.
@@ -790,7 +790,7 @@ html[data-theme="dark"] .sheet-veil {
   cursor: pointer;
 }
 .sheet__trust-report:active {
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
 }
 
 /* "Рядом ещё" — a compact swipeable card strip of nearby events. */

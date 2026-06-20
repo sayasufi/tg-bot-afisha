@@ -5,6 +5,7 @@ import { logIntent } from "../../api/intent";
 import { categoryMeta } from "../../lib/categories";
 import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import { Highlight } from "../../lib/highlight";
 import { CategoryIcon, IconBell, IconClose, IconGoing, IconHeart, IconPin, IconShare } from "../../lib/icons";
 import { pushSetting } from "../../lib/settings";
@@ -66,6 +67,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const [swipeHint, setSwipeHint] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  useFocusTrap(sheetRef, true); // the sheet mounts only while open → always active here
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -319,7 +321,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   return (
     <>
       <div className="sheet-veil" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={selected.title} ref={sheetRef}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={selected.title} ref={sheetRef} tabIndex={-1}>
         <div className="sheet__sticky">
           {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>

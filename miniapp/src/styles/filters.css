@@ -141,7 +141,7 @@
   box-shadow: inset 0 0 0 1px var(--cinnabar);
 }
 .gonow-toggle--on .gonow-toggle__hint {
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
 }
 .gonow-toggle:active {
   background: var(--vitrine);

@@ -1,4 +1,7 @@
+import { useRef } from "react";
+
 import type { ThemeName } from "../../lib/telegram";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import type { View } from "./view";
 
 const NAV: { key: View; label: string; glyph: string }[] = [
@@ -27,9 +30,19 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const dark = theme === "dark";
+  const panelRef = useRef<HTMLElement>(null);
+  useFocusTrap(panelRef, open); // contain keyboard focus in the menu while it's open
   return (
     <div className={`drawer${open ? " drawer--open" : ""}`} onClick={onClose}>
-      <aside className="drawer__panel" onClick={(e) => e.stopPropagation()}>
+      <aside
+        className="drawer__panel"
+        onClick={(e) => e.stopPropagation()}
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Меню"
+      >
         <div className="drawer__brand">
           <span className="brand-o">о</span>крест
         </div>

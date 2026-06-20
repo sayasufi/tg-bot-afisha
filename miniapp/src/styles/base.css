@@ -13,7 +13,8 @@
   --acid: #ccff00; /* the only saturated colour — selection/highlight */
   --acid-deep: #a8d400;
   --on-acid: #0b0b0b; /* black always sits on acid */
-  --cinnabar: #e63312; /* misregistration ghost, used once */
+  --cinnabar: #e63312; /* misregistration ghost — fills / borders / dots (decoration) */
+  --cinnabar-ink: #d12d10; /* same hue, darkened for TEXT: AA 4.65:1 on --bg, 5.1:1 on white (e63312 was 3.9) */
   --on-cinnabar: #fff; /* text/dot on the cinnabar urgency badge */
   --radius: 0px;
 
@@ -54,6 +55,7 @@ html[data-theme="dark"] {
   --acid-deep: #2200cc;
   --on-acid: #f1ecde;
   --cinnabar: #ff5a3c; /* nudged brighter so it reads on dark */
+  --cinnabar-ink: var(--cinnabar); /* bright cinnabar already clears AA on the dark wall (6.3:1) */
   --on-cinnabar: #2a0d04; /* dark text on the brighter dark cinnabar (white would fail) */
   color: var(--ink);
   background: var(--bg);

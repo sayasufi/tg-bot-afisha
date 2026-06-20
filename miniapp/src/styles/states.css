@@ -576,7 +576,7 @@ html[data-theme="dark"] .aurora::before {
   color: var(--acid);
 }
 .toast--muted .toast__glyph {
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
 }
 .toast__text {
   font-family: var(--mono);

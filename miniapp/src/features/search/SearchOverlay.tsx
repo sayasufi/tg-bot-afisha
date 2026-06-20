@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { searchEvents, type EventItem } from "../../api/client";
 import type { LatLon } from "../../lib/distance";
 import { IconClose, IconSearch } from "../../lib/icons";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import { EventRow } from "../panel/EventRow";
 
 // Looks like a public event code ("MSK-04PN") → fire immediately (no debounce, no min
@@ -32,6 +33,8 @@ export function SearchOverlay({
   const [error, setError] = useState(false);
   const [active, setActive] = useState(-1); // keyboard-highlighted result (-1 = none)
   const inputRef = useRef<HTMLInputElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(overlayRef, open, inputRef); // trap focus in the overlay; land on the search input
 
   // Reset + focus on open.
   useEffect(() => {
@@ -86,7 +89,7 @@ export function SearchOverlay({
   const showEmpty = !loading && !error && s.length >= 2 && items.length === 0;
 
   return (
-    <div className="searchov" role="dialog" aria-modal="true" aria-label="Поиск">
+    <div className="searchov" role="dialog" aria-modal="true" aria-label="Поиск" ref={overlayRef} tabIndex={-1}>
       <button type="button" className="searchov__scrim" aria-label="Закрыть" onClick={onClose} />
       {loading && <div className="searchov__loading" aria-hidden="true" />}
       <div className="searchov__panel">

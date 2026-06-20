@@ -215,7 +215,7 @@
   text-overflow: ellipsis;
 }
 .crow__live {
-  color: var(--cinnabar);
+  color: var(--cinnabar-ink);
   font-weight: 700;
 }
 
