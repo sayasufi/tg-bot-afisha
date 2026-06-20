@@ -1611,7 +1611,7 @@ mark.hl {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .vrow__top {
   display: flex;
@@ -1644,11 +1644,12 @@ mark.hl {
   white-space: nowrap;
   box-shadow: 0 0 0 1px var(--ink);
 }
-/* Nearest/ongoing event at the venue — category · title · date. */
+/* Nearest/ongoing event — three tiers: chip (eyebrow) · title (the «what») on one line,
+   then the date on its own faint mono line so the second line stops reading as one grey smear. */
 .vrow__next {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 .vrow__cat {
@@ -1670,16 +1671,17 @@ mark.hl {
   flex: 0 1 auto;
   min-width: 0;
   font-family: var(--grotesk);
-  font-size: 12px;
-  color: var(--ink-dim);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .vrow__nextdate {
-  flex: 0 0 auto;
   font-family: var(--mono);
   font-size: 11px;
+  letter-spacing: 0.02em;
   color: var(--ink-faint);
 }
 .vrow__addr {
@@ -1714,6 +1716,17 @@ mark.hl {
   font-family: var(--mono);
   font-size: 8px;
   letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+/* Frames the screen as «places you follow», not «a list of venues» — once, at the top. */
+.vrow__lede {
+  margin: 0;
+  padding: 2px 0 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--ink-faint);
 }
 

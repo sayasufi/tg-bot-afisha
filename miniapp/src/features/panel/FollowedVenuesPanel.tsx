@@ -90,6 +90,11 @@ export function FollowedVenuesPanel({
       </header>
       <div className="panelview__scroll" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
+        {venues.length > 0 && (
+          <p className="vrow__lede">
+            следите за {venues.length} {plural(venues.length, "площадкой", "площадками", "площадками")}
+          </p>
+        )}
         {venues.length > 0 ? (
           venues.map((v) => {
             // v.events is sorted soonest-first by the API → the next/ongoing event at this venue.
@@ -116,16 +121,18 @@ export function FollowedVenuesPanel({
                     )}
                   </span>
                   {next ? (
-                    <span className="vrow__next">
-                      {cat && (
-                        <span className="vrow__cat" style={{ "--cat": cat.color } as CSSProperties}>
-                          <CategoryIcon cat={next.category} size={13} className="vrow__caticon" />
-                          {cat.label}
-                        </span>
-                      )}
-                      <span className="vrow__nexttitle">{next.title}</span>
+                    <>
+                      <span className="vrow__next">
+                        {cat && (
+                          <span className="vrow__cat" style={{ "--cat": cat.color } as CSSProperties}>
+                            <CategoryIcon cat={next.category} size={13} className="vrow__caticon" />
+                            {cat.label}
+                          </span>
+                        )}
+                        <span className="vrow__nexttitle">{next.title}</span>
+                      </span>
                       <span className="vrow__nextdate">{formatWhenShort(next.date_start, next.date_end)}</span>
-                    </span>
+                    </>
                   ) : (
                     <span className="vrow__next">
                       <span className="vrow__addr">{v.address || "Площадка"}</span>
