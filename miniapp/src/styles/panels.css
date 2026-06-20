@@ -124,9 +124,58 @@
   box-shadow: 0 0 0 1px var(--ink);
 }
 
-/* Theme toggle — day/after-dark, pinned above the drawer foot. */
-.themetoggle {
+/* Account block — replaces the «Профиль» nav item; opens the profile/settings screen. Pinned to the
+   bottom group (avatar · @handle · ›), Linear/Slack-style. */
+.drawer__account {
   margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 60px;
+  padding: 0 6px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.drawer__account:active {
+  background: var(--plinth);
+}
+.drawer__avatar {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vitrine) center/cover no-repeat;
+  box-shadow: 0 0 0 1.5px var(--acid);
+  display: grid;
+  place-items: center;
+  font-family: var(--grotesk);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+.drawer__handle {
+  font-family: var(--grotesk);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.drawer__account-go {
+  margin-left: auto;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+.drawer__account--active .drawer__avatar {
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+
+/* Theme toggle — day/after-dark, sits under the account block. */
+.themetoggle {
   display: flex;
   align-items: center;
   justify-content: space-between;

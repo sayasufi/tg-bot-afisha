@@ -950,6 +950,7 @@ export function App() {
         open={drawerOpen}
         view={view}
         favCount={fav.ids.size}
+        user={tgUser}
         theme={theme}
         onToggleTheme={toggleTheme}
         onClose={() => setDrawerOpen(false)}
