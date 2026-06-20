@@ -7,13 +7,13 @@ import { CategoryIcon, IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
-// Position (% of the box) for circle i, by share rank — a phyllotaxis SPIRAL (golden angle): the
-// dominant genre leads up-left, the rest spiral outward, touching/overlapping. Plaster-filled
-// circles then occlude cleanly where they meet.
+// Position (% of the box) for circle i, by share rank — an Archimedean SPIRAL: the dominant genre
+// leads up-left, the rest spiral outward with linear radius growth so they spread and only lightly
+// touch (the reference flow). Plaster-filled circles occlude cleanly where they meet.
 function clusterPos(i: number): { x: number; y: number } {
-  const angle = -2.4 + i * 2.39996; // golden angle
-  const r = 13.5 * Math.sqrt(i + 0.55);
-  return { x: 50 + Math.cos(angle) * r * 1.12, y: 44 + Math.sin(angle) * r };
+  const angle = -2.5 + i * 2.4;
+  const r = 11 + i * 6.5;
+  return { x: 49 + Math.cos(angle) * r * 1.1, y: 45 + Math.sin(angle) * r * 1.05 };
 }
 
 const eventsBasis = (n: number) => `основано на ${n} ${n === 1 ? "сохранённом событии" : "сохранённых событиях"}`;
