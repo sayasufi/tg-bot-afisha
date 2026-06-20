@@ -79,12 +79,15 @@ export function IconHeart({ size = 18, className, filled = false }: UiProps & { 
   );
 }
 
-// «Идут» — a single figure; next to a count it reads as people going.
+// «Я иду» — a figure mid-stride (walking), so it reads as "going" on the RSVP action + the count.
 export function IconGoing({ size = 18, className }: UiProps) {
   return (
     <svg {...strokeProps(size, className)}>
-      <circle cx="12" cy="7" r="3.2" />
-      <path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <circle cx="13" cy="4" r="2" />
+      <path d="M12.7 6.2 L11.5 13 L14 15.6 L13.4 19.6" />
+      <path d="M11.5 13 L8.8 19.6" />
+      <path d="M12.2 8.4 L9.2 10.2" />
+      <path d="M12.2 8.4 L15.2 10.6" />
     </svg>
   );
 }

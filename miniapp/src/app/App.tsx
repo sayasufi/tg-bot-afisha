@@ -897,6 +897,9 @@ export function App() {
           // Only attribute the inviter (and its sig) when the invite is for THIS event.
           const inv = invite && invite.eventId === selected.event_id ? invite : null;
           going.mark(selected.event_id, inv?.inviterId ?? null, inv?.sig ?? null);
+          // «Я иду» also arms the pre-event reminder (the server does too) so the bell flips on at
+          // once — unless reminders are globally muted, or it's already armed.
+          if (notifyReminders && !rem.has(selected.event_id)) rem.toggle(selected.event_id);
         }}
         onUnGoing={() => selected && going.unmark(selected.event_id)}
         onSelect={openEvent}

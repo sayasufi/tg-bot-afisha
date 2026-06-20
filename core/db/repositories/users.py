@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -237,7 +237,8 @@ async def set_going(db: AsyncSession, telegram_user_id: int, event_id: str, invi
 
 
 async def cancel_going(db: AsyncSession, telegram_user_id: int, event_id: str) -> None:
-    """Un-RSVP — remove the «Я иду» row (no commit). No-op if it was never set or the id is junk."""
+    """Un-RSVP — remove the «Я иду» row (no commit). No-op if it was never set or the id is junk.
+    Deliberately does NOT clear the inviter-notice ledger, so re-RSVPing can't re-DM the inviter."""
     try:
         eid = uuid.UUID(str(event_id))
     except (ValueError, TypeError):
@@ -248,6 +249,24 @@ async def cancel_going(db: AsyncSession, telegram_user_id: int, event_id: str) -
             EventGoing.event_id == eid,
         )
     )
+
+
+async def mark_inviter_notified(db: AsyncSession, invitee_id: int, event_id: str, inviter_id: int) -> bool:
+    """Record (durably) that we've DMed `inviter_id` about `invitee_id` going to `event_id`. Returns
+    True ONLY on the first insert, so the inviter is pinged at most once per (invitee, event, inviter)
+    — surviving any cancel/re-RSVP cycle (the going row gets deleted on cancel; this ledger doesn't)."""
+    try:
+        eid = uuid.UUID(str(event_id))
+    except (ValueError, TypeError):
+        return False
+    res = await db.execute(
+        text(
+            "INSERT INTO ref.event_going_notice (telegram_user_id, event_id, inviter_id) "
+            "VALUES (:u, :e, :i) ON CONFLICT DO NOTHING"
+        ),
+        {"u": int(invitee_id), "e": str(eid), "i": int(inviter_id)},
+    )
+    return bool(res.rowcount)
 
 
 async def warm_interests_from(db: AsyncSession, user_id: int, inviter_id: int) -> list[str]:

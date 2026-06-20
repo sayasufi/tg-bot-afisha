@@ -49,7 +49,6 @@ export function EventRow({
       <span className="erow__body">
         <span className="erow__title">
           <Highlight text={item.title} query={query} />
-          <GoingBadge eventId={item.event_id} className="erow__going" />
         </span>
         <span className="erow__meta">
           {query && item.code && <span className="erow__code">{item.code}</span>}
@@ -60,6 +59,7 @@ export function EventRow({
           {item.venue ? ` · ${item.venue}` : ""}
         </span>
       </span>
+      <GoingBadge eventId={item.event_id} className="erow__going" />
       {dist && <span className="erow__dist">{dist}</span>}
     </button>
   );

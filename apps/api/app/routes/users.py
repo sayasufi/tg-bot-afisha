@@ -22,6 +22,7 @@ from core.db.repositories.users import (
     cancel_going,
     event_title,
     get_settings,
+    mark_inviter_notified,
     list_favorite_ids,
     list_followed_venue_ids,
     list_going_ids,
@@ -242,7 +243,13 @@ async def toggle_going(payload: GoingRequest, db: AsyncSession = Depends(get_asy
             and invite_verify(payload.event_id, payload.inviter_id, payload.sig)
         ):
             recip = await get_settings(db, int(payload.inviter_id))
-            if recip and recip.get("notify_reminders") is not False:
+            # Durable once-only guard: a cancel + re-RSVP must NOT re-DM the inviter (the going row
+            # is deleted on cancel, so first_time alone would re-fire). The notice ledger survives it.
+            if (
+                recip
+                and recip.get("notify_reminders") is not False
+                and await mark_inviter_notified(db, uid, payload.event_id, int(payload.inviter_id))
+            ):
                 title = await event_title(db, payload.event_id)
                 notify = (int(payload.inviter_id), title or "")
     elif payload.event_id is not None and not payload.on:

@@ -420,6 +420,17 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           >
             <IconBell filled={hasReminder} size={16} />
           </button>
+          {/* «Я иду» — toggle RSVP right here with the other quick actions; the walking figure reads
+              as "going". Tapping again cancels. */}
+          <button
+            type="button"
+            className={`sheet__picon${isGoing ? " sheet__picon--on" : ""}`}
+            aria-label={isGoing ? "Идёшь — отменить" : "Я иду"}
+            aria-pressed={isGoing}
+            onClick={handleGoing}
+          >
+            <IconGoing size={16} />
+          </button>
           <button type="button" className="sheet__picon" aria-label="Поделиться" onClick={onShare}>
             <IconShare size={16} />
           </button>
@@ -552,17 +563,8 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           </div>
         )}
 
-        {/* «Я иду» is always the first, labelled action (the app's north-star intent) — RSVP/cancel
-            with one tap. Ticket / map / route follow when available. */}
-        <div className="sheet__actions">
-            <button
-              type="button"
-              className={`btn btn--going${isGoing ? " btn--going-on" : ""}`}
-              aria-pressed={isGoing}
-              onClick={handleGoing}
-            >
-              {isGoing ? "идёшь ✓" : "я иду"}
-            </button>
+        {(sourceUrl || routeUrl || (onShowMap && lat != null && lon != null)) && (
+          <div className="sheet__actions">
             {sourceUrl && (
               <a
                 className="btn btn--ghost"
@@ -597,7 +599,8 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
                 Маршрут
               </a>
             )}
-        </div>
+          </div>
+        )}
 
       </div>
 
