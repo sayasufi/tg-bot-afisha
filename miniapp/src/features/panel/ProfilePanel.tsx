@@ -7,6 +7,26 @@ import { CategoryIcon, IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
+// Irregular «клякса» radii (one per blob, by index) — uneven organic shapes, not perfect circles.
+const BLOB_SHAPES = [
+  "42% 58% 68% 32% / 46% 44% 56% 54%",
+  "63% 37% 41% 59% / 50% 56% 44% 50%",
+  "38% 62% 60% 40% / 42% 47% 53% 58%",
+  "55% 45% 33% 67% / 58% 40% 60% 42%",
+  "66% 34% 52% 48% / 40% 60% 40% 60%",
+  "48% 52% 59% 41% / 54% 57% 43% 46%",
+];
+const fract = (x: number) => x - Math.floor(x);
+// Deterministic organic cluster position (% of the box) for blob i of n: biggest centred, the
+// rest placed around it at even angles + a stable jitter so they overlap into a chaotic клякса-cluster.
+function blobPos(i: number, n: number): { x: number; y: number } {
+  if (i === 0) return { x: 50, y: 47 };
+  const around = Math.max(1, n - 1);
+  const angle = ((i - 1) / around) * Math.PI * 2 - Math.PI / 2 + (fract(Math.sin(i * 12.9) * 4137) - 0.5) * 0.8;
+  const jr = fract(Math.sin(i * 78.2) * 2719);
+  return { x: 50 + Math.cos(angle) * (23 + jr * 7), y: 47 + Math.sin(angle) * (27 + jr * 8) };
+}
+
 export function ProfilePanel({
   user,
   city,
@@ -135,13 +155,25 @@ export function ProfilePanel({
           </span>
           {hasTaste ? (
             <>
-              <span className="tastecard__bubbles">
-                {taste.slice(0, 6).map((t) => {
-                  // Bubble diameter scales with the genre's share (biggest = your dominant taste).
-                  const d = 42 + Math.round((t.n / taste[0].n) * 40);
+              <span className="tastecard__blobs">
+                {taste.slice(0, 6).map((t, i, arr) => {
+                  const d = 48 + Math.round((t.n / arr[0].n) * 44); // diameter ∝ genre share
+                  const pos = blobPos(i, arr.length);
                   return (
-                    <span key={t.key} className="bubble" style={{ width: `${d}px`, height: `${d}px`, background: t.meta.color }}>
-                      <CategoryIcon cat={t.key} size={Math.round(d * 0.42)} />
+                    <span
+                      key={t.key}
+                      className="blob"
+                      style={{
+                        width: `${d}px`,
+                        height: `${d}px`,
+                        left: `${pos.x}%`,
+                        top: `${pos.y}%`,
+                        background: t.meta.color,
+                        borderRadius: BLOB_SHAPES[i % BLOB_SHAPES.length],
+                        zIndex: i + 1,
+                      }}
+                    >
+                      <CategoryIcon cat={t.key} size={Math.round(d * 0.4)} />
                     </span>
                   );
                 })}
@@ -151,10 +183,17 @@ export function ProfilePanel({
           ) : (
             <>
               <span className="tastecard__nudge">Пока ничего нет. Сохрани несколько событий — и здесь сложится твой культурный профиль.</span>
-              <span className="tastecard__bubbles">
-                {[66, 48, 58, 40, 44].map((d, i) => (
-                  <span key={i} className="bubble bubble--empty" style={{ width: `${d}px`, height: `${d}px` }} />
-                ))}
+              <span className="tastecard__blobs">
+                {[84, 58, 66, 48, 54].map((d, i) => {
+                  const pos = blobPos(i, 5);
+                  return (
+                    <span
+                      key={i}
+                      className="blob blob--empty"
+                      style={{ width: `${d}px`, height: `${d}px`, left: `${pos.x}%`, top: `${pos.y}%`, borderRadius: BLOB_SHAPES[i % BLOB_SHAPES.length] }}
+                    />
+                  );
+                })}
               </span>
             </>
           )}
