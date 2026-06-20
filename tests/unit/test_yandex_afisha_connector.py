@@ -1,10 +1,12 @@
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 
-from connectors.web.yandex_afisha_connector import YandexAfishaConnector
+from connectors.web.yandex_afisha_connector import _LOOKAHEAD_DAYS, YandexAfishaConnector
 from pipeline.normalizer.rules import RuleBasedNormalizer
 
 TODAY = date(2026, 6, 15)
+# Past the listing horizon, derived from the real constant so the test survives lookahead changes.
+OUT_OF_WINDOW = (TODAY + timedelta(days=_LOOKAHEAD_DAYS + 30)).isoformat()
 
 
 class _FakeResponse:
@@ -69,7 +71,7 @@ def test_dates_all_day_uses_midnight_placeholder() -> None:
 
 
 def test_dates_filters_outside_window_and_caps() -> None:
-    rows = _conn()._build_dates({"dates": ["2026-06-01", "2026-06-20", "2027-01-01"], "regularity": {}}, TODAY)
+    rows = _conn()._build_dates({"dates": ["2026-06-01", "2026-06-20", OUT_OF_WINDOW], "regularity": {}}, TODAY)
     assert [r["start_date"] for r in rows] == ["2026-06-20"]
 
 
@@ -232,6 +234,7 @@ def test_build_records_maps_to_pipeline_payload_end_to_end() -> None:
     assert item.age_limit == "16+"
     assert (item.price_min, item.price_max) == (2000.0, 5000.0)
     assert item.source_url == "https://afisha.yandex.ru/moscow/concert/x"
-    assert item.images and item.images[0] == "https://img/cover.jpg"
+    # orig (full-res) is primary; the tiny s380x220 cover follows as a fallback.
+    assert item.images and item.images[0] == "https://img/orig.jpg"
     assert "concert" in item.tags and "rock" in item.tags
     assert item.date_start is not None

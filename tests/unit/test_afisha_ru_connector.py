@@ -1,9 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
 
-from connectors.web.afisha_ru_connector import AfishaRuConnector
+from connectors.web.afisha_ru_connector import _LOOKAHEAD_DAYS, AfishaRuConnector
 from core.categorization import map_source_category
 
 TODAY = date(2026, 6, 16)
+# A date guaranteed past the listing horizon, derived from the real constant so the test stays valid
+# whatever _LOOKAHEAD_DAYS is set to (it's now a full year).
+OUT_OF_WINDOW = (TODAY + timedelta(days=_LOOKAHEAD_DAYS + 30)).isoformat()
 
 
 def _conn() -> AfishaRuConnector:
@@ -69,7 +72,7 @@ def test_build_records_flat_item() -> None:
 
 
 def test_build_records_skips_out_of_window_and_untitled() -> None:
-    far = _tile(ScheduleInfo={"MinScheduleDate": "2026-09-01T19:00:00", "MaxScheduleDate": "2026-09-01T19:00:00"})
+    far = _tile(ScheduleInfo={"MinScheduleDate": f"{OUT_OF_WINDOW}T19:00:00", "MaxScheduleDate": f"{OUT_OF_WINDOW}T19:00:00"})
     assert _conn()._build_records([{"Tile": far}], "concert", TODAY) == []
     assert _conn()._build_records([{"Tile": _tile(Name=None)}], "concert", TODAY) == []
 
@@ -83,7 +86,11 @@ def test_dates_single_showtime_keeps_clock_time() -> None:
 
 
 def test_dates_ongoing_run_becomes_one_span() -> None:
-    rows = _conn()._build_dates({"MinScheduleDate": "2026-06-01T00:00:00", "MaxScheduleDate": "2026-12-31T00:00:00"}, None, TODAY)
+    # A continuous run collapses to a single clamped span only for EXHIBITIONS — concerts/shows stay
+    # discrete (a span would render as a misleading multi-month range).
+    rows = _conn()._build_dates(
+        {"MinScheduleDate": "2026-06-01T00:00:00", "MaxScheduleDate": "2026-12-31T00:00:00"}, None, TODAY, is_exhibition=True
+    )
     assert len(rows) == 1
     # clamped to today (past start), open-ended to the run's end
     assert rows[0]["start_date"] == "2026-06-16"

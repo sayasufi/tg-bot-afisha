@@ -2,13 +2,21 @@ from dataclasses import dataclass
 
 try:
     from rapidfuzz import fuzz
+    # rapidfuzz 3.x no longer applies a default processor, so token_set_ratio became
+    # case/punctuation-SENSITIVE — "Ночь джаза" vs "Джаза ночь" scored 40 instead of 100. Restore the
+    # lowercase + strip-non-alphanumeric normalisation the matching was designed around.
+    from rapidfuzz.utils import default_process as _PROCESS
 except Exception:  # pragma: no cover
     from difflib import SequenceMatcher
 
+    _PROCESS = None
+
     class _FuzzFallback:
         @staticmethod
-        def token_set_ratio(a: str, b: str) -> float:
-            return SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100
+        def token_set_ratio(a: str, b: str, *, processor=None) -> float:
+            if processor:
+                a, b = processor(a), processor(b)
+            return SequenceMatcher(None, (a or "").lower(), (b or "").lower()).ratio() * 100
 
     fuzz = _FuzzFallback()
 
@@ -27,7 +35,7 @@ REVIEW_THRESHOLD = 0.72
 
 
 def score_candidate(title_a: str, title_b: str, same_day: bool, geo_close: bool) -> float:
-    title_score = fuzz.token_set_ratio(title_a, title_b) / 100.0
+    title_score = fuzz.token_set_ratio(title_a, title_b, processor=_PROCESS) / 100.0
     date_bonus = 0.2 if same_day else 0.0
     geo_bonus = 0.1 if geo_close else 0.0
     return min(1.0, title_score + date_bonus + geo_bonus)

@@ -14,13 +14,21 @@ import re
 
 try:
     from rapidfuzz import fuzz
+    # rapidfuzz 3.x dropped default processing → token_set_ratio turned case/punctuation-sensitive,
+    # so "МХТ имени А. П. Чехова" vs "МХТ им. Чехова" dipped below STRONG_RATIO. Restore the
+    # lowercase + strip-punctuation normalisation the thresholds were tuned against.
+    from rapidfuzz.utils import default_process as _PROCESS
 except Exception:  # pragma: no cover
     from difflib import SequenceMatcher
 
+    _PROCESS = None
+
     class _FuzzFallback:
         @staticmethod
-        def token_set_ratio(a: str, b: str) -> float:
-            return SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100
+        def token_set_ratio(a: str, b: str, *, processor=None) -> float:
+            if processor:
+                a, b = processor(a), processor(b)
+            return SequenceMatcher(None, (a or "").lower(), (b or "").lower()).ratio() * 100
 
     fuzz = _FuzzFallback()
 
@@ -69,7 +77,7 @@ def name_match_score(a: str, b: str, co_host: bool = False) -> float | None:
     and only strong names / structural containment reuse a venue."""
     if contrasts(a, b):  # different halls of one building — keep apart
         return None
-    ratio = fuzz.token_set_ratio(a or "", b or "")
+    ratio = fuzz.token_set_ratio(a or "", b or "", processor=_PROCESS)
     if ratio >= STRONG_RATIO:
         return ratio
     if co_host and (is_subset(a, b) or ratio >= COHOST_RATIO):
