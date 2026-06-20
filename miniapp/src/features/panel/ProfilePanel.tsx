@@ -158,8 +158,9 @@ export function ProfilePanel({
                       className={`tcircle${top ? " tcircle--top" : ""}`}
                       style={{ width: `${d}px`, height: `${d}px`, left: `calc(50% + ${pos.dx}px)`, top: `calc(50% + ${pos.dy}px)`, zIndex: top ? 20 : i + 1 }}
                     >
-                      <CategoryIcon cat={t.key} size={Math.round(d * 0.3)} />
+                      <CategoryIcon cat={t.key} size={Math.round(d * 0.28)} />
                       <span className="tcircle__label">{t.meta.label.toLowerCase()}</span>
+                      <span className="tcircle__n">{t.n}</span>
                     </span>
                   );
                 })}

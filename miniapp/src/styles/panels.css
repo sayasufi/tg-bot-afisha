@@ -461,12 +461,25 @@ mark.hl {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   color: var(--ink);
 }
 .tcircle--top {
   border-color: var(--ink);
   background: var(--acid);
+  color: var(--on-acid);
+}
+/* The genre's weight — a tabular number so the cluster reads, not just decorates. */
+.tcircle__n {
+  margin-top: 1px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.tcircle--top .tcircle__n {
   color: var(--on-acid);
 }
 .tcircle--empty {
