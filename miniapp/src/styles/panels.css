@@ -439,34 +439,71 @@ mark.hl {
   color: var(--ink-faint);
 }
 
-/* Blob cluster — absolutely-positioned irregular кляксы overlapping into an organic, chaotic mass. */
-.tastecard__blobs {
-  display: block; /* span needs a box for height + to anchor the absolute blobs */
+/* Constellation of clean circles — each genre an outline circle (white fill + hairline), the
+   DOMINANT one filled acid; the white fill makes overlaps occlude cleanly (stacked-coin look).
+   Icon + label inside; accent dots fill the gaps. NOT the old messy кляксы. */
+.tastecard__cluster {
+  display: block; /* span needs a box for height + to anchor the absolute circles */
   position: relative;
-  height: 178px;
+  height: 186px;
   overflow: hidden;
 }
-.blob {
+.tcircle {
   position: absolute;
   transform: translate(-50%, -50%);
-  display: grid;
-  place-items: center;
-  color: var(--ink); /* dark category icon on the colour */
-  box-shadow: 0 2px 10px rgba(11, 11, 11, 0.07);
-}
-.blob--empty {
-  background: var(--ink);
-  opacity: 0.06;
-  box-shadow: none;
-}
-.tastecard__cap {
-  display: block;
-  margin-top: 4px;
-  font-family: var(--grotesk);
-  font-size: 14px;
-  font-weight: 600;
-  text-transform: lowercase;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   color: var(--ink);
+}
+.tcircle--top {
+  border-color: var(--ink);
+  background: var(--acid);
+  color: var(--on-acid);
+}
+.tcircle--empty {
+  border-color: var(--line-soft);
+  background: var(--bg);
+}
+.tcircle__label {
+  max-width: 88%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--grotesk);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  line-height: 1;
+}
+.tdot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--plinth);
+  z-index: 0;
+}
+.tdot--acid {
+  background: var(--acid);
+  border-color: var(--ink);
+}
+.tastecard__basis {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 .tastecard__nudge {
   display: block;
