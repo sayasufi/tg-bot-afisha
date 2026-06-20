@@ -1,5 +1,5 @@
 import type { EventItem } from "../../api/client";
-import { formatWhenShort } from "../../lib/datetime";
+import { formatWhenShort, mskEndOfTodayMs } from "../../lib/datetime";
 import { distanceLabel, distanceMeters, type LatLon } from "../../lib/distance";
 import { CategoryIcon } from "../../lib/icons";
 import { safeHttpUrl } from "../../lib/url";
@@ -21,14 +21,13 @@ export function SimilarEvents({
   if (selected.lat == null || selected.lon == null) return null;
   const here: LatLon = [selected.lat, selected.lon];
 
-  const now = new Date();
-  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const endOfTodayMs = mskEndOfTodayMs(); // end of *Moscow* today, not the viewer's
   const onToday = (iso: string | null) => {
     if (!iso) return false;
-    const d = new Date(iso);
+    const t = Date.parse(iso);
     // Items are already filtered server-side to "not yet ended", so a start at
     // or before end-of-today means it is ongoing or starts today.
-    return !Number.isNaN(d.getTime()) && d <= endOfToday;
+    return !Number.isNaN(t) && t <= endOfTodayMs;
   };
 
   const near = items

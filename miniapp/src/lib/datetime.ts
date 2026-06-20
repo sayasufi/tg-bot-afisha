@@ -10,21 +10,38 @@ const MONTHS = [
 ];
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
+// Every event datetime arrives as an absolute UTC instant (e.g. "…T16:00:00+00:00" = 19:00 MSK).
+// The UI must show MOSCOW wall-clock regardless of the device's timezone, so all field reads (hour,
+// day, weekday, year…) go through `_msk` — never Date.getHours()/getDate(), which render the
+// VIEWER's local time. Moscow is a FIXED UTC+3 (no DST since 2014), so shifting +3h and reading the
+// UTC getters is both correct and far cheaper than Intl for the thousands of live/goNow checks per
+// tick. getTime() comparisons stay on the TRUE instant (timezone-independent) and are left as-is.
+const MSK_OFFSET_MS = 3 * 3600 * 1000;
+const _msk = (d: Date) => new Date(d.getTime() + MSK_OFFSET_MS); // read ONLY via getUTC* → MSK fields
+const mskDayIdx = (d: Date) => Math.floor((d.getTime() + MSK_OFFSET_MS) / 86400000); // MSK calendar day
+
 function parse(iso?: string | null): Date | null {
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }
-const isMidnight = (d: Date) => d.getHours() === 0 && d.getMinutes() === 0;
-const pad = (n: number) => String(n).padStart(2, "0");
-const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-const dayDiff = (a: Date, b: Date) => {
-  const A = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
-  const B = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
-  return Math.round((B - A) / 86400000);
+const isMidnight = (d: Date) => {
+  const m = _msk(d);
+  return m.getUTCHours() === 0 && m.getUTCMinutes() === 0;
 };
+const pad = (n: number) => String(n).padStart(2, "0");
+const hm = (d: Date) => {
+  const m = _msk(d);
+  return `${pad(m.getUTCHours())}:${pad(m.getUTCMinutes())}`;
+};
+const sameDay = (a: Date, b: Date) => mskDayIdx(a) === mskDayIdx(b);
+const dayDiff = (a: Date, b: Date) => mskDayIdx(b) - mskDayIdx(a);
+
+// The instant (ms) of the END of *today* in Moscow — for "is this on/by today?" checks that must
+// use the Moscow calendar day, not the viewer's. Next MSK midnight minus 1ms.
+export function mskEndOfTodayMs(now: Date = new Date()): number {
+  return (mskDayIdx(now) + 1) * 86400000 - MSK_OFFSET_MS - 1;
+}
 
 const hmToMin = (hm: string): number => {
   const [h, m] = String(hm).split(":");
@@ -54,10 +71,11 @@ export function venueOpenNow(
   const week = hours?.week;
   if (!Array.isArray(week) || week.length !== 7) return null;
   if (isTerritoryHours(hours)) return null; // 24/7 territory → we don't know the event's hours
-  const day = week[now.getDay()];
+  const m = _msk(now);
+  const day = week[m.getUTCDay()];
   if (day === null) return false; // closed today
   if (!Array.isArray(day) || day.length === 0) return null; // unknown
-  const mins = now.getHours() * 60 + now.getMinutes();
+  const mins = m.getUTCHours() * 60 + m.getUTCMinutes();
   for (const r of day) {
     if (!Array.isArray(r) || r.length !== 2) continue;
     const open = hmToMin(r[0]);
@@ -84,7 +102,7 @@ export function isLiveNow(start?: string | null, end?: string | null, hours?: { 
     return now <= endMs;
   }
   // Run / all-day / ongoing: must still be within its run, and venue open now.
-  const farFuture = !!e && e.getFullYear() > new Date(now).getFullYear() + 5;
+  const farFuture = !!e && _msk(e).getUTCFullYear() > _msk(new Date(now)).getUTCFullYear() + 5;
   if (e && !farFuture && now > e.getTime()) return false; // run already over
   return venueOpenNow(hours, new Date()) !== false; // closed now → not live
 }
@@ -154,14 +172,16 @@ export function goNowState(
   if (openNow !== true) return { eligible: false };
   return { eligible: true, kind: "now", label: "идёт сейчас" };
 }
-const dmy = (d: Date, withYear: boolean, short = false) =>
-  `${d.getDate()} ${(short ? MONTHS_SHORT : MONTHS)[d.getMonth()]}${withYear ? ` ${d.getFullYear()}` : ""}`;
+const dmy = (d: Date, withYear: boolean, short = false) => {
+  const m = _msk(d);
+  return `${m.getUTCDate()} ${(short ? MONTHS_SHORT : MONTHS)[m.getUTCMonth()]}${withYear ? ` ${m.getUTCFullYear()}` : ""}`;
+};
 
 // Classify the end: a real end, nothing, or an open-ended sentinel (>5y out).
 function endInfo(s: Date, endIso: string | null | undefined, now: Date): { end: Date | null; open: boolean } {
   const e = parse(endIso);
   if (!e) return { end: null, open: false };
-  if (e.getFullYear() > now.getFullYear() + 5) return { end: null, open: true }; // 9998-style sentinel
+  if (_msk(e).getUTCFullYear() > _msk(now).getUTCFullYear() + 5) return { end: null, open: true }; // 9998-style sentinel
   if (e.getTime() <= s.getTime()) return { end: null, open: false }; // missing/redundant
   return { end: e, open: false };
 }
@@ -173,7 +193,8 @@ export function formatWhen(startIso?: string | null, endIso?: string | null, now
   const s = parse(startIso);
   if (!s) return "";
   const { end: e, open } = endInfo(s, endIso, now);
-  const yr = (d: Date) => d.getFullYear() !== now.getFullYear();
+  const nowY = _msk(now).getUTCFullYear();
+  const yr = (d: Date) => _msk(d).getUTCFullYear() !== nowY;
   const hasTime = !isMidnight(s);
 
   if (open) {
@@ -217,7 +238,7 @@ export function venueHoursToday(
   const week = hours?.week;
   if (!Array.isArray(week) || week.length !== 7) return null;
   if (isTerritoryHours(hours)) return null; // all-week 24/7 = matched a territory, not the hall
-  const day = week[now.getDay()];
+  const day = week[_msk(now).getUTCDay()];
   if (day === null) return "сегодня закрыто";
   if (!Array.isArray(day) || day.length === 0) return null;
   // Round-the-clock for a single day (a genuine 24h spot, not an all-week territory).
@@ -235,7 +256,7 @@ export function venueHoursToday(
 export function formatDateChip(startIso?: string | null, now: Date = new Date()): string {
   const s = parse(startIso);
   if (!s) return "";
-  return dmy(s, s.getFullYear() !== now.getFullYear(), true) + (isMidnight(s) ? "" : `, ${hm(s)}`);
+  return dmy(s, _msk(s).getUTCFullYear() !== _msk(now).getUTCFullYear(), true) + (isMidnight(s) ? "" : `, ${hm(s)}`);
 }
 
 // Compact format for list rows / ticker (short months).
@@ -243,7 +264,8 @@ export function formatWhenShort(startIso?: string | null, endIso?: string | null
   const s = parse(startIso);
   if (!s) return "";
   const { end: e, open } = endInfo(s, endIso, now);
-  const yr = (d: Date) => d.getFullYear() !== now.getFullYear();
+  const nowY = _msk(now).getUTCFullYear();
+  const yr = (d: Date) => _msk(d).getUTCFullYear() !== nowY;
   const hasTime = !isMidnight(s);
 
   if (open) {
@@ -272,8 +294,7 @@ export function eventBucket(startIso?: string | null, endIso?: string | null, no
   if (e && dayDiff(s, e) > 3 && s.getTime() <= now.getTime()) {
     return { key: "ongoing", label: "Идут сейчас", order: 4 };
   }
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const ds = dayDiff(today, s);
+  const ds = dayDiff(now, s); // whole days from today (both in Moscow calendar)
   if (ds <= 0) return { key: "today", label: "Сегодня", order: 1 };
   if (ds <= 7) return { key: "week", label: "На этой неделе", order: 2 };
   return { key: "later", label: "Позже", order: 3 };

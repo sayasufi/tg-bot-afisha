@@ -23,6 +23,7 @@ type TelegramWebApp = {
   initData?: string;
   isVersionAtLeast?: (version: string) => boolean;
   shareMessage?: (msgId: string, callback?: (sent: boolean) => void) => void;
+  disableVerticalSwipes?: () => void; // Bot API 7.7+ — stop pull-to-close hijacking in-app scrolls
 };
 
 const BOT_LINK = "https://t.me/okrestmap_bot";
@@ -96,6 +97,10 @@ export function initTelegram(): ThemeName {
   try {
     tg?.ready();
     tg?.expand();
+    // Stop Telegram's pull-to-close gesture from hijacking vertical scrolls/swipes inside the App
+    // (the event sheet swipe, the recommendations rail) and yanking the Mini App shut. Version-gated:
+    // the method only exists on Bot API 7.7+ (older clients silently lack it).
+    tg?.disableVerticalSwipes?.();
   } catch {
     /* not running inside Telegram — ignore */
   }

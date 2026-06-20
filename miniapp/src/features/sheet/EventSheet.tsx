@@ -312,7 +312,8 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     if (isGoing) return;
     haptic("medium");
     onGoing();
-    showToast("Ты идёшь! Сообщили пригласившему", { tone: "good" });
+    // Notify-copy only when there's actually an inviter to ping; otherwise it's a plain RSVP.
+    showToast(invitedBy != null ? "Ты идёшь! Сообщили пригласившему" : "Ты идёшь ✓", { tone: "good" });
   };
 
   return (
@@ -411,6 +412,17 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             }}
           >
             <IconBell filled={hasReminder} size={16} />
+          </button>
+          {/* «Я иду» — always reachable here, not only on a «Пойдём?» invite. The strongest intent
+              signal we can collect, one tap from any event. */}
+          <button
+            type="button"
+            className={`sheet__picon${isGoing ? " sheet__picon--on" : ""}`}
+            aria-label={isGoing ? "Идёшь" : "Я иду"}
+            aria-pressed={isGoing}
+            onClick={handleGoing}
+          >
+            <IconGoing size={16} />
           </button>
           <button type="button" className="sheet__picon" aria-label="Поделиться" onClick={onShare}>
             <IconShare size={16} />
