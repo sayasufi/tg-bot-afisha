@@ -61,7 +61,7 @@ export function App() {
   const rem = useReminders();
   const going = useGoing();
   // Who invited me here (from a share deep-link «<event>_<inviter>») — drives the «Я иду» banner.
-  const [invite, setInvite] = useState<{ eventId: string; inviterId: number } | null>(null);
+  const [invite, setInvite] = useState<{ eventId: string; inviterId: number; sig: string } | null>(null);
   // Pull this account's favourites + reminders from the server once on open (favourites
   // also merge this device's local hearts in on first run) so they sync across devices.
   useEffect(() => {
@@ -698,11 +698,13 @@ export function App() {
     } catch {
       /* no storage (private mode) — fall through and open as before */
     }
-    // A share deep-link may carry the inviter: «<event-uuid>_<inviter-id>». The UUID has no '_',
-    // so the part before the first '_' is the event id, the rest the inviter's telegram id.
-    const us = raw.indexOf("_");
-    const eventId = us > 0 ? raw.slice(0, us) : raw;
-    const inviterId = us > 0 ? Number(raw.slice(us + 1)) : NaN;
+    // A share deep-link may carry the inviter: «<event-uuid>_<inviter-id>_<sig>». The UUID has no
+    // '_', so split on '_'. The HMAC sig (minted by our share endpoint) is verified server-side;
+    // without a valid one the inviter is ignored (no DM, no taste warm-start) — anti-spoof.
+    const parts = raw.split("_");
+    const eventId = parts[0];
+    const inviterId = parts[1] ? Number(parts[1]) : NaN;
+    const inviteSig = parts[2] ?? null;
     // A non-UUID start_param is a KEYWORD route, not an event id (e.g. the weekly digest's
     // «weekend» CTA). Opening it as an event 422s and silently dumps the user on the default map.
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId);
@@ -715,10 +717,11 @@ export function App() {
     }
     fetchEventDetail(eventId)
       .then((d) => {
-        if (Number.isFinite(inviterId)) {
-          setInvite({ eventId: d.event_id, inviterId });
+        if (Number.isFinite(inviterId) && inviteSig) {
+          setInvite({ eventId: d.event_id, inviterId, sig: inviteSig });
           // Referral warm-start: attribute the inviter + warm a still-cold feed from their taste.
-          void markInvited(inviterId).then((warm) => {
+          // The server re-verifies the sig, so a forged inviter returns nothing (no warm, no leak).
+          void markInvited(eventId, inviterId, inviteSig).then((warm) => {
             if (warm && warm.length) setPickedInterests((prev) => (prev.length ? prev : warm));
           });
         }
@@ -888,7 +891,12 @@ export function App() {
         onToggleReminder={() => selected && rem.toggle(selected.event_id)}
         invitedBy={invite && selected?.event_id === invite.eventId ? invite.inviterId : null}
         isGoing={!!selected && going.has(selected.event_id)}
-        onGoing={() => selected && going.mark(selected.event_id, invite?.inviterId ?? null)}
+        onGoing={() => {
+          if (!selected) return;
+          // Only attribute the inviter (and its sig) when the invite is for THIS event.
+          const inv = invite && invite.eventId === selected.event_id ? invite : null;
+          going.mark(selected.event_id, inv?.inviterId ?? null, inv?.sig ?? null);
+        }}
         onSelect={openEvent}
         onShowMap={showOnMap}
         onOpenVenue={onOpenVenue}

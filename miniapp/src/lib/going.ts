@@ -41,13 +41,13 @@ function setLocal(next: Set<string>): void {
   emit();
 }
 
-export function markGoing(id: string, inviterId: number | null): void {
+export function markGoing(id: string, inviterId: number | null, sig: string | null = null): void {
   if (going.has(id)) return; // already going — idempotent, the server won't re-notify either
   const next = new Set(going);
   next.add(id);
   setLocal(next); // optimistic — the button flips instantly
   const seq = ++mutationSeq;
-  markGoingRemote(id, inviterId)
+  markGoingRemote(id, inviterId, sig)
     .then((ids) => {
       if (ids && seq === mutationSeq) setLocal(new Set(ids));
     })

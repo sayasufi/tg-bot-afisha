@@ -150,14 +150,14 @@ export async function syncGoing(): Promise<string[] | null> {
   }
 }
 
-export async function markGoingRemote(eventId: string, inviterId: number | null): Promise<string[] | null> {
+export async function markGoingRemote(eventId: string, inviterId: number | null, sig: string | null = null): Promise<string[] | null> {
   const init = initData();
   if (!init) return null;
   try {
     const r = await fetch(`${API_BASE}/v1/users/going`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, event_id: eventId, inviter_id: inviterId ?? undefined }),
+      body: JSON.stringify({ init_data: init, event_id: eventId, inviter_id: inviterId ?? undefined, sig: sig ?? undefined }),
       keepalive: true,
     });
     if (!r.ok) return null;
@@ -168,16 +168,17 @@ export async function markGoingRemote(eventId: string, inviterId: number | null)
   }
 }
 
-// «Пойдём?» invite opened → attribute the inviter + warm a cold feed from their taste. Returns
-// the interests now driving the feed (so the app can apply them this session), or null.
-export async function markInvited(inviterId: number): Promise<string[] | null> {
+// «Пойдём?» invite opened → attribute the inviter + warm a cold feed from their taste. The sig (set
+// by our share endpoint) is re-verified server-side; a forged inviter returns nothing. Returns the
+// interests now driving the feed (so the app can apply them this session), or null.
+export async function markInvited(eventId: string, inviterId: number, sig: string): Promise<string[] | null> {
   const init = initData();
   if (!init) return null;
   try {
     const r = await fetch(`${API_BASE}/v1/users/invited`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, inviter_id: inviterId }),
+      body: JSON.stringify({ init_data: init, inviter_id: inviterId, event_id: eventId, sig }),
       keepalive: true,
     });
     if (!r.ok) return null;

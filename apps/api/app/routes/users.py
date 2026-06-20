@@ -10,6 +10,7 @@ from apps.api.app.services.geo import reverse_city
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.cities import city_by_name
 from core.config.settings import get_settings as get_app_settings
+from core.invite import verify as invite_verify
 from core.db.repositories.reminders import (
     cancel_reminder,
     list_reminder_ids,
@@ -72,11 +73,14 @@ class GoingRequest(BaseModel):
     init_data: str
     event_id: str | None = None  # omit (just LIST going ids) or include to confirm «Я иду»
     inviter_id: int | None = None  # the sharer who invited me (from the share deep-link), if any
+    sig: str | None = None  # HMAC over (event_id, inviter_id) — proves the inviter wasn't forged
 
 
 class InvitedRequest(BaseModel):
     init_data: str
     inviter_id: int  # the sharer whose «Пойдём?» deep-link I opened
+    event_id: str | None = None  # the invited event — needed to verify the signature
+    sig: str | None = None  # HMAC over (event_id, inviter_id) — gates the referral warm-start
 
 
 class SettingsRequest(BaseModel):
@@ -207,9 +211,18 @@ async def toggle_going(payload: GoingRequest, db: AsyncSession = Depends(get_asy
     notify: tuple[int, str] | None = None
     if payload.event_id is not None:
         first_time = await set_going(db, uid, payload.event_id, payload.inviter_id)
-        if first_time and payload.inviter_id and int(payload.inviter_id) != uid:
-            title = await event_title(db, payload.event_id)
-            notify = (int(payload.inviter_id), title or "")
+        # DM the inviter ONLY on a genuine SIGNED invite (a forged inviter_id can't be replayed to
+        # spam DMs), never to yourself, and never if they've globally muted notifications.
+        if (
+            first_time
+            and payload.inviter_id
+            and int(payload.inviter_id) != uid
+            and invite_verify(payload.event_id, payload.inviter_id, payload.sig)
+        ):
+            recip = await get_settings(db, int(payload.inviter_id))
+            if recip and recip.get("notify_reminders") is not False:
+                title = await event_title(db, payload.event_id)
+                notify = (int(payload.inviter_id), title or "")
     await db.commit()
     # Send the nudge AFTER the commit so the going is durable even if Telegram is slow/down.
     if notify:
@@ -224,7 +237,12 @@ async def mark_invited(payload: InvitedRequest, db: AsyncSession = Depends(get_a
     driving the feed so the Mini App can apply them this session."""
     user, uid = _auth(payload.init_data)
     await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-    interests = await warm_interests_from(db, uid, payload.inviter_id)
+    # Warm the feed ONLY for a genuine SIGNED invite — otherwise a client could probe any user's
+    # taste by replaying their id as the inviter. Unsigned / forged → no warm, no leak.
+    if invite_verify(payload.event_id or "", payload.inviter_id, payload.sig):
+        interests = await warm_interests_from(db, uid, payload.inviter_id)
+    else:
+        interests = []
     await db.commit()
     return {"interests": interests}
 

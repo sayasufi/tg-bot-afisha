@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.services.card import ensure_card
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.config.settings import get_settings
+from core.invite import sign as invite_sign
 from core.db.models import Event, EventOccurrence, Venue
 from core.db.session import get_async_db
 
@@ -25,10 +26,14 @@ BOT_USERNAME = "okrestmap_bot"
 
 
 def _open_url(event_id, inviter=None) -> str:
-    # startapp deep link → opens the Mini App on this event. With an inviter it becomes an
-    # answerable invite (the App shows «тебя зовут» + «Я иду»); the inviter id is appended after
-    # the UUID, which contains no '_', so the App splits the start param on '_'.
-    param = f"{event_id}_{inviter}" if inviter else f"{event_id}"
+    # startapp deep link → opens the Mini App on this event. With an inviter it becomes an answerable
+    # invite («тебя зовут» + «Я иду»). Format «<uuid>_<inviter>_<sig>»: the UUID has no '_', so the App
+    # splits on '_'; the HMAC sig proves we minted this inviter id so it can't be forged to spam DMs.
+    if inviter:
+        sig = invite_sign(str(event_id), int(inviter))
+        param = f"{event_id}_{inviter}_{sig}"
+    else:
+        param = f"{event_id}"
     return f"https://t.me/{BOT_USERNAME}?startapp={param}"
 
 _MONTHS = [
