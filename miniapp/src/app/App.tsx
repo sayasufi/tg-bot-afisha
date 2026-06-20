@@ -940,6 +940,8 @@ export function App() {
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
+            theme={theme}
+            onToggleTheme={toggleTheme}
             onOpenFavorites={() => setView("favorites")}
             onClose={() => setView("map")}
           />
@@ -951,8 +953,6 @@ export function App() {
         view={view}
         favCount={fav.ids.size}
         user={tgUser}
-        theme={theme}
-        onToggleTheme={toggleTheme}
         onClose={() => setDrawerOpen(false)}
         onSelect={(v) => {
           haptic("light");

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import type { ThemeName, TgUser } from "../../lib/telegram";
+import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import type { View } from "./view";
@@ -17,8 +17,6 @@ export function Sidebar({
   view,
   favCount = 0,
   user = null,
-  theme = "light",
-  onToggleTheme,
   onSelect,
   onClose,
 }: {
@@ -26,12 +24,9 @@ export function Sidebar({
   view: View;
   favCount?: number;
   user?: TgUser | null;
-  theme?: ThemeName;
-  onToggleTheme?: () => void;
   onSelect: (v: View) => void;
   onClose: () => void;
 }) {
-  const dark = theme === "dark";
   const navCount: Partial<Record<View, number>> = { favorites: favCount };
   // The «Профиль» nav item is gone; this account block at the bottom is the entry to the profile
   // screen (where notifications / city / taste live) — Linear/Slack-style.
@@ -83,21 +78,6 @@ export function Sidebar({
           </span>
           <span className="drawer__handle">{handle}</span>
           <span className="drawer__account-go" aria-hidden="true">›</span>
-        </button>
-        <button
-          type="button"
-          className={`themetoggle${dark ? " themetoggle--dark" : ""}`}
-          onClick={onToggleTheme}
-          role="switch"
-          aria-checked={dark}
-        >
-          <span className="themetoggle__label">
-            <span className="themetoggle__glyph">{dark ? "☾" : "☀"}</span>
-            {dark ? "После заката" : "Дневной свет"}
-          </span>
-          <span className="themetoggle__switch">
-            <span className="themetoggle__knob" />
-          </span>
         </button>
         <div className="drawer__foot">события рядом с тобой</div>
       </aside>

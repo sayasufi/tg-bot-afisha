@@ -4,7 +4,7 @@ import { fetchEventsByIds, type City, type EventItem } from "../../api/client";
 import { viewedCount } from "../../lib/affinity";
 import { categoryMeta } from "../../lib/categories";
 import { CategoryIcon, IconClose } from "../../lib/icons";
-import type { TgUser } from "../../lib/telegram";
+import type { ThemeName, TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
 // Pixel offset from the box centre for circle i of n, by share rank — a tight OVERLAPPING RING with
@@ -29,6 +29,8 @@ export function ProfilePanel({
   onToggleReminders,
   notifyDigest,
   onToggleDigest,
+  theme = "light",
+  onToggleTheme,
   onOpenFavorites,
   onClose,
 }: {
@@ -41,6 +43,8 @@ export function ProfilePanel({
   onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
+  theme?: ThemeName;
+  onToggleTheme?: () => void;
   onOpenFavorites: () => void;
   onClose: () => void;
 }) {
@@ -192,7 +196,7 @@ export function ProfilePanel({
         >
           <span className="profile__switch-text">
             <span className="profile__switch-label">Напоминания</span>
-            <span className="profile__switch-sub">Бот пишет перед началом событий, где ты нажал колокол. Выключи, чтобы приглушить все разом</span>
+            <span className="profile__switch-sub">Бот напомнит перед началом событий из избранного. Выключи, чтобы приглушить все разом</span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />
@@ -209,6 +213,23 @@ export function ProfilePanel({
           <span className="profile__switch-text">
             <span className="profile__switch-label">Афиша на выходные</span>
             <span className="profile__switch-sub">Раз в неделю бот пришлёт, что нового рядом и на твоих площадках</span>
+          </span>
+          <span className="profile__switch-track" aria-hidden="true">
+            <span className="profile__switch-knob" />
+          </span>
+        </button>
+
+        <div className="recs__section">Оформление</div>
+        <button
+          type="button"
+          className={`profile__switch${theme === "dark" ? " profile__switch--on" : ""}`}
+          role="switch"
+          aria-checked={theme === "dark"}
+          onClick={() => onToggleTheme?.()}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">После заката</span>
+            <span className="profile__switch-sub">Тёмная тема — тёплые чернила вместо белого куба</span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />
