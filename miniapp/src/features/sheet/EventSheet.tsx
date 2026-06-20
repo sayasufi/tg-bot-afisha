@@ -319,7 +319,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   return (
     <>
       <div className="sheet-veil" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-label={selected.title} ref={sheetRef}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={selected.title} ref={sheetRef}>
         <div className="sheet__sticky">
           {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>

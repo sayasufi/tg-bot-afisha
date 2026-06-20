@@ -1,6 +1,7 @@
+import sys
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -61,6 +62,24 @@ class Settings(BaseSettings):
     # Absolute base the client uses to load images (e.g. https://host/v1/media).
     # Falls back to the same-origin API path when empty.
     media_public_base: str = Field(default="", alias="MEDIA_PUBLIC_BASE")
+
+    @model_validator(mode="after")
+    def _fail_fast_on_prod_secrets(self):
+        """Every field has a dev-friendly default, which means a misconfigured production deploy would
+        silently run on insecure defaults (a dead bot, a guessable MinIO key). In production we refuse
+        to start without the critical secret, and shout about the insecure defaults that aren't fatal."""
+        if self.app_env != "production":
+            return self
+        if not self.telegram_bot_token:
+            raise ValueError(
+                "APP_ENV=production but TELEGRAM_BOT_TOKEN is empty — bot, reminders and digests would "
+                "silently no-op. Set it (or unset APP_ENV for local)."
+            )
+        if self.minio_secret_key == "okrest-minio-secret":
+            print("WARNING: MINIO_ROOT_PASSWORD is the insecure dev default in production", file=sys.stderr)
+        if "afisha:afisha@" in self.database_url:
+            print("WARNING: DATABASE_URL uses the default afisha:afisha credentials in production", file=sys.stderr)
+        return self
 
 
 @lru_cache(maxsize=1)
