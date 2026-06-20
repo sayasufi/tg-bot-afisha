@@ -12,10 +12,11 @@ from core.cities import city_by_name
 from core.config.settings import get_settings as get_app_settings
 from core.invite import verify as invite_verify
 from core.db.repositories.reminders import (
+    arm_reminder_if_unsent,
     cancel_reminder,
     list_reminder_ids,
     set_reminder,
-    soonest_start,
+    soonest_future_start,
 )
 from core.db.repositories.users import (
     add_favorites,
@@ -177,8 +178,8 @@ async def toggle_reminder(payload: ReminderRequest, db: AsyncSession = Depends(g
     await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
     if payload.event_id is not None and payload.on is not None:
         if payload.on:
-            start = await soonest_start(db, payload.event_id)
-            if start is not None:  # no sessions → can't remind; silently no-op (bell won't arm)
+            start = await soonest_future_start(db, payload.event_id)
+            if start is not None:  # no UPCOMING session → can't remind; silently no-op
                 now = datetime.now(timezone.utc)
                 # Fire ~2h before; clamp to the near future so imminent events still fire soon.
                 fire_at = max(now + timedelta(seconds=45), start - _REMINDER_LEAD)
@@ -221,27 +222,28 @@ async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_i
 
 
 async def _arm_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
-    """Arm the pre-event reminder for one favourited event — UNLESS reminders are globally muted.
-    Reminders are now driven by favourites (no per-event bell). Best-effort: no soonest session → none."""
+    """Arm the pre-event reminder for one favourited event — UNLESS reminders are globally muted, or the
+    event has no UPCOMING session (never remind about something that already happened). Reminders are
+    now driven by favourites (no per-event bell)."""
     settings = await get_settings(db, uid)
     if settings.get("notify_reminders") is False:
         return
-    start = await soonest_start(db, event_id)
+    start = await soonest_future_start(db, event_id)
     if start is None:
         return
     now = datetime.now(timezone.utc)
-    fire_at = max(now + timedelta(seconds=45), start - _REMINDER_LEAD)
-    await set_reminder(db, uid, event_id, fire_at)
+    await arm_reminder_if_unsent(db, uid, event_id, max(now + timedelta(seconds=45), start - _REMINDER_LEAD))
 
 
 async def _arm_all_favorite_reminders(db: AsyncSession, uid: int) -> None:
-    """Arm reminders for every currently-favourited event — run when the user switches the profile
-    notifications toggle ON, so reminders cover everything they'd already saved while it was off."""
+    """Arm reminders for every favourited event with an UPCOMING session — run when the user switches the
+    profile notifications toggle ON, so reminders cover everything saved while it was off. Non-destructive
+    (arm_reminder_if_unsent): never re-fires a reminder that already delivered, never arms a past event."""
     now = datetime.now(timezone.utc)
     for fid in await list_favorite_ids(db, uid):
-        start = await soonest_start(db, fid)
+        start = await soonest_future_start(db, fid)
         if start is not None:
-            await set_reminder(db, uid, fid, max(now + timedelta(seconds=45), start - _REMINDER_LEAD))
+            await arm_reminder_if_unsent(db, uid, fid, max(now + timedelta(seconds=45), start - _REMINDER_LEAD))
 
 
 async def _invite_dm_once(invitee_id: int, event_id: str, inviter_id: int) -> bool:

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from core.db.models.ref.user import User
-from core.db.repositories.reminders import set_reminder, soonest_start
+from core.db.repositories.reminders import arm_reminder_if_unsent, soonest_future_start
 from core.db.repositories.users import list_favorite_ids
 from core.db.session import WorkerAsyncSessionLocal
 
@@ -29,10 +29,11 @@ async def main() -> None:
         now = datetime.now(timezone.utc)
         for uid in uids:
             for fid in await list_favorite_ids(db, uid):
-                start = await soonest_start(db, fid)
+                start = await soonest_future_start(db, fid)
                 if start is None:
-                    continue  # no future session → nothing to remind about
-                await set_reminder(db, uid, fid, max(now + timedelta(seconds=45), start - _LEAD))
+                    continue  # no UPCOMING session → nothing to remind about (never arm a past event)
+                # Non-destructive: don't resurrect a reminder that already fired.
+                await arm_reminder_if_unsent(db, uid, fid, max(now + timedelta(seconds=45), start - _LEAD))
                 armed += 1
         await db.commit()
     print(f"armed {armed} reminders across {len(uids)} notify-on users")

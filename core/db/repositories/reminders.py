@@ -34,14 +34,42 @@ async def soonest_start(db: AsyncSession, event_id: str) -> datetime | None:
     return await db.scalar(select(func.min(EventOccurrence.date_start)).where(EventOccurrence.event_id == event_id))
 
 
+async def soonest_future_start(db: AsyncSession, event_id: str) -> datetime | None:
+    """The soonest UPCOMING session start (>= now), or None if EVERY session is already past. Use this
+    to decide whether to ARM a pre-event reminder — never arm one for an event that already happened
+    (soonest_start's past fallback would otherwise fire a bogus 'starts soon' DM for a past session)."""
+    now = datetime.now(timezone.utc)
+    return await db.scalar(
+        select(func.min(EventOccurrence.date_start)).where(
+            EventOccurrence.event_id == event_id, EventOccurrence.date_start >= now
+        )
+    )
+
+
 async def set_reminder(db: AsyncSession, user_id: int, event_id: str, fire_at: datetime) -> None:
-    """Arm (or re-arm) a reminder. Re-setting clears sent_at so it fires again."""
+    """Arm (or re-arm) a reminder. Re-setting clears sent_at so it fires again — for an explicit
+    single-event action where re-firing is intended."""
     await db.execute(
         pg_insert(EventReminder)
         .values(telegram_user_id=user_id, event_id=event_id, fire_at=fire_at, sent_at=None)
         .on_conflict_do_update(
             index_elements=[EventReminder.telegram_user_id, EventReminder.event_id],
             set_={"fire_at": fire_at, "sent_at": None},
+        )
+    )
+
+
+async def arm_reminder_if_unsent(db: AsyncSession, user_id: int, event_id: str, fire_at: datetime) -> None:
+    """Arm WITHOUT resurrecting an already-delivered reminder: insert if absent, re-arm only while
+    still unsent (sent_at IS NULL). For BULK arming (backfill / notify-toggle-on) that sweeps every
+    favourite — so an event whose reminder already fired isn't re-fired."""
+    await db.execute(
+        pg_insert(EventReminder)
+        .values(telegram_user_id=user_id, event_id=event_id, fire_at=fire_at, sent_at=None)
+        .on_conflict_do_update(
+            index_elements=[EventReminder.telegram_user_id, EventReminder.event_id],
+            set_={"fire_at": fire_at, "sent_at": None},
+            where=EventReminder.sent_at.is_(None),
         )
     )
 
