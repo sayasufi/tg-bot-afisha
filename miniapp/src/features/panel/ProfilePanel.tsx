@@ -7,15 +7,14 @@ import { CategoryIcon, IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
-// Position (% of the box) for circle i of n, by share rank — a tight OVERLAPPING RING with a slight
-// spiral rotation: the dominant genre leads up-left, each circle touches/overlaps its neighbours
-// (small radius so they never fling apart and clip), centred so the cluster stays inside the box.
-function clusterPos(i: number, n: number): { x: number; y: number } {
+// Pixel offset from the box centre for circle i of n, by share rank — a tight OVERLAPPING RING with
+// a touch of spiral: the dominant leads up-left, each circle overlaps its neighbours, the radius
+// grows a hair per step (the spiral). PX (not %) so it never stretches/clips on a wide box.
+function clusterPos(i: number, n: number): { dx: number; dy: number } {
   const step = (2 * Math.PI) / Math.max(n, 3);
-  const angle = -2.0 + i * (step + 0.07); // start upper-left + a touch of spiral per step
-  const rx = 16 + i * 0.8; // x-radius %, tiny growth = the spiral feel
-  const ry = 21 + i * 1.2; // y-radius % (larger — the box is wider than tall)
-  return { x: 50 + Math.cos(angle) * rx, y: 50 + Math.sin(angle) * ry };
+  const angle = -2.2 + i * step;
+  const p = 48 + i * 4; // ring radius px, slight growth = spiral
+  return { dx: Math.cos(angle) * p * 1.1, dy: Math.sin(angle) * p };
 }
 
 const eventsBasis = (n: number) => `основано на ${n} ${n === 1 ? "сохранённом событии" : "сохранённых событиях"}`;
@@ -157,7 +156,7 @@ export function ProfilePanel({
                     <span
                       key={t.key}
                       className={`tcircle${top ? " tcircle--top" : ""}`}
-                      style={{ width: `${d}px`, height: `${d}px`, left: `${pos.x}%`, top: `${pos.y}%`, zIndex: top ? 20 : i + 1 }}
+                      style={{ width: `${d}px`, height: `${d}px`, left: `calc(50% + ${pos.dx}px)`, top: `calc(50% + ${pos.dy}px)`, zIndex: top ? 20 : i + 1 }}
                     >
                       <CategoryIcon cat={t.key} size={Math.round(d * 0.3)} />
                       <span className="tcircle__label">{t.meta.label.toLowerCase()}</span>
@@ -179,7 +178,7 @@ export function ProfilePanel({
                 {[86, 70, 74, 64, 68].map((d, i) => {
                   const pos = clusterPos(i, 5);
                   return (
-                    <span key={i} className="tcircle tcircle--empty" style={{ width: `${d}px`, height: `${d}px`, left: `${pos.x}%`, top: `${pos.y}%` }} />
+                    <span key={i} className="tcircle tcircle--empty" style={{ width: `${d}px`, height: `${d}px`, left: `calc(50% + ${pos.dx}px)`, top: `calc(50% + ${pos.dy}px)` }} />
                   );
                 })}
               </span>
