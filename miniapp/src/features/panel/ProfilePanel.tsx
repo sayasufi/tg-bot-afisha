@@ -7,13 +7,15 @@ import { CategoryIcon, IconClose } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 
-// Position (% of the box) for circle i, by share rank — an Archimedean SPIRAL: the dominant genre
-// leads up-left, the rest spiral outward with linear radius growth so they spread and only lightly
-// touch (the reference flow). Plaster-filled circles occlude cleanly where they meet.
-function clusterPos(i: number): { x: number; y: number } {
-  const angle = -2.5 + i * 2.4;
-  const r = 13 + i * 8;
-  return { x: 50 + Math.cos(angle) * r * 1.05, y: 50 + Math.sin(angle) * r };
+// Position (% of the box) for circle i of n, by share rank — a tight OVERLAPPING RING with a slight
+// spiral rotation: the dominant genre leads up-left, each circle touches/overlaps its neighbours
+// (small radius so they never fling apart and clip), centred so the cluster stays inside the box.
+function clusterPos(i: number, n: number): { x: number; y: number } {
+  const step = (2 * Math.PI) / Math.max(n, 3);
+  const angle = -2.0 + i * (step + 0.07); // start upper-left + a touch of spiral per step
+  const rx = 16 + i * 0.8; // x-radius %, tiny growth = the spiral feel
+  const ry = 21 + i * 1.2; // y-radius % (larger — the box is wider than tall)
+  return { x: 50 + Math.cos(angle) * rx, y: 50 + Math.sin(angle) * ry };
 }
 
 const eventsBasis = (n: number) => `основано на ${n} ${n === 1 ? "сохранённом событии" : "сохранённых событиях"}`;
@@ -148,8 +150,8 @@ export function ProfilePanel({
             <>
               <span className="tastecard__cluster">
                 {taste.slice(0, 6).map((t, i, arr) => {
-                  const d = 60 + Math.round((t.n / arr[0].n) * 34); // 60..94px, by genre share
-                  const pos = clusterPos(i);
+                  const d = 64 + Math.round((t.n / arr[0].n) * 28); // 64..92px, by genre share
+                  const pos = clusterPos(i, arr.length);
                   const top = i === 0;
                   return (
                     <span
@@ -174,8 +176,8 @@ export function ProfilePanel({
             <>
               <span className="tastecard__nudge">Пока ничего нет. Сохрани несколько событий — и здесь сложится твой культурный профиль.</span>
               <span className="tastecard__cluster">
-                {[80, 60, 66, 54, 58].map((d, i) => {
-                  const pos = clusterPos(i);
+                {[86, 70, 74, 64, 68].map((d, i) => {
+                  const pos = clusterPos(i, 5);
                   return (
                     <span key={i} className="tcircle tcircle--empty" style={{ width: `${d}px`, height: `${d}px`, left: `${pos.x}%`, top: `${pos.y}%` }} />
                   );
