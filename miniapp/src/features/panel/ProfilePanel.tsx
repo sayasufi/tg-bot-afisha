@@ -12,8 +12,8 @@ import { safeHttpUrl } from "../../lib/url";
 // touch (the reference flow). Plaster-filled circles occlude cleanly where they meet.
 function clusterPos(i: number): { x: number; y: number } {
   const angle = -2.5 + i * 2.4;
-  const r = 11 + i * 6.5;
-  return { x: 49 + Math.cos(angle) * r * 1.1, y: 45 + Math.sin(angle) * r * 1.05 };
+  const r = 13 + i * 8;
+  return { x: 50 + Math.cos(angle) * r * 1.05, y: 50 + Math.sin(angle) * r };
 }
 
 const eventsBasis = (n: number) => `основано на ${n} ${n === 1 ? "сохранённом событии" : "сохранённых событиях"}`;
@@ -148,7 +148,7 @@ export function ProfilePanel({
             <>
               <span className="tastecard__cluster">
                 {taste.slice(0, 6).map((t, i, arr) => {
-                  const d = 54 + Math.round((t.n / arr[0].n) * 32); // 54..86px, by genre share
+                  const d = 60 + Math.round((t.n / arr[0].n) * 34); // 60..94px, by genre share
                   const pos = clusterPos(i);
                   const top = i === 0;
                   return (

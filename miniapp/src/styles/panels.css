@@ -446,7 +446,7 @@ mark.hl {
 .tastecard__cluster {
   display: block; /* span needs a box for height + to anchor the absolute circles */
   position: relative;
-  height: 186px;
+  height: 200px;
   overflow: hidden;
 }
 .tcircle {
