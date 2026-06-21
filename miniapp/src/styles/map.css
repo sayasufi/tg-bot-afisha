@@ -74,19 +74,26 @@
 }
 .vpin__friend {
   position: absolute;
+  /* straddle the plate's bottom-right corner (GitHub-badge style) — a secondary hint, not the main signal */
   right: -5px;
   bottom: -5px;
-  width: 15px;
-  height: 15px;
+  width: 11px;
+  height: 11px;
   display: grid;
   place-items: center;
   background: var(--ink);
   color: var(--plinth);
   box-shadow: 0 0 0 1.5px var(--plinth);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
   z-index: 3;
 }
 .vpin__friend svg {
   display: block;
+  width: 8px;
+  height: 8px;
 }
 
 /* Catalogue code on the focused pin — the exhibit's accession number, mono on ink, acid type. Floated

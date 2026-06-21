@@ -21,7 +21,7 @@ type Props = {
   clusters: MapCluster[];
   clusterMode: boolean;
   goNowIds: Set<string>;
-  friendIds: Set<string>; // events a friend saved → acid ring on the pin (detail zoom only)
+  friendCounts: Map<string, number>; // event_id → #friends who saved it → corner badge (detail zoom only)
   selected: EventItem | null;
   focused: EventItem | null;
   focusOut: boolean;
@@ -234,7 +234,7 @@ export function EventsMap({
   clusters,
   clusterMode,
   goNowIds,
-  friendIds,
+  friendCounts,
   selected,
   focused,
   focusOut,
@@ -396,15 +396,15 @@ export function EventsMap({
           <Marker
             key={item.event_id}
             position={[item.lat as number, item.lon as number]}
-            icon={pinIcon(item, false, goNowRef.current.has(item.event_id), friendIds.has(item.event_id))}
+            icon={pinIcon(item, false, goNowRef.current.has(item.event_id), friendCounts.get(item.event_id) ?? 0)}
             eventHandlers={{ click: () => onSelect(item) }}
           />
         ))}
       </MarkerClusterGroup>
     );
-    // friendIds in deps: the acid friend-ring appears once the (async) friends-favorited fetch lands,
+    // friendCounts in deps: the friend badge appears once the (async) friends-favorited fetch lands,
     // not just on the next pan. goNow stays on the ref (refreshes on rebuild) — it's the minute tick.
-  }, [pins, friendIds, onSelect, clusterHandlers]);
+  }, [pins, friendCounts, onSelect, clusterHandlers]);
 
   // The FOCUSED event's highlighted (acid) pin, drawn once on top of everything.
   // It tracks `focused` — which persists after the sheet is closed and at any zoom

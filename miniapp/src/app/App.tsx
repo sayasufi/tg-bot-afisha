@@ -165,7 +165,7 @@ export function App() {
   const [friendDisclosure, setFriendDisclosure] = useState(false);
   const [friendReqCount, setFriendReqCount] = useState(0);
   const [friendProfile, setFriendProfile] = useState<Friend | null>(null); // open friend's profile overlay
-  const [friendMapIds, setFriendMapIds] = useState<Set<string>>(() => new Set()); // visible events a friend saved
+  const [friendCounts, setFriendCounts] = useState<Map<string, number>>(() => new Map()); // event_id → #friends who saved it
   useEffect(() => {
     void manageFriends().then((s) => {
       if (!s) return;
@@ -327,7 +327,7 @@ export function App() {
   useEffect(() => {
     const bb = mapBbox;
     if (view !== "map" || (mapZoom ?? 0) < DETAIL_ZOOM || shownItems.length === 0) {
-      setFriendMapIds((prev) => (prev.size ? new Set() : prev));
+      setFriendCounts((prev) => (prev.size ? new Map() : prev));
       return;
     }
     // Send the events actually IN VIEW, not the first 250 of every loaded event — shownItems accumulates
@@ -337,7 +337,7 @@ export function App() {
       ? shownItems.filter((i) => i.lat != null && i.lon != null && i.lon >= bb[0] && i.lon <= bb[2] && i.lat >= bb[1] && i.lat <= bb[3])
       : shownItems;
     if (inView.length === 0) {
-      setFriendMapIds((prev) => (prev.size ? new Set() : prev));
+      setFriendCounts((prev) => (prev.size ? new Map() : prev));
       return;
     }
     const ids = inView.slice(0, 250).map((i) => i.event_id);
@@ -346,10 +346,13 @@ export function App() {
       void fetchFriendsFavorited(ids).then((res) => {
         if (!alive || !res) return;
         const keys = Object.keys(res.friends);
-        // Keep the SAME Set identity when the friend-set is unchanged (you have no friends, or the
-        // visible friend-saves didn't change) — otherwise a new equal Set reference would re-trigger the
-        // pins memo and blink every marker a second time after each zoom/pan.
-        setFriendMapIds((prev) => (prev.size === keys.length && keys.every((k) => prev.has(k)) ? prev : new Set(keys)));
+        // Keep the SAME Map identity when nothing changed (same events AND same counts) — otherwise a new
+        // equal reference would re-trigger the pins memo and rebuild every marker after each zoom/pan.
+        setFriendCounts((prev) =>
+          prev.size === keys.length && keys.every((k) => prev.get(k) === res.friends[k].length)
+            ? prev
+            : new Map(keys.map((k) => [k, res.friends[k].length])),
+        );
       });
     }, 450);
     return () => {
@@ -887,7 +890,7 @@ export function App() {
           clusters={clusters}
           clusterMode={clusterMode}
           goNowIds={goNowIds}
-          friendIds={friendMapIds}
+          friendCounts={friendCounts}
           selected={selected}
           focused={focused}
           focusOut={focusOut}
