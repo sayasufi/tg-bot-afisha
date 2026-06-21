@@ -18,6 +18,19 @@ from core.db.repositories.reminders import (
     set_reminder,
     soonest_future_start,
 )
+from core.db.repositories.friends import (
+    accept_request,
+    count_friends,
+    decline_request,
+    friends_who_favorited,
+    list_friends,
+    list_requests,
+    my_hidden_event_ids,
+    remove_friend,
+    request_friend,
+    set_favorite_hidden,
+    set_mute,
+)
 from core.db.repositories.users import (
     add_favorites,
     event_title,
@@ -89,6 +102,24 @@ class SettingsRequest(BaseModel):
     interests: list[str] | None = None  # categories picked at onboarding (warms «Для тебя»)
     notify_reminders: bool | None = None  # global mute for the per-event reminder DMs (default on)
     notify_digest: bool | None = None  # opt-in to the weekly digest DM (default off)
+    friends_private: bool | None = None  # hide ALL my favourites from friends (default off)
+
+
+class FriendsFavoritedRequest(BaseModel):
+    init_data: str
+    event_ids: list[str] = []  # which events to resolve «friends who saved this» for
+
+
+class FriendsRequest(BaseModel):
+    init_data: str
+    action: str | None = None  # 'accept'|'decline'|'remove'|'block'|'unblock' — omit to LIST friends+requests
+    friend_id: int | None = None
+
+
+class HideFavoriteRequest(BaseModel):
+    init_data: str
+    event_id: str
+    hidden: bool  # hide this favourite from friends (per-item privacy)
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -139,29 +170,35 @@ async def sync_favorites(payload: FavoritesSyncRequest, db: AsyncSession = Depen
 @router.post("/favorites")
 async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Depends(get_async_db)):
     """Heart / un-heart one event. Favouriting also arms its pre-event reminder (unless reminders are
-    globally muted), and — when it carries a signed «Пойдём?» invite — DMs the inviter once."""
+    globally muted); accepting a signed «Пойдём?» invite additionally sends the inviter a friend REQUEST
+    (which they confirm — a pending edge exposes nothing) and DMs them once."""
     user, uid = _auth(payload.init_data)
-    await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-    newly = await set_favorite(db, uid, payload.event_id, payload.on)
+    await upsert_user_async(
+        db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
+    )
+    await set_favorite(db, uid, payload.event_id, payload.on)
     notify: tuple[int, str] | None = None
     if payload.on:
         await _arm_reminder(db, uid, payload.event_id)
-        # Invite accept: first favourite via a genuine SIGNED «Пойдём?» link → DM the inviter (once,
-        # Redis-deduped; a forged inviter can't replay it). Never to yourself or a muted inviter.
+        # Invite accept via a genuine SIGNED «Пойдём?» link → record a PENDING friend request the inviter
+        # must confirm (a pending edge leaks nothing; the inviter chooses), and DM them once (Redis-deduped;
+        # a forged inviter can't replay it). Independent of whether the event was already favourited, so an
+        # invite to an already-saved event still creates the request. Never self / muted / non-existent.
         if (
-            newly
-            and payload.inviter_id
+            payload.inviter_id
             and int(payload.inviter_id) != uid
             and invite_verify(payload.event_id, payload.inviter_id, payload.sig)
         ):
-            recip = await get_settings(db, int(payload.inviter_id))
+            inviter = int(payload.inviter_id)
+            await request_friend(db, inviter, uid, src_event_id=payload.event_id)
+            recip = await get_settings(db, inviter)
             if (
                 recip
                 and recip.get("notify_reminders") is not False
-                and await _invite_dm_once(uid, payload.event_id, int(payload.inviter_id))
+                and await _invite_dm_once(uid, payload.event_id, inviter)
             ):
                 title = await event_title(db, payload.event_id)
-                notify = (int(payload.inviter_id), title or "")
+                notify = (inviter, title or "")
     else:
         await cancel_reminder(db, uid, payload.event_id)  # un-fav → drop its reminder
     await db.commit()
@@ -202,13 +239,67 @@ async def toggle_venue_follow(payload: VenueFollowRequest, db: AsyncSession = De
     return {"ids": await list_followed_venue_ids(db, uid)}
 
 
+@router.post("/friends-favorited")
+async def get_friends_favorited(payload: FriendsFavoritedRequest, db: AsyncSession = Depends(get_async_db)):
+    """For the given events, which of MY friends favourited each — the «друг сохранил это» signal in the
+    event sheet. Read-only (no commit). Privacy is enforced in the query (accepted edge, not private, not
+    hidden, not muted). Also returns which of these I've hidden, so the sheet's per-item toggle is correct."""
+    _user, uid = _auth(payload.init_data)
+    ids = payload.event_ids[:100]
+    return {
+        "friends": await friends_who_favorited(db, uid, ids),
+        "hidden": await my_hidden_event_ids(db, uid, ids),
+        "has_friends": await count_friends(db, uid) > 0,
+    }
+
+
+@router.post("/friends")
+async def manage_friends(payload: FriendsRequest, db: AsyncSession = Depends(get_async_db)):
+    """List my friends + incoming requests, or act on one: accept / decline a pending request, remove
+    (unfriend, both edges), block (mute + unfriend) / unblock. Returns the resulting friends + requests,
+    and `first_friend` when an accept created my very first friendship (→ one-time disclosure)."""
+    _user, uid = _auth(payload.init_data)
+    first_friend = False
+    if payload.action and payload.friend_id and int(payload.friend_id) != uid:
+        other = int(payload.friend_id)
+        if payload.action == "accept":
+            if await accept_request(db, uid, other) and await count_friends(db, uid) == 1:
+                first_friend = True
+        elif payload.action == "decline":
+            await decline_request(db, uid, other)
+        elif payload.action == "remove":
+            await remove_friend(db, uid, other)
+        elif payload.action == "block":
+            await set_mute(db, uid, other, True)
+        elif payload.action == "unblock":
+            await set_mute(db, uid, other, False)
+        await db.commit()
+    return {
+        "friends": await list_friends(db, uid),
+        "requests": await list_requests(db, uid),
+        "first_friend": first_friend,
+    }
+
+
+@router.post("/favorites/hide")
+async def hide_favorite(payload: HideFavoriteRequest, db: AsyncSession = Depends(get_async_db)):
+    """Hide / unhide one of my favourites from friends (per-item privacy). No-op if it isn't favourited."""
+    _user, uid = _auth(payload.init_data)
+    await set_favorite_hidden(db, uid, payload.event_id, payload.hidden)
+    await db.commit()
+    return {"ok": True}
+
+
 async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
     """DM the inviter that someone accepted their «Пойдём?» (added it to favourites) — best-effort,
     never blocks the response. The inviter started the bot (they shared from the Mini App)."""
     token = get_app_settings().telegram_bot_token
     if not token or not inviter_id:
         return
-    text = f"🎉 <b>{escape(name or 'Кто-то')}</b> принял твоё приглашение\n{escape(title or 'на событие')}"
+    text = (
+        f"🎉 <b>{escape(name or 'Кто-то')}</b> принял твоё приглашение\n{escape(title or 'на событие')}\n\n"
+        "Хочет добавиться в друзья — подтверди заявку в профиле."
+    )
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
     try:
         async with httpx.AsyncClient(timeout=8) as client:
@@ -281,12 +372,12 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
     user, uid = _auth(payload.init_data)
     changing = any(
         v is not None
-        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests, payload.notify_reminders, payload.notify_digest)
+        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests, payload.notify_reminders, payload.notify_digest, payload.friends_private)
     )
     if changing:
         # Only write the user row when actually changing a setting (a pure read on app
         # open shouldn't UPDATE+commit — favorites/sync already recorded the open).
-        await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+        await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url"))
         settings = await update_settings(
             db,
             uid,
@@ -298,6 +389,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
             interests=payload.interests,
             notify_reminders=payload.notify_reminders,
             notify_digest=payload.notify_digest,
+            friends_private=payload.friends_private,
         )
         # Turning notifications ON arms reminders for everything already in favourites (they're now the
         # single reminder source). Turning OFF needs nothing — delivery is gated on notify_reminders.

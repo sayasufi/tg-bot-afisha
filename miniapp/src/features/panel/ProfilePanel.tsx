@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { fetchEventsByIds, type City, type EventItem } from "../../api/client";
+import { manageFriends, type Friend, type FriendsState } from "../../api/users";
 import { viewedCount } from "../../lib/affinity";
+import { FriendDisclosure } from "./FriendDisclosure";
 import { categoryMeta } from "../../lib/categories";
 import { CategoryIcon, IconClose } from "../../lib/icons";
 import type { ThemeName, TgUser } from "../../lib/telegram";
@@ -29,6 +31,8 @@ export function ProfilePanel({
   onToggleReminders,
   notifyDigest,
   onToggleDigest,
+  friendsPrivate,
+  onToggleFriendsPrivate,
   theme = "light",
   onToggleTheme,
   onOpenFavorites,
@@ -43,12 +47,57 @@ export function ProfilePanel({
   onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
+  friendsPrivate: boolean;
+  onToggleFriendsPrivate: (on: boolean) => void;
   theme?: ThemeName;
   onToggleTheme?: () => void;
   onOpenFavorites: () => void;
   onClose: () => void;
 }) {
   const [cityOpen, setCityOpen] = useState(false);
+  // Friends + incoming requests — fetched once on open; managed in place.
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [requests, setRequests] = useState<Friend[]>([]);
+  const [disclose, setDisclose] = useState(false);
+  const apply = (s: FriendsState | null) => {
+    if (!s) return;
+    setFriends(s.friends);
+    setRequests(s.requests);
+  };
+  useEffect(() => {
+    let alive = true;
+    manageFriends().then((s) => {
+      if (alive) apply(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const removeFriend = (id: number) => {
+    setFriends((fs) => fs.filter((f) => f.id !== id)); // optimistic
+    void manageFriends("remove", id).then(apply);
+  };
+  const acceptRequest = (id: number) => {
+    setRequests((rs) => rs.filter((r) => r.id !== id)); // optimistic
+    void manageFriends("accept", id).then((s) => {
+      apply(s);
+      // First friendship → show the one-time visibility disclosure (favourites become visible).
+      if (s?.firstFriend) {
+        try {
+          if (localStorage.getItem("okrest_friend_disclosed") !== "1") {
+            localStorage.setItem("okrest_friend_disclosed", "1");
+            setDisclose(true);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  };
+  const declineRequest = (id: number) => {
+    setRequests((rs) => rs.filter((r) => r.id !== id)); // optimistic
+    void manageFriends("decline", id).then(apply);
+  };
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
@@ -185,6 +234,100 @@ export function ProfilePanel({
           )}
         </button>
 
+        {/* Incoming requests — people who accepted your «Пойдём?». You decide (a pending edge shows
+            nothing to either side until you accept). */}
+        {requests.length > 0 && (
+          <>
+            <div className="recs__section">Заявки в друзья</div>
+            <div className="profile__friends">
+              {requests.map((f) => {
+                const rav = safeHttpUrl(f.photo_url);
+                const ri = (f.name || "?").slice(0, 1).toUpperCase();
+                return (
+                  <div className="profile__friend" key={f.id}>
+                    <span
+                      className="profile__friend-av"
+                      style={rav ? { backgroundImage: `url("${rav}")` } : undefined}
+                    >
+                      {rav ? "" : ri}
+                    </span>
+                    <span className="profile__friend-id">
+                      <span className="profile__friend-name">{f.name || "Друг"}</span>
+                      {f.username && <span className="profile__friend-handle">@{f.username}</span>}
+                    </span>
+                    <span className="profile__req-actions">
+                      <button type="button" className="profile__req-accept" onClick={() => acceptRequest(f.id)}>
+                        принять
+                      </button>
+                      <button
+                        type="button"
+                        className="profile__friend-x"
+                        aria-label={`Отклонить ${f.name || "заявку"}`}
+                        onClick={() => declineRequest(f.id)}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Друзья — confirmed friendships. The privacy controls live right here. */}
+        <div className="recs__section">Друзья</div>
+        {friends.length > 0 ? (
+          <div className="profile__friends">
+            {friends.map((f) => {
+              const fav = safeHttpUrl(f.photo_url);
+              const fi = (f.name || "?").slice(0, 1).toUpperCase();
+              return (
+                <div className="profile__friend" key={f.id}>
+                  <span
+                    className="profile__friend-av"
+                    style={fav ? { backgroundImage: `url("${fav}")` } : undefined}
+                  >
+                    {fav ? "" : fi}
+                  </span>
+                  <span className="profile__friend-id">
+                    <span className="profile__friend-name">{f.name || "Друг"}</span>
+                    {f.username && <span className="profile__friend-handle">@{f.username}</span>}
+                  </span>
+                  <button
+                    type="button"
+                    className="profile__friend-x"
+                    aria-label={`Убрать ${f.name || "друга"} из друзей`}
+                    onClick={() => removeFriend(f.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="profile__friends-empty">
+            Поделись событием через «Пойдём?» — кто примет, попадёт в заявки, а после подтверждения вы будете
+            видеть, что друг у друга в избранном.
+          </p>
+        )}
+        <button
+          type="button"
+          className={`profile__switch${friendsPrivate ? " profile__switch--on" : ""}`}
+          role="switch"
+          aria-checked={friendsPrivate}
+          onClick={() => onToggleFriendsPrivate(!friendsPrivate)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Скрыть от друзей</span>
+            <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь. Отдельное событие можно скрыть в его карточке</span>
+          </span>
+          <span className="profile__switch-track" aria-hidden="true">
+            <span className="profile__switch-knob" />
+          </span>
+        </button>
+
         {/* Settings, grouped under their own header below the passport. */}
         <div className="recs__section">Уведомления</div>
         <button
@@ -236,6 +379,7 @@ export function ProfilePanel({
           </span>
         </button>
       </div>
+      {disclose && <FriendDisclosure onClose={() => setDisclose(false)} />}
     </div>
   );
 }

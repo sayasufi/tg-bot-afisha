@@ -45,19 +45,30 @@ def get_or_create_city(db: Session, name: str, country: str = "RU") -> City:
 
 
 async def upsert_user_async(
-    db: AsyncSession, telegram_user_id: int, username: str | None = None, first_name: str | None = None
+    db: AsyncSession,
+    telegram_user_id: int,
+    username: str | None = None,
+    first_name: str | None = None,
+    photo_url: str | None = None,
 ) -> User:
     """Create or refresh a bot user (profile + last-active), no commit. ON CONFLICT DO UPDATE so
     the burst of open-time requests for a brand-new account can't race into a duplicate-key 500 —
-    the losers update instead of erroring (the old get-then-insert raced on the unique PK)."""
+    the losers update instead of erroring (the old get-then-insert raced on the unique PK).
+    photo_url is only written when provided (a call without it must not wipe a stored avatar)."""
     now = datetime.now(timezone.utc)
+    set_ = {"username": username, "first_name": first_name, "last_active_at": now}
+    if photo_url is not None:
+        set_["photo_url"] = photo_url
     await db.execute(
         pg_insert(User.__table__)
-        .values(telegram_user_id=telegram_user_id, username=username, first_name=first_name, last_active_at=now)
-        .on_conflict_do_update(
-            index_elements=["telegram_user_id"],
-            set_={"username": username, "first_name": first_name, "last_active_at": now},
+        .values(
+            telegram_user_id=telegram_user_id,
+            username=username,
+            first_name=first_name,
+            photo_url=photo_url,
+            last_active_at=now,
         )
+        .on_conflict_do_update(index_elements=["telegram_user_id"], set_=set_)
     )
     return await db.get(User, telegram_user_id)
 
@@ -72,6 +83,7 @@ def _settings_dict(user: User) -> dict:
         "interests": list(user.interests or []),
         "notify_reminders": user.notify_reminders,
         "notify_digest": user.notify_digest,
+        "friends_private": user.friends_private,
     }
 
 
@@ -93,6 +105,7 @@ async def update_settings(
     interests: list[str] | None = None,
     notify_reminders: bool | None = None,
     notify_digest: bool | None = None,
+    friends_private: bool | None = None,
 ) -> dict:
     """Set the provided settings (None = leave unchanged; "" clears city). No commit."""
     user = await db.get(User, telegram_user_id)
@@ -121,6 +134,8 @@ async def update_settings(
         user.notify_reminders = bool(notify_reminders)
     if notify_digest is not None:
         user.notify_digest = bool(notify_digest)
+    if friends_private is not None:
+        user.friends_private = bool(friends_private)
     db.add(user)
     return _settings_dict(user)
 

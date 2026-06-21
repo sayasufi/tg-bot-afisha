@@ -13,6 +13,8 @@ class User(Base):
     telegram_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # The account's Telegram avatar (captured from initData) — for the friend social-proof faces.
+    photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Account-scoped app settings — explicit columns (synced across the user's devices
     # instead of living per-device in the Mini App's localStorage). The user's city is a
     # single source of truth: city_slug (was a dead city_id FK alongside it — dropped 0018).
@@ -32,6 +34,9 @@ class User(Base):
     # consent; this is a global mute). The weekly digest is strictly opt-in (default off).
     notify_reminders: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     notify_digest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Friends kill-switch: when true, NONE of my favourites are shown to any friend (the blunt opt-out
+    # next to the per-item hidden_from_friends). Default off — the friend edge itself is the consent.
+    friends_private: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     # Per-send ledger for the weekly digest — the instant we last DM'd this user a digest.
     # opted_in_users() filters on it (NULL or < this week's start) so a redeploy/manual re-run/
     # missed-run catchup in the same ISO week never double-sends; only a delivered (or permanently

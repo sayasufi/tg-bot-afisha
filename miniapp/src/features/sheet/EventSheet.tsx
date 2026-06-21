@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
+import { fetchFriendsFavorited, hideFavoriteRemote, type Friend } from "../../api/users";
 import { logIntent } from "../../api/intent";
 import { categoryMeta } from "../../lib/categories";
 import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
@@ -38,6 +39,14 @@ function pluralDates(n: number): string {
   return "дат";
 }
 
+// Named friend social-proof label — no conjugated verb (gender unknown), the heart icon carries «saved».
+function friendsNames(faces: Friend[]): string {
+  const names = faces.map((f) => f.name || "друг");
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} и ${names[1]}`;
+  return `${names[0]}, ${names[1]} и ещё ${names.length - 2}`;
+}
+
 type MetroPing = { name: string; meters: number };
 
 type Props = {
@@ -62,6 +71,11 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const [descOpen, setDescOpen] = useState(false);
   const [datesOpen, setDatesOpen] = useState(false);
   const [swipeHint, setSwipeHint] = useState(false);
+  // «друг сохранил это» — friends who saved THIS event (faces), whether MY save is hidden from friends,
+  // and whether I have any friends at all (gates the per-item hide control).
+  const [friendFaces, setFriendFaces] = useState<Friend[]>([]);
+  const [hiddenFromFriends, setHiddenFromFriends] = useState(false);
+  const [hasFriends, setHasFriends] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   useFocusTrap(sheetRef, true); // the sheet mounts only while open → always active here
@@ -87,12 +101,28 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     setDetail(null);
     setDescOpen(false);
     setDatesOpen(false);
+    setFriendFaces([]);
+    setHiddenFromFriends(false);
+    setHasFriends(false);
     if (!selected) return;
     const ctrl = new AbortController();
+    let alive = true;
     fetchEventDetail(selected.event_id, ctrl.signal)
       .then(setDetail)
       .catch(() => undefined);
-    return () => ctrl.abort();
+    const eid = selected.event_id;
+    fetchFriendsFavorited([eid])
+      .then((res) => {
+        if (!alive || !res) return;
+        setFriendFaces(res.friends[eid] ?? []);
+        setHiddenFromFriends(res.hidden.includes(eid));
+        setHasFriends(res.hasFriends);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+      ctrl.abort();
+    };
   }, [selected]);
 
   // A cached cover can already be `complete` before onLoad binds (so it would stay
@@ -308,10 +338,21 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   };
 
   const handleAccept = () => {
-    if (isFav) return; // already saved — nothing to do
+    // For an invite the friend REQUEST is the point — send it even if the event is already saved.
+    if (isFav && invitedBy == null) return;
     haptic("medium");
     onAccept();
-    showToast("Добавил в избранное! Сообщили пригласившему", { tone: "good" });
+    showToast(isFav ? "Отправил заявку в друзья" : "Добавил в избранное! Отправил заявку в друзья", { tone: "good" });
+  };
+
+  // Per-item privacy: hide / unhide THIS favourite from friends. Optimistic; persisted best-effort.
+  const toggleHiddenFromFriends = () => {
+    if (!selected) return;
+    const next = !hiddenFromFriends;
+    setHiddenFromFriends(next);
+    haptic("light");
+    void hideFavoriteRemote(selected.event_id, next);
+    showToast(next ? "Скрыто от друзей" : "Снова видно друзьям", { tone: next ? "muted" : "good" });
   };
 
   return (
@@ -408,15 +449,48 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           <Highlight text={selected.title} query={query} />
         </h2>
         {(() => {
-          // Social proof — how many saved it, only over a threshold so a quiet event stays silent.
           const s = detail?.saved_count ?? 0;
-          if (s < 3) return null;
+          const friends = friendFaces;
+          const showFriends = friends.length > 0; // named friends who saved this
+          // De-anon rule: when friends are named, do NOT also show the exact count (it would let you
+          // subtract the named ones to deduce a stranger). Anonymous count only when no friends shown.
+          const showCount = !showFriends && s >= 3;
+          const showHide = isFav && hasFriends; // per-item «hide from friends» needs me to have friends
+          if (!showFriends && !showCount && !showHide) return null;
           return (
             <div className="sheet__social">
-              <span className="sheet__social-stat" title={`${s} сохранили`}>
-                <IconHeart size={13} filled />
-                {s}
-              </span>
+              {showFriends && (
+                <span className="sheet__friends" title={`сохранили: ${friends.map((f) => f.name || "друг").join(", ")}`}>
+                  <span className="sheet__faces" aria-hidden="true">
+                    {friends.slice(0, 3).map((f) => (
+                      <span
+                        key={f.id}
+                        className="sheet__face"
+                        style={f.photo_url ? { backgroundImage: `url("${f.photo_url}")` } : undefined}
+                      >
+                        {f.photo_url ? "" : (f.name || "?").slice(0, 1).toUpperCase()}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="sheet__friends-label">{friendsNames(friends)}</span>
+                </span>
+              )}
+              {showCount && (
+                <span className="sheet__social-stat" title={`${s} сохранили`}>
+                  <IconHeart size={13} filled />
+                  {s}
+                </span>
+              )}
+              {showHide && (
+                <button
+                  type="button"
+                  className={`sheet__hidefriends${hiddenFromFriends ? " is-hidden" : ""}`}
+                  onClick={toggleHiddenFromFriends}
+                  aria-pressed={hiddenFromFriends}
+                >
+                  {hiddenFromFriends ? "скрыто от друзей" : "видно друзьям"}
+                </button>
+              )}
             </div>
           );
         })()}

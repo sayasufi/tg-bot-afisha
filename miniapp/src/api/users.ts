@@ -55,7 +55,11 @@ export type UserSettings = {
   interests?: string[]; // categories picked at onboarding — warms the "Для тебя" feed
   notify_reminders?: boolean; // global mute for the per-event reminder DMs (default on)
   notify_digest?: boolean; // opt-in to the weekly digest DM (default off)
+  friends_private?: boolean; // hide ALL my favourites from friends (default off)
 };
+
+// A friend mini-profile — the faces in the «друг сохранил это» social proof + the profile friend list.
+export type Friend = { id: number; name: string; username?: string | null; photo_url?: string | null };
 
 export async function syncSettings(patch?: Partial<UserSettings>): Promise<UserSettings | null> {
   const init = initData();
@@ -97,6 +101,73 @@ export async function toggleFavoriteRemote(
     return Array.isArray(j.ids) ? j.ids : null;
   } catch {
     return null;
+  }
+}
+
+// For the given events, which of MY friends saved each (event_id → faces), plus which of these I've
+// hidden from friends. The «друг сохранил это» signal in the event sheet. Null outside Telegram / error.
+export async function fetchFriendsFavorited(
+  eventIds: string[],
+): Promise<{ friends: Record<string, Friend[]>; hidden: string[]; hasFriends: boolean } | null> {
+  const init = initData();
+  if (!init || !eventIds.length) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friends-favorited`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, event_ids: eventIds }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { friends?: Record<string, Friend[]>; hidden?: string[]; has_friends?: boolean };
+    return { friends: j.friends ?? {}, hidden: Array.isArray(j.hidden) ? j.hidden : [], hasFriends: !!j.has_friends };
+  } catch {
+    return null;
+  }
+}
+
+// List my friends + incoming requests, or act on one (accept / decline a request, remove / block /
+// unblock). Returns {friends, requests, firstFriend} (firstFriend=true when an accept made my first
+// friend → one-time disclosure), or null outside Telegram / on error.
+export type FriendsState = { friends: Friend[]; requests: Friend[]; firstFriend: boolean };
+export async function manageFriends(
+  action?: "accept" | "decline" | "remove" | "block" | "unblock",
+  friendId?: number,
+): Promise<FriendsState | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friends`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, action, friend_id: friendId }),
+      keepalive: true,
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { friends?: Friend[]; requests?: Friend[]; first_friend?: boolean };
+    return {
+      friends: Array.isArray(j.friends) ? j.friends : [],
+      requests: Array.isArray(j.requests) ? j.requests : [],
+      firstFriend: !!j.first_friend,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Hide / unhide one of my favourites from friends (per-item privacy). Returns whether it persisted.
+export async function hideFavoriteRemote(eventId: string, hidden: boolean): Promise<boolean> {
+  const init = initData();
+  if (!init) return false;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/favorites/hide`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, event_id: eventId, hidden }),
+      keepalive: true,
+    });
+    return r.ok;
+  } catch {
+    return false;
   }
 }
 

@@ -890,6 +890,168 @@ mark.hl {
 }
 
 /* Settings switch (digest opt-in) — a flat VITRINE toggle: plaster→acid track, ink knob. */
+/* Friend list (profile) — avatar · name/@handle · unfriend. Hairline rows, like the venue list. */
+.profile__friends {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+.profile__friend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.profile__friend-av {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background-color: var(--plinth);
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-family: var(--grotesk);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+.profile__friend-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.profile__friend-name {
+  font-family: var(--grotesk);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile__friend-handle {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile__friend-x {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+.profile__friend-x:active {
+  color: var(--cinnabar);
+}
+/* Incoming request row actions: a small acid «принять» + the same × to decline. */
+.profile__req-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.profile__req-accept {
+  border: 0;
+  cursor: pointer;
+  padding: 6px 12px;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--grotesk);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: lowercase;
+  box-shadow: 1.4px 1.4px 0 var(--cinnabar);
+}
+.profile__friends-empty {
+  margin: 2px 0 14px;
+  font-family: var(--grotesk);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+
+/* First-friend disclosure — a small centred dialog over a dim veil. */
+.fdisc-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(11, 11, 11, 0.5);
+}
+.fdisc {
+  width: 100%;
+  max-width: 340px;
+  background: var(--plinth);
+  box-shadow: 0 0 0 1px var(--ink), 6px 6px 0 var(--acid);
+  padding: 22px 20px 18px;
+}
+.fdisc__kicker {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.fdisc__title {
+  margin: 6px 0 10px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+  color: var(--ink);
+}
+.fdisc__body {
+  margin: 0 0 18px;
+  font-family: var(--grotesk);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-dim);
+}
+.fdisc__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.fdisc__ghost,
+.fdisc__cta {
+  border: 0;
+  cursor: pointer;
+  padding: 10px 16px;
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+.fdisc__ghost {
+  background: none;
+  color: var(--ink-dim);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.fdisc__cta {
+  background: var(--acid);
+  color: var(--on-acid);
+  box-shadow: 1.6px 1.6px 0 var(--cinnabar);
+}
+
 .profile__switch {
   display: flex;
   align-items: center;

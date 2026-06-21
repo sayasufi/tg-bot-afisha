@@ -134,6 +134,12 @@ export function App() {
     setNotifyDigest(on);
     pushSetting("notify_digest", on);
   }, []);
+  // Friends privacy: hide ALL my favourites from friends (default off — the friend edge is consent).
+  const [friendsPrivate, setFriendsPrivate] = useState(false);
+  const toggleFriendsPrivate = useCallback((on: boolean) => {
+    setFriendsPrivate(on);
+    pushSetting("friends_private", on);
+  }, []);
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
   // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
@@ -178,6 +184,7 @@ export function App() {
       if (Array.isArray(s.interests) && s.interests.length) setPickedInterests(s.interests);
       if (typeof s.notify_reminders === "boolean") setNotifyReminders(s.notify_reminders);
       if (typeof s.notify_digest === "boolean") setNotifyDigest(s.notify_digest);
+      if (typeof s.friends_private === "boolean") setFriendsPrivate(s.friends_private);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -884,7 +891,8 @@ export function App() {
         invitedBy={invite && selected?.event_id === invite.eventId ? invite.inviterId : null}
         onAccept={() => {
           if (!selected) return;
-          // Accepting a «Пойдём?» invite = favourite it + attribute the inviter (the bot DMs them).
+          // Accepting a «Пойдём?» invite = favourite it + attribute the inviter (the bot DMs them) +
+          // send the inviter a friend REQUEST (they confirm it in their profile).
           const inv = invite && invite.eventId === selected.event_id ? invite : null;
           if (inv) fav.accept(selected.event_id, inv.inviterId, inv.sig);
         }}
@@ -940,6 +948,8 @@ export function App() {
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
+            friendsPrivate={friendsPrivate}
+            onToggleFriendsPrivate={toggleFriendsPrivate}
             theme={theme}
             onToggleTheme={toggleTheme}
             onOpenFavorites={() => setView("favorites")}

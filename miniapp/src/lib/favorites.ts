@@ -63,9 +63,9 @@ export function toggleFavorite(id: string): void {
     });
 }
 
-// «Пойдём?» invite accepted → favourite the event AND attribute the inviter so the bot DMs them once
-// (server-deduped). Ensures favourited; harmless if already so (the server's "newly added" check
-// stops a duplicate DM).
+// «Пойдём?» invite accepted → favourite the event AND attribute the inviter (the bot DMs them once,
+// server-deduped) AND send the inviter a friend REQUEST (they confirm it; a pending edge exposes
+// nothing). Harmless if already saved (the server's dedup stops a repeat DM; the request is idempotent).
 export function acceptInvite(id: string, inviter: number, sig: string): void {
   if (!favs.has(id)) {
     const next = new Set(favs);
