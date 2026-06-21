@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
-import { fetchFriendsFavorited, hideFavoriteRemote, type Friend } from "../../api/users";
+import { fetchFriendsFavorited, type Friend } from "../../api/users";
 import { logIntent } from "../../api/intent";
 import { categoryMeta } from "../../lib/categories";
 import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
@@ -72,11 +72,9 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const [descOpen, setDescOpen] = useState(false);
   const [datesOpen, setDatesOpen] = useState(false);
   const [swipeHint, setSwipeHint] = useState(false);
-  // «друг сохранил это» — friends who saved THIS event (faces), whether MY save is hidden from friends,
-  // and whether I have any friends at all (gates the per-item hide control).
+  // «друг сохранил это» — friends who saved THIS event (faces). Whether MY favourites are visible to
+  // friends is a single global setting (friends_private), not a per-item toggle.
   const [friendFaces, setFriendFaces] = useState<Friend[]>([]);
-  const [hiddenFromFriends, setHiddenFromFriends] = useState(false);
-  const [hasFriends, setHasFriends] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false); // «позвать друга» picker
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -104,8 +102,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     setDescOpen(false);
     setDatesOpen(false);
     setFriendFaces([]);
-    setHiddenFromFriends(false);
-    setHasFriends(false);
     if (!selected) return;
     const ctrl = new AbortController();
     let alive = true;
@@ -117,8 +113,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
       .then((res) => {
         if (!alive || !res) return;
         setFriendFaces(res.friends[eid] ?? []);
-        setHiddenFromFriends(res.hidden.includes(eid));
-        setHasFriends(res.hasFriends);
       })
       .catch(() => undefined);
     return () => {
@@ -347,16 +341,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     onAccept();
   };
 
-  // Per-item privacy: hide / unhide THIS favourite from friends. Optimistic; persisted best-effort.
-  const toggleHiddenFromFriends = () => {
-    if (!selected) return;
-    const next = !hiddenFromFriends;
-    setHiddenFromFriends(next);
-    haptic("light");
-    void hideFavoriteRemote(selected.event_id, next);
-    showToast(next ? "Скрыто от друзей" : "Снова видно друзьям", { tone: next ? "muted" : "good" });
-  };
-
   return (
     <>
       <div className="sheet-veil" onClick={onClose} />
@@ -457,8 +441,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           // De-anon rule: when friends are named, do NOT also show the exact count (it would let you
           // subtract the named ones to deduce a stranger). Anonymous count only when no friends shown.
           const showCount = !showFriends && s >= 3;
-          const showHide = isFav && hasFriends; // per-item «hide from friends» needs me to have friends
-          if (!showFriends && !showCount && !showHide) return null;
+          if (!showFriends && !showCount) return null;
           return (
             <div className="sheet__social">
               {showFriends && (
@@ -482,16 +465,6 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
                   <IconHeart size={13} filled />
                   {s}
                 </span>
-              )}
-              {showHide && (
-                <button
-                  type="button"
-                  className={`sheet__hidefriends${hiddenFromFriends ? " is-hidden" : ""}`}
-                  onClick={toggleHiddenFromFriends}
-                  aria-pressed={hiddenFromFriends}
-                >
-                  {hiddenFromFriends ? "скрыто от друзей" : "видно друзьям"}
-                </button>
               )}
             </div>
           );

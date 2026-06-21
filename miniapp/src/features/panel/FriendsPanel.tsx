@@ -280,7 +280,7 @@ export function FriendsPanel({
         >
           <span className="profile__switch-text">
             <span className="profile__switch-label">Скрыть от друзей</span>
-            <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь. Отдельное событие можно скрыть в его карточке</span>
+            <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь — ни в профиле, ни на карте</span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />
