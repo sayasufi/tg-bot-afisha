@@ -309,19 +309,30 @@ export function App() {
   // user-scoped side-channel. NOT gated on a cached «has friends» flag — that goes stale the moment you
   // become a friend mid-session (the bug); a friendless user's query is empty + cheap (0-row JOIN).
   useEffect(() => {
+    const bb = mapBbox;
     if (view !== "map" || (mapZoom ?? 0) < DETAIL_ZOOM || shownItems.length === 0) {
       setFriendMapIds((prev) => (prev.size ? new Set() : prev));
       return;
     }
-    const ids = shownItems.slice(0, 250).map((i) => i.event_id);
+    // Send the events actually IN VIEW, not the first 250 of every loaded event — shownItems accumulates
+    // far more than the viewport, so the visible (rendered) pins could fall past the cap and never be
+    // checked. Filter to mapBbox (same bbox the map renders pins for) so the visible set is what we ask.
+    const inView = bb
+      ? shownItems.filter((i) => i.lat != null && i.lon != null && i.lon >= bb[0] && i.lon <= bb[2] && i.lat >= bb[1] && i.lat <= bb[3])
+      : shownItems;
+    if (inView.length === 0) {
+      setFriendMapIds((prev) => (prev.size ? new Set() : prev));
+      return;
+    }
+    const ids = inView.slice(0, 250).map((i) => i.event_id);
     let alive = true;
     const t = setTimeout(() => {
       void fetchFriendsFavorited(ids).then((res) => {
         if (!alive || !res) return;
         const keys = Object.keys(res.friends);
-        // Keep the SAME Set identity when the friend-set is unchanged (e.g. you have no friends, or the
-        // visible friend-saves didn't change on this zoom) — otherwise a new empty/equal Set reference
-        // would re-trigger the pins memo and blink every marker a second time after each zoom.
+        // Keep the SAME Set identity when the friend-set is unchanged (you have no friends, or the
+        // visible friend-saves didn't change) — otherwise a new equal Set reference would re-trigger the
+        // pins memo and blink every marker a second time after each zoom/pan.
         setFriendMapIds((prev) => (prev.size === keys.length && keys.every((k) => prev.has(k)) ? prev : new Set(keys)));
       });
     }, 450);
@@ -329,7 +340,7 @@ export function App() {
       alive = false;
       clearTimeout(t);
     };
-  }, [view, mapZoom, shownItems]);
+  }, [view, mapZoom, mapBbox, shownItems]);
   const shownTotal = (filters.radiusKm && userPos) || filters.goNow ? shownItems.length : total;
 
   // «Сейчас» list header count: the can-go-now events (the same map pins, via goNowIds) that
