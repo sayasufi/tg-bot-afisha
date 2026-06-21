@@ -66,34 +66,31 @@
   display: none;
 }
 
-/* A friend saved this event — a small black «friend» badge on the plate's bottom-right corner (legend:
-   black = friend). Replaces the old acid ring, which read as «selected» and fought the frame; the plate
-   itself stays a normal pin (so it keeps the flat, blink-free shadow). Sits above ordinary pins. */
+/* A friend saved this event — a small acid «+N» badge straddling the plate's bottom-right corner (how many
+   friends saved it). The plate itself stays a normal pin (keeps the flat, blink-free shadow). Above pins. */
 .vpin--friend {
   z-index: 500;
 }
 .vpin__friend {
   position: absolute;
-  /* straddle the plate's bottom-right corner (GitHub-badge style) — a secondary hint, not the main signal */
-  right: -5px;
-  bottom: -5px;
-  width: 11px;
-  height: 11px;
+  /* straddle the plate's bottom-right corner (badge style) — a secondary hint, not the main signal */
+  right: -6px;
+  bottom: -6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
   display: grid;
   place-items: center;
-  background: var(--ink);
-  color: var(--plinth);
+  background: var(--acid);
+  color: var(--ink);
+  border-radius: 7px;
   box-shadow: 0 0 0 1.5px var(--plinth);
   font-family: var(--mono);
   font-size: 8px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1;
   z-index: 3;
-}
-.vpin__friend svg {
-  display: block;
-  width: 8px;
-  height: 8px;
 }
 
 /* Catalogue code on the focused pin — the exhibit's accession number, mono on ink, acid type. Floated
