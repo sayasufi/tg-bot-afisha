@@ -2074,8 +2074,7 @@ mark.hl {
   --rule: rgba(255, 255, 255, 0.3);
   --rule-strong: rgba(255, 255, 255, 0.62);
 }
-.cat--whiteband,
-.cat--acidband {
+.cat--whiteband {
   --rule: rgba(11, 11, 11, 0.22);
   --rule-strong: rgba(11, 11, 11, 0.5);
 }
@@ -2108,15 +2107,17 @@ mark.hl {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 24%, rgba(0, 0, 0, 0.5) 48%, var(--ink) 82%);
 }
 
-/* ---- Variant: whiteband — photo fades into a solid white band; dark type on it ---- */
+/* ---- Variant: whiteband — photo fades into a white band; dark type on it. Kept SHORT so the
+   photo owns the top of the card: the solid band sits low (padding-top 28, solid at 24px), and
+   a tiny top scrim keeps the code legible. (No acid sibling — opaque colour bands removed.) ---- */
 .cat--whiteband .cat__scrim {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 22%);
 }
 .cat--whiteband .cat__panel {
-  /* Same fix as acidband: derive the transparent stop from --plinth so the fade tracks
-     the surface token (dark plinth at night) instead of a hardcoded white. */
-  background: linear-gradient(180deg, color-mix(in srgb, var(--plinth) 0%, transparent) 0%, var(--plinth) 44px);
-  padding-top: 48px;
+  /* Transparent stop derived from --plinth so the fade tracks the surface token (dark plinth at
+     night) instead of a hardcoded white. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--plinth) 0%, transparent) 0%, var(--plinth) 24px);
+  padding-top: 28px;
   color: var(--ink);
 }
 .cat--whiteband .cat__meta {
@@ -2124,26 +2125,6 @@ mark.hl {
 }
 .cat--whiteband .cat__price {
   color: var(--ink);
-}
-
-/* ---- Variant: acidband — photo fades into a solid acid band; ink type on it ---- */
-.cat--acidband .cat__scrim {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 22%);
-}
-.cat--acidband .cat__panel {
-  /* Transparent stop derived from --acid (NOT a hardcoded chartreuse) so it inverts
-     cleanly in dark — where --acid is #3300ff, a literal rgba(204,255,0,0) start fades
-     through muddy chartreuse. color-mix keeps the fade in the actual accent's hue. */
-  background: linear-gradient(180deg, color-mix(in srgb, var(--acid) 0%, transparent) 0%, var(--acid) 44px);
-  padding-top: 48px;
-  color: var(--on-acid);
-}
-.cat--acidband .cat__meta {
-  color: var(--on-acid);
-  opacity: 0.82;
-}
-.cat--acidband .cat__price {
-  color: var(--on-acid);
 }
 
 /* ---- Variant: topband — fade from the top; title sits at the top, code moves down ---- */

@@ -41,10 +41,11 @@ function derive(item: EventItem, now?: number): Card {
 }
 
 // Every card is a photo block; the look is one of several variants that rotate so adjacent
-// cards never repeat. Transitions fade to black / white / acid, from bottom / right / top.
-type Variant = "bottom" | "sideblack" | "band" | "tall" | "whiteband" | "acidband" | "topband";
-const FULL_VARIANTS: Variant[] = ["bottom", "sideblack", "whiteband", "tall", "band", "acidband", "topband"];
-const HALF_VARIANTS: Variant[] = ["bottom", "whiteband", "band", "acidband"];
+// cards never repeat. Transitions fade to black / white, from bottom / right / top. (No acid
+// band — an opaque saturated band reads as «poster replaced by colour», off-brand here.)
+type Variant = "bottom" | "sideblack" | "band" | "tall" | "whiteband" | "topband";
+const FULL_VARIANTS: Variant[] = ["bottom", "sideblack", "whiteband", "tall", "band", "topband"];
+const HALF_VARIANTS: Variant[] = ["bottom", "whiteband", "band"];
 const ROWS = ["full", "duo", "full", "full", "duo"] as const;
 // A rule between title and footer, varied by weight + geometry: none / thin hairline / bold
 // line / a short stub (rotates). Adjacent duo cards never both get one (enforced below).
