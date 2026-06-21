@@ -1,16 +1,18 @@
 import { useRef } from "react";
 
+import { IconBuilding, IconHeart, IconMap, IconPeople, IconSparkle } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import type { View } from "./view";
 
-const NAV: { key: View; label: string; glyph: string }[] = [
-  { key: "map", label: "Карта", glyph: "▦" },
-  { key: "recs", label: "Подборка", glyph: "✷" },
-  { key: "favorites", label: "Избранное", glyph: "♥" },
-  { key: "friends", label: "Друзья", glyph: "⊚" },
-  { key: "venues", label: "Площадки", glyph: "⌂" },
+type NavIcon = (props: { size?: number; className?: string }) => JSX.Element;
+const NAV: { key: View; label: string; Icon: NavIcon }[] = [
+  { key: "map", label: "Карта", Icon: IconMap },
+  { key: "recs", label: "Подборка", Icon: IconSparkle },
+  { key: "favorites", label: "Избранное", Icon: IconHeart },
+  { key: "venues", label: "Площадки", Icon: IconBuilding },
+  { key: "friends", label: "Друзья", Icon: IconPeople },
 ];
 
 export function Sidebar({
@@ -61,7 +63,9 @@ export function Sidebar({
               className={`navitem${view === n.key ? " navitem--active" : ""}`}
               onClick={() => onSelect(n.key)}
             >
-              <span className="navitem__glyph">{n.glyph}</span>
+              <span className="navitem__glyph">
+                <n.Icon size={19} />
+              </span>
               {n.label}
               {(navCount[n.key] ?? 0) > 0 && <span className="navitem__badge">{navCount[n.key]}</span>}
             </button>

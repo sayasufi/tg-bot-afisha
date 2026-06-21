@@ -81,8 +81,9 @@
 
 .navitem__glyph {
   width: 22px;
-  text-align: center;
-  font-size: 15px;
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
   color: var(--ink-faint);
 }
 

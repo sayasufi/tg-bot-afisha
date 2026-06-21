@@ -113,6 +113,55 @@ export function IconPin({ size = 18, className }: UiProps) {
   );
 }
 
+// Folded paper map — the «Карта» nav item.
+export function IconMap({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+      <line x1="9" y1="3" x2="9" y2="18" />
+      <line x1="15" y1="6" x2="15" y2="21" />
+    </svg>
+  );
+}
+
+// Six-point asterisk — the «Подборка» (curated picks) nav item. A spark, not a star.
+export function IconSparkle({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <line x1="12" y1="3.5" x2="12" y2="20.5" />
+      <line x1="4.65" y1="7.75" x2="19.35" y2="16.25" />
+      <line x1="4.65" y1="16.25" x2="19.35" y2="7.75" />
+    </svg>
+  );
+}
+
+// Buildings — the «Площадки» (venues) nav item. A main block with windows + side wings.
+export function IconBuilding({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <path d="M6 21.5V4.5A1.5 1.5 0 0 1 7.5 3h6A1.5 1.5 0 0 1 15 4.5v17" />
+      <path d="M15 9h2.5A1.5 1.5 0 0 1 19 10.5v11" />
+      <path d="M6 12.5H3.5A1.5 1.5 0 0 0 2 14v7.5" />
+      <line x1="1.5" y1="21.5" x2="22.5" y2="21.5" />
+      <line x1="9" y1="7" x2="12" y2="7" />
+      <line x1="9" y1="11" x2="12" y2="11" />
+      <line x1="9" y1="15" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+// Two people — the «Друзья» nav item. A front figure + a partial figure behind (reads as 👥).
+export function IconPeople({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <path d="M15.5 20.5v-1.8a3.8 3.8 0 0 0-3.8-3.8H6.3a3.8 3.8 0 0 0-3.8 3.8v1.8" />
+      <circle cx="9" cy="7.3" r="3.8" />
+      <path d="M21.5 20.5v-1.8a3.8 3.8 0 0 0-2.85-3.68" />
+      <path d="M15.5 3.7a3.8 3.8 0 0 1 0 7.36" />
+    </svg>
+  );
+}
+
 // "All categories" mark — a filled 2×2 grid (reads as "everything").
 export function IconGrid({ size = 18, className }: UiProps) {
   return (
