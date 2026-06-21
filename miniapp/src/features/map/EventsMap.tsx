@@ -218,10 +218,14 @@ function ServerClusters({ clusters }: { clusters: MapCluster[] }) {
 
 // Keep pins whose point falls in the viewport, padded by 30% so markers near the
 // edge appear before they scroll fully into view.
+// Pins are pre-rendered for a margin BEYOND the viewport (not just what's on screen) so they're already
+// there when you pan, instead of popping in after the gesture settles. 0.6 = a 60%-of-viewport buffer on
+// each side (the set updates on moveend; this covers a typical drag before the edge runs dry).
+const _BBOX_PAD = 0.6;
 function inBbox(lat: number, lon: number, b: Bbox): boolean {
   const [w, s, e, n] = b;
-  const px = (e - w) * 0.3;
-  const py = (n - s) * 0.3;
+  const px = (e - w) * _BBOX_PAD;
+  const py = (n - s) * _BBOX_PAD;
   return lon >= w - px && lon <= e + px && lat >= s - py && lat <= n + py;
 }
 
