@@ -317,7 +317,12 @@ export function App() {
     let alive = true;
     const t = setTimeout(() => {
       void fetchFriendsFavorited(ids).then((res) => {
-        if (alive && res) setFriendMapIds(new Set(Object.keys(res.friends)));
+        if (!alive || !res) return;
+        const keys = Object.keys(res.friends);
+        // Keep the SAME Set identity when the friend-set is unchanged (e.g. you have no friends, or the
+        // visible friend-saves didn't change on this zoom) — otherwise a new empty/equal Set reference
+        // would re-trigger the pins memo and blink every marker a second time after each zoom.
+        setFriendMapIds((prev) => (prev.size === keys.length && keys.every((k) => prev.has(k)) ? prev : new Set(keys)));
       });
     }, 450);
     return () => {
