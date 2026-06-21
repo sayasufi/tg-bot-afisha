@@ -20,6 +20,7 @@ from core.db.repositories.reminders import (
 )
 from core.db.repositories.friends import (
     accept_request,
+    befriend,
     count_friends,
     decline_request,
     friends_who_favorited,
@@ -27,7 +28,6 @@ from core.db.repositories.friends import (
     list_requests,
     my_hidden_event_ids,
     remove_friend,
-    request_friend,
     set_favorite_hidden,
     set_mute,
 )
@@ -170,29 +170,28 @@ async def sync_favorites(payload: FavoritesSyncRequest, db: AsyncSession = Depen
 @router.post("/favorites")
 async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Depends(get_async_db)):
     """Heart / un-heart one event. Favouriting also arms its pre-event reminder (unless reminders are
-    globally muted); accepting a signed «Пойдём?» invite additionally sends the inviter a friend REQUEST
-    (which they confirm — a pending edge exposes nothing) and DMs them once."""
+    globally muted); accepting a signed «Пойдём?» invite additionally makes the inviter a mutual FRIEND
+    instantly (accepting is the consent) and DMs them once."""
     user, uid = _auth(payload.init_data)
     await upsert_user_async(
         db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
     )
     await set_favorite(db, uid, payload.event_id, payload.on)
     notify: tuple[int, str] | None = None
-    friend = "none"  # friendship outcome of this accept: 'accepted' (mutual now) / 'pending' / 'none'
+    friend = "none"  # friendship outcome of this accept: 'accepted' (mutual friends now) / 'none'
     first_friend = False
     if payload.on:
         await _arm_reminder(db, uid, payload.event_id)
-        # Invite accept via a genuine SIGNED «Пойдём?» link → record a PENDING friend request the inviter
-        # confirms (a pending edge leaks nothing; the inviter chooses) — UNLESS a reciprocal request
-        # already exists (both invited each other), then they become friends now. DM the inviter once
-        # (Redis-deduped). Independent of whether the event was already favourited. Never self/muted/ghost.
+        # Invite accept via a genuine SIGNED «Пойдём?» link → become mutual friends with the inviter NOW
+        # (accepting is the consent — no confirmation). DM the inviter once (Redis-deduped). Independent
+        # of whether the event was already favourited. Never self / muted / non-existent inviter.
         if (
             payload.inviter_id
             and int(payload.inviter_id) != uid
             and invite_verify(payload.event_id, payload.inviter_id, payload.sig)
         ):
             inviter = int(payload.inviter_id)
-            friend = await request_friend(db, inviter, uid, src_event_id=payload.event_id)
+            friend = await befriend(db, uid, inviter, src_event_id=payload.event_id)
             if friend == "accepted" and await count_friends(db, uid) == 1:
                 first_friend = True  # my first friend, formed instantly → one-time disclosure
             recip = await get_settings(db, inviter)
@@ -302,7 +301,7 @@ async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_i
         return
     text = (
         f"🎉 <b>{escape(name or 'Кто-то')}</b> принял твоё приглашение\n{escape(title or 'на событие')}\n\n"
-        "Хочет добавиться в друзья — подтверди заявку в профиле."
+        "Теперь вы друзья — смотрите, что друг у друга в избранном."
     )
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
     try:

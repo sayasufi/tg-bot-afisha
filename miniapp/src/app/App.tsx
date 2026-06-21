@@ -149,7 +149,22 @@ export function App() {
   const [friendDisclosure, setFriendDisclosure] = useState(false);
   const [friendReqCount, setFriendReqCount] = useState(0);
   useEffect(() => {
-    void manageFriends().then((s) => s && setFriendReqCount(s.requests.length));
+    void manageFriends().then((s) => {
+      if (!s) return;
+      setFriendReqCount(s.requests.length);
+      // You may have become someone's friend while away (they accepted your invite). Show the one-time
+      // «friends see your saves» disclosure on open if you have any friend and haven't seen it.
+      if (s.friends.length > 0) {
+        try {
+          if (localStorage.getItem("okrest_friend_disclosed") !== "1") {
+            localStorage.setItem("okrest_friend_disclosed", "1");
+            setFriendDisclosure(true);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
   }, []);
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
   // Current city (nearest by geolocation, or an explicit pick) drives the map `city`

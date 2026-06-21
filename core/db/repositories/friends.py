@@ -43,25 +43,21 @@ async def _both_exist(db: AsyncSession, a: int, b: int) -> bool:
     return a in rows and b in rows
 
 
-async def request_friend(db: AsyncSession, target: int, requester: int, *, src_event_id: str | None = None) -> str:
-    """`requester` accepted `target`'s signed «Пойдём?». Normally this records a PENDING request the
-    `target` (inviter) must CONFIRM — a pending edge exposes NOTHING (friends_who_favorited /
-    count_friends require 'accepted'), so a forwarded/broadcast link can't auto-befriend or leak a
-    favourite; the inviter chooses. BUT if a RECIPROCAL request already exists (the target earlier
-    accepted the requester's OWN invite → a pending row the other way), both have reached out, so they
-    become friends NOW — no second confirmation. No commit. Returns 'accepted' (mutual → friends now),
-    'pending' (request created), or 'none' (skipped: self / non-existent / blocked / already friends /
-    at cap / duplicate)."""
-    target, requester = int(target), int(requester)
-    if target == requester:
+async def befriend(db: AsyncSession, a: int, b: int, *, src_event_id: str | None = None) -> str:
+    """Make `a` and `b` mutual friends NOW — accepting a «Пойдём?» invite IS the consent, no
+    confirmation step. Writes the symmetric 'accepted' pair (upgrading a Phase-2 pending edge if one
+    exists). No commit. Returns 'accepted' (a NEW friendship formed) or 'none' (skipped: self /
+    non-existent account (FK) / blocked pair / already friends / either at the friend cap)."""
+    a, b = int(a), int(b)
+    if a == b:
         return "none"
-    if not await _both_exist(db, target, requester):
+    if not await _both_exist(db, a, b):
         return "none"
     blocked = await db.scalar(
         select(func.count()).select_from(UserMute).where(
             or_(
-                and_(UserMute.user_id == target, UserMute.muted_user_id == requester),
-                and_(UserMute.user_id == requester, UserMute.muted_user_id == target),
+                and_(UserMute.user_id == a, UserMute.muted_user_id == b),
+                and_(UserMute.user_id == b, UserMute.muted_user_id == a),
             )
         )
     )
@@ -69,44 +65,30 @@ async def request_friend(db: AsyncSession, target: int, requester: int, *, src_e
         return "none"
     already = await db.scalar(
         select(func.count()).select_from(UserFriend).where(
-            UserFriend.user_id == target, UserFriend.friend_id == requester, UserFriend.status == "accepted"
+            UserFriend.user_id == a, UserFriend.friend_id == b, UserFriend.status == "accepted"
         )
     )
     if already:
         return "none"  # already friends
-    if await count_friends(db, target) >= _FRIEND_CAP or await count_friends(db, requester) >= _FRIEND_CAP:
+    if await count_friends(db, a) >= _FRIEND_CAP or await count_friends(db, b) >= _FRIEND_CAP:
         return "none"
-    # Reciprocal pending (the requester previously got a pending request from the target — i.e. the
-    # target accepted the requester's own invite). Both reached out → friends now, skip the confirm step.
-    reciprocal = await db.scalar(
-        select(func.count()).select_from(UserFriend).where(
-            UserFriend.user_id == requester, UserFriend.friend_id == target, UserFriend.status == "pending"
-        )
-    )
-    if reciprocal:
-        await db.execute(
-            update(UserFriend)
-            .where(UserFriend.user_id == requester, UserFriend.friend_id == target, UserFriend.status == "pending")
-            .values(status="accepted")
-        )
-        await db.execute(
-            pg_insert(UserFriend.__table__)
-            .values(user_id=target, friend_id=requester, status="accepted")
-            .on_conflict_do_update(index_elements=["user_id", "friend_id"], set_={"status": "accepted"})
-        )
-        return "accepted"
     eid: uuid.UUID | None = None
     if src_event_id:
         try:
             eid = uuid.UUID(str(src_event_id))
         except (ValueError, TypeError):
             eid = None
-    res = await db.execute(
+    await db.execute(
         pg_insert(UserFriend.__table__)
-        .values(user_id=target, friend_id=requester, status="pending", src_event_id=eid)
-        .on_conflict_do_nothing()  # don't downgrade an existing accepted/pending edge
+        .values(
+            [
+                {"user_id": a, "friend_id": b, "status": "accepted", "src_event_id": eid},
+                {"user_id": b, "friend_id": a, "status": "accepted", "src_event_id": eid},
+            ]
+        )
+        .on_conflict_do_update(index_elements=["user_id", "friend_id"], set_={"status": "accepted"})
     )
-    return "pending" if res.rowcount else "none"
+    return "accepted"
 
 
 async def accept_request(db: AsyncSession, uid: int, requester: int) -> bool:
