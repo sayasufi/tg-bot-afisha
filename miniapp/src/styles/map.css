@@ -56,6 +56,17 @@
   display: none;
 }
 
+/* A friend saved this event — a thin acid ring hugging the plate (no avatar; VITRINE «info > photo»).
+   Sits above ordinary pins but below the active one. */
+.vpin--friend {
+  z-index: 500;
+}
+.vpin--friend .vpin__plate {
+  box-shadow:
+    inset 0 0 0 1px var(--ink),
+    0 0 0 2.5px var(--acid);
+}
+
 .vpin__nail {
   width: 1px;
   height: 8px;

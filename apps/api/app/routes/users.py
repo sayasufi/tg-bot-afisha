@@ -254,7 +254,7 @@ async def get_friends_favorited(payload: FriendsFavoritedRequest, db: AsyncSessi
     event sheet. Read-only (no commit). Privacy is enforced in the query (accepted edge, not private, not
     hidden, not muted). Also returns which of these I've hidden, so the sheet's per-item toggle is correct."""
     _user, uid = _auth(payload.init_data)
-    ids = payload.event_ids[:100]
+    ids = payload.event_ids[:250]  # the map sends the visible pins at detail zoom; the sheet sends 1
     return {
         "friends": await friends_who_favorited(db, uid, ids),
         "hidden": await my_hidden_event_ids(db, uid, ids),

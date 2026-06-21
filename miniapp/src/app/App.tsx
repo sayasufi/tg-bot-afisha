@@ -29,7 +29,7 @@ const FollowedVenuesPanel = lazy(() =>
 const FriendsPanel = lazy(() => import("../features/panel/FriendsPanel").then((m) => ({ default: m.FriendsPanel })));
 const FriendProfile = lazy(() => import("../features/panel/FriendProfile").then((m) => ({ default: m.FriendProfile })));
 import { FriendDisclosure } from "../features/panel/FriendDisclosure";
-import { manageFriends, type Friend } from "../api/users";
+import { fetchFriendsFavorited, manageFriends, type Friend } from "../api/users";
 import { showToast } from "../lib/toast";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
@@ -95,6 +95,7 @@ export function App() {
   // List view ("Списком"): the current map bbox (reported by EventsMap) + the bbox
   // frozen when the list was opened, so the list reflects the area you were looking at.
   const [mapBbox, setMapBbox] = useState<[number, number, number, number] | null>(null);
+  const [mapZoom, setMapZoom] = useState<number | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [listBbox, setListBbox] = useState<[number, number, number, number] | null>(null);
   // An open «Подборка» detail (opened from the recs grid/«смотреть все»), layered over the recs panel.
@@ -149,11 +150,14 @@ export function App() {
   // badge count of incoming friend requests (pulled once on open, kept live by the Friends panel).
   const [friendDisclosure, setFriendDisclosure] = useState(false);
   const [friendReqCount, setFriendReqCount] = useState(0);
+  const [hasFriends, setHasFriends] = useState(false); // gates the friends-on-map fetch
   const [friendProfile, setFriendProfile] = useState<Friend | null>(null); // open friend's profile overlay
+  const [friendMapIds, setFriendMapIds] = useState<Set<string>>(() => new Set()); // visible events a friend saved
   useEffect(() => {
     void manageFriends().then((s) => {
       if (!s) return;
       setFriendReqCount(s.requests.length);
+      setHasFriends(s.friends.length > 0);
       // You may have become someone's friend while away (they accepted your invite). Show the one-time
       // «friends see your saves» disclosure on open if you have any friend and haven't seen it.
       if (s.friends.length > 0) {
@@ -301,6 +305,27 @@ export function App() {
     () => (filters.goNow ? radiusItems.filter((i) => goNowIds.has(i.event_id)) : radiusItems),
     [radiusItems, filters.goNow, goNowIds],
   );
+
+  // Friends-on-map: which of the visible events a friend has saved → an acid ring on those pins. Only
+  // at detail zoom (individual pins, a neighbourhood-sized set), only if you have friends, debounced so
+  // panning doesn't spam the user-scoped side-channel. Cleared otherwise.
+  useEffect(() => {
+    if (!hasFriends || view !== "map" || (mapZoom ?? 0) < DETAIL_ZOOM || shownItems.length === 0) {
+      setFriendMapIds((prev) => (prev.size ? new Set() : prev));
+      return;
+    }
+    const ids = shownItems.slice(0, 250).map((i) => i.event_id);
+    let alive = true;
+    const t = setTimeout(() => {
+      void fetchFriendsFavorited(ids).then((res) => {
+        if (alive && res) setFriendMapIds(new Set(Object.keys(res.friends)));
+      });
+    }, 450);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [hasFriends, view, mapZoom, shownItems]);
   const shownTotal = (filters.radiusKm && userPos) || filters.goNow ? shownItems.length : total;
 
   // «Сейчас» list header count: the can-go-now events (the same map pins, via goNowIds) that
@@ -826,6 +851,7 @@ export function App() {
           clusters={clusters}
           clusterMode={clusterMode}
           goNowIds={goNowIds}
+          friendIds={friendMapIds}
           selected={selected}
           focused={focused}
           focusOut={focusOut}
@@ -842,7 +868,10 @@ export function App() {
           onLocate={handleLocate}
           locating={locating}
           onReady={handleMapReady}
-          onViewport={(bbox) => setMapBbox(bbox)}
+          onViewport={(bbox, zoom) => {
+            setMapBbox(bbox);
+            setMapZoom(zoom);
+          }}
         />
       </Suspense>
 

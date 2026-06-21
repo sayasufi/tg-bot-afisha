@@ -141,7 +141,7 @@ async def friends_who_favorited(db: AsyncSession, uid: int, event_ids: list[str]
     signal. Honours every privacy gate: accepted edge only, friend not globally private, the favourite
     not per-item hidden, and neither side has muted the other. Capped per event."""
     uid = int(uid)
-    eids = _as_uuids(event_ids, 200)
+    eids = _as_uuids(event_ids, 250)
     if not eids:
         return {}
     muted = exists().where(
@@ -186,7 +186,7 @@ async def friends_who_favorited(db: AsyncSession, uid: int, event_ids: list[str]
 async def my_hidden_event_ids(db: AsyncSession, uid: int, event_ids: list[str]) -> list[str]:
     """Of the given events, the ones whose favourite THIS user has hidden from friends — so the sheet
     renders the per-item toggle in its real state."""
-    eids = _as_uuids(event_ids, 200)
+    eids = _as_uuids(event_ids, 250)
     if not eids:
         return []
     rows = (
