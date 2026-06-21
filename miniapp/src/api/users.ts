@@ -160,6 +160,40 @@ export async function manageFriends(
   }
 }
 
+// A friend's profile — «что он лайкнул»: their visible favourite event_ids (+ identity). Null outside
+// Telegram / on error / 403 (not a mutual friend). `private` = they've globally hidden their saves.
+export type FriendProfile = {
+  id: number;
+  name: string;
+  username?: string | null;
+  photo_url?: string | null;
+  private: boolean;
+  favorite_ids: string[];
+};
+export async function fetchFriendProfile(friendId: number): Promise<FriendProfile | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friend-profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, friend_id: friendId }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as Partial<FriendProfile>;
+    return {
+      id: j.id ?? friendId,
+      name: j.name ?? "",
+      username: j.username ?? null,
+      photo_url: j.photo_url ?? null,
+      private: !!j.private,
+      favorite_ids: Array.isArray(j.favorite_ids) ? j.favorite_ids : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Hide / unhide one of my favourites from friends (per-item privacy). Returns whether it persisted.
 export async function hideFavoriteRemote(eventId: string, hidden: boolean): Promise<boolean> {
   const init = initData();

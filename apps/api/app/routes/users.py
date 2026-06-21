@@ -23,6 +23,7 @@ from core.db.repositories.friends import (
     befriend,
     count_friends,
     decline_request,
+    friend_profile,
     friends_who_favorited,
     list_friends,
     list_requests,
@@ -120,6 +121,11 @@ class HideFavoriteRequest(BaseModel):
     init_data: str
     event_id: str
     hidden: bool  # hide this favourite from friends (per-item privacy)
+
+
+class FriendProfileRequest(BaseModel):
+    init_data: str
+    friend_id: int
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -291,6 +297,17 @@ async def hide_favorite(payload: HideFavoriteRequest, db: AsyncSession = Depends
     await set_favorite_hidden(db, uid, payload.event_id, payload.hidden)
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/friend-profile")
+async def get_friend_profile(payload: FriendProfileRequest, db: AsyncSession = Depends(get_async_db)):
+    """A friend's profile — «что он лайкнул» (their visible favourite event_ids + identity). Read-only.
+    403 unless we're mutual accepted friends and unblocked (you can't read a stranger's taste by id)."""
+    _user, uid = _auth(payload.init_data)
+    prof = await friend_profile(db, uid, int(payload.friend_id))
+    if prof is None:
+        raise HTTPException(status_code=403, detail="not a friend")
+    return prof
 
 
 async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:

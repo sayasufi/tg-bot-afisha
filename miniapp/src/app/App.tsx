@@ -27,8 +27,9 @@ const FollowedVenuesPanel = lazy(() =>
   import("../features/panel/FollowedVenuesPanel").then((m) => ({ default: m.FollowedVenuesPanel })),
 );
 const FriendsPanel = lazy(() => import("../features/panel/FriendsPanel").then((m) => ({ default: m.FriendsPanel })));
+const FriendProfile = lazy(() => import("../features/panel/FriendProfile").then((m) => ({ default: m.FriendProfile })));
 import { FriendDisclosure } from "../features/panel/FriendDisclosure";
-import { manageFriends } from "../api/users";
+import { manageFriends, type Friend } from "../api/users";
 import { showToast } from "../lib/toast";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
@@ -148,6 +149,7 @@ export function App() {
   // badge count of incoming friend requests (pulled once on open, kept live by the Friends panel).
   const [friendDisclosure, setFriendDisclosure] = useState(false);
   const [friendReqCount, setFriendReqCount] = useState(0);
+  const [friendProfile, setFriendProfile] = useState<Friend | null>(null); // open friend's profile overlay
   useEffect(() => {
     void manageFriends().then((s) => {
       if (!s) return;
@@ -500,13 +502,14 @@ export function App() {
     else if (drawerOpen) setDrawerOpen(false);
     else if (listOpen) setListOpen(false);
     else if (collection) setCollection(null); // the «Подборка» detail closes back to the recs panel
+    else if (friendProfile) setFriendProfile(null); // a friend's profile closes back to the Friends list
     else if (view !== "map") setView("map");
     else return false;
     // Drop focus from the trigger so it doesn't keep a focus ring after closing
     // (a keyboard Escape otherwise leaves the pill button looking "highlighted").
     (document.activeElement as HTMLElement | null)?.blur?.();
     return true;
-  }, [searchOpen, selected, venueId, peek, filtersOpen, drawerOpen, listOpen, collection, view]);
+  }, [searchOpen, selected, venueId, peek, filtersOpen, drawerOpen, listOpen, collection, friendProfile, view]);
 
   // «Подборки» tile / «смотреть все» → the full collection detail (layered over the recs panel).
   const onOpenCollection = useCallback((slug: string, title: string, subtitle: string | null) => {
@@ -533,7 +536,7 @@ export function App() {
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || collection != null || view !== "map";
+    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || collection != null || friendProfile != null || view !== "map";
     const pop = () => closeTop();
     if (stacked) {
       back.show();
@@ -542,7 +545,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, collection, view, closeTop]);
+  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, collection, friendProfile, view, closeTop]);
 
   // Esc behaves like tapping the visible × — closes the first-run guide, then the
   // top overlay.
@@ -607,6 +610,12 @@ export function App() {
   // profile) so it never lingers behind a panel.
   useEffect(() => {
     if (view !== "map") setPeek(null);
+  }, [view]);
+
+  // A friend's profile overlays the Friends view — drop it when we navigate elsewhere (e.g. «На карте»
+  // from an event opened inside it) so it can't linger over the map.
+  useEffect(() => {
+    if (view !== "friends") setFriendProfile(null);
   }, [view]);
 
   // Hold the event sheet back briefly after a selection so the pin→sheet spark,
@@ -988,7 +997,17 @@ export function App() {
             friendsPrivate={friendsPrivate}
             onToggleFriendsPrivate={toggleFriendsPrivate}
             onRequestsChange={setFriendReqCount}
+            onOpenFriend={setFriendProfile}
             onClose={() => setView("map")}
+          />
+        )}
+        {friendProfile && (
+          <FriendProfile
+            friend={friendProfile}
+            myFavIds={fav.ids}
+            userPos={userPos}
+            onSelect={openEvent}
+            onClose={() => setFriendProfile(null)}
           />
         )}
         {view === "profile" && (

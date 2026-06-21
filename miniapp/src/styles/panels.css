@@ -943,6 +943,38 @@ mark.hl {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Tappable part of a friend row (avatar + name) → opens their profile; the action (×) sits outside it. */
+.profile__friend-tap,
+.profile__friend-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.profile__friend-tap {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.profile__friend-tap:active {
+  opacity: 0.6;
+}
+/* «вы оба сохранили N» — acid overlap chip on a friend's profile. */
+.friendprof__overlap {
+  margin: 6px 0 2px;
+  padding: 8px 11px;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 1.6px 1.6px 0 var(--cinnabar);
+}
 .profile__friend-x {
   flex: 0 0 auto;
   width: 28px;

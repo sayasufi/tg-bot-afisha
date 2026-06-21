@@ -6,13 +6,13 @@ import { haptic } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { FriendDisclosure } from "./FriendDisclosure";
 
-// One person row: avatar · name/@handle · trailing action(s). Module-level so it isn't re-created
-// (and the rows re-mounted, flickering avatars) on every parent render.
-function FriendRow({ f, children }: { f: Friend; children: ReactNode }) {
+// One person row: avatar · name/@handle (taps to open their profile, if onOpen) · trailing action(s).
+// Module-level so it isn't re-created (rows re-mounted, avatars flickering) on every parent render.
+function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) => void; children: ReactNode }) {
   const av = safeHttpUrl(f.photo_url);
   const initial = (f.name || "?").slice(0, 1).toUpperCase();
-  return (
-    <div className="profile__friend">
+  const inner = (
+    <>
       <span className="profile__friend-av" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
         {av ? "" : initial}
       </span>
@@ -20,6 +20,22 @@ function FriendRow({ f, children }: { f: Friend; children: ReactNode }) {
         <span className="profile__friend-name">{f.name || "Друг"}</span>
         {f.username && <span className="profile__friend-handle">@{f.username}</span>}
       </span>
+    </>
+  );
+  return (
+    <div className="profile__friend">
+      {onOpen ? (
+        <button
+          type="button"
+          className="profile__friend-tap"
+          aria-label={`Профиль ${f.name || "друга"}`}
+          onClick={() => onOpen(f)}
+        >
+          {inner}
+        </button>
+      ) : (
+        <span className="profile__friend-main">{inner}</span>
+      )}
       {children}
     </div>
   );
@@ -32,11 +48,13 @@ export function FriendsPanel({
   friendsPrivate,
   onToggleFriendsPrivate,
   onRequestsChange,
+  onOpenFriend,
   onClose,
 }: {
   friendsPrivate: boolean;
   onToggleFriendsPrivate: (on: boolean) => void;
   onRequestsChange?: (n: number) => void;
+  onOpenFriend?: (f: Friend) => void;
   onClose: () => void;
 }) {
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -125,7 +143,7 @@ export function FriendsPanel({
         {friends.length > 0 ? (
           <div className="profile__friends">
             {friends.map((f) => (
-              <FriendRow key={f.id} f={f}>
+              <FriendRow key={f.id} f={f} onOpen={onOpenFriend}>
                 <button
                   type="button"
                   className="profile__friend-x"

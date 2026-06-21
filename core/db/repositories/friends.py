@@ -201,6 +201,53 @@ async def my_hidden_event_ids(db: AsyncSession, uid: int, event_ids: list[str]) 
     return [str(r) for r in rows]
 
 
+async def friend_profile(db: AsyncSession, uid: int, friend_id: int) -> dict | None:
+    """A friend's profile to view «что он лайкнул» — ONLY if uid and friend_id are mutual accepted
+    friends and neither has blocked the other. Returns name/username/photo_url + their visible favourite
+    event_ids (excluding per-item hidden ones; EMPTY if they've gone friends_private). None → caller 403s,
+    so you can't read a stranger's or a blocked person's taste by id."""
+    uid, friend_id = int(uid), int(friend_id)
+    is_friend = await db.scalar(
+        select(func.count()).select_from(UserFriend).where(
+            UserFriend.user_id == uid, UserFriend.friend_id == friend_id, UserFriend.status == "accepted"
+        )
+    )
+    if not is_friend:
+        return None
+    blocked = await db.scalar(
+        select(func.count()).select_from(UserMute).where(
+            or_(
+                and_(UserMute.user_id == uid, UserMute.muted_user_id == friend_id),
+                and_(UserMute.user_id == friend_id, UserMute.muted_user_id == uid),
+            )
+        )
+    )
+    if blocked:
+        return None
+    u = await db.get(User, friend_id)
+    if not u:
+        return None
+    fav_ids: list[str] = []
+    if not u.friends_private:
+        rows = (
+            await db.execute(
+                select(UserFavorite.event_id)
+                .where(UserFavorite.telegram_user_id == friend_id, UserFavorite.hidden_from_friends.is_(False))
+                .order_by(UserFavorite.created_at.desc())
+                .limit(300)
+            )
+        ).scalars().all()
+        fav_ids = [str(r) for r in rows]
+    return {
+        "id": friend_id,
+        "name": u.first_name or "",
+        "username": u.username,
+        "photo_url": u.photo_url,
+        "private": bool(u.friends_private),
+        "favorite_ids": fav_ids,
+    }
+
+
 async def list_friends(db: AsyncSession, uid: int) -> list[dict]:
     """The account's accepted friends as mini-profiles (newest first) — for the profile friend list."""
     rows = (
