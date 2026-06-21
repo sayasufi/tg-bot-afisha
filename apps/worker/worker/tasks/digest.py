@@ -18,6 +18,7 @@ from apps.bot.bot.formatting import digest_caption, digest_message, weekend_labe
 from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.digest import (
+    friends_saved,
     mark_digest_sent,
     new_at_followed_venues,
     opted_in_users,
@@ -137,20 +138,26 @@ async def _send_digest_impl() -> int:
                 if city not in pools:
                     pools[city] = await weekend_pool(db, city, now)
                 venue_items = await new_at_followed_venues(db, u["user_id"], now)
+                # «Что сохранили друзья» — gated on the user's friend-notifications, deduped against the
+                # followed-venue block. Sits between «новое на площадках» and «на выходных».
+                seen = {e["event_id"] for e in venue_items}
+                friend_items = await friends_saved(db, u["user_id"], now) if u.get("notify_friends") else []
+                friend_items = [it for it in friend_items if it["event_id"] not in seen]
+                seen |= {it["event_id"] for it in friend_items}
                 weekend_items = rank_weekend(
                     pools[city],
                     u.get("interests") or [],
-                    [e["event_id"] for e in venue_items],
+                    list(seen),  # don't repeat venue OR friend items in the weekend block
                     view_counts,
                 )
-                if not venue_items and not weekend_items:
+                if not venue_items and not friend_items and not weekend_items:
                     continue  # nothing fresh for this user this week — stay quiet
-                # Build the poster: followed-venue first, then weekend; covers fetched (cached), a
+                # Build the poster: followed-venue → friends → weekend; covers fetched (cached), a
                 # when-phrase per tile. Render off the event loop (PIL is CPU-bound).
                 poster_items = [
                     {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now),
                      "photo": await cover(it.get("image"))}
-                    for it in (venue_items + weekend_items)[:6]
+                    for it in (venue_items + friend_items + weekend_items)[:6]
                 ]
                 poster: bytes | None = None
                 try:
@@ -161,8 +168,8 @@ async def _send_digest_impl() -> int:
                 # code · when · venue, so the caption stays short. Text roundup is the fallback.
                 result = await _send_digest_one(
                     client, base, u["user_id"], poster,
-                    digest_caption(venue_items, weekend_items, label),
-                    digest_message(venue_items, weekend_items, label, now),
+                    digest_caption(venue_items, friend_items, weekend_items, label),
+                    digest_message(venue_items, friend_items, weekend_items, label, now),
                     markup,
                 )
                 if result == "retry":

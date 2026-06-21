@@ -34,6 +34,9 @@ class User(Base):
     # consent; this is a global mute). The weekly digest is strictly opt-in (default off).
     notify_reminders: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     notify_digest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Friend notifications — the «X добавил тебя в друзья» DM + the digest's friends section. Default ON
+    # (mutable), separate from notify_reminders (event reminders) and notify_digest (the roundup itself).
+    notify_friends: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     # Friends kill-switch: when true, NONE of my favourites are shown to any friend (the blunt opt-out
     # next to the per-item hidden_from_friends). Default off — the friend edge itself is the consent.
     friends_private: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))

@@ -29,6 +29,8 @@ export function ProfilePanel({
   onToggleReminders,
   notifyDigest,
   onToggleDigest,
+  notifyFriends,
+  onToggleNotifyFriends,
   theme = "light",
   onToggleTheme,
   onOpenFavorites,
@@ -43,6 +45,8 @@ export function ProfilePanel({
   onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
+  notifyFriends: boolean;
+  onToggleNotifyFriends: (on: boolean) => void;
   theme?: ThemeName;
   onToggleTheme?: () => void;
   onOpenFavorites: () => void;
@@ -213,6 +217,22 @@ export function ProfilePanel({
           <span className="profile__switch-text">
             <span className="profile__switch-label">Афиша на выходные</span>
             <span className="profile__switch-sub">Раз в неделю бот пришлёт, что нового рядом и на твоих площадках</span>
+          </span>
+          <span className="profile__switch-track" aria-hidden="true">
+            <span className="profile__switch-knob" />
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`profile__switch${notifyFriends ? " profile__switch--on" : ""}`}
+          role="switch"
+          aria-checked={notifyFriends}
+          onClick={() => onToggleNotifyFriends(!notifyFriends)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">О друзьях</span>
+            <span className="profile__switch-sub">Сообщать, когда тебя добавили в друзья, и показывать в афише, что сохранили друзья</span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />

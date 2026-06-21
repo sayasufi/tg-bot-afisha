@@ -6,12 +6,12 @@ All read-only query composition; the Prefect flow in apps/worker formats + sends
 """
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.cities import city_by_slug, region_predicate_sql
 from core.codes import event_code
-from core.db.models import Event, EventOccurrence, Venue
+from core.db.models import Event, EventOccurrence, UserFavorite, UserFriend, UserMute, Venue
 from core.db.models.ref.user import User
 from core.db.models.ref.user_venue_follow import UserVenueFollow
 
@@ -75,13 +75,16 @@ async def opted_in_users(db: AsyncSession, since: datetime) -> list[dict]:
     missed-run catchup: only users with no stamp, or a stamp older than this week's start."""
     rows = (
         await db.execute(
-            select(User.telegram_user_id, User.city_slug, User.interests).where(
+            select(User.telegram_user_id, User.city_slug, User.interests, User.notify_friends).where(
                 User.notify_digest.is_(True),
                 (User.last_digest_sent_at.is_(None)) | (User.last_digest_sent_at < since),
             )
         )
     ).all()
-    return [{"user_id": r[0], "city_slug": r[1], "interests": list(r[2] or [])} for r in rows]
+    return [
+        {"user_id": r[0], "city_slug": r[1], "interests": list(r[2] or []), "notify_friends": bool(r[3])}
+        for r in rows
+    ]
 
 
 async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, limit: int = 4) -> list[dict]:
@@ -126,6 +129,67 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
         )
     ).all()
     return [_item(r) for r in rows]
+
+
+async def friends_saved(db: AsyncSession, user_id: int, now: datetime, limit: int = 3) -> list[dict]:
+    """Events the user's FRIENDS saved that overlap the coming weekend — the «что сохранили друзья»
+    digest section. Privacy-gated exactly like the in-app signal (accepted friend, friend not globally
+    private, the favourite not per-item hidden, neither side muted). Ranked by how many friends saved
+    each (DESC) then soonest. Each item carries `nfriends`. Empty → the section is skipped."""
+    muted = exists().where(
+        or_(
+            and_(UserMute.user_id == user_id, UserMute.muted_user_id == UserFriend.friend_id),
+            and_(UserMute.user_id == UserFriend.friend_id, UserMute.muted_user_id == user_id),
+        )
+    )
+    counts = (
+        await db.execute(
+            select(UserFavorite.event_id, func.count(func.distinct(UserFriend.friend_id)).label("n"))
+            .select_from(UserFriend)
+            .join(UserFavorite, UserFavorite.telegram_user_id == UserFriend.friend_id)
+            .join(User, User.telegram_user_id == UserFriend.friend_id)
+            .where(
+                UserFriend.user_id == user_id,
+                UserFriend.status == "accepted",
+                UserFavorite.hidden_from_friends.is_(False),
+                User.friends_private.is_(False),
+                ~muted,
+            )
+            .group_by(UserFavorite.event_id)
+        )
+    ).all()
+    if not counts:
+        return []
+    nby = {r.event_id: int(r.n) for r in counts}
+    _, _, start, end = weekend_window(now)
+    soon = (
+        select(
+            EventOccurrence.event_id.label("eid"),
+            EventOccurrence.date_start,
+            EventOccurrence.date_end,
+            EventOccurrence.price_min,
+            EventOccurrence.venue_id,
+        )
+        .distinct(EventOccurrence.event_id)
+        .where(
+            EventOccurrence.event_id.in_(list(nby.keys())),
+            EventOccurrence.date_start < end,
+            func.coalesce(EventOccurrence.date_end, EventOccurrence.date_start) >= start,
+        )
+        .order_by(EventOccurrence.event_id, (EventOccurrence.date_start < now).asc(), EventOccurrence.date_start.asc())
+        .subquery()
+    )
+    rows = (
+        await db.execute(
+            select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, Venue.name, Venue.city)
+            .join(soon, soon.c.eid == Event.event_id)
+            .join(Venue, Venue.venue_id == soon.c.venue_id)
+            .where(Event.status == "active")
+        )
+    ).all()
+    items = [{**_item(r), "nfriends": nby.get(r[0], 0)} for r in rows]
+    items.sort(key=lambda it: (-int(it.get("nfriends") or 0), it.get("date_start") or ""))
+    return items[:limit]
 
 
 async def weekend_pool(

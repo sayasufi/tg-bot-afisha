@@ -55,6 +55,7 @@ export type UserSettings = {
   interests?: string[]; // categories picked at onboarding — warms the "Для тебя" feed
   notify_reminders?: boolean; // global mute for the per-event reminder DMs (default on)
   notify_digest?: boolean; // opt-in to the weekly digest DM (default off)
+  notify_friends?: boolean; // friend DMs + digest friends section (default on)
   friends_private?: boolean; // hide ALL my favourites from friends (default off)
 };
 
