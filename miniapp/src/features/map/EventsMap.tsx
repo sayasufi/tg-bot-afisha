@@ -293,6 +293,9 @@ export function EventsMap({
       const icons = el.querySelectorAll<HTMLElement>(".leaflet-marker-icon");
       if (icons.length === 0) return;
       revealedRef.current = true;
+      // After the first reveal, stop the per-pin grow-in (vpinIn) from replaying every time
+      // MarkerClusterGroup rebuilds the markers on pan/zoom — that replay was the «blink».
+      el.classList.add("map-wrap--revealed");
       const box = el.getBoundingClientRect();
       const cx = box.width / 2;
       const cy = box.height / 2;
