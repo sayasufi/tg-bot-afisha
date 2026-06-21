@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ARRAY, BigInteger, Boolean, DateTime, String, func, text
+from sqlalchemy import ARRAY, BigInteger, Boolean, DateTime, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db.base import Base
@@ -40,6 +40,13 @@ class User(Base):
     # Friends kill-switch: when true, NONE of my favourites are shown to any friend (the blunt opt-out
     # next to the per-item hidden_from_friends). Default off — the friend edge itself is the consent.
     friends_private: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Opt-in (default DENY): when true, this account can be found by exact @username and sent a friend
+    # request. Default off so nobody is findable — or even confirmable as a user — without consenting.
+    is_searchable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Per-account version mixed into the «add me» friend-link HMAC. Bumping it (a self-serve «reset my
+    # link» kill-switch) invalidates every link the user previously shared, without touching anyone
+    # else's link or any event-invite sig. 0 = the legacy payload, so links minted before this stay valid.
+    friend_link_ver: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     # Per-send ledger for the weekly digest — the instant we last DM'd this user a digest.
     # opted_in_users() filters on it (NULL or < this week's start) so a redeploy/manual re-run/
     # missed-run catchup in the same ISO week never double-sends; only a delivered (or permanently

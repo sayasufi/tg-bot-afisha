@@ -24,6 +24,7 @@ type TelegramWebApp = {
   isVersionAtLeast?: (version: string) => boolean;
   shareMessage?: (msgId: string, callback?: (sent: boolean) => void) => void;
   disableVerticalSwipes?: () => void; // Bot API 7.7+ — stop pull-to-close hijacking in-app scrolls
+  showConfirm?: (message: string, callback?: (ok: boolean) => void) => void;
 };
 
 const BOT_LINK = "https://t.me/okrestmap_bot";

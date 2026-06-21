@@ -1,8 +1,16 @@
 import { type ReactNode, useEffect, useState } from "react";
 
-import { createFriendLink, manageFriends, type Friend, type FriendsState } from "../../api/users";
+import {
+  createFriendLink,
+  findFriend,
+  type FoundFriend,
+  type Friend,
+  type FriendsState,
+  manageFriends,
+  resetFriendLink,
+} from "../../api/users";
 import { IconClose } from "../../lib/icons";
-import { haptic, shareEvent } from "../../lib/telegram";
+import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
 import { FriendDisclosure } from "./FriendDisclosure";
@@ -48,12 +56,16 @@ function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) =>
 export function FriendsPanel({
   friendsPrivate,
   onToggleFriendsPrivate,
+  isSearchable,
+  onToggleSearchable,
   onRequestsChange,
   onOpenFriend,
   onClose,
 }: {
   friendsPrivate: boolean;
   onToggleFriendsPrivate: (on: boolean) => void;
+  isSearchable: boolean;
+  onToggleSearchable: (on: boolean) => void;
   onRequestsChange?: (n: number) => void;
   onOpenFriend?: (f: Friend) => void;
   onClose: () => void;
@@ -61,6 +73,9 @@ export function FriendsPanel({
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<Friend[]>([]);
   const [disclose, setDisclose] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [found, setFound] = useState<FoundFriend | null>(null); // null = no search; {found:false} = miss
   const apply = (s: FriendsState | null) => {
     if (!s) return;
     setFriends(s.friends);
@@ -114,6 +129,57 @@ export function FriendsPanel({
     }
     shareEvent({ title: "Добавь меня в Окрест 👋", text: "будем видеть, что друг у друга в избранном", url: link });
   };
+  const resetLink = () => {
+    haptic("light");
+    const run = async () => {
+      const link = await resetFriendLink();
+      showToast(link ? "Ссылка сброшена — старая больше не работает" : "Не удалось", {
+        tone: link ? "good" : "muted",
+      });
+    };
+    const wa = getWebApp();
+    if (wa?.showConfirm) {
+      wa.showConfirm("Сбросить ссылку-приглашение? Старая перестанет работать у всех, кому ты её отправил.", (ok) => {
+        if (ok) void run();
+      });
+    } else {
+      void run();
+    }
+  };
+  const handle = () => query.trim().replace(/^@+/, "");
+  const doSearch = async () => {
+    const u = handle();
+    if (!u || searching) return;
+    haptic("light");
+    setSearching(true);
+    const res = await findFriend(u, false);
+    setSearching(false);
+    if (!res) {
+      showToast("Слишком много поисков или ошибка", { tone: "muted" });
+      return;
+    }
+    setFound(res);
+  };
+  const sendRequest = async () => {
+    if (!found?.user) return;
+    haptic("light");
+    const res = await findFriend(handle(), true);
+    if (!res) {
+      showToast("Не удалось отправить", { tone: "muted" });
+      return;
+    }
+    setFound(res);
+    if (res.status === "accepted") {
+      showToast("Теперь вы друзья!", { tone: "good" });
+      void manageFriends().then(apply); // the reciprocal upgrade added a friend
+    } else if (res.status === "pending") {
+      showToast("Заявка отправлена", { tone: "good" });
+    }
+  };
+  const acceptFound = (f: Friend) => {
+    accept(f.id); // reuse the «Заявки» accept (optimistic + refresh + first-friend disclosure)
+    setFound((cur) => (cur ? { ...cur, relation: "friends" } : cur));
+  };
 
   return (
     <div className="panelview">
@@ -127,6 +193,57 @@ export function FriendsPanel({
         <button type="button" className="friends__invite" onClick={inviteFriend}>
           пригласить друга в окрест →
         </button>
+        <button type="button" className="friends__reset" onClick={resetLink}>
+          сбросить ссылку-приглашение
+        </button>
+
+        <div className="friends__search">
+          <input
+            className="friends__search-input"
+            type="text"
+            inputMode="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="найти по @username"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void doSearch();
+            }}
+            aria-label="Найти друга по @username"
+          />
+          <button
+            type="button"
+            className="friends__search-go"
+            onClick={() => void doSearch()}
+            disabled={searching || !handle()}
+          >
+            {searching ? "…" : "найти"}
+          </button>
+        </div>
+        {found &&
+          (found.found && found.user ? (
+            <div className="profile__friends">
+              <FriendRow f={found.user} onOpen={found.relation === "friends" ? onOpenFriend : undefined}>
+                {found.relation === "friends" ? (
+                  <span className="friends__found-state">вы друзья</span>
+                ) : found.relation === "pending_out" ? (
+                  <span className="friends__found-state">заявка отправлена</span>
+                ) : found.relation === "pending_in" ? (
+                  <button type="button" className="profile__req-accept" onClick={() => acceptFound(found.user!)}>
+                    принять
+                  </button>
+                ) : (
+                  <button type="button" className="profile__req-accept" onClick={() => void sendRequest()}>
+                    добавить
+                  </button>
+                )}
+              </FriendRow>
+            </div>
+          ) : (
+            <p className="profile__friends-empty">Никого не нашли по этому нику.</p>
+          ))}
         {requests.length > 0 && (
           <>
             <div className="recs__section">Заявки</div>
@@ -185,6 +302,22 @@ export function FriendsPanel({
           <span className="profile__switch-text">
             <span className="profile__switch-label">Скрыть от друзей</span>
             <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь. Отдельное событие можно скрыть в его карточке</span>
+          </span>
+          <span className="profile__switch-track" aria-hidden="true">
+            <span className="profile__switch-knob" />
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`profile__switch${isSearchable ? " profile__switch--on" : ""}`}
+          role="switch"
+          aria-checked={isSearchable}
+          onClick={() => onToggleSearchable(!isSearchable)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Находить меня по @username</span>
+            <span className="profile__switch-sub">По умолчанию выключено. Включи — и друзья смогут найти тебя по нику и отправить заявку</span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />

@@ -22,14 +22,19 @@ from core.db.repositories.friends import (
     accept_request,
     are_friends,
     befriend,
+    bump_friend_link_ver,
     count_friends,
     decline_request,
+    find_searchable,
+    friend_link_ver,
     friend_profile,
     friends_who_favorited,
     list_friends,
     list_requests,
     my_hidden_event_ids,
+    relation,
     remove_friend,
+    request_friend,
     set_favorite_hidden,
     set_mute,
     user_card,
@@ -107,6 +112,7 @@ class SettingsRequest(BaseModel):
     notify_digest: bool | None = None  # opt-in to the weekly digest DM (default off)
     notify_friends: bool | None = None  # friend DMs + digest friends section (default on)
     friends_private: bool | None = None  # hide ALL my favourites from friends (default off)
+    is_searchable: bool | None = None  # findable by @username for friend requests (default off / opt-in)
 
 
 class FriendsFavoritedRequest(BaseModel):
@@ -145,6 +151,12 @@ class InviteToFriendRequest(BaseModel):
     init_data: str
     event_id: str
     friend_id: int  # a mutual friend to DM «X зовёт тебя на <event>»
+
+
+class FindFriendRequest(BaseModel):
+    init_data: str
+    username: str  # exact @handle to look up among opt-in (is_searchable) accounts
+    send: bool = False  # false = peek the card + relation; true = send a pending friend request
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -330,19 +342,35 @@ async def get_friend_profile(payload: FriendProfileRequest, db: AsyncSession = D
 
 
 @router.post("/friend-link")
-async def make_friend_link(payload: FriendLinkRequest):
+async def make_friend_link(payload: FriendLinkRequest, db: AsyncSession = Depends(get_async_db)):
     """A personal «добавь меня в друзья» deep-link for the current account (sign_friend) — durable +
-    reshareable, separate from event invites. Opening it shows an accept screen, then instant friends."""
+    reshareable, separate from event invites. Opening it shows an accept screen, then instant friends.
+    Signed at the account's current friend_link_ver so a later reset kills already-shared copies."""
     _user, uid = _auth(payload.init_data)
-    return {"link": f"https://t.me/okrestmap_bot?startapp=friend_{uid}_{sign_friend(uid)}"}
+    ver = await friend_link_ver(db, uid)
+    return {"link": f"https://t.me/okrestmap_bot?startapp=friend_{uid}_{sign_friend(uid, ver)}"}
+
+
+@router.post("/friend-link-reset")
+async def reset_friend_link(payload: FriendLinkRequest, db: AsyncSession = Depends(get_async_db)):
+    """Kill-switch: rotate this account's friend-link version so every link it shared before stops
+    working, and return a fresh one to share. Only affects MY links — not anyone else's, nor event invites."""
+    _user, uid = _auth(payload.init_data)
+    ver = await bump_friend_link_ver(db, uid)
+    await db.commit()
+    return {"link": f"https://t.me/okrestmap_bot?startapp=friend_{uid}_{sign_friend(uid, ver)}"}
 
 
 @router.post("/friend-peek")
 async def peek_friend_link(payload: FriendInviteRequest, db: AsyncSession = Depends(get_async_db)):
     """Who is behind an «add me» link — name/@username/photo for the accept screen. Gated on a valid sig
-    (you can't peek an arbitrary id's card), and never self."""
+    (you can't peek an arbitrary id's card), and never self. The version is loaded from the DB by inviter
+    id (never trusted from the client) so a rotated-away link fails here."""
     _user, uid = _auth(payload.init_data)
-    if int(payload.inviter_id) == uid or not verify_friend(payload.inviter_id, payload.sig):
+    if int(payload.inviter_id) == uid:
+        raise HTTPException(status_code=403, detail="bad friend link")
+    ver = await friend_link_ver(db, int(payload.inviter_id))
+    if not verify_friend(payload.inviter_id, payload.sig, ver):
         raise HTTPException(status_code=403, detail="bad friend link")
     card = await user_card(db, int(payload.inviter_id))
     if not card:
@@ -353,12 +381,16 @@ async def peek_friend_link(payload: FriendInviteRequest, db: AsyncSession = Depe
 @router.post("/friend-accept")
 async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = Depends(get_async_db)):
     """Accept an «add me» link → instant mutual friends (accepting IS the consent). DMs the link owner
-    once. 403 on a forged/self link. Returns the new friend's card + first_friend (one-time disclosure)."""
+    once. 403 on a forged/self/rotated link. Returns the new friend's card + first_friend (one-time
+    disclosure). The link version is loaded from the DB by inviter id, never from the client."""
     user, uid = _auth(payload.init_data)
     await upsert_user_async(
         db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
     )
-    if int(payload.inviter_id) == uid or not verify_friend(payload.inviter_id, payload.sig):
+    if int(payload.inviter_id) == uid:
+        raise HTTPException(status_code=403, detail="bad friend link")
+    ver = await friend_link_ver(db, int(payload.inviter_id))
+    if not verify_friend(payload.inviter_id, payload.sig, ver):
         raise HTTPException(status_code=403, detail="bad friend link")
     inviter = int(payload.inviter_id)
     friend = await befriend(db, uid, inviter)
@@ -394,6 +426,35 @@ async def invite_to_friend(payload: InviteToFriendRequest, db: AsyncSession = De
     title = await event_title(db, payload.event_id)
     await _notify_friend_invited(fid, user.get("first_name") or "", title, payload.event_id)
     return {"ok": True, "sent": True}
+
+
+@router.post("/find-friend")
+async def find_friend(payload: FindFriendRequest, db: AsyncSession = Depends(get_async_db)):
+    """Find an account by EXACT @username (opt-in / is_searchable only) and optionally send a PENDING
+    friend request. Privacy-first: no match / not opt-in / self / blocked ALL return the same {found:false},
+    so search can't probe who is a user. Per-searcher daily cap blunts enumeration. send=true creates a
+    request the target confirms in «Заявки» — the searcher initiated, so it needs the target's consent (NOT
+    instant friends like a bearer link). Reciprocal (they searched you too) auto-accepts to friends."""
+    user, uid = _auth(payload.init_data)
+    if not await _friend_search_day_ok(uid):
+        raise HTTPException(status_code=429, detail="too many searches today")
+    card = await find_searchable(db, uid, payload.username)
+    if not card:
+        return {"found": False}
+    tid = int(card["id"])
+    if not payload.send:
+        return {"found": True, "user": card, "relation": await relation(db, uid, tid)}
+    # Keep the searcher's own handle/avatar fresh so the target sees who's asking, then create the request.
+    await upsert_user_async(
+        db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
+    )
+    status = await request_friend(db, uid, tid)
+    await db.commit()
+    if status == "pending":
+        recip = await get_settings(db, tid)
+        if recip and recip.get("notify_friends") is not False and await _friend_request_dm_once(uid, tid):
+            await _notify_friend_request(tid, user.get("first_name") or "")
+    return {"found": True, "user": card, "relation": await relation(db, uid, tid), "status": status}
 
 
 async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
@@ -529,6 +590,51 @@ async def _notify_friend_invited(friend_id: int, name: str, title: str | None, e
         pass
 
 
+async def _friend_search_day_ok(uid: int, cap: int = 50) -> bool:
+    """Per-searcher daily cap on @username lookups — blunts userbase enumeration. Best-effort (Redis down → allow)."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    key = f"friend:search:day:{uid}:{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    try:
+        n = await client.incr(key)
+        if n == 1:
+            await client.expire(key, 2 * 24 * 3600)
+        return n <= cap
+    except Exception:
+        return True
+
+
+async def _friend_request_dm_once(from_id: int, to_id: int) -> bool:
+    """Redis NX: don't re-DM the SAME person about the SAME requester's friend request (idempotent re-taps).
+    7-day TTL. Best-effort (Redis down → allow)."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    try:
+        return bool(await client.set(f"friend:req:dm:{from_id}:{to_id}", "1", nx=True, ex=7 * 24 * 3600))
+    except Exception:
+        return True
+
+
+async def _notify_friend_request(target_id: int, name: str) -> None:
+    """DM a user that <name> wants to add them as a friend (→ «Заявки») — best-effort, never blocks."""
+    token = get_app_settings().telegram_bot_token
+    if not token or not target_id:
+        return
+    text = f"👋 <b>{escape(name or 'Кто-то')}</b> хочет добавить тебя в друзья"
+    markup = {"inline_keyboard": [[{"text": "заявки →", "url": "https://t.me/okrestmap_bot?startapp=friends"}]]}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": int(target_id), "text": text, "parse_mode": "HTML",
+                      "reply_markup": markup, "disable_web_page_preview": True},
+            )
+    except Exception:
+        pass
+
+
 @router.post("/invited")
 async def mark_invited(payload: InvitedRequest, db: AsyncSession = Depends(get_async_db)):
     """A «Пойдём?» invite was opened — attribute the inviter and, if this account is still cold,
@@ -552,7 +658,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
     user, uid = _auth(payload.init_data)
     changing = any(
         v is not None
-        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests, payload.notify_reminders, payload.notify_digest, payload.notify_friends, payload.friends_private)
+        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests, payload.notify_reminders, payload.notify_digest, payload.notify_friends, payload.friends_private, payload.is_searchable)
     )
     if changing:
         # Only write the user row when actually changing a setting (a pure read on app
@@ -571,6 +677,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
             notify_digest=payload.notify_digest,
             notify_friends=payload.notify_friends,
             friends_private=payload.friends_private,
+            is_searchable=payload.is_searchable,
         )
         # Turning notifications ON arms reminders for everything already in favourites (they're now the
         # single reminder source). Turning OFF needs nothing — delivery is gated on notify_reminders.

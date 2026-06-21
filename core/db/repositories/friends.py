@@ -136,6 +136,49 @@ async def list_requests(db: AsyncSession, uid: int) -> list[dict]:
     ]
 
 
+async def request_friend(db: AsyncSession, requester: int, target: int) -> str:
+    """`requester` asks to befriend `target` (found by @username). Writes ONE pending row `target` sees in
+    «Заявки» (user_id=target, friend_id=requester). If `target` ALREADY has an outstanding request to
+    `requester` (they searched each other), upgrade straight to a mutual friendship — both have consented.
+    Same guards as befriend (self / FK / blocked / already friends / cap). No commit. Returns 'accepted'
+    (reciprocal → instant friends), 'pending' (request created or already pending), or 'none' (rejected)."""
+    requester, target = int(requester), int(target)
+    if requester == target:
+        return "none"
+    if not await _both_exist(db, requester, target):
+        return "none"
+    blocked = await db.scalar(
+        select(func.count()).select_from(UserMute).where(
+            or_(
+                and_(UserMute.user_id == requester, UserMute.muted_user_id == target),
+                and_(UserMute.user_id == target, UserMute.muted_user_id == requester),
+            )
+        )
+    )
+    if blocked:
+        return "none"
+    if await are_friends(db, requester, target):
+        return "none"  # already friends — no-op
+    # Reciprocal: target already requested requester (a pending row target→requester awaiting requester's
+    # confirm) → accepting it makes them friends now. accept_request promotes that row + writes the reverse.
+    reciprocal = await db.scalar(
+        select(func.count()).select_from(UserFriend).where(
+            UserFriend.user_id == requester, UserFriend.friend_id == target, UserFriend.status == "pending"
+        )
+    )
+    if reciprocal:
+        await accept_request(db, requester, target)
+        return "accepted"
+    if await count_friends(db, requester) >= _FRIEND_CAP:
+        return "none"
+    await db.execute(
+        pg_insert(UserFriend.__table__)
+        .values(user_id=target, friend_id=requester, status="pending")
+        .on_conflict_do_nothing(index_elements=["user_id", "friend_id"])
+    )
+    return "pending"
+
+
 async def friends_who_favorited(db: AsyncSession, uid: int, event_ids: list[str]) -> dict[str, list[dict]]:
     """For each given event, the friends (mini-profiles) who favourited it — the «друг сохранил это»
     signal. Honours every privacy gate: accepted edge only, friend not globally private, the favourite
@@ -219,6 +262,80 @@ async def user_card(db: AsyncSession, uid: int) -> dict | None:
     if not u:
         return None
     return {"id": u.telegram_user_id, "name": u.first_name or "", "username": u.username, "photo_url": u.photo_url}
+
+
+async def find_searchable(db: AsyncSession, uid: int, username: str) -> dict | None:
+    """Find an OPT-IN account by exact, case-insensitive @username — the «add by @username» lookup. Returns
+    the target's mini-card, or None for: no match / not is_searchable / self / a blocked pair. The route maps
+    all of these to one «not found», so search can't probe whether a handle is a (searchable) user. Exact
+    match only (no prefix/LIKE) so you can't walk the alphabet to enumerate the userbase."""
+    handle = (username or "").strip().lstrip("@").lower()
+    if not handle or len(handle) > 64:
+        return None
+    row = (
+        await db.execute(
+            select(User.telegram_user_id, User.first_name, User.username, User.photo_url)
+            .where(
+                func.lower(User.username) == handle,
+                User.is_searchable.is_(True),
+                User.telegram_user_id != int(uid),
+            )
+            .order_by(User.last_active_at.desc())  # newest if a handle ever collides across rows
+            .limit(1)
+        )
+    ).first()
+    if not row:
+        return None
+    blocked = await db.scalar(
+        select(func.count()).select_from(UserMute).where(
+            or_(
+                and_(UserMute.user_id == int(uid), UserMute.muted_user_id == row.telegram_user_id),
+                and_(UserMute.user_id == row.telegram_user_id, UserMute.muted_user_id == int(uid)),
+            )
+        )
+    )
+    if blocked:
+        return None
+    return {"id": row.telegram_user_id, "name": row.first_name or "", "username": row.username, "photo_url": row.photo_url}
+
+
+async def relation(db: AsyncSession, uid: int, other: int) -> str:
+    """My relationship to `other`: 'friends' | 'pending_out' (I requested them) | 'pending_in' (they
+    requested me) | 'none'. Drives the «add by username» result button."""
+    uid, other = int(uid), int(other)
+    if await are_friends(db, uid, other):
+        return "friends"
+    if await db.scalar(
+        select(func.count()).select_from(UserFriend).where(
+            UserFriend.user_id == other, UserFriend.friend_id == uid, UserFriend.status == "pending"
+        )
+    ):
+        return "pending_out"
+    if await db.scalar(
+        select(func.count()).select_from(UserFriend).where(
+            UserFriend.user_id == uid, UserFriend.friend_id == other, UserFriend.status == "pending"
+        )
+    ):
+        return "pending_in"
+    return "none"
+
+
+async def friend_link_ver(db: AsyncSession, uid: int) -> int:
+    """The account's current «add me» link version (0 if never rotated / unknown). Load this from the DB
+    at sign + verify time — never trust a client-supplied version, or the kill-switch is bypassable."""
+    return int(await db.scalar(select(User.friend_link_ver).where(User.telegram_user_id == int(uid))) or 0)
+
+
+async def bump_friend_link_ver(db: AsyncSession, uid: int) -> int:
+    """Rotate (kill) the account's outstanding friend-links: increment friend_link_ver, return the new
+    value. No commit. Links signed at a lower version stop verifying immediately."""
+    res = await db.execute(
+        update(User)
+        .where(User.telegram_user_id == int(uid))
+        .values(friend_link_ver=User.friend_link_ver + 1)
+        .returning(User.friend_link_ver)
+    )
+    return int(res.scalar() or 0)
 
 
 async def friend_profile(db: AsyncSession, uid: int, friend_id: int) -> dict | None:

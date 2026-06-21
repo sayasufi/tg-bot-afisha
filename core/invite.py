@@ -26,16 +26,22 @@ def verify(event_id: str, inviter_id: int | None, sig: str | None) -> bool:
     return hmac.compare_digest(sign(event_id, int(inviter_id)), sig)
 
 
-def sign_friend(inviter_id: int) -> str:
+def sign_friend(inviter_id: int, ver: int = 0) -> str:
     """Signs a personal «add me as a friend» deep-link. Namespaced ('friend:') so a friend sig can never
     be replayed as an event-invite sig (or vice versa) — different namespaces hash differently. No event,
-    no expiry: a durable personal link the user can re-share. HMAC(friend:<id>, bot_token), 12 hex chars."""
+    no expiry: a durable personal link the user can re-share. `ver` is the account's friend_link_ver — a
+    self-serve kill-switch: bumping it changes the signed payload so every previously-shared link stops
+    verifying. ver==0 keeps the LEGACY payload ('friend:<id>') so links minted before rotation existed
+    stay valid until the owner resets. HMAC(friend:<id>[:<ver>], bot_token), 12 hex chars."""
     key = (get_settings().telegram_bot_token or "okrest-dev-secret").encode()
-    return hmac.new(key, f"friend:{inviter_id}".encode(), hashlib.sha256).hexdigest()[:_SIG_LEN]
+    msg = f"friend:{inviter_id}" if not ver else f"friend:{inviter_id}:{ver}"
+    return hmac.new(key, msg.encode(), hashlib.sha256).hexdigest()[:_SIG_LEN]
 
 
-def verify_friend(inviter_id: int | None, sig: str | None) -> bool:
-    """True only for an inviter_id whose friend-link we minted — proves the «add me» link is genuine."""
+def verify_friend(inviter_id: int | None, sig: str | None, ver: int = 0) -> bool:
+    """True only for an inviter_id whose friend-link we minted at version `ver`. The CALLER must pass the
+    account's CURRENT friend_link_ver loaded from the DB (never a client-supplied value) — otherwise the
+    kill-switch is bypassable by sending ver=0."""
     if not inviter_id or not sig:
         return False
-    return hmac.compare_digest(sign_friend(int(inviter_id)), sig)
+    return hmac.compare_digest(sign_friend(int(inviter_id), int(ver or 0)), sig)

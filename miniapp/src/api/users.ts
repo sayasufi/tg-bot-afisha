@@ -57,6 +57,7 @@ export type UserSettings = {
   notify_digest?: boolean; // opt-in to the weekly digest DM (default off)
   notify_friends?: boolean; // friend DMs + digest friends section (default on)
   friends_private?: boolean; // hide ALL my favourites from friends (default off)
+  is_searchable?: boolean; // findable by @username for friend requests (default off / opt-in)
 };
 
 // A friend mini-profile — the faces in the «друг сохранил это» social proof + the profile friend list.
@@ -201,6 +202,50 @@ export async function createFriendLink(): Promise<string | null> {
   if (!init) return null;
   try {
     const r = await fetch(`${API_BASE}/v1/users/friend-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { link?: string };
+    return typeof j.link === "string" ? j.link : null;
+  } catch {
+    return null;
+  }
+}
+
+// Find a friend by EXACT @username (opt-in accounts only). send=false peeks the card+relation; send=true
+// fires a PENDING friend request. {found:false} for any miss (so it can't probe who's a user). `relation`:
+// 'friends' | 'pending_out' (I asked them) | 'pending_in' (they asked me) | 'none'. Null on error / 429.
+export type FoundFriend = {
+  found: boolean;
+  user?: Friend;
+  relation?: "friends" | "pending_out" | "pending_in" | "none";
+  status?: "accepted" | "pending" | "none";
+};
+export async function findFriend(username: string, send = false): Promise<FoundFriend | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/find-friend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, username, send }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as FoundFriend;
+    return { found: !!j.found, user: j.user, relation: j.relation, status: j.status };
+  } catch {
+    return null;
+  }
+}
+
+// Rotate (kill) my «add me» friend-link — every copy I shared before stops working. Returns the fresh link.
+export async function resetFriendLink(): Promise<string | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friend-link-reset`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ init_data: init }),
