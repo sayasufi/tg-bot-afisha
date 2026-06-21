@@ -34,19 +34,24 @@ export function userIcon(heading: number | null): L.DivIcon {
 
 // Pin = a gallery nameplate: a white plate with a 1px frame, the category's
 // vinyl-cut icon, and a thin category-colour rail along the bottom edge (a
-// gallery label's colour code); a nail + dot drops to the geo point. Active
-// flips to acid; a live (happening-now) event gets a cinnabar pulse; a friend-
-// saved event gets a thin acid ring around the plate (no avatar — VITRINE).
+// gallery label's colour code); a soft drop shadow lifts it off the map, and a
+// nail + dot drops to the geo point. Active flips to acid AND drops its catalogue
+// code on a mono plate below (the focused exhibit's accession number); a live
+// event gets a cinnabar pulse; a friend-saved event gets a thin acid ring.
 export function pinIcon(item: EventItem, active: boolean, live = false, friend = false): L.DivIcon {
   const cls = `vpin${active ? " vpin--active" : ""}${live ? " vpin--live" : ""}${friend ? " vpin--friend" : ""}`;
   const liveDot = live ? '<span class="vpin__live"></span>' : "";
   const { color } = categoryMeta(item.category);
+  // The catalogue code, only on the focused pin (no clutter on the dense map).
+  const codeText = active && item.code ? String(item.code).replace(/[<>&"]/g, "") : "";
+  const code = codeText ? `<div class="vpin__code">${codeText}</div>` : "";
+  const tall = !!code; // a code plate makes the marker taller → push the anchor down so the dot still lands true
   return L.divIcon({
     className: "vpin-wrap",
-    html: `<div class="${cls}"><div class="vpin__plate" style="--cat:${color}">${categorySvg(item.category, 18)}<i class="vpin__rail"></i></div>${liveDot}<div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
-    iconSize: [30, 40],
-    iconAnchor: [15, 40],
-    popupAnchor: [0, -40],
+    html: `<div class="${cls}"><div class="vpin__plate" style="--cat:${color}">${categorySvg(item.category, 18)}<i class="vpin__rail"></i></div>${liveDot}${code}<div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
+    iconSize: [30, tall ? 65 : 40],
+    iconAnchor: [15, tall ? 64 : 40],
+    popupAnchor: [0, tall ? -64 : -40],
   });
 }
 
