@@ -1092,6 +1092,23 @@ export function App() {
 
       <Toaster />
       <OfflineBanner />
+      {view === "map" && (
+        <div
+          style={{
+            position: "fixed",
+            left: 8,
+            bottom: 76,
+            zIndex: 4000,
+            padding: "4px 8px",
+            background: "var(--ink)",
+            color: "var(--acid)",
+            font: "600 11px/1 var(--mono, monospace)",
+            pointerEvents: "none",
+          }}
+        >
+          друзья:{friendMapIds.size} z:{mapZoom ?? "—"}
+        </div>
+      )}
     </div>
   );
 }
