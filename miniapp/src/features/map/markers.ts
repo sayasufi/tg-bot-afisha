@@ -42,16 +42,21 @@ export function pinIcon(item: EventItem, active: boolean, live = false, friend =
   const cls = `vpin${active ? " vpin--active" : ""}${live ? " vpin--live" : ""}${friend ? " vpin--friend" : ""}`;
   const liveDot = live ? '<span class="vpin__live"></span>' : "";
   const { color } = categoryMeta(item.category);
-  // The catalogue code, only on the focused pin (no clutter on the dense map).
+  // The catalogue code, only on the focused pin (no clutter on the dense map). Rendered ABOVE the plate so
+  // the plate still sits exactly where the unselected pin's plate is — the taller active overlay then fully
+  // covers the cluster's own (shorter) pin for this event, instead of letting it peek out below.
   const codeText = active && item.code ? String(item.code).replace(/[<>&"]/g, "") : "";
+  // Floated ABSOLUTELY above the plate (out of the grid flow), so the active marker keeps the EXACT same
+  // box + anchor as the unselected pin — it covers the cluster's own pin for this event perfectly, and the
+  // wide code can't grow the grid column and shove the centred plate sideways.
   const code = codeText ? `<div class="vpin__code">${codeText}</div>` : "";
-  const tall = !!code; // a code plate makes the marker taller → push the anchor down so the dot still lands true
+  const plate = `<div class="vpin__plate" style="--cat:${color}">${categorySvg(item.category, 18)}<i class="vpin__rail"></i>${liveDot}</div>`;
   return L.divIcon({
     className: "vpin-wrap",
-    html: `<div class="${cls}"><div class="vpin__plate" style="--cat:${color}">${categorySvg(item.category, 18)}<i class="vpin__rail"></i></div>${liveDot}${code}<div class="vpin__nail"></div><div class="vpin__dot"></div></div>`,
-    iconSize: [30, tall ? 65 : 40],
-    iconAnchor: [15, tall ? 64 : 40],
-    popupAnchor: [0, tall ? -64 : -40],
+    html: `<div class="${cls}">${plate}<div class="vpin__nail"></div><div class="vpin__dot"></div>${code}</div>`,
+    iconSize: [30, 40],
+    iconAnchor: [15, 40],
+    popupAnchor: [0, -40],
   });
 }
 

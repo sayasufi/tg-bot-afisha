@@ -76,9 +76,14 @@
     0 3px 7px rgba(11, 11, 11, 0.22);
 }
 
-/* Catalogue code under the focused pin — the exhibit's accession number, mono on ink, acid type. */
+/* Catalogue code on the focused pin — the exhibit's accession number, mono on ink, acid type. Floated
+   absolutely just ABOVE the plate (centred on it), so it doesn't change the marker's box/anchor and the
+   active plate keeps covering the unselected pin underneath. */
 .vpin__code {
-  margin-top: 6px;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
   padding: 2px 6px;
   background: var(--ink);
   color: var(--acid);
