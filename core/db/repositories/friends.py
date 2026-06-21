@@ -201,6 +201,17 @@ async def my_hidden_event_ids(db: AsyncSession, uid: int, event_ids: list[str]) 
     return [str(r) for r in rows]
 
 
+async def are_friends(db: AsyncSession, a: int, b: int) -> bool:
+    """True iff a and b are mutual accepted friends (one accepted row a→b suffices — they're symmetric)."""
+    return bool(
+        await db.scalar(
+            select(func.count()).select_from(UserFriend).where(
+                UserFriend.user_id == int(a), UserFriend.friend_id == int(b), UserFriend.status == "accepted"
+            )
+        )
+    )
+
+
 async def user_card(db: AsyncSession, uid: int) -> dict | None:
     """A user's public mini-card (id/name/@username/photo) — for the «X хочет добавить тебя» accept
     screen and DMs. No relationship gate (the caller already proved the friend-link sig)."""

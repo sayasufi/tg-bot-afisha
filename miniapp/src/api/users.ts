@@ -253,6 +253,26 @@ export async function acceptFriendLink(
   }
 }
 
+// Send THIS event to a specific mutual friend's DM («X зовёт тебя…»). `sent` = a DM actually went out
+// (false if already invited / friend muted friend-notifications). Null on error / 429 (daily cap).
+export async function inviteToFriend(eventId: string, friendId: number): Promise<{ sent: boolean } | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/invite-friend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, event_id: eventId, friend_id: friendId }),
+      keepalive: true,
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { sent?: boolean };
+    return { sent: !!j.sent };
+  } catch {
+    return null;
+  }
+}
+
 // Hide / unhide one of my favourites from friends (per-item privacy). Returns whether it persisted.
 export async function hideFavoriteRemote(eventId: string, hidden: boolean): Promise<boolean> {
   const init = initData();

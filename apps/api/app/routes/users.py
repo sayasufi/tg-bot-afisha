@@ -20,6 +20,7 @@ from core.db.repositories.reminders import (
 )
 from core.db.repositories.friends import (
     accept_request,
+    are_friends,
     befriend,
     count_friends,
     decline_request,
@@ -138,6 +139,12 @@ class FriendInviteRequest(BaseModel):
     init_data: str
     inviter_id: int  # the owner of the «add me as a friend» link
     sig: str  # HMAC(friend:<inviter_id>) — proves the link is genuine
+
+
+class InviteToFriendRequest(BaseModel):
+    init_data: str
+    event_id: str
+    friend_id: int  # a mutual friend to DM «X зовёт тебя на <event>»
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -368,6 +375,27 @@ async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = De
     return {"friend": card, "first_friend": first_friend, "added": friend == "accepted"}
 
 
+@router.post("/invite-friend")
+async def invite_to_friend(payload: InviteToFriendRequest, db: AsyncSession = Depends(get_async_db)):
+    """Send THIS event to a specific MUTUAL friend's DM («X зовёт тебя на <event>»). Read-only + a
+    best-effort DM. 403 if not a friend; respects the friend's notify_friends, deduped per (you, them,
+    event), capped per sender per day. `sent` = whether a DM actually went out."""
+    user, uid = _auth(payload.init_data)
+    fid = int(payload.friend_id)
+    if fid == uid or not await are_friends(db, uid, fid):
+        raise HTTPException(status_code=403, detail="not a friend")
+    recip = await get_settings(db, fid)
+    if not recip or recip.get("notify_friends") is False:
+        return {"ok": True, "sent": False}  # they've muted friend notifications
+    if not await _friend_invite_dm_once(uid, fid, payload.event_id):
+        return {"ok": True, "sent": False}  # already invited this friend to this event
+    if not await _friend_invite_day_ok(uid):
+        raise HTTPException(status_code=429, detail="too many invites today")
+    title = await event_title(db, payload.event_id)
+    await _notify_friend_invited(fid, user.get("first_name") or "", title, payload.event_id)
+    return {"ok": True, "sent": True}
+
+
 async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
     """DM the inviter that someone accepted their «Пойдём?» (added it to favourites) — best-effort,
     never blocks the response. The inviter started the bot (they shared from the Mini App)."""
@@ -455,6 +483,50 @@ async def _notify_friend_added(inviter_id: int, name: str) -> None:
             )
     except Exception:
         pass  # the friendship is recorded; the nudge is best-effort
+
+
+async def _friend_invite_dm_once(from_id: int, to_id: int, event_id: str) -> bool:
+    """Redis NX: don't DM the SAME friend the SAME event invite twice (idempotent re-taps). 30-day TTL."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    try:
+        return bool(await client.set(f"friend:invite:{from_id}:{to_id}:{event_id}", "1", nx=True, ex=30 * 24 * 3600))
+    except Exception:
+        return True
+
+
+async def _friend_invite_day_ok(from_id: int, cap: int = 50) -> bool:
+    """Per-sender daily cap on addressed friend invites — anti-spam. Best-effort (Redis down → allow)."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    key = f"friend:invite:day:{from_id}:{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    try:
+        n = await client.incr(key)
+        if n == 1:
+            await client.expire(key, 2 * 24 * 3600)
+        return n <= cap
+    except Exception:
+        return True
+
+
+async def _notify_friend_invited(friend_id: int, name: str, title: str | None, event_id: str) -> None:
+    """DM a friend that <name> invites them to <event> — best-effort, never blocks the response."""
+    token = get_app_settings().telegram_bot_token
+    if not token or not friend_id:
+        return
+    text = f"👋 <b>{escape(name or 'Друг')}</b> зовёт тебя\n{escape(title or 'на событие')}"
+    markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": int(friend_id), "text": text, "parse_mode": "HTML",
+                      "reply_markup": markup, "disable_web_page_preview": True},
+            )
+    except Exception:
+        pass
 
 
 @router.post("/invited")

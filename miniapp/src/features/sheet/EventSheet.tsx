@@ -13,6 +13,7 @@ import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
+import { FriendPicker } from "../panel/FriendPicker";
 import { SimilarEvents } from "./SimilarEvents";
 import { accessionNo, formatPrice, stripHtml } from "./sheetFormat";
 
@@ -76,6 +77,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const [friendFaces, setFriendFaces] = useState<Friend[]>([]);
   const [hiddenFromFriends, setHiddenFromFriends] = useState(false);
   const [hasFriends, setHasFriends] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false); // «позвать друга» picker
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   useFocusTrap(sheetRef, true); // the sheet mounts only while open → always active here
@@ -494,6 +496,16 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             </div>
           );
         })()}
+        <button
+          type="button"
+          className="sheet__callfriend"
+          onClick={() => {
+            haptic("light");
+            setPickerOpen(true);
+          }}
+        >
+          позвать друга →
+        </button>
       </div>
 
       {/* Exhibit grid — each datum its own hairline cell, museum-catalogue style. */}
@@ -648,6 +660,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         <SimilarEvents selected={selected} items={items} userPos={userPos} onSelect={onSelect} />
         </div>
       </div>
+      {pickerOpen && selected && <FriendPicker eventId={selected.event_id} onClose={() => setPickerOpen(false)} />}
     </>
   );
 }
