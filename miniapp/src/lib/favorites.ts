@@ -55,8 +55,8 @@ export function toggleFavorite(id: string): void {
   // Persist to the account; adopt the server list back ONLY if this is still the latest
   // local op (a later toggle must not be overwritten by this one's stale response).
   toggleFavoriteRemote(id, on)
-    .then((ids) => {
-      if (ids && seq === mutationSeq) setLocal(new Set(ids));
+    .then((res) => {
+      if (res.ids && seq === mutationSeq) setLocal(new Set(res.ids));
     })
     .catch(() => {
       /* the local toggle already stands; next sync reconciles */
@@ -64,22 +64,26 @@ export function toggleFavorite(id: string): void {
 }
 
 // «Пойдём?» invite accepted → favourite the event AND attribute the inviter (the bot DMs them once,
-// server-deduped) AND send the inviter a friend REQUEST (they confirm it; a pending edge exposes
-// nothing). Harmless if already saved (the server's dedup stops a repeat DM; the request is idempotent).
-export function acceptInvite(id: string, inviter: number, sig: string): void {
+// server-deduped) AND send the inviter a friend REQUEST — or, if you'd each invited the other, become
+// friends instantly. Resolves the friendship outcome so the caller can toast it accurately + show the
+// first-friend disclosure. Harmless if already saved (server dedups the DM; the request is idempotent).
+export function acceptInvite(
+  id: string,
+  inviter: number,
+  sig: string,
+): Promise<{ friend: "accepted" | "pending" | "none"; firstFriend: boolean }> {
   if (!favs.has(id)) {
     const next = new Set(favs);
     next.add(id);
     setLocal(next); // optimistic
   }
   const seq = ++mutationSeq;
-  toggleFavoriteRemote(id, true, inviter, sig)
-    .then((ids) => {
-      if (ids && seq === mutationSeq) setLocal(new Set(ids));
+  return toggleFavoriteRemote(id, true, inviter, sig)
+    .then((res) => {
+      if (res.ids && seq === mutationSeq) setLocal(new Set(res.ids));
+      return { friend: res.friend, firstFriend: res.firstFriend };
     })
-    .catch(() => {
-      /* the local add stands; next sync reconciles */
-    });
+    .catch(() => ({ friend: "none" as const, firstFriend: false }));
 }
 
 let syncing = false;

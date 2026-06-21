@@ -339,10 +339,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
 
   const handleAccept = () => {
     // For an invite the friend REQUEST is the point — send it even if the event is already saved.
+    // The toast is shown by the parent once the friendship outcome (request / instant friends) resolves.
     if (isFav && invitedBy == null) return;
     haptic("medium");
     onAccept();
-    showToast(isFav ? "Отправил заявку в друзья" : "Добавил в избранное! Отправил заявку в друзья", { tone: "good" });
   };
 
   // Per-item privacy: hide / unhide THIS favourite from friends. Optimistic; persisted best-effort.

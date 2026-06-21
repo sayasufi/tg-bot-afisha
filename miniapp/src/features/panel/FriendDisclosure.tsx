@@ -8,7 +8,7 @@ export function FriendDisclosure({ onClose, onOpenProfile }: { onClose: () => vo
         <h3 className="fdisc__title">теперь вы друзья</h3>
         <p className="fdisc__body">
           Друзья видят, что ты сохраняешь — а ты видишь их. Любое событие можно скрыть прямо в его
-          карточке, а всё сразу — выключить ниже.
+          карточке, а всё сразу — в разделе «Друзья».
         </p>
         <div className="fdisc__actions">
           {onOpenProfile && (

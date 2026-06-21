@@ -81,14 +81,16 @@ export async function syncSettings(patch?: Partial<UserSettings>): Promise<UserS
 
 // Heart / un-heart. Favouriting also arms the event's reminder server-side (if profile notifications
 // are on). When done via a «Пойдём?» invite, pass (inviter, sig) so the bot DMs the inviter once.
+export type FavoriteResult = { ids: string[] | null; friend: "accepted" | "pending" | "none"; firstFriend: boolean };
 export async function toggleFavoriteRemote(
   eventId: string,
   on: boolean,
   inviter?: number | null,
   sig?: string | null,
-): Promise<string[] | null> {
+): Promise<FavoriteResult> {
   const init = initData();
-  if (!init) return null;
+  const miss: FavoriteResult = { ids: null, friend: "none", firstFriend: false };
+  if (!init) return miss;
   try {
     const r = await fetch(`${API_BASE}/v1/users/favorites`, {
       method: "POST",
@@ -96,11 +98,15 @@ export async function toggleFavoriteRemote(
       body: JSON.stringify({ init_data: init, event_id: eventId, on, inviter_id: inviter ?? undefined, sig: sig ?? undefined }),
       keepalive: true,
     });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { ids?: string[] };
-    return Array.isArray(j.ids) ? j.ids : null;
+    if (!r.ok) return miss;
+    const j = (await r.json()) as { ids?: string[]; friend?: string; first_friend?: boolean };
+    return {
+      ids: Array.isArray(j.ids) ? j.ids : null,
+      friend: j.friend === "accepted" || j.friend === "pending" ? j.friend : "none",
+      firstFriend: !!j.first_friend,
+    };
   } catch {
-    return null;
+    return miss;
   }
 }
 

@@ -43,18 +43,20 @@ async def _both_exist(db: AsyncSession, a: int, b: int) -> bool:
     return a in rows and b in rows
 
 
-async def request_friend(db: AsyncSession, target: int, requester: int, *, src_event_id: str | None = None) -> bool:
-    """Record a PENDING friend request: `requester` accepted `target`'s signed «Пойдём?» → `target`
-    (the inviter) must CONFIRM it. Crucial: a pending edge exposes NOTHING (friends_who_favorited /
-    count_friends require 'accepted'), so a link forwarded to a group can't auto-befriend or leak a
-    single favourite — the inviter chooses who becomes a friend. No commit. Returns True iff a new
-    pending request was created. Skips self, a non-existent account (FK), a blocked pair, an existing
-    friendship, or a target already at the friend cap."""
+async def request_friend(db: AsyncSession, target: int, requester: int, *, src_event_id: str | None = None) -> str:
+    """`requester` accepted `target`'s signed «Пойдём?». Normally this records a PENDING request the
+    `target` (inviter) must CONFIRM — a pending edge exposes NOTHING (friends_who_favorited /
+    count_friends require 'accepted'), so a forwarded/broadcast link can't auto-befriend or leak a
+    favourite; the inviter chooses. BUT if a RECIPROCAL request already exists (the target earlier
+    accepted the requester's OWN invite → a pending row the other way), both have reached out, so they
+    become friends NOW — no second confirmation. No commit. Returns 'accepted' (mutual → friends now),
+    'pending' (request created), or 'none' (skipped: self / non-existent / blocked / already friends /
+    at cap / duplicate)."""
     target, requester = int(target), int(requester)
     if target == requester:
-        return False
+        return "none"
     if not await _both_exist(db, target, requester):
-        return False
+        return "none"
     blocked = await db.scalar(
         select(func.count()).select_from(UserMute).where(
             or_(
@@ -64,16 +66,35 @@ async def request_friend(db: AsyncSession, target: int, requester: int, *, src_e
         )
     )
     if blocked:
-        return False
+        return "none"
     already = await db.scalar(
         select(func.count()).select_from(UserFriend).where(
             UserFriend.user_id == target, UserFriend.friend_id == requester, UserFriend.status == "accepted"
         )
     )
     if already:
-        return False
-    if await count_friends(db, target) >= _FRIEND_CAP:
-        return False
+        return "none"  # already friends
+    if await count_friends(db, target) >= _FRIEND_CAP or await count_friends(db, requester) >= _FRIEND_CAP:
+        return "none"
+    # Reciprocal pending (the requester previously got a pending request from the target — i.e. the
+    # target accepted the requester's own invite). Both reached out → friends now, skip the confirm step.
+    reciprocal = await db.scalar(
+        select(func.count()).select_from(UserFriend).where(
+            UserFriend.user_id == requester, UserFriend.friend_id == target, UserFriend.status == "pending"
+        )
+    )
+    if reciprocal:
+        await db.execute(
+            update(UserFriend)
+            .where(UserFriend.user_id == requester, UserFriend.friend_id == target, UserFriend.status == "pending")
+            .values(status="accepted")
+        )
+        await db.execute(
+            pg_insert(UserFriend.__table__)
+            .values(user_id=target, friend_id=requester, status="accepted")
+            .on_conflict_do_update(index_elements=["user_id", "friend_id"], set_={"status": "accepted"})
+        )
+        return "accepted"
     eid: uuid.UUID | None = None
     if src_event_id:
         try:
@@ -85,7 +106,7 @@ async def request_friend(db: AsyncSession, target: int, requester: int, *, src_e
         .values(user_id=target, friend_id=requester, status="pending", src_event_id=eid)
         .on_conflict_do_nothing()  # don't downgrade an existing accepted/pending edge
     )
-    return bool(res.rowcount)
+    return "pending" if res.rowcount else "none"
 
 
 async def accept_request(db: AsyncSession, uid: int, requester: int) -> bool:

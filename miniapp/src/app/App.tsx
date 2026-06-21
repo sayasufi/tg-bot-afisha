@@ -26,6 +26,10 @@ const ProfilePanel = lazy(() => import("../features/panel/ProfilePanel").then((m
 const FollowedVenuesPanel = lazy(() =>
   import("../features/panel/FollowedVenuesPanel").then((m) => ({ default: m.FollowedVenuesPanel })),
 );
+const FriendsPanel = lazy(() => import("../features/panel/FriendsPanel").then((m) => ({ default: m.FriendsPanel })));
+import { FriendDisclosure } from "../features/panel/FriendDisclosure";
+import { manageFriends } from "../api/users";
+import { showToast } from "../lib/toast";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { OfflineBanner } from "../features/offline/OfflineBanner";
@@ -139,6 +143,13 @@ export function App() {
   const toggleFriendsPrivate = useCallback((on: boolean) => {
     setFriendsPrivate(on);
     pushSetting("friends_private", on);
+  }, []);
+  // First-friend disclosure (fires here when a mutual invite makes you friends instantly) + the menu
+  // badge count of incoming friend requests (pulled once on open, kept live by the Friends panel).
+  const [friendDisclosure, setFriendDisclosure] = useState(false);
+  const [friendReqCount, setFriendReqCount] = useState(0);
+  useEffect(() => {
+    void manageFriends().then((s) => s && setFriendReqCount(s.requests.length));
   }, []);
   const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
   // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
@@ -892,9 +903,29 @@ export function App() {
         onAccept={() => {
           if (!selected) return;
           // Accepting a «Пойдём?» invite = favourite it + attribute the inviter (the bot DMs them) +
-          // send the inviter a friend REQUEST (they confirm it in their profile).
+          // send a friend REQUEST — or, if you'd each invited the other, become friends instantly.
           const inv = invite && invite.eventId === selected.event_id ? invite : null;
-          if (inv) fav.accept(selected.event_id, inv.inviterId, inv.sig);
+          if (!inv) return;
+          void fav.accept(selected.event_id, inv.inviterId, inv.sig).then(({ friend, firstFriend }) => {
+            showToast(
+              friend === "accepted"
+                ? "Теперь вы друзья!"
+                : friend === "pending"
+                  ? "В избранном · заявка в друзья отправлена"
+                  : "Добавлено в избранное",
+              { tone: "good" },
+            );
+            if (firstFriend) {
+              try {
+                if (localStorage.getItem("okrest_friend_disclosed") !== "1") {
+                  localStorage.setItem("okrest_friend_disclosed", "1");
+                  setFriendDisclosure(true);
+                }
+              } catch {
+                /* ignore */
+              }
+            }
+          });
         }}
         onSelect={openEvent}
         onShowMap={showOnMap}
@@ -937,6 +968,14 @@ export function App() {
           <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
         )}
         {view === "venues" && <FollowedVenuesPanel onOpenVenue={onOpenVenue} onClose={() => setView("map")} />}
+        {view === "friends" && (
+          <FriendsPanel
+            friendsPrivate={friendsPrivate}
+            onToggleFriendsPrivate={toggleFriendsPrivate}
+            onRequestsChange={setFriendReqCount}
+            onClose={() => setView("map")}
+          />
+        )}
         {view === "profile" && (
           <ProfilePanel
             user={tgUser}
@@ -948,8 +987,6 @@ export function App() {
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
-            friendsPrivate={friendsPrivate}
-            onToggleFriendsPrivate={toggleFriendsPrivate}
             theme={theme}
             onToggleTheme={toggleTheme}
             onOpenFavorites={() => setView("favorites")}
@@ -958,10 +995,21 @@ export function App() {
         )}
       </Suspense>
 
+      {friendDisclosure && (
+        <FriendDisclosure
+          onClose={() => setFriendDisclosure(false)}
+          onOpenProfile={() => {
+            setFriendDisclosure(false);
+            setView("friends");
+          }}
+        />
+      )}
+
       <Sidebar
         open={drawerOpen}
         view={view}
         favCount={fav.ids.size}
+        friendRequests={friendReqCount}
         user={tgUser}
         onClose={() => setDrawerOpen(false)}
         onSelect={(v) => {

@@ -178,19 +178,23 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
     )
     await set_favorite(db, uid, payload.event_id, payload.on)
     notify: tuple[int, str] | None = None
+    friend = "none"  # friendship outcome of this accept: 'accepted' (mutual now) / 'pending' / 'none'
+    first_friend = False
     if payload.on:
         await _arm_reminder(db, uid, payload.event_id)
         # Invite accept via a genuine SIGNED «Пойдём?» link → record a PENDING friend request the inviter
-        # must confirm (a pending edge leaks nothing; the inviter chooses), and DM them once (Redis-deduped;
-        # a forged inviter can't replay it). Independent of whether the event was already favourited, so an
-        # invite to an already-saved event still creates the request. Never self / muted / non-existent.
+        # confirms (a pending edge leaks nothing; the inviter chooses) — UNLESS a reciprocal request
+        # already exists (both invited each other), then they become friends now. DM the inviter once
+        # (Redis-deduped). Independent of whether the event was already favourited. Never self/muted/ghost.
         if (
             payload.inviter_id
             and int(payload.inviter_id) != uid
             and invite_verify(payload.event_id, payload.inviter_id, payload.sig)
         ):
             inviter = int(payload.inviter_id)
-            await request_friend(db, inviter, uid, src_event_id=payload.event_id)
+            friend = await request_friend(db, inviter, uid, src_event_id=payload.event_id)
+            if friend == "accepted" and await count_friends(db, uid) == 1:
+                first_friend = True  # my first friend, formed instantly → one-time disclosure
             recip = await get_settings(db, inviter)
             if (
                 recip
@@ -204,7 +208,7 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
     await db.commit()
     if notify:
         await _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
-    return {"ids": await list_favorite_ids(db, uid)}
+    return {"ids": await list_favorite_ids(db, uid), "friend": friend, "first_friend": first_friend}
 
 
 @router.post("/reminders")
