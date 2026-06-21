@@ -1008,6 +1008,26 @@ mark.hl {
   text-transform: lowercase;
   box-shadow: 1.4px 1.4px 0 var(--cinnabar);
 }
+/* «Пригласить друга» — share your personal add-me link. Acid CTA at the top of the Friends screen. */
+.friends__invite {
+  width: 100%;
+  margin: 2px 0 16px;
+  padding: 13px;
+  border: 0;
+  cursor: pointer;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-family: var(--grotesk);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+  box-shadow: 1.6px 1.6px 0 var(--cinnabar);
+}
+.friends__invite:active {
+  transform: translate(1px, 1px);
+  box-shadow: 0.6px 0.6px 0 var(--cinnabar);
+}
 .profile__friends-empty {
   margin: 2px 0 14px;
   font-family: var(--grotesk);

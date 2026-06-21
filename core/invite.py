@@ -24,3 +24,18 @@ def verify(event_id: str, inviter_id: int | None, sig: str | None) -> bool:
     if not inviter_id or not sig:
         return False
     return hmac.compare_digest(sign(event_id, int(inviter_id)), sig)
+
+
+def sign_friend(inviter_id: int) -> str:
+    """Signs a personal «add me as a friend» deep-link. Namespaced ('friend:') so a friend sig can never
+    be replayed as an event-invite sig (or vice versa) — different namespaces hash differently. No event,
+    no expiry: a durable personal link the user can re-share. HMAC(friend:<id>, bot_token), 12 hex chars."""
+    key = (get_settings().telegram_bot_token or "okrest-dev-secret").encode()
+    return hmac.new(key, f"friend:{inviter_id}".encode(), hashlib.sha256).hexdigest()[:_SIG_LEN]
+
+
+def verify_friend(inviter_id: int | None, sig: str | None) -> bool:
+    """True only for an inviter_id whose friend-link we minted — proves the «add me» link is genuine."""
+    if not inviter_id or not sig:
+        return False
+    return hmac.compare_digest(sign_friend(int(inviter_id)), sig)

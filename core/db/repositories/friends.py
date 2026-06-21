@@ -201,6 +201,15 @@ async def my_hidden_event_ids(db: AsyncSession, uid: int, event_ids: list[str]) 
     return [str(r) for r in rows]
 
 
+async def user_card(db: AsyncSession, uid: int) -> dict | None:
+    """A user's public mini-card (id/name/@username/photo) — for the «X хочет добавить тебя» accept
+    screen and DMs. No relationship gate (the caller already proved the friend-link sig)."""
+    u = await db.get(User, int(uid))
+    if not u:
+        return None
+    return {"id": u.telegram_user_id, "name": u.first_name or "", "username": u.username, "photo_url": u.photo_url}
+
+
 async def friend_profile(db: AsyncSession, uid: int, friend_id: int) -> dict | None:
     """A friend's profile to view «что он лайкнул» — ONLY if uid and friend_id are mutual accepted
     friends and neither has blocked the other. Returns name/username/photo_url + their visible favourite

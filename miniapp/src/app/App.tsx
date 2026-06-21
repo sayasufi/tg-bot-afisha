@@ -29,6 +29,7 @@ const FollowedVenuesPanel = lazy(() =>
 const FriendsPanel = lazy(() => import("../features/panel/FriendsPanel").then((m) => ({ default: m.FriendsPanel })));
 const FriendProfile = lazy(() => import("../features/panel/FriendProfile").then((m) => ({ default: m.FriendProfile })));
 import { FriendDisclosure } from "../features/panel/FriendDisclosure";
+import { FriendInviteAccept } from "../features/panel/FriendInviteAccept";
 import { fetchFriendsFavorited, manageFriends, type Friend } from "../api/users";
 import { showToast } from "../lib/toast";
 import { IconList } from "../lib/icons";
@@ -63,6 +64,7 @@ export function App() {
   const fav = useFavorites();
   // Who invited me here (from a share deep-link «<event>_<inviter>_<sig>») — drives the invite banner.
   const [invite, setInvite] = useState<{ eventId: string; inviterId: number; sig: string } | null>(null);
+  const [friendInvite, setFriendInvite] = useState<{ inviterId: number; sig: string } | null>(null); // «add me» link
   // Pull this account's favourites + venue follows from the server once on open (favourites also
   // merge this device's local hearts in on first run) so they sync across devices.
   useEffect(() => {
@@ -542,6 +544,7 @@ export function App() {
     else if (drawerOpen) setDrawerOpen(false);
     else if (listOpen) setListOpen(false);
     else if (collection) setCollection(null); // the «Подборка» detail closes back to the recs panel
+    else if (friendInvite) setFriendInvite(null); // the «add me» accept screen
     else if (friendProfile) setFriendProfile(null); // a friend's profile closes back to the Friends list
     else if (view !== "map") setView("map");
     else return false;
@@ -549,7 +552,7 @@ export function App() {
     // (a keyboard Escape otherwise leaves the pill button looking "highlighted").
     (document.activeElement as HTMLElement | null)?.blur?.();
     return true;
-  }, [searchOpen, selected, venueId, peek, filtersOpen, drawerOpen, listOpen, collection, friendProfile, view]);
+  }, [searchOpen, selected, venueId, peek, filtersOpen, drawerOpen, listOpen, collection, friendInvite, friendProfile, view]);
 
   // «Подборки» tile / «смотреть все» → the full collection detail (layered over the recs panel).
   const onOpenCollection = useCallback((slug: string, title: string, subtitle: string | null) => {
@@ -576,7 +579,7 @@ export function App() {
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || collection != null || friendProfile != null || view !== "map";
+    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || collection != null || friendInvite != null || friendProfile != null || view !== "map";
     const pop = () => closeTop();
     if (stacked) {
       back.show();
@@ -585,7 +588,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, collection, friendProfile, view, closeTop]);
+  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, collection, friendInvite, friendProfile, view, closeTop]);
 
   // Esc behaves like tapping the visible × — closes the first-run guide, then the
   // top overlay.
@@ -788,6 +791,10 @@ export function App() {
       if (eventId === "weekend") {
         setFilters((prev) => ({ ...prev, goNow: false, ...rangeFor("weekend") }));
         setView("map");
+      } else if (eventId === "friend" && Number.isFinite(inviterId) && inviteSig) {
+        setFriendInvite({ inviterId, sig: inviteSig }); // «friend_<id>_<sig>» — show the accept screen
+      } else if (eventId === "friends") {
+        setView("friends"); // a friend-add DM's «друзья →» button
       }
       return;
     }
@@ -1080,6 +1087,14 @@ export function App() {
             setFriendDisclosure(false);
             setView("friends");
           }}
+        />
+      )}
+
+      {friendInvite && (
+        <FriendInviteAccept
+          invite={friendInvite}
+          onClose={() => setFriendInvite(null)}
+          onAccepted={() => setView("friends")}
         />
       )}
 

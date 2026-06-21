@@ -194,6 +194,64 @@ export async function fetchFriendProfile(friendId: number): Promise<FriendProfil
   }
 }
 
+// A personal «add me as a friend» deep-link for the current account (durable, reshareable). Null on error.
+export async function createFriendLink(): Promise<string | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friend-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { link?: string };
+    return typeof j.link === "string" ? j.link : null;
+  } catch {
+    return null;
+  }
+}
+
+// Who's behind an «add me» link (name/photo for the accept screen). Null if the sig is invalid / self.
+export async function peekFriendLink(inviterId: number, sig: string): Promise<Friend | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friend-peek`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, inviter_id: inviterId, sig }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as Partial<Friend>;
+    return { id: j.id ?? inviterId, name: j.name ?? "", username: j.username ?? null, photo_url: j.photo_url ?? null };
+  } catch {
+    return null;
+  }
+}
+
+// Accept an «add me» link → instant mutual friends. Returns the new friend + whether it's your first.
+export async function acceptFriendLink(
+  inviterId: number,
+  sig: string,
+): Promise<{ friend: Friend | null; firstFriend: boolean; added: boolean } | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friend-accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, inviter_id: inviterId, sig }),
+      keepalive: true,
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { friend?: Friend | null; first_friend?: boolean; added?: boolean };
+    return { friend: j.friend ?? null, firstFriend: !!j.first_friend, added: !!j.added };
+  } catch {
+    return null;
+  }
+}
+
 // Hide / unhide one of my favourites from friends (per-item privacy). Returns whether it persisted.
 export async function hideFavoriteRemote(eventId: string, hidden: boolean): Promise<boolean> {
   const init = initData();

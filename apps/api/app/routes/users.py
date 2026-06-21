@@ -10,7 +10,7 @@ from apps.api.app.services.geo import reverse_city
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.cities import city_by_name
 from core.config.settings import get_settings as get_app_settings
-from core.invite import verify as invite_verify
+from core.invite import sign_friend, verify as invite_verify, verify_friend
 from core.db.repositories.reminders import (
     arm_reminder_if_unsent,
     cancel_reminder,
@@ -31,6 +31,7 @@ from core.db.repositories.friends import (
     remove_friend,
     set_favorite_hidden,
     set_mute,
+    user_card,
 )
 from core.db.repositories.users import (
     add_favorites,
@@ -126,6 +127,16 @@ class HideFavoriteRequest(BaseModel):
 class FriendProfileRequest(BaseModel):
     init_data: str
     friend_id: int
+
+
+class FriendLinkRequest(BaseModel):
+    init_data: str
+
+
+class FriendInviteRequest(BaseModel):
+    init_data: str
+    inviter_id: int  # the owner of the «add me as a friend» link
+    sig: str  # HMAC(friend:<inviter_id>) — proves the link is genuine
 
 
 def _auth(init_data: str) -> tuple[dict, int]:
@@ -310,6 +321,52 @@ async def get_friend_profile(payload: FriendProfileRequest, db: AsyncSession = D
     return prof
 
 
+@router.post("/friend-link")
+async def make_friend_link(payload: FriendLinkRequest):
+    """A personal «добавь меня в друзья» deep-link for the current account (sign_friend) — durable +
+    reshareable, separate from event invites. Opening it shows an accept screen, then instant friends."""
+    _user, uid = _auth(payload.init_data)
+    return {"link": f"https://t.me/okrestmap_bot?startapp=friend_{uid}_{sign_friend(uid)}"}
+
+
+@router.post("/friend-peek")
+async def peek_friend_link(payload: FriendInviteRequest, db: AsyncSession = Depends(get_async_db)):
+    """Who is behind an «add me» link — name/@username/photo for the accept screen. Gated on a valid sig
+    (you can't peek an arbitrary id's card), and never self."""
+    _user, uid = _auth(payload.init_data)
+    if int(payload.inviter_id) == uid or not verify_friend(payload.inviter_id, payload.sig):
+        raise HTTPException(status_code=403, detail="bad friend link")
+    card = await user_card(db, int(payload.inviter_id))
+    if not card:
+        raise HTTPException(status_code=404, detail="no such user")
+    return card
+
+
+@router.post("/friend-accept")
+async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = Depends(get_async_db)):
+    """Accept an «add me» link → instant mutual friends (accepting IS the consent). DMs the link owner
+    once. 403 on a forged/self link. Returns the new friend's card + first_friend (one-time disclosure)."""
+    user, uid = _auth(payload.init_data)
+    await upsert_user_async(
+        db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
+    )
+    if int(payload.inviter_id) == uid or not verify_friend(payload.inviter_id, payload.sig):
+        raise HTTPException(status_code=403, detail="bad friend link")
+    inviter = int(payload.inviter_id)
+    friend = await befriend(db, uid, inviter)
+    first_friend = friend == "accepted" and await count_friends(db, uid) == 1
+    card = await user_card(db, inviter)
+    notify = False
+    if friend == "accepted":
+        recip = await get_settings(db, inviter)
+        if recip and recip.get("notify_reminders") is not False and await _friend_add_dm_once(inviter, uid):
+            notify = True
+    await db.commit()
+    if notify:
+        await _notify_friend_added(inviter, user.get("first_name") or "")
+    return {"friend": card, "first_friend": first_friend, "added": friend == "accepted"}
+
+
 async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
     """DM the inviter that someone accepted their «Пойдём?» (added it to favourites) — best-effort,
     never blocks the response. The inviter started the bot (they shared from the Mini App)."""
@@ -367,6 +424,36 @@ async def _invite_dm_once(invitee_id: int, event_id: str, inviter_id: int) -> bo
         return bool(await client.set(f"invite:dm:{inviter_id}:{invitee_id}:{event_id}", "1", nx=True, ex=120 * 24 * 3600))
     except Exception:
         return True
+
+
+async def _friend_add_dm_once(inviter_id: int, invitee_id: int) -> bool:
+    """Redis NX: True only the first time we'd DM `inviter_id` that `invitee_id` used their «add me»
+    friend-link — so re-opening the link can't re-spam. Best-effort (Redis down → allow)."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    try:
+        return bool(await client.set(f"friend:dm:add:{inviter_id}:{invitee_id}", "1", nx=True, ex=365 * 24 * 3600))
+    except Exception:
+        return True
+
+
+async def _notify_friend_added(inviter_id: int, name: str) -> None:
+    """DM the friend-link owner that someone added them via it (now friends) — best-effort, never blocks."""
+    token = get_app_settings().telegram_bot_token
+    if not token or not inviter_id:
+        return
+    text = f"👋 <b>{escape(name or 'Кто-то')}</b> добавил тебя в друзья по твоей ссылке"
+    markup = {"inline_keyboard": [[{"text": "друзья →", "url": "https://t.me/okrestmap_bot?startapp=friends"}]]}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": int(inviter_id), "text": text, "parse_mode": "HTML",
+                      "reply_markup": markup, "disable_web_page_preview": True},
+            )
+    except Exception:
+        pass  # the friendship is recorded; the nudge is best-effort
 
 
 @router.post("/invited")

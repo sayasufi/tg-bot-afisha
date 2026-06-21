@@ -1,8 +1,9 @@
 import { type ReactNode, useEffect, useState } from "react";
 
-import { manageFriends, type Friend, type FriendsState } from "../../api/users";
+import { createFriendLink, manageFriends, type Friend, type FriendsState } from "../../api/users";
 import { IconClose } from "../../lib/icons";
-import { haptic } from "../../lib/telegram";
+import { haptic, shareEvent } from "../../lib/telegram";
+import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
 import { FriendDisclosure } from "./FriendDisclosure";
 
@@ -104,6 +105,15 @@ export function FriendsPanel({
     setFriends((fs) => fs.filter((f) => f.id !== id)); // optimistic
     void manageFriends("remove", id).then(apply);
   };
+  const inviteFriend = async () => {
+    haptic("light");
+    const link = await createFriendLink();
+    if (!link) {
+      showToast("Не удалось создать ссылку", { tone: "muted" });
+      return;
+    }
+    shareEvent({ title: "Добавь меня в Окрест 👋", text: "будем видеть, что друг у друга в избранном", url: link });
+  };
 
   return (
     <div className="panelview">
@@ -114,6 +124,9 @@ export function FriendsPanel({
         </button>
       </header>
       <div className="panelview__scroll">
+        <button type="button" className="friends__invite" onClick={inviteFriend}>
+          пригласить друга в окрест →
+        </button>
         {requests.length > 0 && (
           <>
             <div className="recs__section">Заявки</div>
