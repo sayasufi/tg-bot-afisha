@@ -46,13 +46,14 @@
   display: block;
 }
 
-/* Category colour code — a thin rail along the plate's bottom edge. */
+/* Category colour code — a colour bar INSIDE the plate near the bottom. Inset 1px on all sides so the
+   plate's black frame stays complete (incl. the bottom edge) and the bar reads as an internal band. */
 .vpin__rail {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  height: 4px;
   background: var(--cat, transparent);
 }
 
