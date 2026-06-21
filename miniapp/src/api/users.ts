@@ -240,24 +240,6 @@ export async function findFriend(username: string, send = false): Promise<FoundF
   }
 }
 
-// Rotate (kill) my «add me» friend-link — every copy I shared before stops working. Returns the fresh link.
-export async function resetFriendLink(): Promise<string | null> {
-  const init = initData();
-  if (!init) return null;
-  try {
-    const r = await fetch(`${API_BASE}/v1/users/friend-link-reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init }),
-    });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { link?: string };
-    return typeof j.link === "string" ? j.link : null;
-  } catch {
-    return null;
-  }
-}
-
 // Who's behind an «add me» link (name/photo for the accept screen). Null if the sig is invalid / self.
 export async function peekFriendLink(inviterId: number, sig: string): Promise<Friend | null> {
   const init = initData();

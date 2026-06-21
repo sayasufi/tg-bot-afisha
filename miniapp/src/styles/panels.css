@@ -1011,7 +1011,7 @@ mark.hl {
 /* «Пригласить друга» — share your personal add-me link. Acid CTA at the top of the Friends screen. */
 .friends__invite {
   width: 100%;
-  margin: 2px 0 8px;
+  margin: 2px 0 16px;
   padding: 13px;
   border: 0;
   cursor: pointer;
@@ -1027,24 +1027,6 @@ mark.hl {
 .friends__invite:active {
   transform: translate(1px, 1px);
   box-shadow: 0.6px 0.6px 0 var(--cinnabar);
-}
-/* Kill-switch for a leaked «add me» link — a quiet secondary action under the invite CTA. */
-.friends__reset {
-  width: 100%;
-  margin: 0 0 16px;
-  padding: 8px;
-  border: 0;
-  background: none;
-  box-shadow: inset 0 0 0 1px var(--line);
-  cursor: pointer;
-  color: var(--ink-dim);
-  font-family: var(--grotesk);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: lowercase;
-}
-.friends__reset:active {
-  opacity: 0.6;
 }
 /* «найти по @username» — exact-handle lookup of opt-in accounts. */
 .friends__search {

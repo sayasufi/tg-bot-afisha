@@ -43,9 +43,10 @@ class User(Base):
     # Opt-in (default DENY): when true, this account can be found by exact @username and sent a friend
     # request. Default off so nobody is findable — or even confirmable as a user — without consenting.
     is_searchable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    # Per-account version mixed into the «add me» friend-link HMAC. Bumping it (a self-serve «reset my
-    # link» kill-switch) invalidates every link the user previously shared, without touching anyone
-    # else's link or any event-invite sig. 0 = the legacy payload, so links minted before this stay valid.
+    # Per-account version mixed into the «add me» friend-link HMAC. The first successful add via a link
+    # bumps it, which invalidates that link (and any copies) — making the friend-link SINGLE-USE: no
+    # broadcast, no manual reset. Doesn't touch anyone else's link or any event-invite sig. 0 = the legacy
+    # payload, so links minted before versioning existed stay valid until first used.
     friend_link_ver: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     # Per-send ledger for the weekly digest — the instant we last DM'd this user a digest.
     # opted_in_users() filters on it (NULL or < this week's start) so a redeploy/manual re-run/

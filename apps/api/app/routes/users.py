@@ -343,21 +343,12 @@ async def get_friend_profile(payload: FriendProfileRequest, db: AsyncSession = D
 
 @router.post("/friend-link")
 async def make_friend_link(payload: FriendLinkRequest, db: AsyncSession = Depends(get_async_db)):
-    """A personal «добавь меня в друзья» deep-link for the current account (sign_friend) — durable +
-    reshareable, separate from event invites. Opening it shows an accept screen, then instant friends.
-    Signed at the account's current friend_link_ver so a later reset kills already-shared copies."""
+    """A personal «добавь меня в друзья» deep-link for the current account (sign_friend), separate from
+    event invites. Opening it shows an accept screen, then instant friends. SINGLE-USE: signed at the
+    account's current friend_link_ver, which the first successful add bumps — so the link can't be reused
+    or broadcast. Tapping «пригласить друга» again after an add mints a fresh one."""
     _user, uid = _auth(payload.init_data)
     ver = await friend_link_ver(db, uid)
-    return {"link": f"https://t.me/okrestmap_bot?startapp=friend_{uid}_{sign_friend(uid, ver)}"}
-
-
-@router.post("/friend-link-reset")
-async def reset_friend_link(payload: FriendLinkRequest, db: AsyncSession = Depends(get_async_db)):
-    """Kill-switch: rotate this account's friend-link version so every link it shared before stops
-    working, and return a fresh one to share. Only affects MY links — not anyone else's, nor event invites."""
-    _user, uid = _auth(payload.init_data)
-    ver = await bump_friend_link_ver(db, uid)
-    await db.commit()
     return {"link": f"https://t.me/okrestmap_bot?startapp=friend_{uid}_{sign_friend(uid, ver)}"}
 
 
@@ -380,9 +371,10 @@ async def peek_friend_link(payload: FriendInviteRequest, db: AsyncSession = Depe
 
 @router.post("/friend-accept")
 async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = Depends(get_async_db)):
-    """Accept an «add me» link → instant mutual friends (accepting IS the consent). DMs the link owner
-    once. 403 on a forged/self/rotated link. Returns the new friend's card + first_friend (one-time
-    disclosure). The link version is loaded from the DB by inviter id, never from the client."""
+    """Accept an «add me» link → instant mutual friends (accepting IS the consent). The link is SINGLE-USE:
+    a successful add bumps the owner's friend_link_ver, so the link (and any copies) dies — no broadcast,
+    no manual reset. DMs the link owner once. 403 on a forged/self/already-used link. Returns the new
+    friend's card + first_friend. The link version is loaded from the DB by inviter id, never the client."""
     user, uid = _auth(payload.init_data)
     await upsert_user_async(
         db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
@@ -394,6 +386,8 @@ async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = De
         raise HTTPException(status_code=403, detail="bad friend link")
     inviter = int(payload.inviter_id)
     friend = await befriend(db, uid, inviter)
+    if friend == "accepted":
+        await bump_friend_link_ver(db, inviter)  # single-use: consuming the link invalidates it + any copies
     first_friend = friend == "accepted" and await count_friends(db, uid) == 1
     card = await user_card(db, inviter)
     notify = False

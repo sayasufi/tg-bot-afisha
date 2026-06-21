@@ -7,10 +7,9 @@ import {
   type Friend,
   type FriendsState,
   manageFriends,
-  resetFriendLink,
 } from "../../api/users";
 import { IconClose } from "../../lib/icons";
-import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
+import { haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
 import { FriendDisclosure } from "./FriendDisclosure";
@@ -129,23 +128,6 @@ export function FriendsPanel({
     }
     shareEvent({ title: "Добавь меня в Окрест 👋", text: "будем видеть, что друг у друга в избранном", url: link });
   };
-  const resetLink = () => {
-    haptic("light");
-    const run = async () => {
-      const link = await resetFriendLink();
-      showToast(link ? "Ссылка сброшена — старая больше не работает" : "Не удалось", {
-        tone: link ? "good" : "muted",
-      });
-    };
-    const wa = getWebApp();
-    if (wa?.showConfirm) {
-      wa.showConfirm("Сбросить ссылку-приглашение? Старая перестанет работать у всех, кому ты её отправил.", (ok) => {
-        if (ok) void run();
-      });
-    } else {
-      void run();
-    }
-  };
   const handle = () => query.trim().replace(/^@+/, "");
   const doSearch = async () => {
     const u = handle();
@@ -192,9 +174,6 @@ export function FriendsPanel({
       <div className="panelview__scroll">
         <button type="button" className="friends__invite" onClick={inviteFriend}>
           пригласить друга в окрест →
-        </button>
-        <button type="button" className="friends__reset" onClick={resetLink}>
-          сбросить ссылку-приглашение
         </button>
 
         <div className="friends__search">
