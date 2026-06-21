@@ -10,7 +10,9 @@ events» is one index JOIN on (user_id) with no OR/LEAST. ref.user_mutes carries
 columns ship WITH the named signal so the first release can't out anyone retroactively: a global
 friends_private kill-switch and a per-favourite hidden_from_friends. photo_url stores the friend's TG
 avatar (captured from initData) for the social-proof faces. The missing ix on user_favorites(event_id)
-backs the reverse JOIN. Graph is back-filled from already-accepted invites (ref.users.invited_by).
+backs the reverse JOIN. The graph starts EMPTY — friendships are only ever formed at runtime via befriend
+/ accept (acceptance = consent). It is NOT seeded from users.invited_by: that's set on invite OPEN (feed
+warm-start), not acceptance, so backfilling it would befriend people who merely tapped a link.
 """
 from alembic import op
 
@@ -54,28 +56,8 @@ def upgrade() -> None:
     op.execute("ALTER TABLE ref.users ADD COLUMN IF NOT EXISTS friends_private BOOLEAN NOT NULL DEFAULT false")
     op.execute("ALTER TABLE ref.users ADD COLUMN IF NOT EXISTS photo_url TEXT")
     op.execute("ALTER TABLE ref.user_favorites ADD COLUMN IF NOT EXISTS hidden_from_friends BOOLEAN NOT NULL DEFAULT false")
-    # Back-fill the graph from already-accepted invites (both directions), only where BOTH accounts
-    # exist (the FK requires it) and it isn't a self-invite. ON CONFLICT keeps it idempotent.
-    op.execute(
-        """
-        INSERT INTO ref.user_friends (user_id, friend_id, status)
-        SELECT u.telegram_user_id, u.invited_by, 'accepted'
-        FROM ref.users u
-        JOIN ref.users iv ON iv.telegram_user_id = u.invited_by
-        WHERE u.invited_by IS NOT NULL AND u.invited_by <> u.telegram_user_id
-        ON CONFLICT DO NOTHING
-        """
-    )
-    op.execute(
-        """
-        INSERT INTO ref.user_friends (user_id, friend_id, status)
-        SELECT u.invited_by, u.telegram_user_id, 'accepted'
-        FROM ref.users u
-        JOIN ref.users iv ON iv.telegram_user_id = u.invited_by
-        WHERE u.invited_by IS NOT NULL AND u.invited_by <> u.telegram_user_id
-        ON CONFLICT DO NOTHING
-        """
-    )
+    # No back-fill: the graph starts empty. (An earlier version seeded it from users.invited_by, but that
+    # is an invite-OPEN signal, not acceptance — seeding it would befriend people who only tapped a link.)
 
 
 def downgrade() -> None:

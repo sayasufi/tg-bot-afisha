@@ -222,7 +222,7 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
             recip = await get_settings(db, inviter)
             if (
                 recip
-                and recip.get("notify_reminders") is not False
+                and recip.get("notify_friends") is not False  # this is a friend-formed DM → notify_friends, not reminders
                 and await _invite_dm_once(uid, payload.event_id, inviter)
             ):
                 title = await event_title(db, payload.event_id)
