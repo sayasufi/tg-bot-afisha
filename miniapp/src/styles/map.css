@@ -36,10 +36,12 @@
   width: 30px;
   height: 30px;
   background: var(--plinth);
-  /* 1px frame + a soft drop shadow that lifts the plate off the map (premium «floating» separation). */
+  /* 1px frame + a FLAT (zero-blur) offset that lifts the plate off the map. Flat on purpose: cluster pins
+     rebuild on every pan/zoom, and a blurred shadow is too expensive to repaint across the chunked re-add
+     — it flickered. A hard offset paints instantly (and is more on-brand / VITRINE-flat anyway). */
   box-shadow:
     inset 0 0 0 1px var(--ink),
-    0 3px 7px rgba(11, 11, 11, 0.22);
+    1.5px 1.5px 0 rgba(11, 11, 11, 0.16);
   display: grid;
   place-items: center;
   color: var(--ink);
@@ -64,16 +66,27 @@
   display: none;
 }
 
-/* A friend saved this event — a thin acid ring hugging the plate (no avatar; VITRINE «info > photo»).
-   Sits above ordinary pins but below the active one. */
+/* A friend saved this event — a small black «friend» badge on the plate's bottom-right corner (legend:
+   black = friend). Replaces the old acid ring, which read as «selected» and fought the frame; the plate
+   itself stays a normal pin (so it keeps the flat, blink-free shadow). Sits above ordinary pins. */
 .vpin--friend {
   z-index: 500;
 }
-.vpin--friend .vpin__plate {
-  box-shadow:
-    inset 0 0 0 1px var(--ink),
-    0 0 0 2.5px var(--acid),
-    0 3px 7px rgba(11, 11, 11, 0.22);
+.vpin__friend {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: var(--plinth);
+  box-shadow: 0 0 0 1.5px var(--plinth);
+  z-index: 3;
+}
+.vpin__friend svg {
+  display: block;
 }
 
 /* Catalogue code on the focused pin — the exhibit's accession number, mono on ink, acid type. Floated

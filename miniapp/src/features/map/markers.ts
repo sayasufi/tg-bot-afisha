@@ -4,6 +4,10 @@ import type { EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
 import { categorySvg } from "../../lib/icons";
 
+// A compact «friend» silhouette (head + shoulders) for the corner badge on events a friend has saved.
+const FRIEND_GLYPH =
+  '<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8.2" r="3.7"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0Z"/></svg>';
+
 // User location — a clean acid "you" dot with a soft live pulse. When a heading
 // is known (phone compass), dot + pointer are drawn as ONE SVG shape so a single
 // shared outline wraps the whole marker (no seam between dot and arrow).
@@ -36,8 +40,8 @@ export function userIcon(heading: number | null): L.DivIcon {
 // vinyl-cut icon, and a thin category-colour rail along the bottom edge (a
 // gallery label's colour code); a soft drop shadow lifts it off the map, and a
 // nail + dot drops to the geo point. Active flips to acid AND drops its catalogue
-// code on a mono plate below (the focused exhibit's accession number); a live
-// event gets a cinnabar pulse; a friend-saved event gets a thin acid ring.
+// code on a mono plate (the focused exhibit's accession number); a live event gets
+// a cinnabar pulse; a friend-saved event gets a small black «friend» corner badge.
 export function pinIcon(item: EventItem, active: boolean, live = false, friend = false): L.DivIcon {
   const cls = `vpin${active ? " vpin--active" : ""}${live ? " vpin--live" : ""}${friend ? " vpin--friend" : ""}`;
   const liveDot = live ? '<span class="vpin__live"></span>' : "";
@@ -50,7 +54,8 @@ export function pinIcon(item: EventItem, active: boolean, live = false, friend =
   // box + anchor as the unselected pin — it covers the cluster's own pin for this event perfectly, and the
   // wide code can't grow the grid column and shove the centred plate sideways.
   const code = codeText ? `<div class="vpin__code">${codeText}</div>` : "";
-  const plate = `<div class="vpin__plate" style="--cat:${color}">${categorySvg(item.category, 18)}<i class="vpin__rail"></i>${liveDot}</div>`;
+  const friendBadge = friend ? `<span class="vpin__friend">${FRIEND_GLYPH}</span>` : "";
+  const plate = `<div class="vpin__plate" style="--cat:${color}">${categorySvg(item.category, 18)}<i class="vpin__rail"></i>${liveDot}${friendBadge}</div>`;
   return L.divIcon({
     className: "vpin-wrap",
     html: `<div class="${cls}">${plate}<div class="vpin__nail"></div><div class="vpin__dot"></div>${code}</div>`,
