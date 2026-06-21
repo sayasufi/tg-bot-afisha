@@ -150,14 +150,12 @@ export function App() {
   // badge count of incoming friend requests (pulled once on open, kept live by the Friends panel).
   const [friendDisclosure, setFriendDisclosure] = useState(false);
   const [friendReqCount, setFriendReqCount] = useState(0);
-  const [hasFriends, setHasFriends] = useState(false); // gates the friends-on-map fetch
   const [friendProfile, setFriendProfile] = useState<Friend | null>(null); // open friend's profile overlay
   const [friendMapIds, setFriendMapIds] = useState<Set<string>>(() => new Set()); // visible events a friend saved
   useEffect(() => {
     void manageFriends().then((s) => {
       if (!s) return;
       setFriendReqCount(s.requests.length);
-      setHasFriends(s.friends.length > 0);
       // You may have become someone's friend while away (they accepted your invite). Show the one-time
       // «friends see your saves» disclosure on open if you have any friend and haven't seen it.
       if (s.friends.length > 0) {
@@ -307,10 +305,11 @@ export function App() {
   );
 
   // Friends-on-map: which of the visible events a friend has saved → an acid ring on those pins. Only
-  // at detail zoom (individual pins, a neighbourhood-sized set), only if you have friends, debounced so
-  // panning doesn't spam the user-scoped side-channel. Cleared otherwise.
+  // at detail zoom (individual pins, a neighbourhood-sized set), debounced so panning doesn't spam the
+  // user-scoped side-channel. NOT gated on a cached «has friends» flag — that goes stale the moment you
+  // become a friend mid-session (the bug); a friendless user's query is empty + cheap (0-row JOIN).
   useEffect(() => {
-    if (!hasFriends || view !== "map" || (mapZoom ?? 0) < DETAIL_ZOOM || shownItems.length === 0) {
+    if (view !== "map" || (mapZoom ?? 0) < DETAIL_ZOOM || shownItems.length === 0) {
       setFriendMapIds((prev) => (prev.size ? new Set() : prev));
       return;
     }
@@ -325,7 +324,7 @@ export function App() {
       alive = false;
       clearTimeout(t);
     };
-  }, [hasFriends, view, mapZoom, shownItems]);
+  }, [view, mapZoom, shownItems]);
   const shownTotal = (filters.radiusKm && userPos) || filters.goNow ? shownItems.length : total;
 
   // «Сейчас» list header count: the can-go-now events (the same map pins, via goNowIds) that
