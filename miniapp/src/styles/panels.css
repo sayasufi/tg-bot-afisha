@@ -2115,10 +2115,15 @@ mark.hl {
 }
 .cat--whiteband .cat__panel {
   /* Transparent stop derived from --plinth so the fade tracks the surface token (dark plinth at
-     night) instead of a hardcoded white. */
-  background: linear-gradient(180deg, color-mix(in srgb, var(--plinth) 0%, transparent) 0%, var(--plinth) 24px);
-  padding-top: 28px;
+     night) instead of a hardcoded white. Short band (half cards only) → photo keeps the top half. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--plinth) 0%, transparent) 0%, var(--plinth) 18px);
+  padding-top: 20px;
   color: var(--ink);
+}
+/* On a half tile the white band must stay ≤ half — keep the title to a single line so the opaque
+   panel can't grow past the midline. */
+.cat--half.cat--whiteband .cat__title {
+  -webkit-line-clamp: 1;
 }
 .cat--whiteband .cat__meta {
   color: var(--ink-dim);
