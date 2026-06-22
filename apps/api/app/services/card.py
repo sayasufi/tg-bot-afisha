@@ -283,7 +283,7 @@ def _digest_row(d: ImageDraw.ImageDraw, img: Image.Image, x: int, y: int, w: int
     (day cinnabar, venue mono dim) in the middle, the price (mono) right-aligned, hairline divider."""
     INK_LINE = (38, 38, 36)
     pad = 14
-    tw, th = 232, h - 2 * pad  # thumbnail (bigger → more photo / air)
+    tw, th = 300, h - 2 * pad  # thumbnail — WIDE landscape (~2:1) so it doesn't crop tall/portrait posters to a sliver
     photo = item.get("photo")
     try:
         thumb = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (tw, th), Image.LANCZOS) if photo \
