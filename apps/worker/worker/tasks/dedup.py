@@ -66,6 +66,13 @@ async def _dedup_impl() -> dict:
                     for tag in candidate.tags_json:
                         if tag.startswith("category:"):
                             category = tag.split(":", 1)[1]
+                # Owner: NO lectures from Timepad. The connector drops the obvious ones, but the
+                # "Искусство и культура" → LLM path can still classify a stray as a lecture — delete it
+                # here (deterministic source+category gate) so it never becomes an event or re-loops.
+                if source.name == "timepad" and category == "lecture":
+                    await db.delete(candidate)
+                    await db.commit()
+                    continue
                 venue = await get_venue(db, candidate.venue_id) if candidate.venue_id else None
                 decision = await dedup_and_upsert_event(
                     db,

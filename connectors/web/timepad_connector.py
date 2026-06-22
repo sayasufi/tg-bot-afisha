@@ -31,12 +31,19 @@ class TimepadConnector:
 
     source_name = "timepad"
 
-    # Curated cultural whitelist — Timepad category NAMES, resolved to ids at fetch time.
-    _WHITELIST = ("Театры", "Кино", "Концерты", "Выставки", "Искусство и культура", "Хобби и творчество")
+    # Curated cultural whitelist — Timepad category NAMES, resolved to ids at fetch time. Note: "Хобби и
+    # творчество" is intentionally OUT — it's commercial master-class mills (lectures), which the owner
+    # doesn't want; the few lectures that still slip in via "Искусство и культура" are dropped at dedup.
+    _WHITELIST = ("Театры", "Кино", "Концерты", "Выставки", "Искусство и культура")
+    # Timed categories: a concrete single date+time (the next session), NOT a multi-day range.
+    _TIMED = {"театры", "кино", "концерты"}
+    # Run categories: an all-day open..close span (an exhibition), no spurious opening clock.
+    _RUN = {"выставки"}
     # Organisers that flood the feed with near-identical commercial listings — dropped wholesale.
     _ORG_BLOCK = ("gistoria", "гистория", "шаговед", "quest4walk", "квесты для прогулок", "мой спортивный район")
-    # Titles that aren't events: gift cards, B2B consults, subscriptions.
-    _TITLE_BLOCK = ("подарочный сертификат", "сертификат на", "подарочная карта", "консультация", "абонемент")
+    # Titles that aren't real events (gift cards, B2B consults) or are lectures/workshops (owner: no lectures).
+    _TITLE_BLOCK = ("подарочный сертификат", "сертификат на", "подарочная карта", "консультация", "абонемент",
+                    "лекция", "лекторий", "мастер-класс", "мастер класс", "семинар", "воркшоп")
     _PAGE = 100
     _MAX_PAGES = 60
 
@@ -120,21 +127,35 @@ class TimepadConnector:
         records: list[RawRecord] = []
         for (org_id, base), grp in groups.items():
             grp.sort(key=lambda x: x["_start"])
-            rep = next((g for g in grp if g["_start"] >= now), grp[0])  # soonest upcoming session
+            future = [g for g in grp if g["_start"] >= now]
+            if not future:
+                continue  # never surface a past-only event — no last-year leakage
+            rep = future[0]                              # soonest UPCOMING session
             start = rep["_start"]
+            rep_end = self._parse_dt(rep.get("ends_at"))
             ends = [d for d in (self._parse_dt(g.get("ends_at")) for g in grp) if d]
-            date_end = max(ends) if ends else None      # a real multi-day run shows as start..end
-            if date_end and date_end <= start:
-                date_end = None
+            run_end = max(ends) if ends else None
+            cats = [self._clean(c.get("name")) for c in (rep.get("categories") or []) if c.get("name")]
+            low = {c.lower() for c in cats}
+            multiday = bool(run_end and run_end.date() > start.date())
+            # Timed (theatre/cinema/concert, or any single-day event): a CONCRETE next session — keep its
+            # clock, end only if same day. NOT a multi-day range (that misread discrete shows as a "run").
+            # Run (exhibition / genuine multi-day span): ALL-DAY open..close, dropping the spurious opening
+            # clock so the card reads "по <дата>" instead of a confusing time.
+            if (low & self._TIMED) or (not (low & self._RUN) and not multiday):
+                date_start = start
+                date_end = rep_end if (rep_end and rep_end.date() == start.date()) else None
+            else:
+                date_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+                date_end = run_end.replace(hour=0, minute=0, second=0, microsecond=0) if multiday else None
             loc = rep.get("location") or {}
             org_name = self._clean((rep.get("organization") or {}).get("name"))
-            cats = [self._clean(c.get("name")) for c in (rep.get("categories") or []) if c.get("name")]
             poster = rep.get("poster_image")
             age = str(rep.get("age_limit") or "").strip()
             payload = {
                 "name": self._clean(rep.get("name")),
                 "description_short": self._clean(rep.get("description_short")),
-                "startDate": start.isoformat(),
+                "startDate": date_start.isoformat(),
                 "endDate": date_end.isoformat() if date_end else None,
                 "place": {"title": org_name, "address": self._clean(loc.get("address"))},
                 "price": self._price_text(rep.get("registration_data")),

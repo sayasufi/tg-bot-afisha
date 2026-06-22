@@ -64,7 +64,8 @@ def test_junk_and_spam_are_dropped():
     assert _records(events) == []
 
 
-def test_recurrences_collapse_to_one_with_run_range():
+def test_timed_recurrences_collapse_to_concrete_next_session():
+    # theatre = timed: collapse to ONE record showing the soonest CONCRETE date+time, NOT a multi-day range
     events = [
         _event(id=10, name="Спектакль «Чайка» (5 июля)", starts_at=_iso(5), ends_at=_iso(5, 21)),
         _event(id=11, name="Спектакль «Чайка» (8 июля)", starts_at=_iso(8), ends_at=_iso(8, 21)),
@@ -75,9 +76,29 @@ def test_recurrences_collapse_to_one_with_run_range():
     p = recs[0].payload
     assert p["sessions"] == 3
     assert p["startDate"][:10] == _iso(5)[:10]   # soonest session
-    assert p["endDate"][:10] == _iso(12)[:10]    # latest session end → a run
+    assert p["endDate"][:10] == _iso(5)[:10]     # SAME day → concrete, not a 5..12 range
     # stable id derived from organiser + base title, so re-fetches upsert the same raw
     assert recs[0].external_id.startswith("tp-")
+
+
+def test_exhibition_is_allday_run_without_spurious_clock():
+    # an exhibition spanning days → ALL-DAY open..close; the spurious opening clock is dropped
+    [rec] = _records([_event(id=20, name="Выставка Кандинский",
+                             categories=[{"id": 2, "name": "Выставки"}],
+                             starts_at=_iso(5, 9), ends_at=_iso(40, 18))])
+    p = rec.payload
+    assert p["startDate"][:10] == _iso(5)[:10]
+    assert p["startDate"][11:16] == "00:00"      # midnight — no confusing 09:00
+    assert p["endDate"][:10] == _iso(40)[:10]     # run close
+
+
+def test_lectures_and_workshops_dropped():
+    events = [
+        _event(id=30, name="Лекция о Врубеле"),
+        _event(id=31, name="Мастер-класс по керамике"),
+        _event(id=32, name="Открытый лекторий"),
+    ]
+    assert _records(events) == []
 
 
 def test_clean_event_maps_all_fields():

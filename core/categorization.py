@@ -33,9 +33,8 @@ _LABEL_TO_CATEGORY: dict[str, str] = {
     # festivals / fairs / city holidays
     "festival": "festival", "фестиваль": "festival", "ярмарка": "festival",
     "holiday": "festival", "праздник": "festival",
-    # lectures / education / workshops (KudaGo "education"; Timepad "Хобби и творчество" = master-classes)
+    # lectures / education (KudaGo "education" is the legitimate lecture source)
     "education": "lecture", "lecture": "lecture", "лекция": "lecture", "лекции": "lecture",
-    "хобби и творчество": "lecture", "мастер-класс": "lecture", "мастер-классы": "lecture",
     # tours / excursions / walks
     "tour": "tour", "excursions": "tour", "excursion": "tour",
     "экскурсия": "tour", "экскурсии": "tour", "прогулка": "tour",
