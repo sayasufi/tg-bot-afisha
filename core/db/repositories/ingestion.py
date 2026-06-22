@@ -400,7 +400,7 @@ async def _upsert_occurrences(db: AsyncSession, event: Event, candidate: EventCa
 # source UPDATES a raw (dates shift as old ones pass, a price appears, sessions are added), the
 # candidate + occurrences would otherwise freeze at first-ingest. These re-normalize the changed raw
 # and propagate the fresh date/price through the SAME _upsert_occurrences the first ingest uses.
-_STRUCTURED_SOURCES = ("yandex_afisha", "afisha_ru", "kudago")
+_STRUCTURED_SOURCES = ("yandex_afisha", "afisha_ru", "kudago", "timepad")
 
 
 async def stale_structured_raw_ids(db: AsyncSession, limit: int = 200) -> list[int]:

@@ -168,8 +168,12 @@ class TimepadConnector:
             if not payload["name"]:
                 continue
             ext_id = "tp-" + hashlib.sha256(f"{org_id}|{base}".encode()).hexdigest()[:16]
+            # Include the date in raw_text → content_hash tracks it. The collapse key (org+title) is
+            # stable, so without this a shifted "soonest session" (the prior one passed) would never
+            # re-normalize — the event would freeze on a past date and get expired despite future sessions.
+            date_token = date_start.date().isoformat() + ("/" + date_end.date().isoformat() if date_end else "")
             raw_text = " ".join([payload["name"], payload["description_short"], org_name,
-                                 payload["place"]["address"]]).strip()
+                                 payload["place"]["address"], date_token]).strip()
             records.append(RawRecord(external_id=ext_id, payload=payload, raw_text=raw_text))
         return records
 
