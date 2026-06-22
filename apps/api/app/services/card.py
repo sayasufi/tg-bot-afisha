@@ -277,92 +277,72 @@ def build_reminder_card(item: dict) -> bytes | None:
         return None
 
 
-# --- weekly digest poster: a VITRINE contact-sheet of the weekend's covers -----------
-def _digest_tile(w: int, h: int, item: dict) -> Image.Image:
-    """One weekend event as a MINI light card — the SAME anatomy as the reminder/share card: a bright
-    cover with the code tab + an acid rule, then a plaster caption with the title (Golos) and the
-    venue+price chip (avatar pin · venue · price). items carry {code, title, venue, price_min, photo}."""
-    ph = int(h * 0.50)  # cover height; the rest is the plaster caption (title + chip)
-    RULE = 4
-    tile = Image.new("RGB", (w, h), PLASTER)
+# --- weekly digest poster: a VITRINE editorial LIST of the weekend's events -----------
+def _digest_row(d: ImageDraw.ImageDraw, img: Image.Image, x: int, y: int, w: int, h: int, item: dict) -> None:
+    """One list row: a landscape thumbnail (code tab) on the left, the title (Golos) + venue (mono dim)
+    in the middle, the price (mono) right-aligned, and a hairline divider under the row."""
+    INK_LINE = (38, 38, 36)
+    pad = 12
+    tw, th = 208, h - 2 * pad  # thumbnail
     photo = item.get("photo")
-    block = Image.new("RGB", (w, ph), ACID)
-    if photo:
-        try:
-            block = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (w, ph), Image.LANCZOS)
-        except Exception:
-            block = Image.new("RGB", (w, ph), ACID)
-    tile.paste(block, (0, 0))
-    d = ImageDraw.Draw(tile, "RGBA")
+    try:
+        thumb = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (tw, th), Image.LANCZOS) if photo \
+            else Image.new("RGB", (tw, th), ACID)
+    except Exception:
+        thumb = Image.new("RGB", (tw, th), ACID)
+    img.paste(thumb, (x, y + pad))
     code = (item.get("code") or "").strip()
-    if code:  # accession code, top-left ink tab (mono acid)
-        cf = _mono(20, 600)
-        cw = d.textlength(code, font=cf); pad = 9
-        d.rectangle([12, 12, 12 + cw + 2 * pad, 48], fill=(11, 11, 11, 220))
-        d.text((12 + pad, 19), code, font=cf, fill=ACID)
-    d.rectangle([0, ph, w, ph + RULE], fill=ACID)  # acid rule under the cover
-    P = 18
-    ty = ph + RULE + 15  # title (Golos bold ink, up to 2 lines)
-    tf = _grotesk(24, 700)
-    for ln in _wrap(d, (item.get("title") or "Событие").strip(), tf, w - 2 * P, 2):
-        d.text((P, ty), ln, font=tf, fill=INK)
-        ty += 29
-    # venue + price chip, bottom-anchored — mirrors the card's chip (avatar pin · venue … price)
-    chip_h = 44
-    chy = h - 16 - chip_h
-    d.rectangle([P, chy, w - P, chy + chip_h], outline=INK, width=2)
-    ccy = chy + chip_h // 2
-    _pin_sm(d, P + 22, ccy - 4, 11)
-    venue = (item.get("venue") or "").strip()
-    vf = _grotesk(19, 600)
-    price_str = _price_str(item.get("price_min"), item.get("price_max"))
-    pf = _mono(18, 600)
+    if code:  # code tab on the thumbnail (mono acid on ink)
+        cf = _mono(16, 600)
+        cw = d.textlength(code, font=cf); cp = 7
+        d.rectangle([x + 8, y + pad + 8, x + 8 + cw + 2 * cp, y + pad + 38], fill=(11, 11, 11, 220))
+        d.text((x + 8 + cp, y + pad + 13), code, font=cf, fill=ACID)
+    price_str = _price_str(item.get("price_min"), item.get("price_max"))  # price, right-aligned
+    pf = _mono(24, 600)
     pw = d.textlength(price_str, font=pf) if price_str else 0
-    vmax = (w - P - 14 - (pw + 16 if pw else 0)) - (P + 44)
-    vv = venue
-    while vv and d.textlength(vv + "…", font=vf) > vmax:
-        vv = vv[:-1]
-    if vv != venue and vv:
-        vv = vv.rstrip() + "…"
-    d.text((P + 44, ccy - 13), vv or "—", font=vf, fill=INK)
     if price_str:
-        d.text((w - P - 14 - pw, ccy - 12), price_str, font=pf, fill=INK)
-    d.rectangle([0, 0, w - 1, h - 1], outline=INK, width=2)  # tile hairline
-    return tile
+        d.text((x + w - pw, y + pad + 8), price_str, font=pf, fill=INK)
+    tx = x + tw + 26  # title (Golos bold) + venue (mono dim)
+    tmax = (x + w) - tx - (pw + 28 if pw else 0)
+    tf = _grotesk(31, 700)
+    ty = y + pad + 6
+    for ln in _wrap(d, (item.get("title") or "Событие").strip(), tf, tmax, 2):
+        d.text((tx, ty), ln, font=tf, fill=INK)
+        ty += 38
+    venue = (item.get("venue") or "").strip()
+    if venue:
+        vf = _mono(20, 500)
+        vmax = (x + w) - tx
+        while venue and d.textlength(venue + "…", font=vf) > vmax:
+            venue = venue[:-1]
+        d.text((tx, ty + 4), venue.rstrip() + ("…" if len((item.get("venue") or "").strip()) > len(venue) else ""),
+               font=vf, fill=INK_DIM)
+    d.line([x, y + h, x + w, y + h], fill=INK_LINE, width=2)  # divider
 
 
 def render_digest_poster(items: list[dict], label: str) -> bytes:
-    """The weekly digest as ONE light VITRINE poster — the same language as the cards: the окрест
-    lockup (avatar pin + wordmark) + cinnabar tick + acid rule, then a 2-column grid of mini event
-    cards. items carry {code, title, when, photo:bytes|None}."""
+    """The weekly digest as ONE light VITRINE poster — окрест lockup + cinnabar tick + heading + acid
+    rule, then an editorial LIST of the weekend's events (thumbnail · title · venue · price) in the same
+    voice as the cards. items carry {code, title, venue, price_min, price_max, photo:bytes|None}."""
     img = Image.new("RGB", (W, H), PLASTER)
     d = ImageDraw.Draw(img, "RGBA")
-    M = 30
-    # brand lockup — avatar pin + окрест wordmark + cinnabar registration tick
-    _pin_sm(d, M + 13, 50, 15)
+    M = 40
+    _pin_sm(d, M + 13, 50, 15)  # brand lockup
     d.text((M + 42, 30), "окрест", font=_font(38, 800), fill=INK)
     d.line([W - M - 30, 42, W - M, 42], fill=CINNABAR, width=5)
     d.line([W - M, 42, W - M, 72], fill=CINNABAR, width=5)
-    # heading (Golos, like the card titles) + dates (mono) + acid rule
-    hf = _grotesk(80, 700)
+    hf = _grotesk(76, 700)  # heading + dates + acid rule
     d.text((M, 92), "афиша на", font=hf, fill=INK)
-    d.text((M, 184), "выходные", font=hf, fill=INK)
-    d.text((M, 290), (label or "").upper(), font=_mono(28, 600), fill=CINNABAR)
-    d.rectangle([M, 340, W - M, 347], fill=ACID)
-    # grid of mini cards
-    items = [it for it in items if it][:6]
-    cols = 2
-    rows = max(1, (len(items) + 1) // 2)
-    gut = 14
-    gy0 = 368
-    foot = 62
-    tw = (W - 2 * M - gut) // 2
-    th = ((H - foot) - gy0 - gut * (rows - 1)) // rows
+    d.text((M, 174), "выходные", font=hf, fill=INK)
+    d.text((M, 278), (label or "").upper(), font=_mono(26, 600), fill=CINNABAR)
+    d.rectangle([M, 326, W - M, 332], fill=ACID)
+    items = [it for it in items if it][:6]  # editorial list
+    top, foot = 352, 58
+    n = max(1, len(items))
+    hr = ((H - foot) - top) // n
     for i, it in enumerate(items):
-        r, c = divmod(i, cols)
-        img.paste(_digest_tile(tw, th, it), (M + c * (tw + gut), gy0 + r * (th + gut)))
-    # footer (mono, dim)
-    d.text((M, H - 46), "СОБЫТИЯ РЯДОМ · @OKRESTMAP_BOT", font=_mono(19, 500), fill=INK_DIM)
+        _digest_row(d, img, M, top + i * hr, W - 2 * M, hr, it)
+    d.text((M, H - 44), "СОБЫТИЯ РЯДОМ · @OKRESTMAP_BOT", font=_mono(19, 500), fill=INK_DIM)
     out = io.BytesIO()
     img.save(out, "JPEG", quality=90, optimize=True)
     return out.getvalue()
