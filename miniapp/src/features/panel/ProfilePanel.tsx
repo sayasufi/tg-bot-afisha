@@ -29,6 +29,8 @@ export function ProfilePanel({
   onToggleReminders,
   notifyDigest,
   onToggleDigest,
+  friendsPrivate,
+  onToggleFriendsPrivate,
   theme = "light",
   onToggleTheme,
   onOpenFavorites,
@@ -43,6 +45,8 @@ export function ProfilePanel({
   onToggleReminders: (on: boolean) => void;
   notifyDigest: boolean;
   onToggleDigest: (on: boolean) => void;
+  friendsPrivate: boolean;
+  onToggleFriendsPrivate: (on: boolean) => void;
   theme?: ThemeName;
   onToggleTheme?: () => void;
   onOpenFavorites: () => void;
@@ -213,6 +217,23 @@ export function ProfilePanel({
           <span className="profile__switch-text">
             <span className="profile__switch-label">Афиша на выходные</span>
             <span className="profile__switch-sub">Раз в неделю бот пришлёт, что нового рядом и на твоих площадках</span>
+          </span>
+          <span className="profile__switch-track" aria-hidden="true">
+            <span className="profile__switch-knob" />
+          </span>
+        </button>
+
+        <div className="recs__section">Приватность</div>
+        <button
+          type="button"
+          className={`profile__switch${friendsPrivate ? " profile__switch--on" : ""}`}
+          role="switch"
+          aria-checked={friendsPrivate}
+          onClick={() => onToggleFriendsPrivate(!friendsPrivate)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Скрыть от друзей</span>
+            <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь — ни в профиле, ни на карте</span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />

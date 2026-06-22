@@ -990,6 +990,70 @@ mark.hl {
 .profile__friend-x:active {
   color: var(--cinnabar);
 }
+/* «Активность друзей» — feed of friends' recent saves; each row taps straight into that event. */
+.friends__feed {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+.friends__act {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.friends__act:active {
+  opacity: 0.6;
+}
+.friends__act-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.friends__act-text {
+  font-family: var(--grotesk);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink-dim);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.friends__act-text b,
+.friends__act-ev {
+  color: var(--ink);
+  font-weight: 600;
+}
+.friends__act-time {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+/* «N сохранений» — a friend's visible-saves count (the row still taps to their profile). */
+.friends__saves {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.friends__saves b {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
 /* Incoming request row actions: a small acid «принять» + the same × to decline. */
 .profile__req-actions {
   flex: 0 0 auto;

@@ -6,7 +6,7 @@ from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db.models import User, UserFavorite, UserFriend, UserMute
+from core.db.models import Event, User, UserFavorite, UserFriend, UserMute
 
 _FRIEND_CAP = 500  # a sane upper bound; a real account never has this many, but caps fan-out abuse
 _FACES_PER_EVENT = 8  # cap faces returned per event (the UI shows ≤2-3, this bounds the payload)
@@ -385,17 +385,80 @@ async def friend_profile(db: AsyncSession, uid: int, friend_id: int) -> dict | N
 
 
 async def list_friends(db: AsyncSession, uid: int) -> list[dict]:
-    """The account's accepted friends as mini-profiles (newest first) — for the profile friend list."""
+    """The account's accepted friends as mini-profiles (newest first) — for the «Друзья» list. `saves` =
+    how many of their favourites are visible to me (not per-item hidden, and 0 if they've gone fully
+    private) — the «N сохранений» signal next to each friend that also gates whether their profile shows
+    anything."""
+    # Correlated count of the friend's VISIBLE favourites (private friend → 0). Friend lists are small, so
+    # a per-row subquery is cheap and keeps this a single round-trip.
+    saves = (
+        select(func.count())
+        .select_from(UserFavorite)
+        .where(
+            UserFavorite.telegram_user_id == User.telegram_user_id,
+            UserFavorite.hidden_from_friends.is_(False),
+            User.friends_private.is_(False),
+        )
+        .scalar_subquery()
+    )
     rows = (
         await db.execute(
-            select(User.telegram_user_id, User.first_name, User.username, User.photo_url)
+            select(User.telegram_user_id, User.first_name, User.username, User.photo_url, saves.label("saves"))
             .join(UserFriend, UserFriend.friend_id == User.telegram_user_id)
             .where(UserFriend.user_id == int(uid), UserFriend.status == "accepted")
             .order_by(UserFriend.created_at.desc())
         )
     ).all()
     return [
-        {"id": r.telegram_user_id, "name": r.first_name or "", "username": r.username, "photo_url": r.photo_url}
+        {"id": r.telegram_user_id, "name": r.first_name or "", "username": r.username, "photo_url": r.photo_url, "saves": int(r.saves or 0)}
+        for r in rows
+    ]
+
+
+async def friend_activity(db: AsyncSession, uid: int, limit: int = 24) -> list[dict]:
+    """My friends' recent saves (newest first) — the «Активность друзей» feed: who saved which event, when.
+    Same privacy gates as friends_who_favorited (accepted edge, favourite not per-item hidden, friend not
+    globally private, neither side muted) + only LIVE events (status active), so every row is tappable. The
+    route hydrates the event_ids into rich items. Returns [{friend, event_id, at}] (event_id as a UUID)."""
+    uid = int(uid)
+    muted = exists().where(
+        or_(
+            and_(UserMute.user_id == uid, UserMute.muted_user_id == UserFriend.friend_id),
+            and_(UserMute.user_id == UserFriend.friend_id, UserMute.muted_user_id == uid),
+        )
+    )
+    rows = (
+        await db.execute(
+            select(
+                UserFavorite.event_id,
+                UserFavorite.created_at,
+                User.telegram_user_id,
+                User.first_name,
+                User.username,
+                User.photo_url,
+            )
+            .select_from(UserFriend)
+            .join(UserFavorite, UserFavorite.telegram_user_id == UserFriend.friend_id)
+            .join(User, User.telegram_user_id == UserFriend.friend_id)
+            .join(Event, Event.event_id == UserFavorite.event_id)
+            .where(
+                UserFriend.user_id == uid,
+                UserFriend.status == "accepted",
+                UserFavorite.hidden_from_friends.is_(False),
+                User.friends_private.is_(False),
+                Event.status == "active",
+                ~muted,
+            )
+            .order_by(UserFavorite.created_at.desc())
+            .limit(max(1, min(limit, 60)))
+        )
+    ).all()
+    return [
+        {
+            "friend": {"id": r.telegram_user_id, "name": r.first_name or "", "username": r.username, "photo_url": r.photo_url},
+            "event_id": r.event_id,
+            "at": r.created_at,
+        }
         for r in rows
     ]
 

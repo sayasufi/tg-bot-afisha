@@ -1,4 +1,5 @@
-import { API_BASE } from "./http";
+import { API_BASE, toNum } from "./http";
+import type { EventItem } from "./types";
 
 function initData(): string | undefined {
   return (window as any)?.Telegram?.WebApp?.initData as string | undefined;
@@ -90,7 +91,32 @@ export type UserSettings = {
 };
 
 // A friend mini-profile — the faces in the «друг сохранил это» social proof + the profile friend list.
-export type Friend = { id: number; name: string; username?: string | null; photo_url?: string | null };
+// `saves` (the «N сохранений» count, friend list only) = their favourites visible to me (0 if private).
+export type Friend = { id: number; name: string; username?: string | null; photo_url?: string | null; saves?: number };
+
+// One «Активность друзей» row: a friend + the event they saved + when (ISO). The event is the full map-item
+// shape, so a tap opens the sheet with no extra fetch.
+export type FriendActivity = { friend: Friend; at: string; event: EventItem };
+
+// My friends' recent saves (newest first) — the activity feed at the top of «Друзья». Null outside Telegram.
+export async function fetchFriendsActivity(): Promise<FriendActivity[] | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/friends-activity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { activity?: any[] };
+    return (j.activity ?? [])
+      .filter((a) => a && a.event)
+      .map((a) => ({ friend: a.friend, at: a.at, event: { ...a.event, price_min: toNum(a.event.price_min) } as EventItem }));
+  } catch {
+    return null;
+  }
+}
 
 export async function syncSettings(patch?: Partial<UserSettings>): Promise<UserSettings | null> {
   const init = initData();

@@ -1133,10 +1133,9 @@ export function App() {
         {view === "venues" && <FollowedVenuesPanel onOpenVenue={onOpenVenue} onClose={() => setView("map")} />}
         {view === "friends" && (
           <FriendsPanel
-            friendsPrivate={friendsPrivate}
-            onToggleFriendsPrivate={toggleFriendsPrivate}
             onFriendsChange={setFriendCount}
             onOpenFriend={setFriendProfile}
+            onOpenEvent={openEvent}
             onClose={() => setView("map")}
           />
         )}
@@ -1160,6 +1159,8 @@ export function App() {
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
+            friendsPrivate={friendsPrivate}
+            onToggleFriendsPrivate={toggleFriendsPrivate}
             theme={theme}
             onToggleTheme={toggleTheme}
             onOpenFavorites={() => setView("favorites")}

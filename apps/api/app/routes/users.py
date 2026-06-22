@@ -26,6 +26,7 @@ from core.db.repositories.friends import (
     count_friends,
     decline_request,
     find_searchable,
+    friend_activity,
     friend_link_ver,
     friend_profile,
     friends_who_favorited,
@@ -127,6 +128,10 @@ class FriendsRequest(BaseModel):
     init_data: str
     action: str | None = None  # 'accept'|'decline'|'remove'|'block'|'unblock' — omit to LIST friends+requests
     friend_id: int | None = None
+
+
+class FriendsActivityRequest(BaseModel):
+    init_data: str
 
 
 class HideFavoriteRequest(BaseModel):
@@ -314,6 +319,28 @@ async def get_friends_favorited(payload: FriendsFavoritedRequest, db: AsyncSessi
         "hidden": await my_hidden_event_ids(db, uid, ids),
         "has_friends": await count_friends(db, uid) > 0,
     }
+
+
+@router.post("/friends-activity")
+async def get_friends_activity(payload: FriendsActivityRequest, db: AsyncSession = Depends(get_async_db)):
+    """My friends' recent saves (newest first) — the «Активность друзей» feed at the top of the «Друзья»
+    screen. Each row = a friend + the event they saved + when; the event_ids are hydrated into the rich
+    map-item shape (reusing the favourites by-ids path) so a tap opens the full sheet. Read-only. Privacy +
+    live-only gating lives in friend_activity (accepted / not hidden / friend not private / not muted)."""
+    _user, uid = _auth(payload.init_data)
+    acts = await friend_activity(db, uid, limit=24)
+    if not acts:
+        return {"activity": []}
+    from apps.api.app.services.events_service import EventQueryService
+
+    hydrated = await EventQueryService(db).list_by_ids([a["event_id"] for a in acts])
+    by_id = {str(it["event_id"]): it for it in hydrated.get("items", [])}
+    activity = [
+        {"friend": a["friend"], "at": a["at"], "event": ev}
+        for a in acts
+        if (ev := by_id.get(str(a["event_id"])))
+    ]
+    return {"activity": activity}
 
 
 @router.post("/friends")

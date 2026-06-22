@@ -1,10 +1,13 @@
 import { type ReactNode, useEffect, useState } from "react";
 
+import type { EventItem } from "../../api/types";
 import {
   createFriendLink,
+  fetchFriendsActivity,
   findFriend,
   type FoundFriend,
   type Friend,
+  type FriendActivity,
   type FriendsState,
   manageFriends,
 } from "../../api/users";
@@ -14,16 +17,46 @@ import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
 import { FriendDisclosure } from "./FriendDisclosure";
 
+// Compact «N сохранений» with Russian plural agreement.
+function plural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+// Coarse «когда» label for the activity feed (the API timestamps are minute-grained at best).
+function timeAgo(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const sec = Math.max(0, (Date.now() - t) / 1000);
+  if (sec < 90) return "только что";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min} мин назад`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} ч назад`;
+  const d = Math.round(hr / 24);
+  if (d === 1) return "вчера";
+  if (d < 7) return `${d} дн назад`;
+  return `${Math.round(d / 7)} нед назад`;
+}
+
+function Avatar({ f }: { f: Friend }) {
+  const av = safeHttpUrl(f.photo_url);
+  return (
+    <span className="profile__friend-av" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
+      {av ? "" : (f.name || "?").slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
 // One person row: avatar · name/@handle (taps to open their profile, if onOpen) · trailing action(s).
 // Module-level so it isn't re-created (rows re-mounted, avatars flickering) on every parent render.
 function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) => void; children: ReactNode }) {
-  const av = safeHttpUrl(f.photo_url);
-  const initial = (f.name || "?").slice(0, 1).toUpperCase();
   const inner = (
     <>
-      <span className="profile__friend-av" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
-        {av ? "" : initial}
-      </span>
+      <Avatar f={f} />
       <span className="profile__friend-id">
         <span className="profile__friend-name">{f.name || "Друг"}</span>
         {f.username && <span className="profile__friend-handle">@{f.username}</span>}
@@ -49,24 +82,40 @@ function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) =>
   );
 }
 
-// «Друзья» — its own screen. Incoming requests (accept/decline) + confirmed friends (unfriend) + the
-// privacy kill-switch. A friend appears here once BOTH sides agreed (you accepted a request, or you
-// each invited the other). onFriendsChange keeps the menu badge (friend count) in sync.
+// One «Активность друзей» row — who saved which event, when. Taps straight into the event sheet.
+function ActivityRow({ a, onOpen }: { a: FriendActivity; onOpen: (e: EventItem) => void }) {
+  const who = a.friend.username ? `@${a.friend.username}` : a.friend.name || "друг";
+  return (
+    <button type="button" className="friends__act" onClick={() => onOpen(a.event)}>
+      <Avatar f={a.friend} />
+      <span className="friends__act-body">
+        <span className="friends__act-text">
+          <b>{who}</b> сохранил <span className="friends__act-ev">«{a.event.title}»</span>
+        </span>
+        <span className="friends__act-time">{timeAgo(a.at)}</span>
+      </span>
+    </button>
+  );
+}
+
+// «Друзья» — its own screen. Two mechanics: the friends' recent-saves FEED on top (tap → that event), and
+// the friend LIST below (tap → their profile, with a «N сохранений» signal). Plus the ways to grow the
+// graph: an invite link, @username search, and incoming requests. The «скрыть от друзей» kill-switch now
+// lives in the Profile screen. onFriendsChange keeps the menu badge (friend count) in sync.
 export function FriendsPanel({
-  friendsPrivate,
-  onToggleFriendsPrivate,
   onFriendsChange,
   onOpenFriend,
+  onOpenEvent,
   onClose,
 }: {
-  friendsPrivate: boolean;
-  onToggleFriendsPrivate: (on: boolean) => void;
   onFriendsChange?: (n: number) => void;
   onOpenFriend?: (f: Friend) => void;
+  onOpenEvent: (e: EventItem) => void;
   onClose: () => void;
 }) {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<Friend[]>([]);
+  const [activity, setActivity] = useState<FriendActivity[]>([]);
   const [disclose, setDisclose] = useState(false);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -81,6 +130,9 @@ export function FriendsPanel({
     let alive = true;
     manageFriends().then((s) => {
       if (alive) apply(s);
+    });
+    fetchFriendsActivity().then((a) => {
+      if (alive && a) setActivity(a);
     });
     return () => {
       alive = false;
@@ -242,11 +294,27 @@ export function FriendsPanel({
           </>
         )}
 
-        <div className="recs__section">Друзья</div>
+        {activity.length > 0 && (
+          <>
+            <div className="recs__section">Активность друзей</div>
+            <div className="friends__feed">
+              {activity.map((a, i) => (
+                <ActivityRow key={`${a.friend.id}-${a.event.event_id}-${i}`} a={a} onOpen={onOpenEvent} />
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="recs__section">Друзья{friends.length > 0 ? ` · ${friends.length}` : ""}</div>
         {friends.length > 0 ? (
           <div className="profile__friends">
             {friends.map((f) => (
               <FriendRow key={f.id} f={f} onOpen={onOpenFriend}>
+                {f.saves ? (
+                  <span className="friends__saves">
+                    <b>{f.saves}</b> {plural(f.saves, "сохранение", "сохранения", "сохранений")}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   className="profile__friend-x"
@@ -264,22 +332,6 @@ export function FriendsPanel({
             будете видеть, что друг у друга в избранном.
           </p>
         )}
-
-        <button
-          type="button"
-          className={`profile__switch${friendsPrivate ? " profile__switch--on" : ""}`}
-          role="switch"
-          aria-checked={friendsPrivate}
-          onClick={() => onToggleFriendsPrivate(!friendsPrivate)}
-        >
-          <span className="profile__switch-text">
-            <span className="profile__switch-label">Скрыть от друзей</span>
-            <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь — ни в профиле, ни на карте</span>
-          </span>
-          <span className="profile__switch-track" aria-hidden="true">
-            <span className="profile__switch-knob" />
-          </span>
-        </button>
       </div>
       {disclose && <FriendDisclosure onClose={() => setDisclose(false)} />}
     </div>
