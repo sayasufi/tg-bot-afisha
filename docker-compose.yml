@@ -25,10 +25,13 @@ services:
       POSTGRES_USER: afisha
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-afisha}
     ports:
-      # Host port is only for dev access; the app reaches the DB over the compose
-      # network (postgres:5432). Defaults to 5432; override POSTGRES_HOST_PORT in
-      # .env on hosts where 5432 is taken (e.g. a local Postgres).
-      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+      # Exposed on 0.0.0.0 for DIRECT external DB access (DBeaver). The app itself never uses this host
+      # port — it reaches the DB over the compose network (odyssey:6432 → postgres:5432). PROD IS PROTECTED
+      # BY TWO LAYERS: (1) the `afisha` role has a STRONG password (rotated off the `afisha:afisha` default),
+      # and (2) a server-side iptables DOCKER-USER rule that only lets the owner's IP reach 5432 (not in git
+      # — it's host state). On a FRESH host this binds publicly, so set up BOTH before relying on it. Local
+      # dev: harmless (throwaway DB on your own LAN). Override POSTGRES_HOST_PORT in .env if 5432 is taken.
+      - "0.0.0.0:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
