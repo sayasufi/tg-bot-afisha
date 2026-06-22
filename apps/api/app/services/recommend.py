@@ -19,6 +19,7 @@ import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
+from fastapi.concurrency import run_in_threadpool
 from geoalchemy2 import Geometry
 from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,9 +30,9 @@ from core.db.models import Event, EventOccurrence, Venue
 from core.redis import get_redis
 
 _MSK = timezone(timedelta(hours=3))
-_POOL_CAP = 2000  # soonest-upcoming events scored into the base pool (was 6000). The rails are
-# soon-biased, so the soonest ~2000 cover the visible feed while keeping the per-request
-# re-rank cheap; the base is cached, so this also bounds the once-per-window recompute.
+_POOL_CAP = 1200  # soonest-upcoming events scored into the base pool (was 6000 → 2000 → 1200). The rails
+# are soon-biased and show ≤~84 events, so the soonest ~1200 cover the visible feed while cutting every
+# per-request scan/sort/copy ~40%; the base is cached, so this also bounds the once-per-window recompute.
 _PER_RAIL = 12
 _MIN_RAIL = 4  # themed rails with fewer items are dropped (avoid sparse noise)
 _MAX_RAILS = 7  # hard cap so the feed is a few strong rails, not a wall of relabelled lists
@@ -117,7 +118,12 @@ class RecommendationService:
 
         # 1) Non-personal base score for the city, computed once per window and cached.
         base = await self._base_scored(now, today, hour, city)
-        # 2) Cheap per-user re-rank (category affinity + proximity) — no DB, no re-scoring.
+        # 2) The per-user re-rank + rail/collection assembly is pure CPU (no DB). Run it in a worker thread
+        # so it doesn't block this uvicorn worker's event loop while a neighbouring request waits.
+        return await run_in_threadpool(self._assemble, base, lat, lon, affinity, today, now, per_rail)
+
+    def _assemble(self, base, lat, lon, affinity, today, now, per_rail) -> dict:
+        # Cheap per-user re-rank (category affinity + proximity) — no DB, no re-scoring — then slice into rails.
         scored = self._personalize(base, lat, lon, affinity)
         return {
             "collections": self._collections(scored, today, now, per_rail),
