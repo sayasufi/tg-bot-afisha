@@ -79,10 +79,24 @@ export function FriendProfile({
           </div>
         </div>
 
-        {both > 0 && <div className="friendprof__overlap">вы оба сохранили · {both}</div>}
-
-        {/* The same «кружочки» as your own profile — a constellation of THEIR taste by genre. */}
-        {events.length > 0 && <TasteCard events={events} title={friend.name ? `Вкус ${friend.name}` : "Вкус"} />}
+        {events.length > 0 && (
+          <>
+            {/* Same stat hero as your own profile — «просмотрено» is device-local (no friend equivalent),
+                so it's THEIR saves + your overlap. */}
+            <div className="profile__hero profile__hero--2">
+              <div className="profile__stat">
+                <span className="hero-num">{events.length}</span>
+                <span className="profile__statlabel">сохранено</span>
+              </div>
+              <div className="profile__stat">
+                <span className="hero-num">{both}</span>
+                <span className="profile__statlabel">вы оба</span>
+              </div>
+            </div>
+            {/* The same «кружочки» as your own profile — a constellation of THEIR taste by genre. */}
+            <TasteCard events={events} title={friend.name ? `Вкус ${friend.name}` : "Вкус"} />
+          </>
+        )}
 
         <div className="recs__section">в избранном</div>
         {loading ? (
