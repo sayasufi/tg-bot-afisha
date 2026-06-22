@@ -279,23 +279,27 @@ def build_reminder_card(item: dict) -> bytes | None:
 
 # --- weekly digest poster: a VITRINE editorial LIST of the weekend's events -----------
 def _digest_row(d: ImageDraw.ImageDraw, img: Image.Image, x: int, y: int, w: int, h: int, item: dict) -> None:
-    """One list row: a landscape thumbnail (code tab) on the left, the title (Golos) + day·venue
-    (day cinnabar, venue mono dim) in the middle, the price (mono) right-aligned, hairline divider."""
+    """One list row: a wide cinematic thumbnail (code tab) on the left, then the title (Golos, ONE line,
+    ellipsized) with the price on the same baseline and day·venue beneath — vertically centred against the
+    thumbnail. Landscape photos FILL the frame (cover); only tall/portrait posters keep the whole photo on
+    a soft blurred frame, so they never crop to a sliver AND landscape shots never get blurry side-bars."""
     INK_LINE = (38, 38, 36)
     pad = 14
-    tw, th = 300, h - 2 * pad  # thumbnail — WIDE landscape (~2:1) so it doesn't crop tall/portrait posters to a sliver
+    tw, th = 300, h - 2 * pad
     photo = item.get("photo")
     try:
         if photo:
             src = Image.open(io.BytesIO(photo)).convert("RGB")
-            # The WHOLE photo, contained (no crop), sits sharp on a BLURRED+darkened cover of itself that
-            # fills the box — so a tall/portrait poster shows fully instead of cropping to a sliver, with
-            # no empty bars (the blur fills the sides).
-            thumb = ImageEnhance.Brightness(
-                ImageOps.fit(src, (tw, th), Image.LANCZOS).filter(ImageFilter.GaussianBlur(14))
-            ).enhance(0.6)
-            fg = ImageOps.contain(src, (tw, th), Image.LANCZOS)
-            thumb.paste(fg, ((tw - fg.width) // 2, (th - fg.height) // 2))
+            if src.width / max(1, src.height) >= 1.5:
+                # Landscape enough that a small top/bottom trim reads naturally → fill, no blur bars.
+                thumb = ImageOps.fit(src, (tw, th), Image.LANCZOS)
+            else:
+                # Portrait / square → keep the WHOLE photo on a blurred+darkened cover of itself (no sliver).
+                thumb = ImageEnhance.Brightness(
+                    ImageOps.fit(src, (tw, th), Image.LANCZOS).filter(ImageFilter.GaussianBlur(14))
+                ).enhance(0.6)
+                fg = ImageOps.contain(src, (tw, th), Image.LANCZOS)
+                thumb.paste(fg, ((tw - fg.width) // 2, (th - fg.height) // 2))
         else:
             thumb = Image.new("RGB", (tw, th), ACID)
     except Exception:
@@ -307,20 +311,25 @@ def _digest_row(d: ImageDraw.ImageDraw, img: Image.Image, x: int, y: int, w: int
         cw = d.textlength(code, font=cf); cp = 7
         d.rectangle([x + 8, y + pad + 8, x + 8 + cw + 2 * cp, y + pad + 38], fill=(11, 11, 11, 220))
         d.text((x + 8 + cp, y + pad + 13), code, font=cf, fill=ACID)
-    price_str = _price_str(item.get("price_min"), item.get("price_max"))  # price, right-aligned
+    cy = y + pad + th // 2  # vertical centre of the text block (matches the thumbnail centre)
+    tx = x + tw + 30
+    price_str = _price_str(item.get("price_min"), item.get("price_max"))
     pf = _mono(25, 600)
     pw = d.textlength(price_str, font=pf) if price_str else 0
-    if price_str:
-        d.text((x + w - pw, y + pad + 10), price_str, font=pf, fill=INK)
-    tx = x + tw + 28  # title (Golos bold)
+    # title — ONE line, trimmed (…) to leave room for the price on the same baseline; never wraps.
+    tf = _grotesk(34, 700)
     tmax = (x + w) - tx - (pw + 28 if pw else 0)
-    tf = _grotesk(33, 700)
-    ty = y + pad + 8
-    for ln in _wrap(d, (item.get("title") or "Событие").strip(), tf, tmax, 2):
-        d.text((tx, ty), ln, font=tf, fill=INK)
-        ty += 40
+    title = (item.get("title") or "Событие").strip()
+    if d.textlength(title, font=tf) > tmax:
+        while title and d.textlength(title + "…", font=tf) > tmax:
+            title = title[:-1]
+        title = title.rstrip() + "…"
+    title_y = cy - 36
+    d.text((tx, title_y), title, font=tf, fill=INK)
+    if price_str:
+        d.text((x + w - pw, title_y + 6), price_str, font=pf, fill=INK)
     sf = _mono(21, 500)  # subtitle: day (cinnabar) · venue (mono dim)
-    sx, sy = tx, ty + 6
+    sx, sy = tx, cy + 6
     day = (item.get("day") or "").strip()
     if day:
         d.text((sx, sy), day, font=sf, fill=CINNABAR)
@@ -339,25 +348,25 @@ def render_digest_poster(items: list[dict], label: str) -> bytes:
     """The weekly digest as ONE light VITRINE poster — окрест lockup + cinnabar tick + heading + acid
     rule, then an editorial LIST of the weekend's events (thumbnail · title · day·venue · price) in the
     same voice as the cards. items carry {code, title, venue, price_min, price_max, day, photo}."""
-    Hd = 1480  # a touch taller → more air per row + bigger thumbnails
-    img = Image.new("RGB", (W, Hd), PLASTER)
+    Wd, Hd = 1280, 1480  # WIDER than the share card (own canvas) → one-line titles get room to breathe
+    img = Image.new("RGB", (Wd, Hd), PLASTER)
     d = ImageDraw.Draw(img, "RGBA")
     M = 40
     _pin_sm(d, M + 13, 50, 15)  # brand lockup
     d.text((M + 42, 30), "окрест", font=_font(38, 800), fill=INK)
-    d.line([W - M - 30, 42, W - M, 42], fill=CINNABAR, width=5)
-    d.line([W - M, 42, W - M, 72], fill=CINNABAR, width=5)
+    d.line([Wd - M - 30, 42, Wd - M, 42], fill=CINNABAR, width=5)
+    d.line([Wd - M, 42, Wd - M, 72], fill=CINNABAR, width=5)
     hf = _grotesk(76, 700)  # heading + dates + acid rule
     d.text((M, 92), "афиша на", font=hf, fill=INK)
     d.text((M, 174), "выходные", font=hf, fill=INK)
     d.text((M, 278), (label or "").upper(), font=_mono(26, 600), fill=CINNABAR)
-    d.rectangle([M, 326, W - M, 332], fill=ACID)
+    d.rectangle([M, 326, Wd - M, 332], fill=ACID)
     items = [it for it in items if it][:6]  # editorial list
     top, foot = 352, 58
     n = max(1, len(items))
     hr = ((Hd - foot) - top) // n
     for i, it in enumerate(items):
-        _digest_row(d, img, M, top + i * hr, W - 2 * M, hr, it)
+        _digest_row(d, img, M, top + i * hr, Wd - 2 * M, hr, it)
     d.text((M, Hd - 44), "СОБЫТИЯ РЯДОМ · @OKRESTMAP_BOT", font=_mono(19, 500), fill=INK_DIM)
     out = io.BytesIO()
     img.save(out, "JPEG", quality=90, optimize=True)
