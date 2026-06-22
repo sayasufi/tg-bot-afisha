@@ -317,10 +317,26 @@ export function EventsMap({
 
   // Pins to draw: only when NOT showing server clusters, and only those within
   // the current viewport — so we never instantiate thousands of Leaflet markers.
+  const pinsRef = useRef<EventItem[]>([]);
   const pins = useMemo(() => {
-    if (useServerClusters) return [] as EventItem[];
+    if (useServerClusters) {
+      if (pinsRef.current.length) pinsRef.current = [];
+      return pinsRef.current;
+    }
     const inView = items.filter((i) => i.lat != null && i.lon != null);
-    return view ? inView.filter((i) => inBbox(i.lat as number, i.lon as number, view.bbox)) : inView;
+    const next = view ? inView.filter((i) => inBbox(i.lat as number, i.lon as number, view.bbox)) : inView;
+    // Reuse the SAME array when the visible event SET is unchanged (a pan within the bbox pad). The cluster
+    // memo + coordIndex + handlers all derive from `pins`, so a stable reference means MarkerClusterGroup
+    // is NOT torn down and re-added on every pan — Leaflet just repositions the existing markers. That
+    // clear+re-add of every divIcon was the flicker. (Order is stable: `items` is stable, filter preserves
+    // it.) Event objects rarely change for a given id, and the divIcon depends only on category + goNow +
+    // friend count (the latter two are passed separately), so reusing prior objects is visually identical.
+    const prev = pinsRef.current;
+    if (prev.length === next.length && next.every((p, i) => prev[i].event_id === p.event_id)) {
+      return prev;
+    }
+    pinsRef.current = next;
+    return next;
   }, [useServerClusters, items, view]);
 
   // Index events by exact coordinate so a cluster click can resolve its child
@@ -383,7 +399,6 @@ export function EventsMap({
   const cluster = useMemo(() => {
     return (
       <MarkerClusterGroup
-        chunkedLoading
         showCoverageOnHover={false}
         spiderfyOnMaxZoom={false}
         zoomToBoundsOnClick={false}
