@@ -77,12 +77,29 @@ async def _handle_report(message: Message, event_id: str) -> None:
     await message.answer(f"{ce('🔔')} Спасибо! Отметили неточность — проверим данные по этому событию.")
 
 
+async def _set_digest(message: Message, on: bool) -> None:
+    """Set the weekly-digest flag to an EXPLICIT state — used by the one-tap deep links in the
+    digest DM (?start=digest_off / digest_on). Distinct from /digest, which blindly flips; here we
+    know the intent, so an unsubscribe is idempotent (a second tap doesn't silently re-enable)."""
+    user = message.from_user
+    if not user:
+        return
+    async with AsyncSessionLocal() as db:
+        await upsert_user_async(db, user.id, username=user.username, first_name=user.first_name)
+        await update_settings(db, user.id, notify_digest=on)
+        await db.commit()
+    await message.answer(DIGEST_ON_MSG if on else DIGEST_OFF_MSG)
+
+
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject) -> None:
     await _save_user(message)
     arg = (command.args or "").strip()
     if arg.startswith("report_"):  # «сообщить о неточности» from an event sheet
         await _handle_report(message, arg[len("report_"):])
+        return
+    if arg in ("digest_off", "digest_on"):  # one-tap (un)subscribe from the weekly digest DM
+        await _set_digest(message, arg == "digest_on")
         return
     # No persistent reply keyboard — the map lives on the bot's menu button + in-message links.
     # ReplyKeyboardRemove also clears the old «Открыть карту» bottom button for existing users.

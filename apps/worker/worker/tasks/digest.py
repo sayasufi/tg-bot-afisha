@@ -112,7 +112,13 @@ async def _send_digest_impl() -> int:
             return 0
         sat, sun, _, _ = weekend_window(now)
         label = weekend_label(sat, sun)
-        markup = {"inline_keyboard": [[{"text": "вся афиша →", "url": _app_url()}]]}
+        # Two buttons: open the Mini App, and a one-tap unsubscribe straight from the DM (a t.me
+        # deep link → the bot's /start digest_off → flips notify_digest off). An outbound push that
+        # can't be silenced in-place gets blocked/reported; this keeps the channel respectful.
+        markup = {"inline_keyboard": [
+            [{"text": "вся афиша →", "url": _app_url()}],
+            [{"text": "не присылать", "url": f"https://t.me/{_BOT_USERNAME}?start=digest_off"}],
+        ]}
         # Fetch the heavy shared inputs ONCE, not per user: the rec:views hash, and the weekend
         # pool per DISTINCT city among the opted-in users (a small dict cache). Per user we then
         # only run the personal followed-venues query + an in-memory rank.
