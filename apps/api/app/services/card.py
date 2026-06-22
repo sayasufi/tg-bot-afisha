@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 
 import httpx
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from core.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, get_object, object_exists, public_url, put_image
@@ -128,15 +128,6 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int, max_lines: int
             last = last[:-1]
         lines[-1] = last.rstrip() + "…"
     return lines
-
-
-def _pin(d: ImageDraw.ImageDraw, cx: int, cy: int, r: int) -> None:
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=INK)
-    d.polygon([(cx - r * 0.55, cy + r * 0.5), (cx + r * 0.55, cy + r * 0.5), (cx, cy + r * 1.95)], fill=INK)
-    hr = r * 0.46
-    d.ellipse([cx - hr, cy - hr, cx + hr, cy + hr], fill=ACID)
-    dr = r * 0.17
-    d.ellipse([cx - dr, cy - dr, cx + dr, cy + dr], fill=INK)
 
 
 # --- composed VITRINE card: ONE fixed 1080×1280 frame shared by the reminder DM and the share image
@@ -275,78 +266,80 @@ def build_reminder_card(item: dict) -> bytes | None:
 
 # --- weekly digest poster: a VITRINE contact-sheet of the weekend's covers -----------
 def _digest_tile(w: int, h: int, item: dict) -> Image.Image:
-    """One catalogue tile: the cover (darkened, cover-fit), a bottom scrim, the accession code
-    top-left, and the when + title bottom — the EventListRow look as a flat image."""
+    """One weekend event as a MINI light card — the same language as the reminder/share card: a BRIGHT
+    cover with the code tab + an acid rule, then a plaster caption with the when (mono) and the title
+    (Golos). items carry {code, title, when, photo:bytes|None}."""
+    ph = int(h * 0.60)  # cover height; the rest is the plaster caption
+    RULE = 4
+    tile = Image.new("RGB", (w, h), PLASTER)
     photo = item.get("photo")
-    tile = Image.new("RGB", (w, h), INK)
+    block = Image.new("RGB", (w, ph), ACID)
     if photo:
         try:
-            ph = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (w, h), Image.LANCZOS)
-            ph = ImageEnhance.Brightness(ph).enhance(0.66)
-            ph = ImageEnhance.Color(ph).enhance(0.9)
-            tile.paste(ph, (0, 0))
+            block = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (w, ph), Image.LANCZOS)
         except Exception:
-            pass
+            block = Image.new("RGB", (w, ph), ACID)
+    tile.paste(block, (0, 0))
     d = ImageDraw.Draw(tile, "RGBA")
-    gh = int(h * 0.66)  # bottom legibility gradient
-    for i in range(gh):
-        d.line([(0, h - gh + i), (w, h - gh + i)], fill=(11, 11, 11, int(225 * (i / gh) ** 1.5)))
-    pad = 16
     code = (item.get("code") or "").strip()
-    if code:
-        cf = _font(23, 600)
-        cw = d.textlength(code, font=cf)
-        d.rounded_rectangle([14, 14, 14 + cw + 18, 14 + 36], radius=3, fill=(11, 11, 11, 205))
-        d.text((14 + 9, 14 + 7), code, font=cf, fill=ACID)
-    title = (item.get("title") or "Событие").strip()
-    tf = _font(27, 800)
-    lines = _wrap(d, title, tf, w - 2 * pad, 2)
-    lh = 32
-    ty = h - pad - len(lines) * lh
-    when = (item.get("when") or "").upper().strip()
-    if when:
-        wf = _font(16, 600)
-        ww = w - 2 * pad
-        while when and d.textlength(when + "…", font=wf) > ww:
+    if code:  # accession code, top-left ink tab (mono acid)
+        cf = _mono(20, 600)
+        cw = d.textlength(code, font=cf); pad = 9
+        d.rectangle([12, 12, 12 + cw + 2 * pad, 48], fill=(11, 11, 11, 220))
+        d.text((12 + pad, 19), code, font=cf, fill=ACID)
+    d.rectangle([0, ph, w, ph + RULE], fill=ACID)  # acid rule under the cover
+    P = 16
+    cy = ph + RULE + 13
+    when = (item.get("when") or "").strip()
+    if when:  # mono, cinnabar, ellipsized
+        wf = _mono(18, 500)
+        full = when
+        while when and d.textlength(when + "…", font=wf) > w - 2 * P:
             when = when[:-1]
-        d.text((pad, ty - 25), when.rstrip(), font=wf, fill=ACID)
-    for ln in lines:
-        d.text((pad, ty), ln, font=tf, fill=(255, 255, 255))
-        ty += lh
-    d.rectangle([0, 0, w - 1, h - 1], outline=INK, width=2)
+        if when != full and when:
+            when = when.rstrip() + "…"
+        d.text((P, cy), when, font=wf, fill=CINNABAR)
+        cy += 27
+    tf = _grotesk(26, 700)  # title (Golos bold ink)
+    for ln in _wrap(d, (item.get("title") or "Событие").strip(), tf, w - 2 * P, 2):
+        d.text((P, cy), ln, font=tf, fill=INK)
+        cy += 31
+    d.rectangle([0, 0, w - 1, h - 1], outline=INK, width=2)  # tile hairline
     return tile
 
 
 def render_digest_poster(items: list[dict], label: str) -> bytes:
-    """The weekly digest as ONE poster: окрест header + 'афиша на выходные' + the dates, then a
-    2-column contact sheet of up to 6 weekend covers. items: {code,title,when,photo:bytes|None}."""
+    """The weekly digest as ONE light VITRINE poster — the same language as the cards: the окрест
+    lockup (avatar pin + wordmark) + cinnabar tick + acid rule, then a 2-column grid of mini event
+    cards. items carry {code, title, when, photo:bytes|None}."""
     img = Image.new("RGB", (W, H), PLASTER)
-    d = ImageDraw.Draw(img)
+    d = ImageDraw.Draw(img, "RGBA")
     M = 30
-    # header — wordmark, title, dates, acid rule
-    _pin(d, M + 14, 54, 17)
-    d.text((M + 42, 34), "окрест", font=_font(38, 800), fill=INK)
-    d.line([W - M - 26, 42, W - M, 42], fill=CINNABAR, width=4)
-    d.line([W - M, 42, W - M, 68], fill=CINNABAR, width=4)
-    tf = _font(76, 800)
-    d.text((M, 104), "афиша на", font=tf, fill=INK)
-    d.text((M, 186), "выходные", font=tf, fill=INK)
-    d.text((M, 286), (label or "").upper(), font=_font(30, 600), fill=CINNABAR)
+    # brand lockup — avatar pin + окрест wordmark + cinnabar registration tick
+    _pin_sm(d, M + 13, 50, 15)
+    d.text((M + 42, 30), "окрест", font=_font(38, 800), fill=INK)
+    d.line([W - M - 30, 42, W - M, 42], fill=CINNABAR, width=5)
+    d.line([W - M, 42, W - M, 72], fill=CINNABAR, width=5)
+    # heading (Golos, like the card titles) + dates (mono) + acid rule
+    hf = _grotesk(80, 700)
+    d.text((M, 92), "афиша на", font=hf, fill=INK)
+    d.text((M, 184), "выходные", font=hf, fill=INK)
+    d.text((M, 290), (label or "").upper(), font=_mono(28, 600), fill=CINNABAR)
     d.rectangle([M, 340, W - M, 347], fill=ACID)
-    # grid
+    # grid of mini cards
     items = [it for it in items if it][:6]
     cols = 2
     rows = max(1, (len(items) + 1) // 2)
-    gut = 12
-    gy0 = 366
+    gut = 14
+    gy0 = 368
+    foot = 62
     tw = (W - 2 * M - gut) // 2
-    th = ((H - 78) - gy0 - gut * (rows - 1)) // rows
+    th = ((H - foot) - gy0 - gut * (rows - 1)) // rows
     for i, it in enumerate(items):
         r, c = divmod(i, cols)
         img.paste(_digest_tile(tw, th, it), (M + c * (tw + gut), gy0 + r * (th + gut)))
-    # footer + outer frame
-    d.text((M, H - 56), "СОБЫТИЯ РЯДОМ · @okrestmap_bot", font=_font(21, 600), fill=INK_DIM)
-    d.rectangle([14, 14, W - 15, H - 15], outline=INK, width=3)
+    # footer (mono, dim)
+    d.text((M, H - 46), "СОБЫТИЯ РЯДОМ · @OKRESTMAP_BOT", font=_mono(19, 500), fill=INK_DIM)
     out = io.BytesIO()
     img.save(out, "JPEG", quality=90, optimize=True)
     return out.getvalue()
