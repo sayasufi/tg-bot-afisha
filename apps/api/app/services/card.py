@@ -279,11 +279,11 @@ def build_reminder_card(item: dict) -> bytes | None:
 
 # --- weekly digest poster: a VITRINE editorial LIST of the weekend's events -----------
 def _digest_row(d: ImageDraw.ImageDraw, img: Image.Image, x: int, y: int, w: int, h: int, item: dict) -> None:
-    """One list row: a landscape thumbnail (code tab) on the left, the title (Golos) + venue (mono dim)
-    in the middle, the price (mono) right-aligned, and a hairline divider under the row."""
+    """One list row: a landscape thumbnail (code tab) on the left, the title (Golos) + day·venue
+    (day cinnabar, venue mono dim) in the middle, the price (mono) right-aligned, hairline divider."""
     INK_LINE = (38, 38, 36)
-    pad = 12
-    tw, th = 208, h - 2 * pad  # thumbnail
+    pad = 14
+    tw, th = 232, h - 2 * pad  # thumbnail (bigger → more photo / air)
     photo = item.get("photo")
     try:
         thumb = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (tw, th), Image.LANCZOS) if photo \
@@ -298,33 +298,39 @@ def _digest_row(d: ImageDraw.ImageDraw, img: Image.Image, x: int, y: int, w: int
         d.rectangle([x + 8, y + pad + 8, x + 8 + cw + 2 * cp, y + pad + 38], fill=(11, 11, 11, 220))
         d.text((x + 8 + cp, y + pad + 13), code, font=cf, fill=ACID)
     price_str = _price_str(item.get("price_min"), item.get("price_max"))  # price, right-aligned
-    pf = _mono(24, 600)
+    pf = _mono(25, 600)
     pw = d.textlength(price_str, font=pf) if price_str else 0
     if price_str:
-        d.text((x + w - pw, y + pad + 8), price_str, font=pf, fill=INK)
-    tx = x + tw + 26  # title (Golos bold) + venue (mono dim)
+        d.text((x + w - pw, y + pad + 10), price_str, font=pf, fill=INK)
+    tx = x + tw + 28  # title (Golos bold)
     tmax = (x + w) - tx - (pw + 28 if pw else 0)
-    tf = _grotesk(31, 700)
-    ty = y + pad + 6
+    tf = _grotesk(33, 700)
+    ty = y + pad + 8
     for ln in _wrap(d, (item.get("title") or "Событие").strip(), tf, tmax, 2):
         d.text((tx, ty), ln, font=tf, fill=INK)
-        ty += 38
+        ty += 40
+    sf = _mono(21, 500)  # subtitle: day (cinnabar) · venue (mono dim)
+    sx, sy = tx, ty + 6
+    day = (item.get("day") or "").strip()
+    if day:
+        d.text((sx, sy), day, font=sf, fill=CINNABAR)
+        sx += d.textlength(day + "   ", font=sf)
     venue = (item.get("venue") or "").strip()
     if venue:
-        vf = _mono(20, 500)
-        vmax = (x + w) - tx
-        while venue and d.textlength(venue + "…", font=vf) > vmax:
+        vmax = (x + w) - sx
+        full = venue
+        while venue and d.textlength(venue + "…", font=sf) > vmax:
             venue = venue[:-1]
-        d.text((tx, ty + 4), venue.rstrip() + ("…" if len((item.get("venue") or "").strip()) > len(venue) else ""),
-               font=vf, fill=INK_DIM)
+        d.text((sx, sy), venue.rstrip() + ("…" if venue != full else ""), font=sf, fill=INK_DIM)
     d.line([x, y + h, x + w, y + h], fill=INK_LINE, width=2)  # divider
 
 
 def render_digest_poster(items: list[dict], label: str) -> bytes:
     """The weekly digest as ONE light VITRINE poster — окрест lockup + cinnabar tick + heading + acid
-    rule, then an editorial LIST of the weekend's events (thumbnail · title · venue · price) in the same
-    voice as the cards. items carry {code, title, venue, price_min, price_max, photo:bytes|None}."""
-    img = Image.new("RGB", (W, H), PLASTER)
+    rule, then an editorial LIST of the weekend's events (thumbnail · title · day·venue · price) in the
+    same voice as the cards. items carry {code, title, venue, price_min, price_max, day, photo}."""
+    Hd = 1480  # a touch taller → more air per row + bigger thumbnails
+    img = Image.new("RGB", (W, Hd), PLASTER)
     d = ImageDraw.Draw(img, "RGBA")
     M = 40
     _pin_sm(d, M + 13, 50, 15)  # brand lockup
@@ -339,10 +345,10 @@ def render_digest_poster(items: list[dict], label: str) -> bytes:
     items = [it for it in items if it][:6]  # editorial list
     top, foot = 352, 58
     n = max(1, len(items))
-    hr = ((H - foot) - top) // n
+    hr = ((Hd - foot) - top) // n
     for i, it in enumerate(items):
         _digest_row(d, img, M, top + i * hr, W - 2 * M, hr, it)
-    d.text((M, H - 44), "СОБЫТИЯ РЯДОМ · @OKRESTMAP_BOT", font=_mono(19, 500), fill=INK_DIM)
+    d.text((M, Hd - 44), "СОБЫТИЯ РЯДОМ · @OKRESTMAP_BOT", font=_mono(19, 500), fill=INK_DIM)
     out = io.BytesIO()
     img.save(out, "JPEG", quality=90, optimize=True)
     return out.getvalue()

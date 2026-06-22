@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from apps.api.app.services.card import render_digest_poster
-from apps.bot.bot.formatting import digest_caption, digest_message, weekend_label, when_phrase
+from apps.bot.bot.formatting import digest_caption, digest_message, weekend_day_label, weekend_label, when_phrase
 from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.digest import (
@@ -32,6 +32,8 @@ from core.redis import get_redis
 
 log = logging.getLogger(__name__)
 _BOT_USERNAME = "okrestmap_bot"
+# Full-screen message effect on arrival (free, DM-only) — a small delight when the weekend roundup lands.
+_DIGEST_EFFECT = "5104841245755180586"
 
 
 def _app_url() -> str:
@@ -67,16 +69,16 @@ async def _send_digest_one(client, base, user_id, poster, caption_html, text_htm
             if poster:
                 resp = await client.post(
                     f"{base}/sendPhoto",
-                    data={"chat_id": str(user_id), "caption": caption_html,
-                          "parse_mode": "HTML", "reply_markup": json.dumps(markup)},
+                    data={"chat_id": str(user_id), "caption": caption_html, "parse_mode": "HTML",
+                          "reply_markup": json.dumps(markup), "message_effect_id": _DIGEST_EFFECT},
                     files={"photo": ("digest.jpg", poster, "image/jpeg")},
                 )
                 data = resp.json()
                 if classify(data) == "permanent":  # poster rejected → the text roundup still lands
                     resp = await client.post(
                         f"{base}/sendMessage",
-                        json={"chat_id": user_id, "parse_mode": "HTML", "reply_markup": markup,
-                              "text": text_html, "disable_web_page_preview": True},
+                        json={"chat_id": user_id, "parse_mode": "HTML", "reply_markup": markup, "text": text_html,
+                              "disable_web_page_preview": True, "message_effect_id": _DIGEST_EFFECT},
                     )
                     data = resp.json()
             else:
@@ -156,6 +158,7 @@ async def _send_digest_impl() -> int:
                 # when-phrase per tile. Render off the event loop (PIL is CPU-bound).
                 poster_items = [
                     {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now),
+                     "day": weekend_day_label(it.get("date_start"), it.get("date_end")),
                      "photo": await cover(it.get("image"))}
                     for it in (venue_items + friend_items + weekend_items)[:6]
                 ]

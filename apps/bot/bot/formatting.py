@@ -181,6 +181,32 @@ def weekend_label(sat, sun) -> str:
     return f"{sat.day} {_MONTHS[sat.month - 1]} – {sun.day} {_MONTHS[sun.month - 1]}"
 
 
+_WD_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
+
+
+def weekend_day_label(date_start, date_end=None) -> str:
+    """Compact weekend day for the digest: «сб» / «вс» (day-of-week in MSK), or «оба дня» for a run that
+    spans more than one calendar day (an exhibition open all weekend). Empty when there's no date."""
+    def _p(v):
+        if not v:
+            return None
+        if isinstance(v, datetime):
+            dt = v
+        else:
+            try:
+                dt = datetime.fromisoformat(str(v))
+            except ValueError:
+                return None
+        return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).astimezone(_MSK)
+    ds = _p(date_start)
+    if ds is None:
+        return ""
+    de = _p(date_end)
+    if de and (de.date() - ds.date()).days >= 1:
+        return "оба дня"
+    return _WD_SHORT[ds.weekday()]
+
+
 def _digest_line(item: dict, now: datetime | None) -> str:
     title = escape(str(item.get("title") or "Событие")[:90])
     # Accession code · when · venue — same signature grammar as reminder_caption, so a digest
@@ -237,10 +263,16 @@ def digest_caption(venue_items: list[dict], friend_items: list[dict], weekend_it
         for it in items:
             title = escape(str(it.get("title") or "Событие")[:80])
             link = f'<a href="{event_deeplink(it["event_id"])}"><b>{title}</b></a>'
+            day = weekend_day_label(it.get("date_start"), it.get("date_end"))
             price = _price_short(it.get("price_min"), it.get("price_max"))
-            lines.append(f"{glyph(it.get('category'))} {link}" + (f" · {price}" if price else ""))
+            tail = " · ".join(p for p in [day, price] if p)
+            n = int(it.get("nfriends") or 0)  # social proof for the friends block
+            if n > 1:
+                tail += (" · " if tail else "") + f"♥{n}"
+            lines.append(f"{glyph(it.get('category'))} {link}" + (f" · {tail}" if tail else ""))
 
     block("📍", "новое на твоих площадках", venue_items)
     block("👥", "что сохранили друзья", friend_items)
     block("✨", "на выходных рядом", weekend_items)
+    lines.append(f"\n{ce('📍')} <i>ещё рядом — открой карту ↓</i>")  # CTA hook to the map button
     return "\n".join(lines)
