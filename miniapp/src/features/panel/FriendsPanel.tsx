@@ -34,6 +34,9 @@ function shortTitle(t: string): string {
   return (m ? m[1] : s).trim();
 }
 
+const ACT_PREVIEW = 8; // chronicle rows shown before «вся хроника» (the API already caps the feed at 24)
+const FR_PREVIEW = 12; // friend rows shown before «показать всех»
+
 // Coarse «когда» label for the activity feed (the API timestamps are minute-grained at best).
 function timeAgo(iso: string): string {
   const t = Date.parse(iso);
@@ -107,28 +110,18 @@ function FriendRow({
   );
 }
 
-// One «Хроника друзей» row — reads as an EVENT (title leads, poster on the right). The friend is demoted to
-// a SMALL avatar inside the byline, so the eye doesn't read the leading face as «event belongs to them» —
-// it's «friend saved this event». A chronicle of finds, not a log of actions. Taps into the sheet.
+// One «Хроника друзей» row — friend avatar leads, then the event TITLE (primary) over a quiet «кто · когда»
+// byline, with the event poster on the right. A chronicle of friends' finds. Taps into the sheet.
 function ActivityRow({ a, onOpen }: { a: FriendActivity; onOpen: (e: EventItem) => void }) {
   const who = a.friend.name || (a.friend.username ? `@${a.friend.username}` : "друг");
   const cover = safeHttpUrl(a.event.primary_image_url);
-  const av = safeHttpUrl(a.friend.photo_url);
   return (
     <button type="button" className="friends__act" onClick={() => onOpen(a.event)}>
+      <Avatar f={a.friend} />
       <span className="friends__act-body">
         <span className="friends__act-ev">{shortTitle(a.event.title)}</span>
         <span className="friends__act-meta">
-          <span
-            className="friends__act-av-sm"
-            style={av ? { backgroundImage: `url("${av}")` } : undefined}
-            aria-hidden="true"
-          >
-            {av ? "" : (a.friend.name || a.friend.username || "?").slice(0, 1).toUpperCase()}
-          </span>
-          <span className="friends__act-byline">
-            <span className="friends__act-who">{who}</span> сохранил · {timeAgo(a.at)}
-          </span>
+          <span className="friends__act-who">{who}</span> сохранил · {timeAgo(a.at)}
         </span>
       </span>
       <span
@@ -158,6 +151,10 @@ export function FriendsPanel({
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<Friend[]>([]);
   const [activity, setActivity] = useState<FriendActivity[]>([]);
+  // Scale: the feed/list can grow, so cap each to a scannable preview with a «показать всё» expander —
+  // the chronicle never buries the friend list, and a big roster doesn't make an endless scroll.
+  const [activityFull, setActivityFull] = useState(false);
+  const [friendsFull, setFriendsFull] = useState(false);
   const [disclose, setDisclose] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -354,34 +351,46 @@ export function FriendsPanel({
           <>
             <div className="recs__section">Хроника друзей</div>
             <div className="friends__feed">
-              {activity.map((a, i) => (
+              {(activityFull ? activity : activity.slice(0, ACT_PREVIEW)).map((a, i) => (
                 <ActivityRow key={`${a.friend.id}-${a.event.event_id}-${i}`} a={a} onOpen={onOpenEvent} />
               ))}
             </div>
+            {!activityFull && activity.length > ACT_PREVIEW && (
+              <button type="button" className="friends__more" onClick={() => setActivityFull(true)}>
+                вся хроника · ещё {activity.length - ACT_PREVIEW} →
+              </button>
+            )}
           </>
         )}
 
         <div className="recs__section">Ваши друзья</div>
         {friends.length > 0 ? (
-          <div className="profile__friends">
-            {friends.map((f) => (
-              <FriendRow
-                key={f.id}
-                f={f}
-                onOpen={onOpenFriend}
-                subtitle={tasteLabel(f.top_cats) || (f.username ? `@${f.username}` : "")}
-              >
-                <button
-                  type="button"
-                  className="profile__friend-x"
-                  aria-label={`Убрать ${f.name || "друга"} из друзей`}
-                  onClick={() => remove(f.id)}
+          <>
+            <div className="profile__friends">
+              {(friendsFull ? friends : friends.slice(0, FR_PREVIEW)).map((f) => (
+                <FriendRow
+                  key={f.id}
+                  f={f}
+                  onOpen={onOpenFriend}
+                  subtitle={tasteLabel(f.top_cats) || (f.username ? `@${f.username}` : "")}
                 >
-                  ×
-                </button>
-              </FriendRow>
-            ))}
-          </div>
+                  <button
+                    type="button"
+                    className="profile__friend-x"
+                    aria-label={`Убрать ${f.name || "друга"} из друзей`}
+                    onClick={() => remove(f.id)}
+                  >
+                    ×
+                  </button>
+                </FriendRow>
+              ))}
+            </div>
+            {!friendsFull && friends.length > FR_PREVIEW && (
+              <button type="button" className="friends__more" onClick={() => setFriendsFull(true)}>
+                показать всех · {friends.length} →
+              </button>
+            )}
+          </>
         ) : (
           <p className="profile__friends-empty">
             Поделись событием через «Пойдём?» — кто примет приглашение, сразу станет другом. После этого вы
