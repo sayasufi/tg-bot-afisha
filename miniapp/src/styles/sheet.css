@@ -490,25 +490,6 @@ html[data-theme="dark"] .sheet-veil {
 .sheet__hidefriends.is-hidden {
   text-decoration: line-through;
 }
-/* «Позвать друга» — open the friend picker to DM this event to a specific friend. */
-.sheet__callfriend {
-  align-self: flex-start;
-  margin-top: 11px;
-  padding: 7px 13px;
-  border: 0;
-  background: none;
-  box-shadow: inset 0 0 0 1px var(--line);
-  cursor: pointer;
-  font-family: var(--grotesk);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  text-transform: lowercase;
-  color: var(--ink-dim);
-}
-.sheet__callfriend:active {
-  opacity: 0.6;
-}
 
 /* ---------- Exhibit grid — catalogue cells, ink-ruled like a museum label table.
    Each datum (когда / цена / где / метро / от тебя / возраст) is its own cell; the
