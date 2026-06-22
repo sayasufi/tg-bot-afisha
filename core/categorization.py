@@ -16,13 +16,14 @@ untyped tail) or for free-text sources like Telegram.
 _LABEL_TO_CATEGORY: dict[str, str] = {
     # concerts / live music
     "concert": "concert", "концерт": "concert", "концерты": "concert",
-    # theatre / opera / ballet / musical
-    "theatre": "theatre", "theater": "theatre", "театр": "theatre",
+    # theatre / opera / ballet / musical (Timepad uses the plural "Театры")
+    "theatre": "theatre", "theater": "theatre", "театр": "theatre", "театры": "theatre",
     "спектакль": "theatre", "спектакли": "theatre",
     "опера": "theatre", "балет": "theatre", "мюзикл": "theatre",
-    # exhibitions / museums (Yandex types art exhibitions as "art")
+    # exhibitions / museums (Yandex types art exhibitions as "art"; Timepad: "Выставки" / "Искусство и культура")
     "art": "exhibition", "exhibition": "exhibition", "выставка": "exhibition",
     "выставки": "exhibition", "photo": "exhibition", "museum": "exhibition", "музей": "exhibition",
+    "искусство и культура": "exhibition",
     # cinema
     "cinema": "cinema", "кино": "cinema",
     # stand-up
@@ -30,8 +31,9 @@ _LABEL_TO_CATEGORY: dict[str, str] = {
     # festivals / fairs / city holidays
     "festival": "festival", "фестиваль": "festival", "ярмарка": "festival",
     "holiday": "festival", "праздник": "festival",
-    # lectures / education (KudaGo "education" is the legitimate lecture source)
+    # lectures / education / workshops (KudaGo "education"; Timepad "Хобби и творчество" = master-classes)
     "education": "lecture", "lecture": "lecture", "лекция": "lecture", "лекции": "lecture",
+    "хобби и творчество": "lecture", "мастер-класс": "lecture", "мастер-классы": "lecture",
     # tours / excursions / walks
     "tour": "tour", "excursions": "tour", "excursion": "tour",
     "экскурсия": "tour", "экскурсии": "tour", "прогулка": "tour",

@@ -7,6 +7,7 @@ from connectors.telegram.telethon_connector import TelethonConnector
 from connectors.telegram.web_preview_connector import TelegramWebPreviewConnector
 from connectors.web.afisha_ru_connector import AfishaRuConnector
 from connectors.web.kudago_connector import KudaGoConnector
+from connectors.web.timepad_connector import TimepadConnector
 from connectors.web.yandex_afisha_connector import YandexAfishaConnector
 from core.cities import DEFAULT_CITY
 from core.config.settings import get_settings
@@ -51,6 +52,30 @@ async def _fetch_kudago_impl() -> dict:
             await db.commit()
             await finish_source_run(db, run, "success", {"fetched": len(records)})
             return {"fetched": len(records), "cursor": next_cursor}
+        except Exception as exc:
+            await db.rollback()
+            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+            raise
+
+
+async def _fetch_timepad_impl() -> dict:
+    """One curated Timepad sweep: the connector fetches the whitelisted cultural categories, collapses
+    recurrences and drops junk, returning ~distinct events. A full scan each run (the curated set is
+    small) — no cursor. A no-op when TIMEPAD_TOKEN is unset (connector returns []), so it's safe off."""
+    settings = get_settings()
+    async with WorkerAsyncSessionLocal() as db:
+        source = await ensure_source(
+            db, "timepad", "web", settings.timepad_base_url,
+            {"city": DEFAULT_CITY.slug, "tp_city": "Москва"},
+        )
+        run = await create_source_run(db, source.source_id)
+        try:
+            connector = TimepadConnector(city=source.config_json.get("tp_city", "Москва"))
+            records, _ = await connector.fetch()
+            await bulk_upsert_raw_events(db, source.source_id, records)
+            await db.commit()
+            await finish_source_run(db, run, "success", {"fetched": len(records)})
+            return {"fetched": len(records)}
         except Exception as exc:
             await db.rollback()
             await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))

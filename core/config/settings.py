@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     kudago_base_url: str = "https://kudago.com/public-api/v1.4"
     yandex_afisha_base_url: str = "https://afisha.yandex.ru/api/graphql"
     afisha_ru_base_url: str = "https://www.afisha.ru"
+    # Timepad: independent-organiser events (curated cultural buckets only). The API needs a free
+    # personal token; ingestion is a no-op until TIMEPAD_TOKEN is set, so it's off by default.
+    timepad_base_url: str = "https://api.timepad.ru/v1"
+    timepad_token: str = Field(default="", alias="TIMEPAD_TOKEN")
     # afisha.ru shows an IP-reputation CAPTCHA to RU datacenter IPs (our VK Cloud
     # egress). Prod routes afisha.ru through the WireGuard split-tunnel (→ a GCP
     # exit), which afisha does NOT challenge — so ingestion is enabled by default.

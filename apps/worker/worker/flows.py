@@ -44,6 +44,11 @@ async def fetch_afisha_ru_full_scan():
     return await fetch._fetch_afisha_full_scan_impl()
 
 
+@flow(name="fetch-timepad", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
+async def fetch_timepad():
+    return await fetch._fetch_timepad_impl()
+
+
 @flow(name="fetch-telegram-public", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)
 async def fetch_telegram_public():
     return await fetch._fetch_telegram_impl()

@@ -24,6 +24,10 @@ _SCHEDULE = [
     (flows.fetch_yandex_afisha_full_scan, 43200),
     (flows.fetch_afisha_ru, 300),
     (flows.fetch_afisha_ru_full_scan, 43200),
+    # Timepad is one curated full-scan (no incremental cursor); the whitelisted+collapsed set is small
+    # (~hundreds), so every 30 min keeps it fresh without starving the concurrency-1 pipeline. No-op
+    # until TIMEPAD_TOKEN is set.
+    (flows.fetch_timepad, 1800),
     (flows.fetch_telegram_public, 180),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
