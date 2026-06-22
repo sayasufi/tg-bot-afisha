@@ -130,9 +130,9 @@ export function App() {
     setNotifyReminders(on);
     pushSetting("notify_reminders", on);
   }, []);
-  // Weekly digest opt-in (the bot DMs a Friday roundup). Strictly opt-in; hydrated from the
-  // account on load, toggled from the profile.
-  const [notifyDigest, setNotifyDigest] = useState(false);
+  // Weekly digest (the bot DMs a Friday roundup) — now OPT-OUT (default on); hydrated from the
+  // account on load, toggled off from the profile.
+  const [notifyDigest, setNotifyDigest] = useState(true);
   const toggleDigest = useCallback((on: boolean) => {
     setNotifyDigest(on);
     pushSetting("notify_digest", on);

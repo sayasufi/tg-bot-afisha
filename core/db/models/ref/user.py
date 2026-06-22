@@ -33,7 +33,7 @@ class User(Base):
     # Notification opt-in. Reminders default ON (the per-event "Напомнить" tap is the
     # consent; this is a global mute). The weekly digest is strictly opt-in (default off).
     notify_reminders: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
-    notify_digest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    notify_digest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     # Friend notifications (the «X добавил тебя» DM + the digest's friends section) and @username search are
     # now ALWAYS ON — their opt-in columns (notify_friends / is_searchable) were dropped in migration 0031.
     # Friends kill-switch: when true, NONE of my favourites are shown to any friend (the blunt opt-out
