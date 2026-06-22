@@ -6,6 +6,7 @@ import type { LatLon } from "../../lib/distance";
 import { IconClose } from "../../lib/icons";
 import { safeHttpUrl } from "../../lib/url";
 import { CatalogFeed } from "./CatalogFeed";
+import { TasteCard } from "./TasteCard";
 
 // A friend's profile — what they've saved. Opened from the Friends list. Server-gated to mutual
 // friends; respects the friend's privacy (a globally-private friend shows no saves, hidden items are
@@ -79,6 +80,9 @@ export function FriendProfile({
         </div>
 
         {both > 0 && <div className="friendprof__overlap">вы оба сохранили · {both}</div>}
+
+        {/* The same «кружочки» as your own profile — a constellation of THEIR taste by genre. */}
+        {events.length > 0 && <TasteCard events={events} title={friend.name ? `Вкус ${friend.name}` : "Вкус"} />}
 
         <div className="recs__section">в избранном</div>
         {loading ? (

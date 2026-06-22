@@ -511,6 +511,10 @@ mark.hl {
   text-align: left;
   cursor: pointer;
 }
+/* Non-interactive variant (a friend's profile shows their taste as a viz, their saves are listed below). */
+.tastecard--static {
+  cursor: default;
+}
 .tastecard:active {
   opacity: 0.7;
 }
