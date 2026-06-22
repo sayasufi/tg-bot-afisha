@@ -124,7 +124,24 @@ async def _fetch_yandex_impl() -> dict:
             city = source.config_json.get("city", DEFAULT_CITY.yandex_city)
             page_size = int(source.config_json.get("page_size", 100))
             connector = YandexAfishaConnector(city=city, page_size=page_size)
-            records, next_cursor = await connector.fetch(cursor=cursor)
+            try:
+                records, next_cursor = await connector.fetch(cursor=cursor)
+            except Exception as exc:
+                # Yandex's actualEvents resolver times out (its own ~600ms budget) for DEEP offsets — past
+                # ~6000 of the ~6360-event Moscow catalogue the tail is simply unreachable via offset
+                # pagination. Without this, the incremental cursor sticks at the first failing offset and
+                # the WHOLE source dies: every run re-fetches the same dead page, nothing refreshes, and the
+                # catalogue drains as events expire. Treat a deep-page timeout as end-of-catalogue — wrap to
+                # 0 and keep cycling (the far-future tail resurfaces later as those events move to lower
+                # offsets). A failure at offset 0 is a genuine outage, so re-raise that.
+                if cursor and str(cursor) != "0":
+                    print(f"yandex: deep-offset timeout at {cursor} — wrapping cursor to 0 (tail unreachable): {exc!r}")
+                    source.config_json = {**source.config_json, "cursor": "0"}
+                    db.add(source)
+                    await db.commit()
+                    await finish_source_run(db, run, "success", {"fetched": 0, "wrapped_from": cursor})
+                    return {"fetched": 0, "wrapped_from": cursor}
+                raise
             await bulk_upsert_raw_events(db, source.source_id, records)
             # Stable cursor (== current) means we reached the end — wrap to restart.
             stored_cursor = "0" if next_cursor == cursor else next_cursor
