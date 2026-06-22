@@ -160,6 +160,20 @@ def event_deeplink(event_id: str) -> str:
     return f"https://t.me/{_BOT_USERNAME}?startapp={event_id}"
 
 
+def _price_short(price_min, price_max=None) -> str:
+    """Mirror of the card's _price_str for captions: «бесплатно» only when truly free (0/0), «до N ₽»
+    for a paid range that starts at 0, «от N ₽» with a real floor, empty when there's no price."""
+    lo = float(price_min) if price_min is not None else None
+    hi = float(price_max) if price_max is not None else None
+    if lo and lo > 0:
+        return f"от {int(lo)} ₽"
+    if hi and hi > 0:
+        return f"до {int(hi)} ₽"
+    if lo == 0 or hi == 0:
+        return "бесплатно"
+    return ""
+
+
 def weekend_label(sat, sun) -> str:
     """'20–21 июня', or '31 мая – 1 июня' when the weekend straddles two months."""
     if sat.month == sun.month:
@@ -210,19 +224,23 @@ def digest_message(
 
 
 def digest_caption(venue_items: list[dict], friend_items: list[dict], weekend_items: list[dict], label: str) -> str:
-    """Caption UNDER the digest poster: the poster already shows code · when · venue, so the
-    caption stays light — a hero line + tappable titles only (each a deep-link into the event)."""
-    lines = [f"{ce('⚡')} <b>афиша на выходные</b> · {escape(label)}" if label else f"{ce('⚡')} <b>афиша на выходные</b>"]
+    """Caption UNDER the digest poster — the tappable index: a hero line, then sectioned events where
+    each title is a BOLD deep-link into the Mini App with its price beside it. The poster carries the
+    photos + venue; the caption carries the links + price, so it stays a clean, scannable agenda."""
+    hero = f"{ce('⚡')} <b>афиша на выходные</b>"
+    lines = [f"{hero} · <i>{escape(label)}</i>" if label else hero]
 
-    def block(head: str, items: list[dict]) -> None:
+    def block(emoji: str, head: str, items: list[dict]) -> None:
         if not items:
             return
-        lines.append(f"\n<b>{head}</b>")
+        lines.append(f"\n{ce(emoji)} <b>{head}</b>")
         for it in items:
             title = escape(str(it.get("title") or "Событие")[:80])
-            lines.append(f'{glyph(it.get("category"))} <a href="{event_deeplink(it["event_id"])}">{title}</a>')
+            link = f'<a href="{event_deeplink(it["event_id"])}"><b>{title}</b></a>'
+            price = _price_short(it.get("price_min"), it.get("price_max"))
+            lines.append(f"{glyph(it.get('category'))} {link}" + (f" · {price}" if price else ""))
 
-    block("новое на ваших площадках", venue_items)
-    block("что сохранили друзья", friend_items)
-    block("на выходных рядом", weekend_items)
+    block("📍", "новое на твоих площадках", venue_items)
+    block("👥", "что сохранили друзья", friend_items)
+    block("✨", "на выходных рядом", weekend_items)
     return "\n".join(lines)
