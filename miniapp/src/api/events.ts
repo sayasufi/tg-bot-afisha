@@ -58,14 +58,17 @@ function dedupeByEvent(items: EventItem[]): EventItem[] {
 }
 
 export async function fetchMapEvents(params: URLSearchParams, signal?: AbortSignal): Promise<MapResponse> {
-  // The bulk city payload: a longer budget (it's big), and a LOW priority hint so a tapped tab / opened
-  // event isn't starved behind it. Idempotent GET → getJson retries once if it times out.
+  // The slim INDEX payload (id/lat/lon/category/dates/open_now/price) — ~60% smaller than the full body;
+  // the heavy per-event fields (title/venue/code/image) are hydrated in-frame by id. A longer budget +
+  // LOW priority so a tapped tab / opened event isn't starved behind it; idempotent GET → retries once.
+  if (!params.has("fields")) params.set("fields", "index");
   const data = await getJson<MapResponse>(`/v1/events/map?${params.toString()}`, { signal, timeoutMs: 15000, priority: "low" });
   const items = dedupeByEvent((data.items ?? []).map((x: any) => ({ ...x, price_min: toNum(x.price_min) })));
   return {
     clusters: data.clusters ?? [],
     items,
     total: data.total ?? items.length,
+    category_counts: data.category_counts,
   };
 }
 

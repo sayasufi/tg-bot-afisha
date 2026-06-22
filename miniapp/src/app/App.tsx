@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { fetchEventDetail, fetchMapEvents, fetchMetro, type EventItem, type MapCluster, type MetroStation } from "../api/client";
+import { fetchEventDetail, fetchEventsByIds, fetchMapEvents, fetchMetro, type EventItem, type MapCluster, type MetroStation } from "../api/client";
 import { logEventSeen } from "../api/recommend";
 import { markInvited } from "../api/users";
 import { recordOpen, recordViewed } from "../lib/affinity";
@@ -167,6 +167,14 @@ export function App() {
   const [friendCount, setFriendCount] = useState(0); // total accepted friends → badge on «Друзья»
   const [friendProfile, setFriendProfile] = useState<Friend | null>(null); // open friend's profile overlay
   const [friendCounts, setFriendCounts] = useState<Map<string, number>>(() => new Map()); // event_id → #friends who saved it
+  // Slim-index map: the per-event payload carries only id/coords/category/dates/price. The heavy fields
+  // (title/venue/code/image) are HYDRATED in-frame by id (POST /events/by-ids) into this map; openEvent /
+  // the cluster peek / SimilarEvents read full fields from here, with a graceful detail-fetch fallback.
+  const [hydrated, setHydrated] = useState<Map<string, EventItem>>(() => new Map());
+  const hydratedRef = useRef(hydrated);
+  useEffect(() => {
+    hydratedRef.current = hydrated;
+  }, [hydrated]);
   useEffect(() => {
     void manageFriends().then((s) => {
       if (!s) return;
@@ -361,7 +369,49 @@ export function App() {
       clearTimeout(t);
     };
   }, [view, mapZoom, mapBbox, shownItems]);
+
+  // Hydrate the heavy per-event fields (title/venue/code/image) for the events IN VIEW at detail zoom, so a
+  // tapped pin / the cluster peek / SimilarEvents have full data instantly (the slim index payload omits
+  // them). Debounced, fetches ONLY ids not already hydrated (panning reuses what we have), no position so
+  // the by-ids result is shareable/cacheable. A not-yet-hydrated tap still works — the sheet falls back to
+  // its detail fetch for the title.
+  useEffect(() => {
+    const bb = mapBbox;
+    if (view !== "map" || (mapZoom ?? 0) < DETAIL_ZOOM || shownItems.length === 0) return;
+    const inView = bb
+      ? shownItems.filter((i) => i.lat != null && i.lon != null && i.lon >= bb[0] && i.lon <= bb[2] && i.lat >= bb[1] && i.lat <= bb[3])
+      : shownItems;
+    const need = inView.slice(0, 250).filter((i) => !hydratedRef.current.has(i.event_id)).map((i) => i.event_id);
+    if (need.length === 0) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      void fetchEventsByIds(need).then((full) => {
+        if (!alive || full.length === 0) return;
+        setHydrated((prev) => {
+          const next = new Map(prev);
+          for (const e of full) next.set(e.event_id, e);
+          return next.size > 1500 ? new Map([...next].slice(-900)) : next; // bound memory on long pans
+        });
+      });
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [view, mapZoom, mapBbox, shownItems]);
   const shownTotal = (filters.radiusKm && userPos) || filters.goNow ? shownItems.length : total;
+  // Slim items enriched with hydrated full fields — for the sheet's «похожие» strip (the map pins +
+  // clustering keep the lean index set; only consumers that show titles/thumbs need the rich version).
+  const displayItems = useMemo(
+    () =>
+      hydrated.size
+        ? shownItems.map((it) => {
+            const h = hydrated.get(it.event_id);
+            return h ? { ...it, ...h } : it;
+          })
+        : shownItems,
+    [shownItems, hydrated],
+  );
 
   // «Сейчас» list header count: the can-go-now events (the same map pins, via goNowIds) that
   // fall inside the list's frozen bbox. We compute the FULL total here up front — the list's own
@@ -666,13 +716,18 @@ export function App() {
 
   const openEvent = useCallback((i: EventItem) => {
     haptic("light");
+    // A slim-index map pin carries no title/venue/code — overlay the hydrated full event if we have it
+    // (in-view set is hydrated by id), MERGING so index-only fields (venue_id) survive; the sheet's detail
+    // fetch fills the rest / covers a fresh tap before its hydration landed.
+    const h = hydratedRef.current.get(i.event_id);
+    const full = h ? { ...i, ...h } : i;
     // Keep the cluster peek behind the sheet ONLY while it still contains this event
     // (so closing returns you to the same point's list + swipe siblings). Opening an
     // event from elsewhere (a "Рядом" card, a different pin) drops the stale peek so it
     // can't reappear out of sync with the map.
     setPeek((p) => (p && p.some((e) => e.event_id === i.event_id) ? p : null));
-    setSelected(i);
-    setFocused(i); // keep this marker highlighted on the map even after closing
+    setSelected(full);
+    setFocused(full); // keep this marker highlighted on the map even after closing
     setFocusOut(false); // cancel any pending dismiss animation
     logEventSeen(i.event_id); // engagement signal for recommendations
     recordOpen(i.category); // behavioural profile for personalised ranking
@@ -711,7 +766,14 @@ export function App() {
 
   const onCluster = useCallback((evs: EventItem[]) => {
     haptic("light");
-    setPeek(evs);
+    // The peek rows need title/venue — overlay hydrated full events (in-view → already hydrated), merging
+    // so the index-only venue_id survives (the «open this venue» button needs it).
+    setPeek(
+      evs.map((e) => {
+        const h = hydratedRef.current.get(e.event_id);
+        return h ? { ...e, ...h } : e;
+      }),
+    );
   }, []);
 
   // "На карте" from the sheet: drop to the map (the camera already flew to the
@@ -999,7 +1061,7 @@ export function App() {
         selected={sheetReady ? selected : null}
         query={filters.q}
         userPos={userPos}
-        items={shownItems}
+        items={displayItems}
         siblings={peek ?? undefined}
         metro={nearMetro}
         isFav={!!selected && fav.has(selected.event_id)}

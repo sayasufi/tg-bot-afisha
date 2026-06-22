@@ -246,6 +246,9 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
 
   const meta = categoryMeta(selected.category);
   const occ = detail?.occurrences?.[0];
+  // Title: from the (usually-hydrated) map item, falling back to the detail fetch — so a slim-index pin
+  // tapped before its in-view hydration landed still shows a title (a beat later, from detail).
+  const title = selected.title || detail?.canonical_title || "Событие";
   const address = occ?.address || null;
   const venue = selected.venue || occ?.venue || null;
   const venueId = occ?.venue_id ?? selected.venue_id ?? null; // map item carries it pre-detail
@@ -327,7 +330,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     // ?ref so the page's «Открыть» button is still a «Пойдём?» invite deep-link («<event>_<me>»).
     const me = (getWebApp() as any)?.initDataUnsafe?.user?.id;
     const shareUrl = `${window.location.origin}/v1/share/${selected.event_id}${me ? `?ref=${me}` : ""}`;
-    shareEvent({ title: selected.title, text: [dates, venue].filter(Boolean).join(" · "), url: shareUrl });
+    shareEvent({ title, text: [dates, venue].filter(Boolean).join(" · "), url: shareUrl });
     showToast("Ссылка готова к отправке", { icon: "share" });
   };
 
@@ -342,7 +345,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   return (
     <>
       <div className="sheet-veil" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={selected.title} ref={sheetRef} tabIndex={-1}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={title} ref={sheetRef} tabIndex={-1}>
         <div className="sheet__sticky">
           {swipeHint && hasSiblings && <div className="sheet__swipehint" aria-hidden="true">‹ листайте между событиями ›</div>}
       </div>
@@ -430,7 +433,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
 
       <div className="sheet__head">
         <h2 className="sheet__title">
-          <Highlight text={selected.title} query={query} />
+          <Highlight text={title} query={query} />
         </h2>
         {(() => {
           const s = detail?.saved_count ?? 0;

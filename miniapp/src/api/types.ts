@@ -26,6 +26,7 @@ export type MapResponse = {
   clusters: MapCluster[];
   items: EventItem[];
   total: number;
+  category_counts?: Record<string, number>; // server-side per-category totals (slim-index map → ticker)
 };
 
 export type EventOccurrence = {

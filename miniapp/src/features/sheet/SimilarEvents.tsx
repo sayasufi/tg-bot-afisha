@@ -34,7 +34,9 @@ export function SimilarEvents({
       return !Number.isNaN(t) && t <= endOfTodayMs;
     };
     return items
-      .filter((it) => it.event_id !== selected.event_id && it.lat != null && it.lon != null && onToday(it.date_start))
+      // `it.title` gate: with the slim-index map, off-view events aren't hydrated yet — skip them rather
+      // than render blank cards (the nearby similar events are in-view, so they hydrate fast).
+      .filter((it) => it.event_id !== selected.event_id && it.title && it.lat != null && it.lon != null && onToday(it.date_start))
       .map((it) => ({ it, d: distanceMeters(here, [it.lat as number, it.lon as number]) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, 8);

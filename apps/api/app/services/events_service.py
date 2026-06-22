@@ -491,6 +491,7 @@ class EventQueryService:
                     "date_end": r.date_end,
                     "price_min": float(r.price_min) if r.price_min is not None else None,
                     "open_now": _venue_open_now(r.venue_hours, now_msk),
+                    "venue_id": r.venue_id,  # small int — kept so the cluster peek can open the shared venue
                     "lat": float(r.lat) if r.lat is not None else None,
                     "lon": float(r.lon) if r.lon is not None else None,
                 }
