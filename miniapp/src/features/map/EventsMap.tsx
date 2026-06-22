@@ -262,6 +262,11 @@ export function EventsMap({
   // refreshes exactly when pins rebuild (pan/zoom/data), same cadence as before.
   const goNowRef = useRef(goNowIds);
   goNowRef.current = goNowIds;
+  // friendCounts on a ref too (mirrors goNow): the cluster reads it at BUILD time, so the friend badge
+  // refreshes on the next pins rebuild — it must NOT be a cluster dep, or a pan/zoom that changes which
+  // in-view events a friend saved would tear down + re-add every divIcon (the blink the user reported).
+  const friendCountsRef = useRef(friendCounts);
+  friendCountsRef.current = friendCounts;
   const [view, setView] = useState<{ bbox: Bbox; zoom: number } | null>(null);
 
   // At/above detail zoom we draw real pins; below it (when clustering is allowed)
@@ -411,15 +416,16 @@ export function EventsMap({
           <Marker
             key={item.event_id}
             position={[item.lat as number, item.lon as number]}
-            icon={pinIcon(item, false, goNowRef.current.has(item.event_id), friendCounts.get(item.event_id) ?? 0)}
+            icon={pinIcon(item, false, goNowRef.current.has(item.event_id), friendCountsRef.current.get(item.event_id) ?? 0)}
             eventHandlers={{ click: () => onSelect(item) }}
           />
         ))}
       </MarkerClusterGroup>
     );
-    // friendCounts in deps: the friend badge appears once the (async) friends-favorited fetch lands,
-    // not just on the next pan. goNow stays on the ref (refreshes on rebuild) — it's the minute tick.
-  }, [pins, friendCounts, onSelect, clusterHandlers]);
+    // NEITHER friendCounts NOR goNow are deps: both are read from refs at build time and refresh on the
+    // next natural pins rebuild (a set-changing pan/zoom). Keeping them out of the deps is what stops the
+    // async friends-favorited fetch / the minute tick from rebuilding every marker on a static or panning map.
+  }, [pins, onSelect, clusterHandlers]);
 
   // The FOCUSED event's highlighted (acid) pin, drawn once on top of everything.
   // It tracks `focused` — which persists after the sheet is closed and at any zoom
