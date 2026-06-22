@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 
 import httpx
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 from core.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, get_object, object_exists, public_url, put_image
@@ -286,8 +286,18 @@ def _digest_row(d: ImageDraw.ImageDraw, img: Image.Image, x: int, y: int, w: int
     tw, th = 300, h - 2 * pad  # thumbnail — WIDE landscape (~2:1) so it doesn't crop tall/portrait posters to a sliver
     photo = item.get("photo")
     try:
-        thumb = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (tw, th), Image.LANCZOS) if photo \
-            else Image.new("RGB", (tw, th), ACID)
+        if photo:
+            src = Image.open(io.BytesIO(photo)).convert("RGB")
+            # The WHOLE photo, contained (no crop), sits sharp on a BLURRED+darkened cover of itself that
+            # fills the box — so a tall/portrait poster shows fully instead of cropping to a sliver, with
+            # no empty bars (the blur fills the sides).
+            thumb = ImageEnhance.Brightness(
+                ImageOps.fit(src, (tw, th), Image.LANCZOS).filter(ImageFilter.GaussianBlur(14))
+            ).enhance(0.6)
+            fg = ImageOps.contain(src, (tw, th), Image.LANCZOS)
+            thumb.paste(fg, ((tw - fg.width) // 2, (th - fg.height) // 2))
+        else:
+            thumb = Image.new("RGB", (tw, th), ACID)
     except Exception:
         thumb = Image.new("RGB", (tw, th), ACID)
     img.paste(thumb, (x, y + pad))
