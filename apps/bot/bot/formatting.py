@@ -134,6 +134,18 @@ def reminder_caption(item: dict, now: datetime | None = None) -> str:
     return "\n".join(lines)
 
 
+def reminder_caption_card(item: dict, now: datetime | None = None) -> str:
+    """MINIMAL caption under the fully-composed reminder card — the card itself already shows when /
+    title / code / venue / price, so this is just the urgency line + title, enough for the chat-list
+    preview to read the event (vs a bare «Фото») without duplicating the whole wall."""
+    raw = str(item.get("title") or "Событие")
+    if len(raw) > 100:
+        raw = raw[:99].rstrip() + "…"
+    when = when_phrase(item.get("date_start"), item.get("date_end"), now)
+    head = f"{ce('🔔')} <b>{escape(when)}</b>\n" if when else ""
+    return f"{head}{escape(raw)}"
+
+
 _BOT_USERNAME = "okrestmap_bot"
 
 
