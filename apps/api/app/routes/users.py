@@ -115,9 +115,7 @@ class SettingsRequest(BaseModel):
     interests: list[str] | None = None  # categories picked at onboarding (warms «Для тебя»)
     notify_reminders: bool | None = None  # global mute for the per-event reminder DMs (default on)
     notify_digest: bool | None = None  # opt-in to the weekly digest DM (default off)
-    notify_friends: bool | None = None  # friend DMs + digest friends section (default on)
     friends_private: bool | None = None  # hide ALL my favourites from friends (default off)
-    is_searchable: bool | None = None  # findable by @username for friend requests (default off / opt-in)
 
 
 class FriendsFavoritedRequest(BaseModel):
@@ -674,7 +672,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
     user, uid = _auth(payload.init_data)
     changing = any(
         v is not None
-        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests, payload.notify_reminders, payload.notify_digest, payload.notify_friends, payload.friends_private, payload.is_searchable)
+        for v in (payload.theme, payload.city, payload.onboarded, payload.coach, payload.swipe_seen, payload.interests, payload.notify_reminders, payload.notify_digest, payload.friends_private)
     )
     if changing:
         # Only write the user row when actually changing a setting (a pure read on app
@@ -691,9 +689,7 @@ async def user_settings(payload: SettingsRequest, db: AsyncSession = Depends(get
             interests=payload.interests,
             notify_reminders=payload.notify_reminders,
             notify_digest=payload.notify_digest,
-            notify_friends=payload.notify_friends,
             friends_private=payload.friends_private,
-            is_searchable=payload.is_searchable,
         )
         # Turning notifications ON arms reminders for everything already in favourites (they're now the
         # single reminder source). Turning OFF needs nothing — delivery is gated on notify_reminders.

@@ -75,14 +75,14 @@ async def opted_in_users(db: AsyncSession, since: datetime) -> list[dict]:
     missed-run catchup: only users with no stamp, or a stamp older than this week's start."""
     rows = (
         await db.execute(
-            select(User.telegram_user_id, User.city_slug, User.interests, User.notify_friends).where(
+            select(User.telegram_user_id, User.city_slug, User.interests).where(
                 User.notify_digest.is_(True),
                 (User.last_digest_sent_at.is_(None)) | (User.last_digest_sent_at < since),
             )
         )
     ).all()
     return [
-        {"user_id": r[0], "city_slug": r[1], "interests": list(r[2] or []), "notify_friends": bool(r[3])}
+        {"user_id": r[0], "city_slug": r[1], "interests": list(r[2] or [])}
         for r in rows
     ]
 

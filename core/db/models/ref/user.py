@@ -34,15 +34,11 @@ class User(Base):
     # consent; this is a global mute). The weekly digest is strictly opt-in (default off).
     notify_reminders: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     notify_digest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    # Friend notifications — the «X добавил тебя в друзья» DM + the digest's friends section. Default ON
-    # (mutable), separate from notify_reminders (event reminders) and notify_digest (the roundup itself).
-    notify_friends: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    # Friend notifications (the «X добавил тебя» DM + the digest's friends section) and @username search are
+    # now ALWAYS ON — their opt-in columns (notify_friends / is_searchable) were dropped in migration 0031.
     # Friends kill-switch: when true, NONE of my favourites are shown to any friend (the blunt opt-out
     # next to the per-item hidden_from_friends). Default off — the friend edge itself is the consent.
     friends_private: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    # Opt-in (default DENY): when true, this account can be found by exact @username and sent a friend
-    # request. Default off so nobody is findable — or even confirmable as a user — without consenting.
-    is_searchable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     # Per-account version mixed into the «add me» friend-link HMAC. The first successful add via a link
     # bumps it, which invalidates that link (and any copies) — making the friend-link SINGLE-USE: no
     # broadcast, no manual reset. Doesn't touch anyone else's link or any event-invite sig. 0 = the legacy

@@ -83,9 +83,7 @@ def _settings_dict(user: User) -> dict:
         "interests": list(user.interests or []),
         "notify_reminders": user.notify_reminders,
         "notify_digest": user.notify_digest,
-        "notify_friends": user.notify_friends,
         "friends_private": user.friends_private,
-        "is_searchable": user.is_searchable,
     }
 
 
@@ -107,9 +105,7 @@ async def update_settings(
     interests: list[str] | None = None,
     notify_reminders: bool | None = None,
     notify_digest: bool | None = None,
-    notify_friends: bool | None = None,
     friends_private: bool | None = None,
-    is_searchable: bool | None = None,
 ) -> dict:
     """Set the provided settings (None = leave unchanged; "" clears city). No commit."""
     user = await db.get(User, telegram_user_id)
@@ -138,12 +134,8 @@ async def update_settings(
         user.notify_reminders = bool(notify_reminders)
     if notify_digest is not None:
         user.notify_digest = bool(notify_digest)
-    if notify_friends is not None:
-        user.notify_friends = bool(notify_friends)
     if friends_private is not None:
         user.friends_private = bool(friends_private)
-    if is_searchable is not None:
-        user.is_searchable = bool(is_searchable)
     db.add(user)
     return _settings_dict(user)
 
