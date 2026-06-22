@@ -156,6 +156,7 @@ export function FriendsPanel({
   const [activityFull, setActivityFull] = useState(false);
   const [friendsFull, setFriendsFull] = useState(false);
   const [tab, setTab] = useState<"activity" | "friends">("activity"); // two segments so the list isn't buried under the feed
+  const [loading, setLoading] = useState(true); // true until BOTH on-open fetches settle (no empty-state flash)
   const [disclose, setDisclose] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -169,11 +170,15 @@ export function FriendsPanel({
   };
   useEffect(() => {
     let alive = true;
-    manageFriends().then((s) => {
-      if (alive) apply(s);
-    });
-    fetchFriendsActivity().then((a) => {
-      if (alive && a) setActivity(a);
+    Promise.allSettled([
+      manageFriends().then((s) => {
+        if (alive) apply(s);
+      }),
+      fetchFriendsActivity().then((a) => {
+        if (alive && a) setActivity(a);
+      }),
+    ]).finally(() => {
+      if (alive) setLoading(false);
     });
     return () => {
       alive = false;
@@ -350,7 +355,9 @@ export function FriendsPanel({
         </div>
 
         {tab === "activity" ? (
-          activity.length > 0 ? (
+          loading ? (
+            <p className="panelview__hint">Загружаем…</p>
+          ) : activity.length > 0 ? (
             <>
               <div className="friends__feed">
                 {(activityFull ? activity : activity.slice(0, ACT_PREVIEW)).map((a, i) => (
@@ -363,12 +370,20 @@ export function FriendsPanel({
                 </button>
               )}
             </>
+          ) : friends.length === 0 ? (
+            // Cold start: nobody to chronicle yet → nudge + the invite right here (don't make them find the
+            // other tab for it).
+            <>
+              <p className="profile__friends-empty">Пока нет друзей. Добавь — и тут появится, что они сохраняют.</p>
+              <button type="button" className="friends__invite" onClick={inviteFriend}>
+                <span className="friends__invite-plus" aria-hidden="true">
+                  +
+                </span>
+                пригласить друга
+              </button>
+            </>
           ) : (
-            <p className="profile__friends-empty">
-              {friends.length === 0
-                ? "Пока нет друзей. Добавь их во вкладке «Друзья» — и тут появится, что они сохраняют."
-                : "Пока тихо — здесь появится, что сохраняют твои друзья."}
-            </p>
+            <p className="profile__friends-empty">Пока тихо — здесь появится, что сохраняют твои друзья.</p>
           )
         ) : (
           <>

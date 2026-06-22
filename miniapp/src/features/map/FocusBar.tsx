@@ -34,7 +34,7 @@ export function FocusBar({
             {meta.label}
             {when ? ` · ${when}` : ""}
           </span>
-          <span className="focusbar__title">{event.title}</span>
+          <span className="focusbar__title">{event.title || "Событие"}</span>
         </span>
       </button>
       <button type="button" className="focusbar__close" aria-label="Снять выделение" onClick={onClose}>

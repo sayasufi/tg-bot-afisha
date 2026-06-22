@@ -32,7 +32,7 @@ function ClusterRow({
       <span className="crow__body">
         <span className="crow__title">
           {go.eligible && <i className="crow__dot" aria-hidden="true" />}
-          {item.title}
+          {item.title || "Событие"}
         </span>
         <span className="crow__meta">
           {go.eligible && <span className="crow__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}

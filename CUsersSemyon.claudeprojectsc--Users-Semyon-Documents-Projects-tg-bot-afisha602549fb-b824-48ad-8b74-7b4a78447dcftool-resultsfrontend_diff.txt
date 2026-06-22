@@ -1,0 +1,810 @@
+diff --git a/miniapp/src/features/panel/FriendProfile.tsx b/miniapp/src/features/panel/FriendProfile.tsx
+index fc942da..edeb90b 100644
+--- a/miniapp/src/features/panel/FriendProfile.tsx
++++ b/miniapp/src/features/panel/FriendProfile.tsx
+@@ -6,6 +6,7 @@ import type { LatLon } from "../../lib/distance";
+ import { IconClose } from "../../lib/icons";
+ import { safeHttpUrl } from "../../lib/url";
+ import { CatalogFeed } from "./CatalogFeed";
++import { TasteCard } from "./TasteCard";
+ 
+ // A friend's profile — what they've saved. Opened from the Friends list. Server-gated to mutual
+ // friends; respects the friend's privacy (a globally-private friend shows no saves, hidden items are
+@@ -61,13 +62,8 @@ export function FriendProfile({
+ 
+   return (
+     <div className="panelview">
+-      <header className="panelview__head">
+-        <h2>{(friend.name || "друг").toLowerCase()}</h2>
+-        <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
+-          <IconClose size={18} />
+-        </button>
+-      </header>
+-      <div className="panelview__scroll">
++      <div className="panelview__scroll friendprof__scroll">
++        {/* No panel heading — the avatar + name IS the heading; close (×) sits to its right. */}
+         <div className="profile">
+           <div className="profile__avatar" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
+             {av ? "" : initial}
+@@ -76,9 +72,29 @@ export function FriendProfile({
+             <div className="profile__name">{friend.name || "Друг"}</div>
+             <div className="profile__handle">{friend.username ? `@${friend.username}` : "в друзьях"}</div>
+           </div>
++          <button type="button" className="panelview__close friendprof__close" aria-label="Закрыть" onClick={onClose}>
++            <IconClose size={18} />
++          </button>
+         </div>
+ 
+-        {both > 0 && <div className="friendprof__overlap">вы оба сохранили · {both}</div>}
++        {events.length > 0 && (
++          <>
++            {/* Same stat hero as your own profile — «просмотрено» is device-local (no friend equivalent),
++                so it's THEIR saves + your overlap. */}
++            <div className="profile__hero profile__hero--2">
++              <div className="profile__stat">
++                <span className="hero-num">{events.length}</span>
++                <span className="profile__statlabel">сохранено</span>
++              </div>
++              <div className="profile__stat">
++                <span className="hero-num">{both}</span>
++                <span className="profile__statlabel">общих</span>
++              </div>
++            </div>
++            {/* The same «кружочки» as your own profile — a constellation of THEIR taste by genre. */}
++            <TasteCard events={events} title={friend.name ? `Вкус ${friend.name}` : "Вкус"} />
++          </>
++        )}
+ 
+         <div className="recs__section">в избранном</div>
+         {loading ? (
+diff --git a/miniapp/src/features/panel/FriendsPanel.tsx b/miniapp/src/features/panel/FriendsPanel.tsx
+index ae52672..019375a 100644
+--- a/miniapp/src/features/panel/FriendsPanel.tsx
++++ b/miniapp/src/features/panel/FriendsPanel.tsx
+@@ -1,32 +1,93 @@
+ import { type ReactNode, useEffect, useState } from "react";
+ 
++import type { EventItem } from "../../api/types";
+ import {
+   createFriendLink,
++  fetchFriendsActivity,
+   findFriend,
+   type FoundFriend,
+   type Friend,
++  type FriendActivity,
+   type FriendsState,
+   manageFriends,
+ } from "../../api/users";
+-import { IconClose } from "../../lib/icons";
++import { categoryMeta } from "../../lib/categories";
++import { IconClose, IconSearch } from "../../lib/icons";
+ import { haptic, shareEvent } from "../../lib/telegram";
+ import { showToast } from "../../lib/toast";
+ import { safeHttpUrl } from "../../lib/url";
+ import { FriendDisclosure } from "./FriendDisclosure";
+ 
+-// One person row: avatar · name/@handle (taps to open their profile, if onOpen) · trailing action(s).
+-// Module-level so it isn't re-created (rows re-mounted, avatars flickering) on every parent render.
+-function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) => void; children: ReactNode }) {
++// «любит концерты, театр» from a friend's 1-2 top category slugs — a lighter, more human signal than a
++// bare save count. Empty when they have no visible saves (new / private friend).
++function tasteLabel(cats?: string[]): string {
++  if (!cats || !cats.length) return "";
++  return `любит ${cats.map((c) => categoryMeta(c).label.toLowerCase()).join(", ")}`;
++}
++
++// In the feed, lead with just the MAIN title — drop a trailing subtitle after the first «. » / « — » / « · »
++// (event titles are «Main. Subtitle»). The full title still shows in the event card. Guarded to ≥6 chars so
++// it never cuts to a stub; the CSS still clamps to one line as a backstop.
++function shortTitle(t: string): string {
++  const s = (t || "").trim();
++  const m = s.match(/^(.{6,}?)(?:\.\s|\s[—–·|]\s)/);
++  return (m ? m[1] : s).trim();
++}
++
++const ACT_PREVIEW = 8; // chronicle rows shown before «вся хроника» (the API already caps the feed at 24)
++const FR_PREVIEW = 12; // friend rows shown before «показать всех»
++
++// Coarse «когда» label for the activity feed (the API timestamps are minute-grained at best).
++function timeAgo(iso: string): string {
++  const t = Date.parse(iso);
++  if (Number.isNaN(t)) return "";
++  const sec = Math.max(0, (Date.now() - t) / 1000);
++  if (sec < 90) return "только что";
++  const min = Math.round(sec / 60);
++  if (min < 60) return `${min} мин назад`;
++  const hr = Math.round(min / 60);
++  if (hr < 24) return `${hr} ч назад`;
++  const d = Math.round(hr / 24);
++  if (d === 1) return "вчера";
++  if (d < 7) return `${d} дн назад`;
++  return `${Math.round(d / 7)} нед назад`;
++}
++
++function Avatar({ f }: { f: Friend }) {
+   const av = safeHttpUrl(f.photo_url);
+-  const initial = (f.name || "?").slice(0, 1).toUpperCase();
++  return (
++    <span className="profile__friend-av" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
++      {av ? "" : (f.name || f.username || "?").slice(0, 1).toUpperCase()}
++    </span>
++  );
++}
++
++// One person row: avatar · name + (taste/@handle) (taps to open their profile, if onOpen) · trailing
++// action(s). `subtitle` overrides the default @handle line (the friend list passes the taste line).
++// Module-level so it isn't re-created (rows re-mounted, avatars flickering) on every parent render.
++function FriendRow({
++  f,
++  onOpen,
++  subtitle,
++  children,
++}: {
++  f: Friend;
++  onOpen?: (f: Friend) => void;
++  subtitle?: string;
++  children?: ReactNode;
++}) {
+   const inner = (
+     <>
+-      <span className="profile__friend-av" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
+-        {av ? "" : initial}
+-      </span>
++      <Avatar f={f} />
+       <span className="profile__friend-id">
+-        <span className="profile__friend-name">{f.name || "Друг"}</span>
+-        {f.username && <span className="profile__friend-handle">@{f.username}</span>}
++        <span className="profile__friend-name">{f.name || (f.username ? `@${f.username}` : "Друг")}</span>
++        {subtitle !== undefined ? (
++          subtitle ? (
++            <span className="profile__friend-sub">{subtitle}</span>
++          ) : null
++        ) : (
++          f.username && <span className="profile__friend-handle">@{f.username}</span>
++        )}
+       </span>
+     </>
+   );
+@@ -49,29 +110,54 @@ function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) =>
+   );
+ }
+ 
+-// «Друзья» — its own screen. Incoming requests (accept/decline) + confirmed friends (unfriend) + the
+-// privacy kill-switch. A friend appears here once BOTH sides agreed (you accepted a request, or you
+-// each invited the other). onFriendsChange keeps the menu badge (friend count) in sync.
++// One «Хроника друзей» row — friend avatar leads, then the event TITLE (primary) over a quiet «кто · когда»
++// byline, with the event poster on the right. A chronicle of friends' finds. Taps into the sheet.
++function ActivityRow({ a, onOpen }: { a: FriendActivity; onOpen: (e: EventItem) => void }) {
++  const who = a.friend.name || (a.friend.username ? `@${a.friend.username}` : "друг");
++  const cover = safeHttpUrl(a.event.primary_image_url);
++  return (
++    <button type="button" className="friends__act" onClick={() => onOpen(a.event)}>
++      <Avatar f={a.friend} />
++      <span className="friends__act-body">
++        <span className="friends__act-ev">{shortTitle(a.event.title)}</span>
++        <span className="friends__act-meta">
++          <span className="friends__act-who">{who}</span> сохранил · {timeAgo(a.at)}
++        </span>
++      </span>
++      <span
++        className={`friends__act-cover${cover ? "" : " friends__act-cover--ph"}`}
++        style={cover ? { backgroundImage: `url("${cover}")` } : undefined}
++        aria-hidden="true"
++      />
++    </button>
++  );
++}
++
++// «Друзья» — its own screen. Two mechanics: the friends' recent-saves FEED right under the header (tap →
++// that event), and the friend LIST below (tap → their profile, with a «любит …» taste line). @username
++// search is tucked behind a header icon; the invite link sits quietly at the bottom. The «скрыть от
++// друзей» kill-switch now lives in Profile. onFriendsChange keeps the menu badge (friend count) in sync.
+ export function FriendsPanel({
+-  friendsPrivate,
+-  onToggleFriendsPrivate,
+-  isSearchable,
+-  onToggleSearchable,
+   onFriendsChange,
+   onOpenFriend,
++  onOpenEvent,
+   onClose,
+ }: {
+-  friendsPrivate: boolean;
+-  onToggleFriendsPrivate: (on: boolean) => void;
+-  isSearchable: boolean;
+-  onToggleSearchable: (on: boolean) => void;
+   onFriendsChange?: (n: number) => void;
+   onOpenFriend?: (f: Friend) => void;
++  onOpenEvent: (e: EventItem) => void;
+   onClose: () => void;
+ }) {
+   const [friends, setFriends] = useState<Friend[]>([]);
+   const [requests, setRequests] = useState<Friend[]>([]);
++  const [activity, setActivity] = useState<FriendActivity[]>([]);
++  // Scale: the feed/list can grow, so cap each to a scannable preview with a «показать всё» expander —
++  // the chronicle never buries the friend list, and a big roster doesn't make an endless scroll.
++  const [activityFull, setActivityFull] = useState(false);
++  const [friendsFull, setFriendsFull] = useState(false);
++  const [tab, setTab] = useState<"activity" | "friends">("activity"); // two segments so the list isn't buried under the feed
+   const [disclose, setDisclose] = useState(false);
++  const [searchOpen, setSearchOpen] = useState(false);
+   const [query, setQuery] = useState("");
+   const [searching, setSearching] = useState(false);
+   const [found, setFound] = useState<FoundFriend | null>(null); // null = no search; {found:false} = miss
+@@ -86,6 +172,9 @@ export function FriendsPanel({
+     manageFriends().then((s) => {
+       if (alive) apply(s);
+     });
++    fetchFriendsActivity().then((a) => {
++      if (alive && a) setActivity(a);
++    });
+     return () => {
+       alive = false;
+     };
+@@ -165,141 +254,188 @@ export function FriendsPanel({
+     <div className="panelview">
+       <header className="panelview__head">
+         <h2>друзья</h2>
+-        <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
+-          <IconClose size={18} />
+-        </button>
++        <span className="panelview__head-actions">
++          <button
++            type="button"
++            className={`panelview__icon${searchOpen ? " panelview__icon--on" : ""}`}
++            aria-label="Найти друга по @username"
++            aria-pressed={searchOpen}
++            onClick={() => setSearchOpen((o) => !o)}
++          >
++            <IconSearch size={18} />
++          </button>
++          <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
++            <IconClose size={18} />
++          </button>
++        </span>
+       </header>
+       <div className="panelview__scroll">
+-        <button type="button" className="friends__invite" onClick={inviteFriend}>
+-          пригласить друга в окрест →
+-        </button>
++        {searchOpen && (
++          <>
++            <div className="friends__search">
++              <input
++                className="friends__search-input"
++                type="text"
++                inputMode="text"
++                autoCapitalize="none"
++                autoCorrect="off"
++                spellCheck={false}
++                autoFocus
++                placeholder="найти по @username"
++                value={query}
++                onChange={(e) => setQuery(e.target.value)}
++                onKeyDown={(e) => {
++                  if (e.key === "Enter") void doSearch();
++                }}
++                aria-label="Найти друга по @username"
++              />
++              <button
++                type="button"
++                className="friends__search-go"
++                onClick={() => void doSearch()}
++                disabled={searching || !handle()}
++              >
++                {searching ? "…" : "найти"}
++              </button>
++            </div>
++            {found &&
++              (found.found && found.user ? (
++                <div className="profile__friends">
++                  <FriendRow f={found.user} onOpen={found.relation === "friends" ? onOpenFriend : undefined}>
++                    {found.relation === "friends" ? (
++                      <span className="friends__found-state">вы друзья</span>
++                    ) : found.relation === "pending_out" ? (
++                      <span className="friends__found-state">заявка отправлена</span>
++                    ) : found.relation === "pending_in" ? (
++                      <button type="button" className="profile__req-accept" onClick={() => acceptFound(found.user!)}>
++                        принять
++                      </button>
++                    ) : (
++                      <button type="button" className="profile__req-accept" onClick={() => void sendRequest()}>
++                        добавить
++                      </button>
++                    )}
++                  </FriendRow>
++                </div>
++              ) : (
++                <p className="profile__friends-empty">Никого не нашли по этому нику.</p>
++              ))}
++          </>
++        )}
+ 
+-        <div className="friends__search">
+-          <input
+-            className="friends__search-input"
+-            type="text"
+-            inputMode="text"
+-            autoCapitalize="none"
+-            autoCorrect="off"
+-            spellCheck={false}
+-            placeholder="найти по @username"
+-            value={query}
+-            onChange={(e) => setQuery(e.target.value)}
+-            onKeyDown={(e) => {
+-              if (e.key === "Enter") void doSearch();
+-            }}
+-            aria-label="Найти друга по @username"
+-          />
++        <div className="friends__tabs" role="tablist" aria-label="Друзья">
+           <button
+             type="button"
+-            className="friends__search-go"
+-            onClick={() => void doSearch()}
+-            disabled={searching || !handle()}
++            role="tab"
++            aria-selected={tab === "activity"}
++            className={`friends__tab${tab === "activity" ? " friends__tab--on" : ""}`}
++            onClick={() => setTab("activity")}
+           >
+-            {searching ? "…" : "найти"}
++            Хроника
++            {activity.length > 0 && <span className="friends__tab-count">{activity.length}</span>}
++          </button>
++          <button
++            type="button"
++            role="tab"
++            aria-selected={tab === "friends"}
++            className={`friends__tab${tab === "friends" ? " friends__tab--on" : ""}`}
++            onClick={() => setTab("friends")}
++          >
++            Друзья
++            {friends.length > 0 && (
++              <span className="friends__tab-count">{friends.length > 99 ? "99+" : friends.length}</span>
++            )}
++            {requests.length > 0 && <span className="friends__tab-badge">{requests.length}</span>}
+           </button>
+         </div>
+-        {found &&
+-          (found.found && found.user ? (
+-            <div className="profile__friends">
+-              <FriendRow f={found.user} onOpen={found.relation === "friends" ? onOpenFriend : undefined}>
+-                {found.relation === "friends" ? (
+-                  <span className="friends__found-state">вы друзья</span>
+-                ) : found.relation === "pending_out" ? (
+-                  <span className="friends__found-state">заявка отправлена</span>
+-                ) : found.relation === "pending_in" ? (
+-                  <button type="button" className="profile__req-accept" onClick={() => acceptFound(found.user!)}>
+-                    принять
+-                  </button>
+-                ) : (
+-                  <button type="button" className="profile__req-accept" onClick={() => void sendRequest()}>
+-                    добавить
+-                  </button>
+-                )}
+-              </FriendRow>
+-            </div>
++
++        {tab === "activity" ? (
++          activity.length > 0 ? (
++            <>
++              <div className="friends__feed">
++                {(activityFull ? activity : activity.slice(0, ACT_PREVIEW)).map((a, i) => (
++                  <ActivityRow key={`${a.friend.id}-${a.event.event_id}-${i}`} a={a} onOpen={onOpenEvent} />
++                ))}
++              </div>
++              {!activityFull && activity.length > ACT_PREVIEW && (
++                <button type="button" className="friends__more" onClick={() => setActivityFull(true)}>
++                  вся хроника · ещё {activity.length - ACT_PREVIEW} →
++                </button>
++              )}
++            </>
+           ) : (
+-            <p className="profile__friends-empty">Никого не нашли по этому нику.</p>
+-          ))}
+-        {requests.length > 0 && (
++            <p className="profile__friends-empty">
++              {friends.length === 0
++                ? "Пока нет друзей. Добавь их во вкладке «Друзья» — и тут появится, что они сохраняют."
++                : "Пока тихо — здесь появится, что сохраняют твои друзья."}
++            </p>
++          )
++        ) : (
+           <>
+-            <div className="recs__section">Заявки</div>
+-            <div className="profile__friends">
+-              {requests.map((f) => (
+-                <FriendRow key={f.id} f={f}>
+-                  <span className="profile__req-actions">
+-                    <button type="button" className="profile__req-accept" onClick={() => accept(f.id)}>
+-                      принять
+-                    </button>
+-                    <button
+-                      type="button"
+-                      className="profile__friend-x"
+-                      aria-label={`Отклонить ${f.name || "заявку"}`}
+-                      onClick={() => decline(f.id)}
++            {requests.length > 0 && (
++              <>
++                <div className="recs__section">Заявки</div>
++                <div className="profile__friends">
++                  {requests.map((f) => (
++                    <FriendRow key={f.id} f={f}>
++                      <span className="profile__req-actions">
++                        <button type="button" className="profile__req-accept" onClick={() => accept(f.id)}>
++                          принять
++                        </button>
++                        <button
++                          type="button"
++                          className="profile__friend-x"
++                          aria-label={`Отклонить ${f.name || "заявку"}`}
++                          onClick={() => decline(f.id)}
++                        >
++                          ×
++                        </button>
++                      </span>
++                    </FriendRow>
++                  ))}
++                </div>
++              </>
++            )}
++            {friends.length > 0 ? (
++              <>
++                <div className="profile__friends">
++                  {(friendsFull ? friends : friends.slice(0, FR_PREVIEW)).map((f) => (
++                    <FriendRow
++                      key={f.id}
++                      f={f}
++                      onOpen={onOpenFriend}
++                      subtitle={tasteLabel(f.top_cats) || (f.username ? `@${f.username}` : "")}
+                     >
+-                      ×
+-                    </button>
+-                  </span>
+-                </FriendRow>
+-              ))}
+-            </div>
+-          </>
+-        )}
++                      <button
++                        type="button"
++                        className="profile__friend-x"
++                        aria-label={`Убрать ${f.name || "друга"} из друзей`}
++                        onClick={() => remove(f.id)}
++                      >
++                        ×
++                      </button>
++                    </FriendRow>
++                  ))}
++                </div>
++                {!friendsFull && friends.length > FR_PREVIEW && (
++                  <button type="button" className="friends__more" onClick={() => setFriendsFull(true)}>
++                    показать всех · {friends.length} →
++                  </button>
++                )}
++              </>
++            ) : (
++              <p className="profile__friends-empty">
++                Поделись событием через «Пойдём?» — кто примет приглашение, сразу станет другом. После этого
++                вы будете видеть, что друг у друга в избранном.
++              </p>
++            )}
+ 
+-        <div className="recs__section">Друзья</div>
+-        {friends.length > 0 ? (
+-          <div className="profile__friends">
+-            {friends.map((f) => (
+-              <FriendRow key={f.id} f={f} onOpen={onOpenFriend}>
+-                <button
+-                  type="button"
+-                  className="profile__friend-x"
+-                  aria-label={`Убрать ${f.name || "друга"} из друзей`}
+-                  onClick={() => remove(f.id)}
+-                >
+-                  ×
+-                </button>
+-              </FriendRow>
+-            ))}
+-          </div>
+-        ) : (
+-          <p className="profile__friends-empty">
+-            Поделись событием через «Пойдём?» — кто примет приглашение, сразу станет другом. После этого вы
+-            будете видеть, что друг у друга в избранном.
+-          </p>
++            <button type="button" className="friends__invite" onClick={inviteFriend}>
++              <span className="friends__invite-plus" aria-hidden="true">+</span>
++              пригласить друга
++            </button>
++          </>
+         )}
+-
+-        <button
+-          type="button"
+-          className={`profile__switch${friendsPrivate ? " profile__switch--on" : ""}`}
+-          role="switch"
+-          aria-checked={friendsPrivate}
+-          onClick={() => onToggleFriendsPrivate(!friendsPrivate)}
+-        >
+-          <span className="profile__switch-text">
+-            <span className="profile__switch-label">Скрыть от друзей</span>
+-            <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь — ни в профиле, ни на карте</span>
+-          </span>
+-          <span className="profile__switch-track" aria-hidden="true">
+-            <span className="profile__switch-knob" />
+-          </span>
+-        </button>
+-
+-        <button
+-          type="button"
+-          className={`profile__switch${isSearchable ? " profile__switch--on" : ""}`}
+-          role="switch"
+-          aria-checked={isSearchable}
+-          onClick={() => onToggleSearchable(!isSearchable)}
+-        >
+-          <span className="profile__switch-text">
+-            <span className="profile__switch-label">Находить меня по @username</span>
+-            <span className="profile__switch-sub">По умолчанию выключено. Включи — и друзья смогут найти тебя по нику и отправить заявку</span>
+-          </span>
+-          <span className="profile__switch-track" aria-hidden="true">
+-            <span className="profile__switch-knob" />
+-          </span>
+-        </button>
+       </div>
+       {disclose && <FriendDisclosure onClose={() => setDisclose(false)} />}
+     </div>
+diff --git a/miniapp/src/features/panel/ProfilePanel.tsx b/miniapp/src/features/panel/ProfilePanel.tsx
+index 19a88c3..475fd20 100644
+--- a/miniapp/src/features/panel/ProfilePanel.tsx
++++ b/miniapp/src/features/panel/ProfilePanel.tsx
+@@ -1,23 +1,11 @@
+-import { useEffect, useMemo, useState } from "react";
++import { useEffect, useState } from "react";
+ 
+ import { fetchEventsByIds, type City, type EventItem } from "../../api/client";
+ import { viewedCount } from "../../lib/affinity";
+-import { categoryMeta } from "../../lib/categories";
+-import { CategoryIcon, IconClose } from "../../lib/icons";
++import { IconClose } from "../../lib/icons";
+ import type { ThemeName, TgUser } from "../../lib/telegram";
+ import { safeHttpUrl } from "../../lib/url";
+-
+-// Pixel offset from the box centre for circle i of n, by share rank — a tight OVERLAPPING RING with
+-// a touch of spiral: the dominant leads up-left, each circle overlaps its neighbours, the radius
+-// grows a hair per step (the spiral). PX (not %) so it never stretches/clips on a wide box.
+-function clusterPos(i: number, n: number): { dx: number; dy: number } {
+-  const step = (2 * Math.PI) / Math.max(n, 3);
+-  const angle = -2.2 + i * step;
+-  const p = 48 + i * 4; // ring radius px, slight growth = spiral
+-  return { dx: Math.cos(angle) * p * 1.1, dy: Math.sin(angle) * p };
+-}
+-
+-const eventsBasis = (n: number) => `основано на ${n} ${n === 1 ? "сохранённом событии" : "сохранённых событиях"}`;
++import { TasteCard } from "./TasteCard";
+ 
+ export function ProfilePanel({
+   user,
+@@ -29,8 +17,8 @@ export function ProfilePanel({
+   onToggleReminders,
+   notifyDigest,
+   onToggleDigest,
+-  notifyFriends,
+-  onToggleNotifyFriends,
++  friendsPrivate,
++  onToggleFriendsPrivate,
+   theme = "light",
+   onToggleTheme,
+   onOpenFavorites,
+@@ -45,8 +33,8 @@ export function ProfilePanel({
+   onToggleReminders: (on: boolean) => void;
+   notifyDigest: boolean;
+   onToggleDigest: (on: boolean) => void;
+-  notifyFriends: boolean;
+-  onToggleNotifyFriends: (on: boolean) => void;
++  friendsPrivate: boolean;
++  onToggleFriendsPrivate: (on: boolean) => void;
+   theme?: ThemeName;
+   onToggleTheme?: () => void;
+   onOpenFavorites: () => void;
+@@ -73,14 +61,6 @@ export function ProfilePanel({
+     fetchEventsByIds(ids).then(setFavs);
+   }, [idsKey]);
+ 
+-  // Ranked favourite genres (for the card caption).
+-  const taste = useMemo(() => {
+-    const counts = new Map<string, number>();
+-    for (const it of favs) counts.set(it.category, (counts.get(it.category) || 0) + 1);
+-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([key, n]) => ({ key, n, meta: categoryMeta(key) }));
+-  }, [favs]);
+-  const hasTaste = favs.length > 0;
+-
+   return (
+     <div className="panelview">
+       <header className="panelview__head">
+@@ -140,54 +120,8 @@ export function ProfilePanel({
+           )}
+         </div>
+ 
+-        {/* «Твой вкус» — a card whose visualisation IS a contact-sheet of your saved-event posters
+-            (your taste as images). Tap → Избранное. Empty → placeholder grid + a nudge. */}
+-        <button type="button" className="tastecard" aria-label="Твой вкус — открыть избранное" onClick={onOpenFavorites}>
+-          <span className="tastecard__head">
+-            <span className="tastecard__title">Твой вкус</span>
+-            <span className="tastecard__chev" aria-hidden="true">→</span>
+-          </span>
+-          {hasTaste ? (
+-            <>
+-              <span className="tastecard__cluster">
+-                {taste.slice(0, 6).map((t, i, arr) => {
+-                  const d = 64 + Math.round((t.n / arr[0].n) * 28); // 64..92px, by genre share
+-                  const pos = clusterPos(i, arr.length);
+-                  const top = i === 0;
+-                  return (
+-                    <span
+-                      key={t.key}
+-                      className={`tcircle${top ? " tcircle--top" : ""}`}
+-                      style={{ width: `${d}px`, height: `${d}px`, left: `calc(50% + ${pos.dx}px)`, top: `calc(50% + ${pos.dy}px)`, zIndex: top ? 20 : i + 1 }}
+-                    >
+-                      <CategoryIcon cat={t.key} size={Math.round(d * 0.28)} />
+-                      <span className="tcircle__label">{t.meta.label.toLowerCase()}</span>
+-                      <span className="tcircle__n">{t.n}</span>
+-                    </span>
+-                  );
+-                })}
+-                {/* Accent dots fill the gaps — the «constellation» finish. */}
+-                <span className="tdot tdot--acid" style={{ left: "84%", top: "18%" }} />
+-                <span className="tdot" style={{ left: "14%", top: "26%" }} />
+-                <span className="tdot tdot--acid" style={{ left: "76%", top: "84%" }} />
+-                <span className="tdot" style={{ left: "26%", top: "86%" }} />
+-              </span>
+-              <span className="tastecard__basis">{eventsBasis(favs.length)}</span>
+-            </>
+-          ) : (
+-            <>
+-              <span className="tastecard__nudge">Пока ничего нет. Сохрани несколько событий — и здесь сложится твой культурный профиль.</span>
+-              <span className="tastecard__cluster">
+-                {[86, 70, 74, 64, 68].map((d, i) => {
+-                  const pos = clusterPos(i, 5);
+-                  return (
+-                    <span key={i} className="tcircle tcircle--empty" style={{ width: `${d}px`, height: `${d}px`, left: `calc(50% + ${pos.dx}px)`, top: `calc(50% + ${pos.dy}px)` }} />
+-                  );
+-                })}
+-              </span>
+-            </>
+-          )}
+-        </button>
++        {/* «Твой вкус» — a constellation of your saved-event genres (the «кружочки»); tap → Избранное. */}
++        <TasteCard events={favs} title="Твой вкус" onTap={onOpenFavorites} />
+ 
+         {/* Settings, grouped under their own header below the passport. */}
+         <div className="recs__section">Уведомления</div>
+@@ -223,16 +157,17 @@ export function ProfilePanel({
+           </span>
+         </button>
+ 
++        <div className="recs__section">Приватность</div>
+         <button
+           type="button"
+-          className={`profile__switch${notifyFriends ? " profile__switch--on" : ""}`}
++          className={`profile__switch${friendsPrivate ? " profile__switch--on" : ""}`}
+           role="switch"
+-          aria-checked={notifyFriends}
+-          onClick={() => onToggleNotifyFriends(!notifyFriends)}
++          aria-checked={friendsPrivate}
++          onClick={() => onToggleFriendsPrivate(!friendsPrivate)}
+         >
+           <span className="profile__switch-text">
+-            <span className="profile__switch-label">О друзьях</span>
+-            <span className="profile__switch-sub">Сообщать, когда тебя добавили в друзья, и показывать в афише, что сохранили друзья</span>
++            <span className="profile__switch-label">Скрыть от друзей</span>
++            <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь — ни в профиле, ни на карте</span>
+           </span>
+           <span className="profile__switch-track" aria-hidden="true">
+             <span className="profile__switch-knob" />
+diff --git a/miniapp/src/features/panel/TasteCard.tsx b/miniapp/src/features/panel/TasteCard.tsx
+new file mode 100644
+index 0000000..02de8c2
+--- /dev/null
++++ b/miniapp/src/features/panel/TasteCard.tsx
+@@ -0,0 +1,102 @@
++import { useMemo } from "react";
++
++import { type EventItem } from "../../api/client";
++import { categoryMeta } from "../../lib/categories";
++import { CategoryIcon } from "../../lib/icons";
++
++// Pixel offset from the box centre for circle i of n, by share rank — a tight OVERLAPPING RING with a
++// touch of spiral: the dominant leads up-left, each circle overlaps its neighbours, the radius grows a
++// hair per step. PX (not %) so it never stretches/clips on a wide box.
++function clusterPos(i: number, n: number): { dx: number; dy: number } {
++  const step = (2 * Math.PI) / Math.max(n, 3);
++  const angle = -2.2 + i * step;
++  const p = 48 + i * 4; // ring radius px, slight growth = spiral
++  return { dx: Math.cos(angle) * p * 1.1, dy: Math.sin(angle) * p };
++}
++
++const eventsBasis = (n: number) => `основано на ${n} ${n === 1 ? "сохранённом событии" : "сохранённых событиях"}`;
++
++// «Вкус» — a constellation of category circles (one per genre, sized by share) computed from a set of
++// saved events. Reused by your own Profile (tappable → Избранное) and a friend's profile (a static viz of
++// their taste, the same «кружочки»). `onTap` omitted → renders as a non-interactive card.
++export function TasteCard({ events, title, onTap }: { events: EventItem[]; title: string; onTap?: () => void }) {
++  const taste = useMemo(() => {
++    const counts = new Map<string, number>();
++    for (const it of events) counts.set(it.category, (counts.get(it.category) || 0) + 1);
++    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([key, n]) => ({ key, n, meta: categoryMeta(key) }));
++  }, [events]);
++  const hasTaste = events.length > 0;
++
++  const inner = (
++    <>
++      <span className="tastecard__head">
++        <span className="tastecard__title">{title}</span>
++        {onTap && (
++          <span className="tastecard__chev" aria-hidden="true">
++            →
++          </span>
++        )}
++      </span>
++      {hasTaste ? (
++        <>
++          <span className="tastecard__cluster">
++            {taste.slice(0, 6).map((t, i, arr) => {
++              const d = 64 + Math.round((t.n / arr[0].n) * 28); // 64..92px, by genre share
++              const pos = clusterPos(i, arr.length);
++              const top = i === 0;
++              return (
++                <span
++                  key={t.key}
++                  className={`tcircle${top ? " tcircle--top" : ""}`}
++                  style={{
++                    width: `${d}px`,
++                    height: `${d}px`,
++                    left: `calc(50% + ${pos.dx}px)`,
++                    top: `calc(50% + ${pos.dy}px)`,
++                    zIndex: top ? 20 : i + 1,
++                  }}
++                >
++                  <CategoryIcon cat={t.key} size={Math.round(d * 0.28)} />
++                  <span className="tcircle__label">{t.meta.label.toLowerCase()}</span>
++                  <span className="tcircle__n">{t.n}</span>
++                </span>
++              );
++            })}
++            {/* Accent dots fill the gaps — the «constellation» finish. */}
++            <span className="tdot tdot--acid" style={{ left: "84%", top: "18%" }} />
++            <span className="tdot" style={{ left: "14%", top: "26%" }} />
++            <span className="tdot tdot--acid" style={{ left: "76%", top: "84%" }} />
++            <span className="tdot" style={{ left: "26%", top: "86%" }} />
++          </span>
++          <span className="tastecard__basis">{eventsBasis(events.length)}</span>
++        </>
++      ) : (
++        <>
++          <span className="tastecard__nudge">
++            Пока ничего нет. Сохрани несколько событий — и здесь сложится твой культурный профиль.
++          </span>
++          <span className="tastecard__cluster">
++            {[86, 70, 74, 64, 68].map((d, i) => {
++              const pos = clusterPos(i, 5);
++              return (
++                <span
++                  key={i}
++                  className="tcircle tcircle--empty"
++                  style={{ width: `${d}px`, height: `${d}px`, left: `calc(50% + ${pos.dx}px)`, top: `calc(50% + ${pos.dy}px)` }}
++                />
++              );
++            })}
++          </span>
++        </>
++      )}
++    </>
++  );
++
++  return onTap ? (
++    <button type="button" className="tastecard" aria-label={`${title} — открыть избранное`} onClick={onTap}>
++      {inner}
++    </button>
++  ) : (
++    <div className="tastecard tastecard--static">{inner}</div>
++  );
++}

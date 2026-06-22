@@ -25,13 +25,12 @@ services:
       POSTGRES_USER: afisha
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-afisha}
     ports:
-      # Exposed on 0.0.0.0 for DIRECT external DB access (DBeaver). The app itself never uses this host
-      # port — it reaches the DB over the compose network (odyssey:6432 → postgres:5432). PROD IS PROTECTED
-      # BY TWO LAYERS: (1) the `afisha` role has a STRONG password (rotated off the `afisha:afisha` default),
-      # and (2) a server-side iptables DOCKER-USER rule that only lets the owner's IP reach 5432 (not in git
-      # — it's host state). On a FRESH host this binds publicly, so set up BOTH before relying on it. Local
-      # dev: harmless (throwaway DB on your own LAN). Override POSTGRES_HOST_PORT in .env if 5432 is taken.
-      - "0.0.0.0:${POSTGRES_HOST_PORT:-5432}:5432"
+      # Bind defaults to LOOPBACK (127.0.0.1) — a fresh host / laptop never exposes the DB. The one prod
+      # host opts into a public bind by setting POSTGRES_BIND_ADDR=0.0.0.0 in its .env, and ONLY because it
+      # also has: (1) the `afisha` role on a STRONG rotated password (not the `afisha:afisha` default), and
+      # (2) a server-side iptables DOCKER-USER rule limiting 5432 to the owner's IP (host state, not git).
+      # The app never uses this host port (it reaches the DB over the compose net odyssey:6432→postgres:5432).
+      - "${POSTGRES_BIND_ADDR:-127.0.0.1}:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:

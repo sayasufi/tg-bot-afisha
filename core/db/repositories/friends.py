@@ -367,8 +367,15 @@ async def friend_profile(db: AsyncSession, uid: int, friend_id: int) -> dict | N
     if not u.friends_private:
         rows = (
             await db.execute(
+                # Active events only — same gate as list_friends (taste) and friend_activity, so the
+                # profile's «сохранено» count / TasteCard agree with the friend-row «любит …» denominator.
                 select(UserFavorite.event_id)
-                .where(UserFavorite.telegram_user_id == friend_id, UserFavorite.hidden_from_friends.is_(False))
+                .join(Event, Event.event_id == UserFavorite.event_id)
+                .where(
+                    UserFavorite.telegram_user_id == friend_id,
+                    UserFavorite.hidden_from_friends.is_(False),
+                    Event.status == "active",
+                )
                 .order_by(UserFavorite.created_at.desc())
                 .limit(300)
             )
