@@ -245,7 +245,7 @@ export async function createFriendLink(): Promise<string | null> {
   }
 }
 
-// Find a friend by EXACT @username (opt-in accounts only). send=false peeks the card+relation; send=true
+// Find a friend by EXACT @username (anyone with a handle is findable). send=false peeks the card+relation; send=true
 // fires a PENDING friend request. {found:false} for any miss (so it can't probe who's a user). `relation`:
 // 'friends' | 'pending_out' (I asked them) | 'pending_in' (they asked me) | 'none'. Null on error / 429.
 export type FoundFriend = {

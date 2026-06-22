@@ -137,23 +137,11 @@ export function App() {
     setNotifyDigest(on);
     pushSetting("notify_digest", on);
   }, []);
-  // Friend notifications (the «X добавил тебя» DM + the digest's friends section) — default ON.
-  const [notifyFriends, setNotifyFriends] = useState(true);
-  const toggleNotifyFriends = useCallback((on: boolean) => {
-    setNotifyFriends(on);
-    pushSetting("notify_friends", on);
-  }, []);
   // Friends privacy: hide ALL my favourites from friends (default off — the friend edge is consent).
   const [friendsPrivate, setFriendsPrivate] = useState(false);
   const toggleFriendsPrivate = useCallback((on: boolean) => {
     setFriendsPrivate(on);
     pushSetting("friends_private", on);
-  }, []);
-  // Findable by @username (opt-in, default OFF) — lets friends look you up + send a request.
-  const [isSearchable, setIsSearchable] = useState(false);
-  const toggleSearchable = useCallback((on: boolean) => {
-    setIsSearchable(on);
-    pushSetting("is_searchable", on);
   }, []);
   // First-friend disclosure (fires here when a mutual invite makes you friends instantly) + the menu
   // badge count of incoming friend requests (pulled once on open, kept live by the Friends panel).
@@ -229,9 +217,7 @@ export function App() {
       if (Array.isArray(s.interests) && s.interests.length) setPickedInterests(s.interests);
       if (typeof s.notify_reminders === "boolean") setNotifyReminders(s.notify_reminders);
       if (typeof s.notify_digest === "boolean") setNotifyDigest(s.notify_digest);
-      if (typeof s.notify_friends === "boolean") setNotifyFriends(s.notify_friends);
       if (typeof s.friends_private === "boolean") setFriendsPrivate(s.friends_private);
-      if (typeof s.is_searchable === "boolean") setIsSearchable(s.is_searchable);
     };
     // Capture the favourites/venues merge-payload + mutation seq BEFORE the request (so a toggle made
     // mid-flight can't be clobbered by the stale server list) — same guards the per-store syncs use.
@@ -1149,8 +1135,6 @@ export function App() {
           <FriendsPanel
             friendsPrivate={friendsPrivate}
             onToggleFriendsPrivate={toggleFriendsPrivate}
-            isSearchable={isSearchable}
-            onToggleSearchable={toggleSearchable}
             onFriendsChange={setFriendCount}
             onOpenFriend={setFriendProfile}
             onClose={() => setView("map")}
@@ -1176,8 +1160,6 @@ export function App() {
             onToggleReminders={toggleReminders}
             notifyDigest={notifyDigest}
             onToggleDigest={toggleDigest}
-            notifyFriends={notifyFriends}
-            onToggleNotifyFriends={toggleNotifyFriends}
             theme={theme}
             onToggleTheme={toggleTheme}
             onOpenFavorites={() => setView("favorites")}

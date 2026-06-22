@@ -265,10 +265,10 @@ async def user_card(db: AsyncSession, uid: int) -> dict | None:
 
 
 async def find_searchable(db: AsyncSession, uid: int, username: str) -> dict | None:
-    """Find an OPT-IN account by exact, case-insensitive @username — the «add by @username» lookup. Returns
-    the target's mini-card, or None for: no match / not is_searchable / self / a blocked pair. The route maps
-    all of these to one «not found», so search can't probe whether a handle is a (searchable) user. Exact
-    match only (no prefix/LIKE) so you can't walk the alphabet to enumerate the userbase."""
+    """Find an account by exact, case-insensitive @username — the «add by @username» lookup. Anyone with a
+    handle is findable (the opt-in is_searchable gate was removed). Returns the target's mini-card, or None
+    for: no match / self / a blocked pair. Exact match only (no prefix/LIKE) so you can't walk the alphabet
+    to enumerate the userbase, and a blocked pair still stays hidden."""
     handle = (username or "").strip().lstrip("@").lower()
     if not handle or len(handle) > 64:
         return None
@@ -277,7 +277,6 @@ async def find_searchable(db: AsyncSession, uid: int, username: str) -> dict | N
             select(User.telegram_user_id, User.first_name, User.username, User.photo_url)
             .where(
                 func.lower(User.username) == handle,
-                User.is_searchable.is_(True),
                 User.telegram_user_id != int(uid),
             )
             .order_by(User.last_active_at.desc())  # newest if a handle ever collides across rows

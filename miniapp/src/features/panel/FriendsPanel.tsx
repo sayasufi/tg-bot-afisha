@@ -55,16 +55,12 @@ function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) =>
 export function FriendsPanel({
   friendsPrivate,
   onToggleFriendsPrivate,
-  isSearchable,
-  onToggleSearchable,
   onFriendsChange,
   onOpenFriend,
   onClose,
 }: {
   friendsPrivate: boolean;
   onToggleFriendsPrivate: (on: boolean) => void;
-  isSearchable: boolean;
-  onToggleSearchable: (on: boolean) => void;
   onFriendsChange?: (n: number) => void;
   onOpenFriend?: (f: Friend) => void;
   onClose: () => void;
@@ -279,22 +275,6 @@ export function FriendsPanel({
           <span className="profile__switch-text">
             <span className="profile__switch-label">Скрыть от друзей</span>
             <span className="profile__switch-sub">Друзья не увидят, что ты сохраняешь — ни в профиле, ни на карте</span>
-          </span>
-          <span className="profile__switch-track" aria-hidden="true">
-            <span className="profile__switch-knob" />
-          </span>
-        </button>
-
-        <button
-          type="button"
-          className={`profile__switch${isSearchable ? " profile__switch--on" : ""}`}
-          role="switch"
-          aria-checked={isSearchable}
-          onClick={() => onToggleSearchable(!isSearchable)}
-        >
-          <span className="profile__switch-text">
-            <span className="profile__switch-label">Находить меня по @username</span>
-            <span className="profile__switch-sub">По умолчанию выключено. Включи — и друзья смогут найти тебя по нику и отправить заявку</span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />

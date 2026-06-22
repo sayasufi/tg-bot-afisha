@@ -138,10 +138,10 @@ async def _send_digest_impl() -> int:
                 if city not in pools:
                     pools[city] = await weekend_pool(db, city, now)
                 venue_items = await new_at_followed_venues(db, u["user_id"], now)
-                # «Что сохранили друзья» — gated on the user's friend-notifications, deduped against the
-                # followed-venue block. Sits between «новое на площадках» and «на выходных».
+                # «Что сохранили друзья» — always on now (the «О друзьях» opt-out was removed), deduped
+                # against the followed-venue block. Sits between «новое на площадках» and «на выходных».
                 seen = {e["event_id"] for e in venue_items}
-                friend_items = await friends_saved(db, u["user_id"], now) if u.get("notify_friends") else []
+                friend_items = await friends_saved(db, u["user_id"], now)
                 friend_items = [it for it in friend_items if it["event_id"] not in seen]
                 seen |= {it["event_id"] for it in friend_items}
                 weekend_items = rank_weekend(

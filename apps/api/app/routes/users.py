@@ -160,7 +160,7 @@ class InviteToFriendRequest(BaseModel):
 
 class FindFriendRequest(BaseModel):
     init_data: str
-    username: str  # exact @handle to look up among opt-in (is_searchable) accounts
+    username: str  # exact @handle to look up — anyone with a handle is findable
     send: bool = False  # false = peek the card + relation; true = send a pending friend request
 
 
@@ -260,12 +260,8 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
             friend = await befriend(db, uid, inviter, src_event_id=payload.event_id)
             if friend == "accepted" and await count_friends(db, uid) == 1:
                 first_friend = True  # my first friend, formed instantly → one-time disclosure
-            recip = await get_settings(db, inviter)
-            if (
-                recip
-                and recip.get("notify_friends") is not False  # this is a friend-formed DM → notify_friends, not reminders
-                and await _invite_dm_once(uid, payload.event_id, inviter)
-            ):
+            # Friend notifications are always on (the «О друзьях» opt-out was removed).
+            if await _invite_dm_once(uid, payload.event_id, inviter):
                 title = await event_title(db, payload.event_id)
                 notify = (inviter, title or "")
     else:
@@ -421,8 +417,8 @@ async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = De
     card = await user_card(db, inviter)
     notify = False
     if friend == "accepted":
-        recip = await get_settings(db, inviter)
-        if recip and recip.get("notify_friends") is not False and await _friend_add_dm_once(inviter, uid):
+        # Friend notifications are always on (the «О друзьях» opt-out was removed).
+        if await _friend_add_dm_once(inviter, uid):
             notify = True
     await db.commit()
     if notify:
@@ -433,15 +429,12 @@ async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = De
 @router.post("/invite-friend")
 async def invite_to_friend(payload: InviteToFriendRequest, db: AsyncSession = Depends(get_async_db)):
     """Send THIS event to a specific MUTUAL friend's DM («X зовёт тебя на <event>»). Read-only + a
-    best-effort DM. 403 if not a friend; respects the friend's notify_friends, deduped per (you, them,
-    event), capped per sender per day. `sent` = whether a DM actually went out."""
+    best-effort DM. 403 if not a friend; deduped per (you, them, event), capped per sender per day.
+    `sent` = whether a DM actually went out. Friend notifications are always on (the opt-out was removed)."""
     user, uid = _auth(payload.init_data)
     fid = int(payload.friend_id)
     if fid == uid or not await are_friends(db, uid, fid):
         raise HTTPException(status_code=403, detail="not a friend")
-    recip = await get_settings(db, fid)
-    if not recip or recip.get("notify_friends") is False:
-        return {"ok": True, "sent": False}  # they've muted friend notifications
     if not await _friend_invite_dm_once(uid, fid, payload.event_id):
         return {"ok": True, "sent": False}  # already invited this friend to this event
     if not await _friend_invite_day_ok(uid):
@@ -453,9 +446,9 @@ async def invite_to_friend(payload: InviteToFriendRequest, db: AsyncSession = De
 
 @router.post("/find-friend")
 async def find_friend(payload: FindFriendRequest, db: AsyncSession = Depends(get_async_db)):
-    """Find an account by EXACT @username (opt-in / is_searchable only) and optionally send a PENDING
-    friend request. Privacy-first: no match / not opt-in / self / blocked ALL return the same {found:false},
-    so search can't probe who is a user. Per-searcher daily cap blunts enumeration. send=true creates a
+    """Find an account by EXACT @username (anyone with a handle is findable) and optionally send a PENDING
+    friend request. Privacy-first: no match / self / blocked ALL return the same {found:false}, so search
+    can't probe who is a user. Per-searcher daily cap blunts enumeration. send=true creates a
     request the target confirms in «Заявки» — the searcher initiated, so it needs the target's consent (NOT
     instant friends like a bearer link). Reciprocal (they searched you too) auto-accepts to friends."""
     user, uid = _auth(payload.init_data)
@@ -474,8 +467,8 @@ async def find_friend(payload: FindFriendRequest, db: AsyncSession = Depends(get
     status = await request_friend(db, uid, tid)
     await db.commit()
     if status == "pending":
-        recip = await get_settings(db, tid)
-        if recip and recip.get("notify_friends") is not False and await _friend_request_dm_once(uid, tid):
+        # Friend notifications are always on (the «О друзьях» opt-out was removed).
+        if await _friend_request_dm_once(uid, tid):
             await _notify_friend_request(tid, user.get("first_name") or "")
     return {"found": True, "user": card, "relation": await relation(db, uid, tid), "status": status}
 
