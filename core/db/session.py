@@ -9,17 +9,19 @@ from core.config.settings import get_settings
 
 settings = get_settings()
 
-# Modest per-process pool: this module is imported by every uvicorn worker (the Prefect
-# worker uses the separate NullPool engine below). pool_size stays small so all workers
-# together stay under the Odyssey transaction pool (25) and Postgres max_connections (100).
-_POOL = dict(pool_pre_ping=True, pool_size=5, max_overflow=10, pool_recycle=1800)
+# Per-process pools, imported by every uvicorn worker (Prefect uses the NullPool engine below). The
+# CEILING MUST stay under Postgres max_connections (100) across all 6 workers + the bot + prefect-serve +
+# healthchecks. The SYNC engine is barely used now (only the sync /location endpoint + scripts), so keep it
+# tiny. The ASYNC engine is the hot path: 6 × (5+5) = 60, plus sync 6 × (2+3) = 30 → ≤90 worst case, with
+# headroom. NOTE: the proper scale fix is to route through the deployed Odyssey transaction pooler
+# (odyssey:6432) and/or raise Postgres max_connections — see the perf plan; this just removes the squeeze.
+_SYNC_POOL = dict(pool_pre_ping=True, pool_size=2, max_overflow=3, pool_recycle=1800)
 
-# The async API engine adds an explicit pool_timeout: when every connection is checked
-# out, a request waits at most this long for one, then fails fast — instead of
-# SQLAlchemy's 30s default that turned pool pressure under load into 30s hangs and a wall
-# of 500s (QueuePool timeout). Read handlers now release the connection before any
-# CPU-heavy work, so the pool should rarely be contended; this just bounds the worst case.
-_ASYNC_POOL = {**_POOL, "pool_timeout": 10}
+# The async API engine adds an explicit pool_timeout: when every connection is checked out, a request waits
+# at most this long for one, then fails fast — instead of SQLAlchemy's 30s default that turned pool pressure
+# under load into 30s hangs and a wall of 500s. Read handlers release the connection before any CPU-heavy
+# work, so the pool should rarely be contended; this just bounds the worst case.
+_ASYNC_POOL = dict(pool_pre_ping=True, pool_size=5, max_overflow=5, pool_recycle=1800, pool_timeout=10)
 
 # Pin every session to UTC explicitly. Code relies on a UTC session (e.g. the map and
 # event-detail date floor compare a Python UTC-midnight against SQL date_trunc('day',
@@ -34,7 +36,7 @@ _ASYNC_POOL = {**_POOL, "pool_timeout": 10}
 _CONNECT = {"options": "-c timezone=UTC", "prepare_threshold": None}
 
 # Sync engine — kept for scripts / any sync caller during/after the async migration.
-engine = create_engine(settings.sync_database_url, connect_args=_CONNECT, **_POOL)
+engine = create_engine(settings.sync_database_url, connect_args=_CONNECT, **_SYNC_POOL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
