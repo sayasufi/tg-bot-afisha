@@ -2,6 +2,24 @@ services:
   postgres:
     image: postgis/postgis:16-3.4
     restart: unless-stopped
+    # Tuned for the workload (small PostGIS DB, NVMe, 16-core/110GB host shared with voice-api). The stock
+    # defaults (shared_buffers 128MB / work_mem 4MB / random_page_cost 4 / effective_cache_size 4GB) are
+    # pessimal for a server on SSD: raise the sort/hash budget so map/list/recommend sorts stay in RAM, tell
+    # the planner the OS cache is large AND the disk is SSD (→ favour index scans over seq scans), bump
+    # maintenance + WAL so ingest bursts vacuum/checkpoint less. Postgres-side concurrency is bounded by
+    # Odyssey (pool_size 25), so worst-case total work_mem stays a few GB — comfortable in the 93GB free.
+    # This is the single source of truth (overrides any postgresql.auto.conf); shm_size lifts /dev/shm off
+    # Docker's 64MB default so parallel-query workers can't hit "could not resize shared memory".
+    command: >
+      postgres
+      -c shared_buffers=1GB
+      -c effective_cache_size=12GB
+      -c work_mem=32MB
+      -c maintenance_work_mem=256MB
+      -c max_wal_size=2GB
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+    shm_size: 1gb
     environment:
       POSTGRES_DB: afisha
       POSTGRES_USER: afisha
