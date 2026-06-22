@@ -165,6 +165,10 @@ class TimepadConnector:
                 "site_url": rep.get("url"),
                 "sessions": len(grp),
                 "iso_dates": True,  # startDate/endDate ARE the authoritative session → drives occurrence upsert + prune
+                # registration_data IS the price truth: absent → UNKNOWN, not free. Without this the
+                # normalizer scans the description and a stray «бесплатная регистрация/парковка» mislabels
+                # half the catalog as free. Suppress that text fallback (paid events still carry a price).
+                "price_authoritative": True,
             }
             if not payload["name"]:
                 continue

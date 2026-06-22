@@ -147,7 +147,10 @@ class RuleBasedNormalizer:
         # (addresses/phones/years would poison it).
         price_text = str(payload.get("price") or "")
         price_min, price_max = parse_price_field(price_text)
-        if price_min is None and price_max is None:
+        # `price_authoritative` sources (Timepad) put the WHOLE price in `price`; absence means UNKNOWN,
+        # so don't scrape the description — a stray «бесплатная регистрация/парковка» would mislabel a
+        # paid event as free. Other sources keep the free-text fallback (Telegram, etc.).
+        if price_min is None and price_max is None and not payload.get("price_authoritative"):
             price_min, price_max = parse_price(f"{description} {raw_text}")
         if payload.get("is_free") is True and not price_min and not price_max:
             price_min, price_max = 0.0, 0.0
