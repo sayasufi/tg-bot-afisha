@@ -2,10 +2,10 @@ import json
 
 from aiogram import Router
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
 
 from apps.bot.bot.formatting import ce
-from apps.bot.bot.keyboards.main import map_reply_keyboard, webapp_keyboard
+from apps.bot.bot.keyboards.main import webapp_keyboard
 from core.config.settings import get_settings
 from core.db.repositories.users import update_settings, upsert_user_async
 from core.db.session import AsyncSessionLocal
@@ -55,11 +55,6 @@ async def _save_user(message: Message):
         return u
 
 
-def _map_markup(url: str):
-    # Persistent bottom button on prod (HTTPS); inline fallback on local http.
-    return map_reply_keyboard(url) or webapp_keyboard(url)
-
-
 async def _handle_report(message: Message, event_id: str) -> None:
     """A user tapped «сообщить о неточности» on an event (deep link ?start=report_<id>).
     Record the flag — event + who — so the team can check the data, and acknowledge so the
@@ -89,8 +84,9 @@ async def start_handler(message: Message, command: CommandObject) -> None:
     if arg.startswith("report_"):  # «сообщить о неточности» from an event sheet
         await _handle_report(message, arg[len("report_"):])
         return
-    url = get_settings().telegram_webapp_url
-    await message.answer(WELCOME, reply_markup=_map_markup(url))
+    # No persistent reply keyboard — the map lives on the bot's menu button + in-message links.
+    # ReplyKeyboardRemove also clears the old «Открыть карту» bottom button for existing users.
+    await message.answer(WELCOME, reply_markup=ReplyKeyboardRemove())
 
 
 @router.message(Command("help"))
