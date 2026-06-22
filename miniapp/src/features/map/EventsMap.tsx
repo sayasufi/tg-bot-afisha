@@ -255,6 +255,11 @@ export function EventsMap({
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
+  // React-CONTROLLED (not an imperative classList.add): the wrap's className is owned by React below, so
+  // an imperative `--revealed` gets wiped the moment `selected`/`focusOut` first toggle (open an event) —
+  // React rewrites className and drops the class it doesn't know about, so vpinIn replays on the next
+  // pan/zoom rebuild (the "all pins blink after opening+closing an event" bug). State keeps it sticky.
+  const [revealed, setRevealed] = useState(false);
   const metroIco = useMemo(() => metroIcon(), []);
   // Catchable-now ids, read at pin-build time (kept in a ref so the minute-ticking
   // Set doesn't rebuild every marker each minute — that recreates each divIcon and
@@ -304,7 +309,8 @@ export function EventsMap({
       revealedRef.current = true;
       // After the first reveal, stop the per-pin grow-in (vpinIn) from replaying every time
       // MarkerClusterGroup rebuilds the markers on pan/zoom — that replay was the «blink».
-      el.classList.add("map-wrap--revealed");
+      // Via React state (className below), so toggling selected/focusOut can't strip it.
+      setRevealed(true);
       const box = el.getBoundingClientRect();
       const cx = box.width / 2;
       const cy = box.height / 2;
@@ -445,7 +451,7 @@ export function EventsMap({
   const userIco = useMemo(() => userIcon(heading), [heading]);
 
   return (
-    <div ref={wrapRef} className={`map-wrap${selected ? " map-wrap--has-selected" : ""}${focusOut ? " map-wrap--focus-out" : ""}`}>
+    <div ref={wrapRef} className={`map-wrap${revealed ? " map-wrap--revealed" : ""}${selected ? " map-wrap--has-selected" : ""}${focusOut ? " map-wrap--focus-out" : ""}`}>
       <MapContainer center={center ?? MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
