@@ -69,15 +69,19 @@ class TimepadConnector:
 
     @staticmethod
     def _price_text(reg: object) -> str:
-        """registration_data → a price string the normalizer's parse_price_field round-trips exactly.
-        Absent registration_data → "" (unknown, left to the description); 0/0 → free."""
+        """registration_data → a price string parse_price_field round-trips exactly. Absent registration_
+        data, OR a registration_data with NO price fields (just status — e.g. is_registration_open), →
+        "" (UNKNOWN). Only an EXPLICIT 0/0 reads as free — without this a status-only registration_data
+        (price_min/max missing) mislabelled ~half the catalog «бесплатно»."""
         if not isinstance(reg, dict):
             return ""
         lo = reg.get("price_min"); hi = reg.get("price_max")
         lo = float(lo) if isinstance(lo, (int, float)) else None
         hi = float(hi) if isinstance(hi, (int, float)) else None
-        if (lo in (None, 0)) and (hi in (None, 0)):
-            return "бесплатно"
+        if lo is None and hi is None:
+            return ""  # registration_data present but no price info → unknown, NOT free
+        if (lo or 0) == 0 and (hi or 0) == 0:
+            return "бесплатно"  # explicit zero price
         if lo and hi and hi > lo:
             return f"от {int(lo)} до {int(hi)} рублей"
         if lo and hi and lo == hi:

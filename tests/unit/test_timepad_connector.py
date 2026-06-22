@@ -44,8 +44,10 @@ def test_price_text_round_trips_through_normalizer():
     c = TimepadConnector
     assert parse_price_field(c._price_text({"price_min": 500, "price_max": 1500})) == (500.0, 1500.0)
     assert parse_price_field(c._price_text({"price_min": 800, "price_max": 800})) == (800.0, 800.0)
-    assert parse_price_field(c._price_text({"price_min": 0, "price_max": 0})) == (0.0, 0.0)  # free
+    assert parse_price_field(c._price_text({"price_min": 0, "price_max": 0})) == (0.0, 0.0)  # explicit free
     assert c._price_text(None) == ""  # unknown registration → blank, not "free"
+    assert c._price_text({"is_registration_open": True}) == ""  # status-only reg, no price → unknown, NOT free
+    assert c._price_text({"price_min": None, "price_max": None}) == ""
 
 
 def test_base_title_collapses_date_and_paren_variants():
