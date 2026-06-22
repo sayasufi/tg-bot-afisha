@@ -79,12 +79,16 @@ def _bolt(d: ImageDraw.ImageDraw, x: float, y: float, h: float, color) -> None:
     d.polygon([(x + px * w, y + py * h) for px, py in pts], fill=color)
 
 
-def _pin_sm(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color=ACID) -> None:
-    """A small map-pin glyph (ink hole). Bulb centred near (cx, cy)."""
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
-    d.polygon([(cx - r * 0.62, cy + r * 0.35), (cx + r * 0.62, cy + r * 0.35), (cx, cy + r * 1.9)], fill=color)
-    hr = r * 0.42
-    d.ellipse([cx - hr, cy - hr, cx + hr, cy + hr], fill=INK)
+def _pin_sm(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color=ACID, hole=INK) -> None:
+    """The окрест brand pin (matches the app logo): a teardrop with a CONCENTRIC head — a ring then a
+    centre dot. `hole` is the gap colour (the background showing through the ring). Head centred near
+    (cx, cy), the point below."""
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)                                    # head disc
+    d.polygon([(cx - r * 0.6, cy + r * 0.42), (cx + r * 0.6, cy + r * 0.42), (cx, cy + r * 1.95)], fill=color)  # point
+    rr = r * 0.58
+    d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=hole)                                 # concentric gap (ring)
+    dr = r * 0.25
+    d.ellipse([cx - dr, cy - dr, cx + dr, cy + dr], fill=color)                                # centre dot
 
 
 def _calendar(d: ImageDraw.ImageDraw, x: float, y: float, s: float, color) -> None:
@@ -201,7 +205,7 @@ def _compose_card(item: dict, photo: bytes | None, lead_text: str, lead_mark: st
     chip = [P, chip_y, W - P, chip_y + chip_h]
     d.rectangle(chip, outline=INK, width=2)
     cy = chip_y + chip_h // 2
-    _pin_sm(d, P + 30, cy - 4, 13, color=CINNABAR)
+    _pin_sm(d, P + 32, cy - 5, 15, color=ACID, hole=INK)
     venue = str(item.get("venue") or "").strip()
     vf = _grotesk(31, 600)
     price = item.get("price_min")
@@ -217,7 +221,7 @@ def _compose_card(item: dict, photo: bytes | None, lead_text: str, lead_mark: st
         vv = vv.rstrip() + "…"
     d.text((P + 58, cy - 21), vv or "—", font=vf, fill=INK)
     if price_str:
-        d.text((W - P - 24 - pw, cy - 18), price_str, font=pf, fill=CINNABAR)
+        d.text((W - P - 24 - pw, cy - 18), price_str, font=pf, fill=ACID)
 
     out = io.BytesIO()
     img.save(out, "JPEG", quality=92, optimize=True)
@@ -347,7 +351,7 @@ def ensure_card(event_id: str, item: dict, image_url: str) -> str:
     """Public URL of the cached unified share card (rendered + stored if missing). `item` carries
     code / title / category / venue / price_min / when (the event DATE). Empty string on failure.
     The card is STATIC (an absolute date, not a relative time), so it's safe to cache per event."""
-    key = f"cards/v2/{event_id}.jpg"  # v2: the unified light VITRINE card (was the plaster poster)
+    key = f"cards/v3/{event_id}.jpg"  # v3: acid brand pin + acid price in the chip (v2 = first light card)
     try:
         if object_exists(key):
             return public_url(key)
