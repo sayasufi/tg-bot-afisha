@@ -266,10 +266,10 @@ def build_reminder_card(item: dict) -> bytes | None:
 
 # --- weekly digest poster: a VITRINE contact-sheet of the weekend's covers -----------
 def _digest_tile(w: int, h: int, item: dict) -> Image.Image:
-    """One weekend event as a MINI light card — the same language as the reminder/share card: a BRIGHT
-    cover with the code tab + an acid rule, then a plaster caption with the when (mono) and the title
-    (Golos). items carry {code, title, when, photo:bytes|None}."""
-    ph = int(h * 0.60)  # cover height; the rest is the plaster caption
+    """One weekend event as a MINI light card — the SAME anatomy as the reminder/share card: a bright
+    cover with the code tab + an acid rule, then a plaster caption with the title (Golos) and the
+    venue+price chip (avatar pin · venue · price). items carry {code, title, venue, price_min, photo}."""
+    ph = int(h * 0.50)  # cover height; the rest is the plaster caption (title + chip)
     RULE = 4
     tile = Image.new("RGB", (w, h), PLASTER)
     photo = item.get("photo")
@@ -288,22 +288,34 @@ def _digest_tile(w: int, h: int, item: dict) -> Image.Image:
         d.rectangle([12, 12, 12 + cw + 2 * pad, 48], fill=(11, 11, 11, 220))
         d.text((12 + pad, 19), code, font=cf, fill=ACID)
     d.rectangle([0, ph, w, ph + RULE], fill=ACID)  # acid rule under the cover
-    P = 16
-    cy = ph + RULE + 13
-    when = (item.get("when") or "").strip()
-    if when:  # mono, cinnabar, ellipsized
-        wf = _mono(18, 500)
-        full = when
-        while when and d.textlength(when + "…", font=wf) > w - 2 * P:
-            when = when[:-1]
-        if when != full and when:
-            when = when.rstrip() + "…"
-        d.text((P, cy), when, font=wf, fill=CINNABAR)
-        cy += 27
-    tf = _grotesk(26, 700)  # title (Golos bold ink)
+    P = 18
+    ty = ph + RULE + 15  # title (Golos bold ink, up to 2 lines)
+    tf = _grotesk(24, 700)
     for ln in _wrap(d, (item.get("title") or "Событие").strip(), tf, w - 2 * P, 2):
-        d.text((P, cy), ln, font=tf, fill=INK)
-        cy += 31
+        d.text((P, ty), ln, font=tf, fill=INK)
+        ty += 29
+    # venue + price chip, bottom-anchored — mirrors the card's chip (avatar pin · venue … price)
+    chip_h = 44
+    chy = h - 16 - chip_h
+    d.rectangle([P, chy, w - P, chy + chip_h], outline=INK, width=2)
+    ccy = chy + chip_h // 2
+    _pin_sm(d, P + 22, ccy - 4, 11)
+    venue = (item.get("venue") or "").strip()
+    vf = _grotesk(19, 600)
+    price = item.get("price_min")
+    price_str = "бесплатно" if price is not None and float(price) == 0 else \
+        (f"от {int(float(price))} ₽" if price is not None else "")
+    pf = _mono(18, 600)
+    pw = d.textlength(price_str, font=pf) if price_str else 0
+    vmax = (w - P - 14 - (pw + 16 if pw else 0)) - (P + 44)
+    vv = venue
+    while vv and d.textlength(vv + "…", font=vf) > vmax:
+        vv = vv[:-1]
+    if vv != venue and vv:
+        vv = vv.rstrip() + "…"
+    d.text((P + 44, ccy - 13), vv or "—", font=vf, fill=INK)
+    if price_str:
+        d.text((w - P - 14 - pw, ccy - 12), price_str, font=pf, fill=INK)
     d.rectangle([0, 0, w - 1, h - 1], outline=INK, width=2)  # tile hairline
     return tile
 
