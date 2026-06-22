@@ -1049,10 +1049,10 @@ mark.hl {
   font-weight: 600;
   line-height: 1.25;
   color: var(--ink);
+  /* One line — the feed leads with the main title; the full «Main. Subtitle» lives in the event card. */
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .friends__act-meta {
   font-family: var(--grotesk);
@@ -1061,6 +1061,11 @@ mark.hl {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The friend's name reads a notch stronger than the «сохранил · когда» action, so the person stands out. */
+.friends__act-who {
+  color: var(--ink-dim);
+  font-weight: 500;
 }
 .friends__act-cover {
   flex: 0 0 auto;
@@ -1093,25 +1098,43 @@ mark.hl {
   text-transform: lowercase;
   box-shadow: 1.4px 1.4px 0 var(--cinnabar);
 }
-/* «Пригласить друга» — share your personal add-me link. A quiet OUTLINE button at the BOTTOM (the value
-   of the screen is the activity feed above; the invite no longer dominates as an acid block). */
+/* «Пригласить друга» — share your personal add-me link. Styled as a «+» ROW that continues the friends
+   list (a dashed add-avatar + label), so on a short list it reads as «add another», not an orphan CTA box. */
 .friends__invite {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: 100%;
-  margin: 10px 0 8px;
-  padding: 12px;
-  border: 1px solid var(--line);
+  margin: 2px 0 8px;
+  padding: 8px 0;
+  border: 0;
   cursor: pointer;
   background: none;
   color: var(--ink-dim);
   font-family: var(--grotesk);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
   text-transform: lowercase;
+  text-align: left;
 }
-.friends__invite:active {
-  background: var(--acid);
+.friends__invite-plus {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px dashed var(--line);
+  color: var(--ink-faint);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+}
+.friends__invite:active .friends__invite-plus {
+  border-color: var(--ink);
   color: var(--on-acid);
+  background: var(--acid);
 }
 /* «найти по @username» — exact-handle lookup of opt-in accounts. */
 .friends__search {

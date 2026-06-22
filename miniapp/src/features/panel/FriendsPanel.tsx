@@ -25,6 +25,15 @@ function tasteLabel(cats?: string[]): string {
   return `любит ${cats.map((c) => categoryMeta(c).label.toLowerCase()).join(", ")}`;
 }
 
+// In the feed, lead with just the MAIN title — drop a trailing subtitle after the first «. » / « — » / « · »
+// (event titles are «Main. Subtitle»). The full title still shows in the event card. Guarded to ≥6 chars so
+// it never cuts to a stub; the CSS still clamps to one line as a backstop.
+function shortTitle(t: string): string {
+  const s = (t || "").trim();
+  const m = s.match(/^(.{6,}?)(?:\.\s|\s[—–·|]\s)/);
+  return (m ? m[1] : s).trim();
+}
+
 // Coarse «когда» label for the activity feed (the API timestamps are minute-grained at best).
 function timeAgo(iso: string): string {
   const t = Date.parse(iso);
@@ -107,9 +116,9 @@ function ActivityRow({ a, onOpen }: { a: FriendActivity; onOpen: (e: EventItem) 
     <button type="button" className="friends__act" onClick={() => onOpen(a.event)}>
       <Avatar f={a.friend} />
       <span className="friends__act-body">
-        <span className="friends__act-ev">«{a.event.title}»</span>
+        <span className="friends__act-ev">{shortTitle(a.event.title)}</span>
         <span className="friends__act-meta">
-          {who} сохранил · {timeAgo(a.at)}
+          <span className="friends__act-who">{who}</span> сохранил · {timeAgo(a.at)}
         </span>
       </span>
       <span
@@ -371,7 +380,8 @@ export function FriendsPanel({
         )}
 
         <button type="button" className="friends__invite" onClick={inviteFriend}>
-          пригласить друга →
+          <span className="friends__invite-plus" aria-hidden="true">+</span>
+          пригласить друга
         </button>
       </div>
       {disclose && <FriendDisclosure onClose={() => setDisclose(false)} />}
