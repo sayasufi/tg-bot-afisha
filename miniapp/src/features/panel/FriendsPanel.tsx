@@ -11,19 +11,18 @@ import {
   type FriendsState,
   manageFriends,
 } from "../../api/users";
-import { IconClose } from "../../lib/icons";
+import { categoryMeta } from "../../lib/categories";
+import { IconClose, IconSearch } from "../../lib/icons";
 import { haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
 import { FriendDisclosure } from "./FriendDisclosure";
 
-// Compact «N сохранений» with Russian plural agreement.
-function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
+// «любит концерты, театр» from a friend's 1-2 top category slugs — a lighter, more human signal than a
+// bare save count. Empty when they have no visible saves (new / private friend).
+function tasteLabel(cats?: string[]): string {
+  if (!cats || !cats.length) return "";
+  return `любит ${cats.map((c) => categoryMeta(c).label.toLowerCase()).join(", ")}`;
 }
 
 // Coarse «когда» label for the activity feed (the API timestamps are minute-grained at best).
@@ -46,20 +45,37 @@ function Avatar({ f }: { f: Friend }) {
   const av = safeHttpUrl(f.photo_url);
   return (
     <span className="profile__friend-av" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
-      {av ? "" : (f.name || "?").slice(0, 1).toUpperCase()}
+      {av ? "" : (f.name || f.username || "?").slice(0, 1).toUpperCase()}
     </span>
   );
 }
 
-// One person row: avatar · name/@handle (taps to open their profile, if onOpen) · trailing action(s).
+// One person row: avatar · name + (taste/@handle) (taps to open their profile, if onOpen) · trailing
+// action(s). `subtitle` overrides the default @handle line (the friend list passes the taste line).
 // Module-level so it isn't re-created (rows re-mounted, avatars flickering) on every parent render.
-function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) => void; children: ReactNode }) {
+function FriendRow({
+  f,
+  onOpen,
+  subtitle,
+  children,
+}: {
+  f: Friend;
+  onOpen?: (f: Friend) => void;
+  subtitle?: string;
+  children?: ReactNode;
+}) {
   const inner = (
     <>
       <Avatar f={f} />
       <span className="profile__friend-id">
-        <span className="profile__friend-name">{f.name || "Друг"}</span>
-        {f.username && <span className="profile__friend-handle">@{f.username}</span>}
+        <span className="profile__friend-name">{f.name || (f.username ? `@${f.username}` : "Друг")}</span>
+        {subtitle !== undefined ? (
+          subtitle ? (
+            <span className="profile__friend-sub">{subtitle}</span>
+          ) : null
+        ) : (
+          f.username && <span className="profile__friend-handle">@{f.username}</span>
+        )}
       </span>
     </>
   );
@@ -82,26 +98,32 @@ function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) =>
   );
 }
 
-// One «Активность друзей» row — who saved which event, when. Taps straight into the event sheet.
+// One «Активность друзей» row — who saved which event, when, with the event's cover. Taps into the sheet.
 function ActivityRow({ a, onOpen }: { a: FriendActivity; onOpen: (e: EventItem) => void }) {
   const who = a.friend.username ? `@${a.friend.username}` : a.friend.name || "друг";
+  const cover = safeHttpUrl(a.event.primary_image_url);
   return (
     <button type="button" className="friends__act" onClick={() => onOpen(a.event)}>
       <Avatar f={a.friend} />
       <span className="friends__act-body">
-        <span className="friends__act-text">
-          <b>{who}</b> сохранил <span className="friends__act-ev">«{a.event.title}»</span>
+        <span className="friends__act-meta">
+          {who} · {timeAgo(a.at)}
         </span>
-        <span className="friends__act-time">{timeAgo(a.at)}</span>
+        <span className="friends__act-ev">«{a.event.title}»</span>
       </span>
+      <span
+        className={`friends__act-cover${cover ? "" : " friends__act-cover--ph"}`}
+        style={cover ? { backgroundImage: `url("${cover}")` } : undefined}
+        aria-hidden="true"
+      />
     </button>
   );
 }
 
-// «Друзья» — its own screen. Two mechanics: the friends' recent-saves FEED on top (tap → that event), and
-// the friend LIST below (tap → their profile, with a «N сохранений» signal). Plus the ways to grow the
-// graph: an invite link, @username search, and incoming requests. The «скрыть от друзей» kill-switch now
-// lives in the Profile screen. onFriendsChange keeps the menu badge (friend count) in sync.
+// «Друзья» — its own screen. Two mechanics: the friends' recent-saves FEED right under the header (tap →
+// that event), and the friend LIST below (tap → their profile, with a «любит …» taste line). @username
+// search is tucked behind a header icon; the invite link sits quietly at the bottom. The «скрыть от
+// друзей» kill-switch now lives in Profile. onFriendsChange keeps the menu badge (friend count) in sync.
 export function FriendsPanel({
   onFriendsChange,
   onOpenFriend,
@@ -117,6 +139,7 @@ export function FriendsPanel({
   const [requests, setRequests] = useState<Friend[]>([]);
   const [activity, setActivity] = useState<FriendActivity[]>([]);
   const [disclose, setDisclose] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [found, setFound] = useState<FoundFriend | null>(null); // null = no search; {found:false} = miss
@@ -213,62 +236,75 @@ export function FriendsPanel({
     <div className="panelview">
       <header className="panelview__head">
         <h2>друзья</h2>
-        <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
-          <IconClose size={18} />
-        </button>
-      </header>
-      <div className="panelview__scroll">
-        <button type="button" className="friends__invite" onClick={inviteFriend}>
-          пригласить друга в окрест →
-        </button>
-
-        <div className="friends__search">
-          <input
-            className="friends__search-input"
-            type="text"
-            inputMode="text"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="найти по @username"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void doSearch();
-            }}
-            aria-label="Найти друга по @username"
-          />
+        <span className="panelview__head-actions">
           <button
             type="button"
-            className="friends__search-go"
-            onClick={() => void doSearch()}
-            disabled={searching || !handle()}
+            className={`panelview__icon${searchOpen ? " panelview__icon--on" : ""}`}
+            aria-label="Найти друга по @username"
+            aria-pressed={searchOpen}
+            onClick={() => setSearchOpen((o) => !o)}
           >
-            {searching ? "…" : "найти"}
+            <IconSearch size={18} />
           </button>
-        </div>
-        {found &&
-          (found.found && found.user ? (
-            <div className="profile__friends">
-              <FriendRow f={found.user} onOpen={found.relation === "friends" ? onOpenFriend : undefined}>
-                {found.relation === "friends" ? (
-                  <span className="friends__found-state">вы друзья</span>
-                ) : found.relation === "pending_out" ? (
-                  <span className="friends__found-state">заявка отправлена</span>
-                ) : found.relation === "pending_in" ? (
-                  <button type="button" className="profile__req-accept" onClick={() => acceptFound(found.user!)}>
-                    принять
-                  </button>
-                ) : (
-                  <button type="button" className="profile__req-accept" onClick={() => void sendRequest()}>
-                    добавить
-                  </button>
-                )}
-              </FriendRow>
+          <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
+            <IconClose size={18} />
+          </button>
+        </span>
+      </header>
+      <div className="panelview__scroll">
+        {searchOpen && (
+          <>
+            <div className="friends__search">
+              <input
+                className="friends__search-input"
+                type="text"
+                inputMode="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+                placeholder="найти по @username"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void doSearch();
+                }}
+                aria-label="Найти друга по @username"
+              />
+              <button
+                type="button"
+                className="friends__search-go"
+                onClick={() => void doSearch()}
+                disabled={searching || !handle()}
+              >
+                {searching ? "…" : "найти"}
+              </button>
             </div>
-          ) : (
-            <p className="profile__friends-empty">Никого не нашли по этому нику.</p>
-          ))}
+            {found &&
+              (found.found && found.user ? (
+                <div className="profile__friends">
+                  <FriendRow f={found.user} onOpen={found.relation === "friends" ? onOpenFriend : undefined}>
+                    {found.relation === "friends" ? (
+                      <span className="friends__found-state">вы друзья</span>
+                    ) : found.relation === "pending_out" ? (
+                      <span className="friends__found-state">заявка отправлена</span>
+                    ) : found.relation === "pending_in" ? (
+                      <button type="button" className="profile__req-accept" onClick={() => acceptFound(found.user!)}>
+                        принять
+                      </button>
+                    ) : (
+                      <button type="button" className="profile__req-accept" onClick={() => void sendRequest()}>
+                        добавить
+                      </button>
+                    )}
+                  </FriendRow>
+                </div>
+              ) : (
+                <p className="profile__friends-empty">Никого не нашли по этому нику.</p>
+              ))}
+          </>
+        )}
+
         {requests.length > 0 && (
           <>
             <div className="recs__section">Заявки</div>
@@ -305,16 +341,16 @@ export function FriendsPanel({
           </>
         )}
 
-        <div className="recs__section">Друзья{friends.length > 0 ? ` · ${friends.length}` : ""}</div>
+        <div className="recs__section">Ваши друзья</div>
         {friends.length > 0 ? (
           <div className="profile__friends">
             {friends.map((f) => (
-              <FriendRow key={f.id} f={f} onOpen={onOpenFriend}>
-                {f.saves ? (
-                  <span className="friends__saves">
-                    <b>{f.saves}</b> {plural(f.saves, "сохранение", "сохранения", "сохранений")}
-                  </span>
-                ) : null}
+              <FriendRow
+                key={f.id}
+                f={f}
+                onOpen={onOpenFriend}
+                subtitle={tasteLabel(f.top_cats) || (f.username ? `@${f.username}` : "")}
+              >
                 <button
                   type="button"
                   className="profile__friend-x"
@@ -332,6 +368,10 @@ export function FriendsPanel({
             будете видеть, что друг у друга в избранном.
           </p>
         )}
+
+        <button type="button" className="friends__invite" onClick={inviteFriend}>
+          пригласить друга →
+        </button>
       </div>
       {disclose && <FriendDisclosure onClose={() => setDisclose(false)} />}
     </div>

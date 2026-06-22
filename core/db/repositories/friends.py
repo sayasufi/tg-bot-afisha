@@ -385,34 +385,55 @@ async def friend_profile(db: AsyncSession, uid: int, friend_id: int) -> dict | N
 
 
 async def list_friends(db: AsyncSession, uid: int) -> list[dict]:
-    """The account's accepted friends as mini-profiles (newest first) — for the «Друзья» list. `saves` =
-    how many of their favourites are visible to me (not per-item hidden, and 0 if they've gone fully
-    private) — the «N сохранений» signal next to each friend that also gates whether their profile shows
-    anything."""
-    # Correlated count of the friend's VISIBLE favourites (private friend → 0). Friend lists are small, so
-    # a per-row subquery is cheap and keeps this a single round-trip.
-    saves = (
-        select(func.count())
-        .select_from(UserFavorite)
-        .where(
-            UserFavorite.telegram_user_id == User.telegram_user_id,
-            UserFavorite.hidden_from_friends.is_(False),
-            User.friends_private.is_(False),
-        )
-        .scalar_subquery()
-    )
+    """The account's accepted friends as mini-profiles (newest first) — for the «Друзья» list. Each carries
+    a lightweight TASTE signal: `top_cats` = their 1-2 most-saved categories (slugs → «любит концерты,
+    театр» on the client) and `saves` = how many of their favourites are visible to me — both over VISIBLE
+    favourites only (not per-item hidden, live events, 0/empty if they've gone fully private)."""
+    uid = int(uid)
     rows = (
         await db.execute(
-            select(User.telegram_user_id, User.first_name, User.username, User.photo_url, saves.label("saves"))
+            select(User.telegram_user_id, User.first_name, User.username, User.photo_url)
             .join(UserFriend, UserFriend.friend_id == User.telegram_user_id)
-            .where(UserFriend.user_id == int(uid), UserFriend.status == "accepted")
+            .where(UserFriend.user_id == uid, UserFriend.status == "accepted")
             .order_by(UserFriend.created_at.desc())
         )
     ).all()
-    return [
-        {"id": r.telegram_user_id, "name": r.first_name or "", "username": r.username, "photo_url": r.photo_url, "saves": int(r.saves or 0)}
-        for r in rows
-    ]
+    if not rows:
+        return []
+    # Per-friend category breakdown over their visible favourites — one grouped query for the whole list.
+    cat_rows = (
+        await db.execute(
+            select(UserFriend.friend_id, Event.category, func.count().label("c"))
+            .select_from(UserFriend)
+            .join(User, User.telegram_user_id == UserFriend.friend_id)
+            .join(UserFavorite, and_(UserFavorite.telegram_user_id == UserFriend.friend_id, UserFavorite.hidden_from_friends.is_(False)))
+            .join(Event, Event.event_id == UserFavorite.event_id)
+            .where(
+                UserFriend.user_id == uid,
+                UserFriend.status == "accepted",
+                User.friends_private.is_(False),
+                Event.status == "active",
+            )
+            .group_by(UserFriend.friend_id, Event.category)
+        )
+    ).all()
+    by_friend: dict[int, list[tuple[str, int]]] = {}
+    for r in cat_rows:
+        by_friend.setdefault(r.friend_id, []).append((r.category, int(r.c)))
+    out = []
+    for r in rows:
+        cats = sorted(by_friend.get(r.telegram_user_id, []), key=lambda x: -x[1])
+        out.append(
+            {
+                "id": r.telegram_user_id,
+                "name": r.first_name or "",
+                "username": r.username,
+                "photo_url": r.photo_url,
+                "saves": sum(n for _, n in cats),
+                "top_cats": [c for c, _ in cats[:2]],
+            }
+        )
+    return out
 
 
 async def friend_activity(db: AsyncSession, uid: int, limit: int = 24) -> list[dict]:

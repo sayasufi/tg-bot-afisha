@@ -91,8 +91,16 @@ export type UserSettings = {
 };
 
 // A friend mini-profile — the faces in the «друг сохранил это» social proof + the profile friend list.
-// `saves` (the «N сохранений» count, friend list only) = their favourites visible to me (0 if private).
-export type Friend = { id: number; name: string; username?: string | null; photo_url?: string | null; saves?: number };
+// Friend list only: `saves` = their favourites visible to me; `top_cats` = their 1-2 most-saved category
+// slugs (→ «любит концерты, театр»). Both empty/0 if they've gone private.
+export type Friend = {
+  id: number;
+  name: string;
+  username?: string | null;
+  photo_url?: string | null;
+  saves?: number;
+  top_cats?: string[];
+};
 
 // One «Активность друзей» row: a friend + the event they saved + when (ISO). The event is the full map-item
 // shape, so a tap opens the sheet with no extra fetch.
