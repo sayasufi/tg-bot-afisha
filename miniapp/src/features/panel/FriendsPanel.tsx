@@ -98,18 +98,19 @@ function FriendRow({
   );
 }
 
-// One «Активность друзей» row — who saved which event, when, with the event's cover. Taps into the sheet.
+// One «Активность друзей» row — reads as an EVENT (title primary + poster), with «кто · когда» as the
+// quiet byline below, so the feed is a chronicle of friends' finds, not a log of actions. Taps into the sheet.
 function ActivityRow({ a, onOpen }: { a: FriendActivity; onOpen: (e: EventItem) => void }) {
-  const who = a.friend.username ? `@${a.friend.username}` : a.friend.name || "друг";
+  const who = a.friend.name || (a.friend.username ? `@${a.friend.username}` : "друг");
   const cover = safeHttpUrl(a.event.primary_image_url);
   return (
     <button type="button" className="friends__act" onClick={() => onOpen(a.event)}>
       <Avatar f={a.friend} />
       <span className="friends__act-body">
-        <span className="friends__act-meta">
-          {who} · {timeAgo(a.at)}
-        </span>
         <span className="friends__act-ev">«{a.event.title}»</span>
+        <span className="friends__act-meta">
+          {who} сохранил · {timeAgo(a.at)}
+        </span>
       </span>
       <span
         className={`friends__act-cover${cover ? "" : " friends__act-cover--ph"}`}
