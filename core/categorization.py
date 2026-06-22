@@ -20,10 +20,12 @@ _LABEL_TO_CATEGORY: dict[str, str] = {
     "theatre": "theatre", "theater": "theatre", "театр": "theatre", "театры": "theatre",
     "спектакль": "theatre", "спектакли": "theatre",
     "опера": "theatre", "балет": "theatre", "мюзикл": "theatre",
-    # exhibitions / museums (Yandex types art exhibitions as "art"; Timepad: "Выставки" / "Искусство и культура")
+    # exhibitions / museums (Yandex types art exhibitions as "art"; Timepad uses "Выставки")
     "art": "exhibition", "exhibition": "exhibition", "выставка": "exhibition",
     "выставки": "exhibition", "photo": "exhibition", "museum": "exhibition", "музей": "exhibition",
-    "искусство и культура": "exhibition",
+    # NB: Timepad's "Искусство и культура" is deliberately NOT mapped — it's a grab-bag (galleries but
+    # also lectures, excursions, master-classes), so events tagged ONLY that fall to the LLM classifier
+    # for an accurate per-event category instead of everything landing in "exhibition".
     # cinema
     "cinema": "cinema", "кино": "cinema",
     # stand-up
