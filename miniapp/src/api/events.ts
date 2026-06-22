@@ -58,7 +58,9 @@ function dedupeByEvent(items: EventItem[]): EventItem[] {
 }
 
 export async function fetchMapEvents(params: URLSearchParams, signal?: AbortSignal): Promise<MapResponse> {
-  const data = await getJson<MapResponse>(`/v1/events/map?${params.toString()}`, signal);
+  // The bulk city payload: a longer budget (it's big), and a LOW priority hint so a tapped tab / opened
+  // event isn't starved behind it. Idempotent GET → getJson retries once if it times out.
+  const data = await getJson<MapResponse>(`/v1/events/map?${params.toString()}`, { signal, timeoutMs: 15000, priority: "low" });
   const items = dedupeByEvent((data.items ?? []).map((x: any) => ({ ...x, price_min: toNum(x.price_min) })));
   return {
     clusters: data.clusters ?? [],

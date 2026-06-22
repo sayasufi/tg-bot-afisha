@@ -511,27 +511,39 @@ export function App() {
     };
   }, [zoom, queryKey, clusterMode, refreshNonce]);
 
-  // Prefetch the whole cluster-zoom band for the current filters in the background,
-  // so the FIRST visit to any zoom is already warm → zooming feels instant. Tiny
-  // payloads (a few dozen points each), deduped against the cache, served from the
-  // server's short Redis cache.
+  // Prefetch the cluster-zoom band so the FIRST visit to any zoom is already warm → zooming feels
+  // instant. CRITICAL: do it ONE AT A TIME and only when the browser is IDLE — the old version fired all
+  // ~7 levels in parallel on a 700ms timer, starving the ~6 connection slots on open and delaying the
+  // first paint / any tapped tab. Sequential + requestIdleCallback (setTimeout fallback for iOS webview)
+  // keeps it strictly background. Tiny payloads, deduped against the cache, served from Redis.
   useEffect(() => {
     if (!clusterMode) return;
     const ctrl = new AbortController();
-    const t = setTimeout(() => {
+    let cancelled = false;
+    const run = async () => {
       for (let z = 7; z < DETAIL_ZOOM; z++) {
+        if (cancelled) return;
         const p = new URLSearchParams(query);
         p.set("zoom", String(z));
         const key = p.toString();
         if (clusterCache.current.has(key)) continue;
-        fetchMapEvents(p, ctrl.signal)
-          .then((res) => clusterCache.current.set(key, res.clusters))
-          .catch(() => undefined);
+        try {
+          const res = await fetchMapEvents(p, ctrl.signal);
+          clusterCache.current.set(key, res.clusters);
+        } catch {
+          /* ignore — a cold zoom just fetches on demand */
+        }
       }
-    }, 700);
+    };
+    const useRic = typeof window.requestIdleCallback === "function";
+    const id = useRic
+      ? window.requestIdleCallback(() => void run(), { timeout: 2500 })
+      : window.setTimeout(() => void run(), 1200);
     return () => {
-      clearTimeout(t);
+      cancelled = true;
       ctrl.abort();
+      if (useRic && typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(id);
+      else clearTimeout(id);
     };
   }, [queryKey, clusterMode, refreshNonce]);
 

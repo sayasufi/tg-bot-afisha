@@ -63,8 +63,19 @@ app.add_middleware(
 
 
 _RL_WINDOW = 60
-_RL_MAX = 600  # requests per client IP per minute — well above a heavy session, blocks
+_RL_MAX = 600  # general requests per client IP per minute — well above a heavy session, blocks
 # only volumetric abuse. Defense-in-depth behind the nginx edge (best-effort via Redis).
+# A stricter SECOND budget for the EXPENSIVE paths (a cache-miss = a live PostGIS join + a ~MB gzip on the
+# event loop) — a legit session fires only a handful, so 120/min is generous but caps cache-miss abuse.
+_RLX_MAX = 120
+_EXPENSIVE_PREFIXES = ("/v1/events/map", "/v1/events/list", "/v1/recommendations")
+
+
+async def _incr_over(client, key: str, limit: int) -> bool:
+    n = await client.incr(key)
+    if n == 1:
+        await client.expire(key, _RL_WINDOW)
+    return n > limit
 
 
 @app.middleware("http")
@@ -74,15 +85,14 @@ async def rate_limit(request: Request, call_next):
         return await call_next(request)
     client = _redis_client()
     if client is not None:
-        # Real client IP — nginx sets X-Forwarded-For (the app sees only 127.0.0.1).
+        # Real client IP — nginx sets X-Forwarded-For (the app sees only the edge).
         fwd = request.headers.get("x-forwarded-for", "")
         ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
         try:
-            key = f"rl:{ip}"
-            n = await client.incr(key)
-            if n == 1:
-                await client.expire(key, _RL_WINDOW)
-            if n > _RL_MAX:
+            limited = await _incr_over(client, f"rl:{ip}", _RL_MAX)
+            if not limited and any(path.startswith(p) for p in _EXPENSIVE_PREFIXES):
+                limited = await _incr_over(client, f"rlx:{ip}", _RLX_MAX)
+            if limited:
                 return Response(status_code=429, content=b'{"detail":"too many requests"}', media_type="application/json")
         except Exception:  # never block on the limiter
             pass

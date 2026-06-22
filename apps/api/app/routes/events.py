@@ -78,6 +78,9 @@ async def get_map_events(
         result = await service.map_events(
             bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom, city_cfg
         )
+        # Return the pooled connection BEFORE the CPU-bound encode/compress (~MB) — `result` is already plain
+        # dicts, so nothing below needs the DB. Frees a pool slot during the slowest part of a cache-miss.
+        await db.close()
         raw = orjson.dumps(result)  # orjson encodes datetime/UUID natively; price is float
         etag = 'W/"' + hashlib.sha256(raw).hexdigest()[:32] + '"'
         gz_body = gzip.compress(raw, 5)
