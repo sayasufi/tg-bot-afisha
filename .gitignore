@@ -28,3 +28,7 @@ audit_digest.txt
 dedup_eval.py
 titles_corpus.txt
 infra/odyssey/odyssey.conf
+
+# stray agent/tool-result artifacts (a workflow agent once wrote a mangled path here)
+*tool-results*
+*frontend_diff.txt
