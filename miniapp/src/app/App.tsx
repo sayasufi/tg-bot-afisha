@@ -44,7 +44,7 @@ import { rangeFor } from "../lib/datePresets";
 import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { syncFavorites, useFavorites } from "../lib/favorites";
-import { syncVenueFollows } from "../lib/venueFollows";
+import { syncVenueFollows, useVenueFollows } from "../lib/venueFollows";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
 import { SearchOverlay } from "../features/search/SearchOverlay";
@@ -62,6 +62,7 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>(() => initTelegram()); // applies saved theme once
   const [tgUser] = useState(() => getUser());
   const fav = useFavorites();
+  const venueFollows = useVenueFollows(); // followed-venue count → badge on the «Площадки» nav item
   // Who invited me here (from a share deep-link «<event>_<inviter>_<sig>») — drives the invite banner.
   const [invite, setInvite] = useState<{ eventId: string; inviterId: number; sig: string } | null>(null);
   const [friendInvite, setFriendInvite] = useState<{ inviterId: number; sig: string } | null>(null); // «add me» link
@@ -1123,6 +1124,7 @@ export function App() {
         open={drawerOpen}
         view={view}
         favCount={fav.ids.size}
+        venueCount={venueFollows.ids.size}
         friendRequests={friendReqCount}
         user={tgUser}
         onClose={() => setDrawerOpen(false)}
