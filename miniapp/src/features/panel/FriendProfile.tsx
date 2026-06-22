@@ -62,13 +62,8 @@ export function FriendProfile({
 
   return (
     <div className="panelview">
-      <header className="panelview__head">
-        <h2>{(friend.name || "друг").toLowerCase()}</h2>
-        <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
-          <IconClose size={18} />
-        </button>
-      </header>
-      <div className="panelview__scroll">
+      <div className="panelview__scroll friendprof__scroll">
+        {/* No panel heading — the avatar + name IS the heading; close (×) sits to its right. */}
         <div className="profile">
           <div className="profile__avatar" style={av ? { backgroundImage: `url("${av}")` } : undefined}>
             {av ? "" : initial}
@@ -77,6 +72,9 @@ export function FriendProfile({
             <div className="profile__name">{friend.name || "Друг"}</div>
             <div className="profile__handle">{friend.username ? `@${friend.username}` : "в друзьях"}</div>
           </div>
+          <button type="button" className="panelview__close friendprof__close" aria-label="Закрыть" onClick={onClose}>
+            <IconClose size={18} />
+          </button>
         </div>
 
         {events.length > 0 && (

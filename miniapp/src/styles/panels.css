@@ -515,6 +515,15 @@ mark.hl {
 .tastecard--static {
   cursor: default;
 }
+/* Friend profile drops the panel heading — the avatar + name IS the heading, the × sits top-right of that
+   row — so the scroll itself respects the notch + a little top gap. */
+.friendprof__scroll {
+  padding-top: calc(env(safe-area-inset-top) + 6px);
+}
+.friendprof__close {
+  margin-left: auto;
+  align-self: flex-start;
+}
 .tastecard:active {
   opacity: 0.7;
 }
