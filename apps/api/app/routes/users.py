@@ -575,7 +575,7 @@ async def _notify_friend_added(inviter_id: int, name: str) -> None:
     token = get_app_settings().telegram_bot_token
     if not token or not inviter_id:
         return
-    text = f"👋 <b>{escape(name or 'Кто-то')}</b> добавил тебя в друзья по твоей ссылке"
+    text = f"{ce('👋')} <b>{escape(name or 'Кто-то')}</b> добавил тебя в друзья по твоей ссылке"
     markup = {"inline_keyboard": [[{"text": "друзья →", "url": "https://t.me/okrestmap_bot?startapp=friends"}]]}
     try:
         async with httpx.AsyncClient(timeout=8) as client:
@@ -619,7 +619,7 @@ async def _notify_friend_invited(friend_id: int, name: str, title: str | None, e
     token = get_app_settings().telegram_bot_token
     if not token or not friend_id:
         return
-    text = f"👋 <b>{escape(name or 'Друг')}</b> зовёт тебя\n{escape(title or 'на событие')}"
+    text = f"{ce('👋')} <b>{escape(name or 'Друг')}</b> зовёт тебя\n{escape(title or 'на событие')}"
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
     try:
         async with httpx.AsyncClient(timeout=8) as client:
@@ -664,7 +664,7 @@ async def _notify_friend_request(target_id: int, name: str) -> None:
     token = get_app_settings().telegram_bot_token
     if not token or not target_id:
         return
-    text = f"👋 <b>{escape(name or 'Кто-то')}</b> хочет добавить тебя в друзья"
+    text = f"{ce('👋')} <b>{escape(name or 'Кто-то')}</b> хочет добавить тебя в друзья"
     markup = {"inline_keyboard": [[{"text": "заявки →", "url": "https://t.me/okrestmap_bot?startapp=friends"}]]}
     try:
         async with httpx.AsyncClient(timeout=8) as client:
