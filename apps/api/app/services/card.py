@@ -37,6 +37,21 @@ CAT_LABEL = {
 }
 
 
+def _price_str(price_min, price_max=None) -> str:
+    """Human price for a card chip. «бесплатно» ONLY when truly free (0/0). A range that STARTS at 0
+    («от 0 до 3500 ₽» — free entry, paid options) is NOT free → «до 3500 ₽». «от N ₽» when there's a
+    real floor; empty when there's no price at all."""
+    lo = float(price_min) if price_min is not None else None
+    hi = float(price_max) if price_max is not None else None
+    if lo and lo > 0:
+        return f"от {int(lo)} ₽"
+    if hi and hi > 0:                       # lo is 0/None but there's a paid ceiling
+        return f"до {int(hi)} ₽"
+    if lo == 0 or hi == 0:                  # genuinely free (0/0 or 0/None)
+        return "бесплатно"
+    return ""                               # no price info at all
+
+
 def _font(size: int, weight: int = 400) -> ImageFont.FreeTypeFont:
     f = ImageFont.truetype(FONT_PATH, size)
     try:
@@ -204,9 +219,7 @@ def _compose_card(item: dict, photo: bytes | None, lead_text: str, lead_mark: st
     _pin_sm(d, P + 32, cy - 7, 15)  # ink pin · acid ring · ink dot (avatar)
     venue = str(item.get("venue") or "").strip()
     vf = _grotesk(31, 600)
-    price = item.get("price_min")
-    price_str = "бесплатно" if price is not None and float(price) == 0 else \
-        (f"от {int(float(price))} ₽" if price is not None else "")
+    price_str = _price_str(item.get("price_min"), item.get("price_max"))
     pf = _mono(27, 600)
     pw = d.textlength(price_str, font=pf) if price_str else 0
     vmax = (W - P - 24 - (pw + 28 if pw else 0)) - (P + 58)
@@ -302,9 +315,7 @@ def _digest_tile(w: int, h: int, item: dict) -> Image.Image:
     _pin_sm(d, P + 22, ccy - 4, 11)
     venue = (item.get("venue") or "").strip()
     vf = _grotesk(19, 600)
-    price = item.get("price_min")
-    price_str = "бесплатно" if price is not None and float(price) == 0 else \
-        (f"от {int(float(price))} ₽" if price is not None else "")
+    price_str = _price_str(item.get("price_min"), item.get("price_max"))
     pf = _mono(18, 600)
     pw = d.textlength(price_str, font=pf) if price_str else 0
     vmax = (w - P - 14 - (pw + 16 if pw else 0)) - (P + 44)

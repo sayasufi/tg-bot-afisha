@@ -101,6 +101,7 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
             EventOccurrence.date_start,
             EventOccurrence.date_end,
             EventOccurrence.price_min,
+            EventOccurrence.price_max,
             EventOccurrence.venue_id,
         )
         .distinct(EventOccurrence.event_id)
@@ -128,6 +129,7 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
                 soon.c.date_start,
                 soon.c.date_end,
                 soon.c.price_min,
+                soon.c.price_max,
                 Venue.name,
                 Venue.city,
             )
@@ -151,13 +153,14 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
             "event_id": str(r[1]),
             "title": r[2],
             "category": r[3],
-            "code": event_code(r[4], r[11]),
+            "code": event_code(r[4], r[12]),
             "image": r[5] or r[6] or None,  # cached cover (reliable) — raw-photo fallback
             "image_primary": r[6] or r[5] or None,  # ORIGINAL source — full-res for the branded cover
             "date_start": r[7].isoformat() if r[7] else None,
             "date_end": r[8].isoformat() if r[8] else None,
             "price_min": float(r[9]) if r[9] is not None else None,
-            "venue": r[10],
+            "price_max": float(r[10]) if r[10] is not None else None,
+            "venue": r[11],
         }
         for r in rows
     ]

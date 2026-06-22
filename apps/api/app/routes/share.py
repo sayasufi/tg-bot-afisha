@@ -64,6 +64,7 @@ def _card_item(event, occ, venue, city) -> dict:
         "category": event.category,
         "venue": venue,
         "price_min": float(occ.price_min) if occ and occ.price_min is not None else None,
+        "price_max": float(occ.price_max) if occ and occ.price_max is not None else None,
         "when": _card_when(occ.date_start if occ else None),
     }
 

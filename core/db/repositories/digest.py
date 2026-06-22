@@ -43,7 +43,7 @@ def weekend_window(now: datetime) -> tuple[datetime, datetime, datetime, datetim
 def _item(row) -> dict:
     """Shared row → bot-item dict (same column order in both queries)."""
     (event_id, title, category, display_no, cached_img, primary_img,
-     date_start, date_end, price_min, venue_name, venue_city) = row
+     date_start, date_end, price_min, price_max, venue_name, venue_city) = row
     return {
         "event_id": str(event_id),
         "title": title,
@@ -55,6 +55,7 @@ def _item(row) -> dict:
         "date_start": date_start.isoformat() if date_start else None,
         "date_end": date_end.isoformat() if date_end else None,
         "price_min": float(price_min) if price_min is not None else None,
+        "price_max": float(price_max) if price_max is not None else None,
         "venue": venue_name,
     }
 
@@ -102,6 +103,7 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
             EventOccurrence.date_start,
             EventOccurrence.date_end,
             EventOccurrence.price_min,
+            EventOccurrence.price_max,
             EventOccurrence.venue_id,
         )
         .distinct(EventOccurrence.event_id)
@@ -120,7 +122,7 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
     )
     rows = (
         await db.execute(
-            select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, Venue.name, Venue.city)
+            select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, soon.c.price_max, Venue.name, Venue.city)
             .join(soon, soon.c.eid == Event.event_id)
             .join(Venue, Venue.venue_id == soon.c.venue_id)
             .where(Event.status == "active", Event.created_at >= now - _NEW_WINDOW)
@@ -168,6 +170,7 @@ async def friends_saved(db: AsyncSession, user_id: int, now: datetime, limit: in
             EventOccurrence.date_start,
             EventOccurrence.date_end,
             EventOccurrence.price_min,
+            EventOccurrence.price_max,
             EventOccurrence.venue_id,
         )
         .distinct(EventOccurrence.event_id)
@@ -181,7 +184,7 @@ async def friends_saved(db: AsyncSession, user_id: int, now: datetime, limit: in
     )
     rows = (
         await db.execute(
-            select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, Venue.name, Venue.city)
+            select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, soon.c.price_max, Venue.name, Venue.city)
             .join(soon, soon.c.eid == Event.event_id)
             .join(Venue, Venue.venue_id == soon.c.venue_id)
             .where(Event.status == "active")
@@ -206,6 +209,7 @@ async def weekend_pool(
             EventOccurrence.date_start,
             EventOccurrence.date_end,
             EventOccurrence.price_min,
+            EventOccurrence.price_max,
             EventOccurrence.venue_id,
         )
         .distinct(EventOccurrence.event_id)
@@ -223,7 +227,7 @@ async def weekend_pool(
         .subquery()
     )
     q = (
-        select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, Venue.name, Venue.city)
+        select(*_COLS, soon.c.date_start, soon.c.date_end, soon.c.price_min, soon.c.price_max, Venue.name, Venue.city)
         .join(soon, soon.c.eid == Event.event_id)
         .join(Venue, Venue.venue_id == soon.c.venue_id)
         # Region guard (the app's single source for it) — keeps the digest to the user's city.
