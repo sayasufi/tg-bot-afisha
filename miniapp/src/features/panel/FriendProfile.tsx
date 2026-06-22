@@ -90,7 +90,7 @@ export function FriendProfile({
               </div>
               <div className="profile__stat">
                 <span className="hero-num">{both}</span>
-                <span className="profile__statlabel">вы оба</span>
+                <span className="profile__statlabel">совпало</span>
               </div>
             </div>
             {/* The same «кружочки» as your own profile — a constellation of THEIR taste by genre. */}
