@@ -115,6 +115,31 @@ export async function syncFavorites(): Promise<void> {
   }
 }
 
+// Seed the store from a pre-fetched list (the on-open /bootstrap call pulls favourites alongside
+// settings/venues/friends in one round-trip). Capture the merge payload + mutation seq UP FRONT, then
+// adopt the server list only if no local toggle raced the request — exactly mirroring syncFavorites'
+// guard + first-run merge, without making favorites its own round-trip.
+export function beginFavoritesAdopt(): { add: string[]; adopt: (ids: string[]) => void } {
+  let merged = false;
+  try {
+    merged = localStorage.getItem(MERGED_KEY) === "1";
+  } catch {
+    /* ignore */
+  }
+  const seq = mutationSeq;
+  return {
+    add: merged ? [] : [...favs],
+    adopt: (ids: string[]) => {
+      if (seq === mutationSeq) setLocal(new Set(ids));
+      try {
+        localStorage.setItem(MERGED_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
+
 function subscribe(cb: () => void): () => void {
   subscribers.add(cb);
   return () => {

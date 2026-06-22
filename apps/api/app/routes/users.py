@@ -72,6 +72,11 @@ class FavoritesSyncRequest(BaseModel):
     add: list[str] = []  # this device's local favourites to merge in (once, on first sync)
 
 
+class BootstrapRequest(BaseModel):
+    init_data: str
+    add: list[str] = []  # this device's local favourites to merge in on first run (same gate as favorites/sync)
+
+
 class FavoriteToggleRequest(BaseModel):
     init_data: str
     event_id: str
@@ -202,6 +207,30 @@ async def sync_favorites(payload: FavoritesSyncRequest, db: AsyncSession = Depen
         u.favorites_merged = True
     await db.commit()
     return {"ids": await list_favorite_ids(db, uid)}
+
+
+@router.post("/bootstrap")
+async def bootstrap(payload: BootstrapRequest, db: AsyncSession = Depends(get_async_db)):
+    """One round-trip on app open: upsert the user once, run the first-run favourites merge if needed, and
+    return everything the client pulls on open — settings + favourite ids + followed venue ids + friend
+    count. Replaces 4 separate authed POSTs (favorites/sync + venues + friends + settings), each of which
+    re-validated initData (and favorites/sync upserted). The client falls back to those 4 if this fails, so
+    the consolidation can never make the open WORSE than before."""
+    user, uid = _auth(payload.init_data)
+    u = await upsert_user_async(
+        db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
+    )
+    # Same one-time, server-gated migration as favorites/sync — a stale device can't resurrect removed ones.
+    if payload.add and not u.favorites_merged:
+        await add_favorites(db, uid, payload.add)
+        u.favorites_merged = True
+    await db.commit()  # the upsert (records the open) + the optional merge — a pure read otherwise
+    return {
+        "settings": await get_settings(db, uid),
+        "favorite_ids": await list_favorite_ids(db, uid),
+        "venue_follow_ids": await list_followed_venue_ids(db, uid),
+        "friends_count": await count_friends(db, uid),
+    }
 
 
 @router.post("/favorites")

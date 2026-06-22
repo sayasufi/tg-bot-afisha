@@ -43,6 +43,37 @@ export async function syncFavorites(add: string[] = []): Promise<string[] | null
   }
 }
 
+// One round-trip on app open — settings + favourite ids + followed venue ids + friend count, with the
+// first-run favourites merge folded in (`add` = this device's local hearts, same gate as favorites/sync).
+// Replaces 4 separate authed POSTs. Null outside Telegram / on error → the caller falls back to those 4.
+export type BootstrapData = {
+  settings: UserSettings | null;
+  favorite_ids: string[];
+  venue_follow_ids: string[];
+  friends_count: number;
+};
+export async function bootstrap(add: string[] = []): Promise<BootstrapData | null> {
+  const init = initData();
+  if (!init) return null;
+  try {
+    const r = await fetch(`${API_BASE}/v1/users/bootstrap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, add }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as Partial<BootstrapData>;
+    return {
+      settings: j.settings ?? null,
+      favorite_ids: Array.isArray(j.favorite_ids) ? j.favorite_ids : [],
+      venue_follow_ids: Array.isArray(j.venue_follow_ids) ? j.venue_follow_ids : [],
+      friends_count: typeof j.friends_count === "number" ? j.friends_count : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Account-scoped app settings (explicit fields). Pass a partial to set those fields;
 // omit to just read. Returns the full settings, or null outside Telegram / on error
 // (callers then keep their local values).

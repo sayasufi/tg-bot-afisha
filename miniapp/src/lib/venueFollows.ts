@@ -72,6 +72,15 @@ export async function syncVenueFollows(): Promise<void> {
   }
 }
 
+// Seed from a pre-fetched list (the on-open /bootstrap pulls follows alongside the rest in one round-trip).
+// Capture the seq up front, adopt only if no local toggle raced it — mirrors syncVenueFollows' guard.
+export function beginVenueFollowsAdopt(): (ids: string[]) => void {
+  const seq = mutationSeq;
+  return (ids: string[]) => {
+    if (seq === mutationSeq) setLocal(new Set(ids));
+  };
+}
+
 function subscribe(cb: () => void): () => void {
   subscribers.add(cb);
   return () => {

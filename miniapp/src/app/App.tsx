@@ -30,7 +30,7 @@ const FriendsPanel = lazy(() => import("../features/panel/FriendsPanel").then((m
 const FriendProfile = lazy(() => import("../features/panel/FriendProfile").then((m) => ({ default: m.FriendProfile })));
 import { FriendDisclosure } from "../features/panel/FriendDisclosure";
 import { FriendInviteAccept } from "../features/panel/FriendInviteAccept";
-import { fetchFriendsFavorited, manageFriends, type Friend } from "../api/users";
+import { bootstrap, fetchFriendsFavorited, manageFriends, type Friend } from "../api/users";
 import { showToast } from "../lib/toast";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
@@ -43,12 +43,12 @@ import { categoryMeta } from "../lib/categories";
 import { rangeFor } from "../lib/datePresets";
 import { goNowState } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
-import { syncFavorites, useFavorites } from "../lib/favorites";
-import { syncVenueFollows, useVenueFollows } from "../lib/venueFollows";
+import { beginFavoritesAdopt, syncFavorites, useFavorites } from "../lib/favorites";
+import { beginVenueFollowsAdopt, syncVenueFollows, useVenueFollows } from "../lib/venueFollows";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
 import { CitySwitcher } from "../features/map/CitySwitcher";
 import { SearchOverlay } from "../features/search/SearchOverlay";
-import { loadSettings, pushSetting } from "../lib/settings";
+import { loadSettings, pushSetting, type Settings } from "../lib/settings";
 import { useCities } from "../lib/useCities";
 import { useGeolocation } from "../lib/useGeolocation";
 
@@ -66,12 +66,6 @@ export function App() {
   // Who invited me here (from a share deep-link «<event>_<inviter>_<sig>») — drives the invite banner.
   const [invite, setInvite] = useState<{ eventId: string; inviterId: number; sig: string } | null>(null);
   const [friendInvite, setFriendInvite] = useState<{ inviterId: number; sig: string } | null>(null); // «add me» link
-  // Pull this account's favourites + venue follows from the server once on open (favourites also
-  // merge this device's local hearts in on first run) so they sync across devices.
-  useEffect(() => {
-    void syncFavorites();
-    void syncVenueFollows();
-  }, []);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -175,13 +169,24 @@ export function App() {
   useEffect(() => {
     hydratedRef.current = hydrated;
   }, [hydrated]);
+  const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
+  // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
+  // scope param and the map centre — no hardcoded city on the client. The switcher shows
+  // only when more than one city is active.
+  const { cities, current: currentCity, select: selectCity, seed: seedCity } = useCities(userPos);
+  // If the user changes theme/city before the settings GET resolves, don't let the (older)
+  // account value snap it back. Set when they act; checked when the load lands.
+  const settingsTouched = useRef({ theme: false, city: false });
+  // ONE round-trip on open: /bootstrap pulls settings + favourites + venue follows + friend count together
+  // (was 4 separate authed POSTs racing the map fetch for the browser's ~6 connections, each re-validating
+  // initData). Settings/favourites override this device's local cache when the account has a saved value.
+  // On ANY failure we fall back to the 4 independent loads, so the open can never be worse than before.
   useEffect(() => {
-    void manageFriends().then((s) => {
-      if (!s) return;
-      setFriendCount(s.friends.length);
+    const applyFriends = (count: number) => {
+      setFriendCount(count);
       // You may have become someone's friend while away (they accepted your invite). Show the one-time
       // «friends see your saves» disclosure on open if you have any friend and haven't seen it.
-      if (s.friends.length > 0) {
+      if (count > 0) {
         try {
           if (localStorage.getItem("okrest_friend_disclosed") !== "1") {
             localStorage.setItem("okrest_friend_disclosed", "1");
@@ -191,21 +196,8 @@ export function App() {
           /* ignore */
         }
       }
-    });
-  }, []);
-  const { userPos, heading, locating, locateNonce, onLocate } = useGeolocation();
-  // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
-  // scope param and the map centre — no hardcoded city on the client. The switcher shows
-  // only when more than one city is active.
-  const { cities, current: currentCity, select: selectCity, seed: seedCity } = useCities(userPos);
-  // If the user changes theme/city before the settings GET resolves, don't let the (older)
-  // account value snap it back. Set when they act; checked when the load lands.
-  const settingsTouched = useRef({ theme: false, city: false });
-  // Pull account-scoped settings on open so they match across devices, overriding this
-  // device's local cache when the account has a saved value.
-  useEffect(() => {
-    void loadSettings().then((s) => {
-      if (!s) return;
+    };
+    const applySettings = (s: Settings) => {
       if (!settingsTouched.current.theme && (s.theme === "dark" || s.theme === "light")) {
         applyTheme(s.theme);
         setTheme(s.theme);
@@ -240,6 +232,24 @@ export function App() {
       if (typeof s.notify_friends === "boolean") setNotifyFriends(s.notify_friends);
       if (typeof s.friends_private === "boolean") setFriendsPrivate(s.friends_private);
       if (typeof s.is_searchable === "boolean") setIsSearchable(s.is_searchable);
+    };
+    // Capture the favourites/venues merge-payload + mutation seq BEFORE the request (so a toggle made
+    // mid-flight can't be clobbered by the stale server list) — same guards the per-store syncs use.
+    const favAdopt = beginFavoritesAdopt();
+    const venueAdopt = beginVenueFollowsAdopt();
+    void bootstrap(favAdopt.add).then((b) => {
+      if (b) {
+        favAdopt.adopt(b.favorite_ids);
+        venueAdopt(b.venue_follow_ids);
+        if (b.settings) applySettings(b.settings);
+        applyFriends(b.friends_count);
+      } else {
+        // Couldn't bootstrap (offline / non-Telegram / error) — fall back to the independent loads.
+        void syncFavorites();
+        void syncVenueFollows();
+        void manageFriends().then((s) => s && applyFriends(s.friends.length));
+        void loadSettings().then((s) => s && applySettings(s));
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
