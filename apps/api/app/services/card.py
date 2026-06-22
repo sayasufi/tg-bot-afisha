@@ -221,38 +221,39 @@ def render_reminder_card(item: dict, photo: bytes | None) -> bytes:
     pd.line([W - 70, 40, W - 40, 40], fill=CINNABAR, width=5)  # cinnabar registration tick (signature)
     pd.line([W - 40, 40, W - 40, 70], fill=CINNABAR, width=5)
 
-    # measure body so the canvas fits the content
-    scratch = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+    # FIXED canvas — every reminder card is EXACTLY 1080×1280, whatever the title length, so it
+    # never changes size between sends in the chat. The chip is anchored to the bottom; the text
+    # block (urgency · title · meta) is vertically centred in the gap between the photo and the chip,
+    # so a 1-line and a 3-line title both look balanced without resizing the card.
     title = str(item.get("title") or "Событие").strip()
     tf = _grotesk(62, 700)
-    tlines = _wrap(scratch, title, tf, W - 2 * P, 3)
-    LH = 72
-    body_top = PH + RULE
-    urg_y = body_top + 40
-    title_y = urg_y + 34 + 30
-    meta_y = title_y + len(tlines) * LH + 16
-    chip_y = meta_y + 30 + 34
-    chip_h = 78
-    H = chip_y + chip_h + P
+    LH, chip_h, H = 72, 78, 1280
+    chip_y = H - P - chip_h
 
     img = Image.new("RGB", (W, H), INK)
     img.paste(block, (0, 0))
     d = ImageDraw.Draw(img, "RGBA")
     d.rectangle([0, PH, W, PH + RULE], fill=ACID)
 
+    tlines = _wrap(d, title, tf, W - 2 * P, 3)
     when = str(item.get("when") or "").strip()
+    URG_H, URG_GAP = (38, 30) if when else (0, 0)
+    META_GAP, META_H = 16, 30
+    block_h = URG_H + URG_GAP + len(tlines) * LH + META_GAP + META_H
+    region_top, region_bottom = PH + RULE + 24, chip_y - 24
+    y = region_top + max(0, (region_bottom - region_top - block_h) // 2)
+
     if when:  # urgency: bolt + when (mono acid)
-        _bolt(d, P, urg_y, 38, ACID)
-        d.text((P + 42, urg_y + 3), when, font=_mono(28, 500), fill=ACID)
-
-    ty = title_y  # title (grotesk bold, white)
-    for ln in tlines:
-        d.text((P, ty), ln, font=tf, fill=WHITE)
-        ty += LH
-
+        _bolt(d, P, y, 38, ACID)
+        d.text((P + 42, y + 3), when, font=_mono(28, 500), fill=ACID)
+        y += URG_H + URG_GAP
+    for ln in tlines:  # title (grotesk bold, white)
+        d.text((P, y), ln, font=tf, fill=WHITE)
+        y += LH
+    y += META_GAP
     cat = CAT_LABEL.get(item.get("category") or "", "Событие").upper()  # code · category (mono dim)
     sig = " · ".join(p for p in [code, cat] if p)
-    d.text((P, meta_y), sig, font=_mono(25, 500), fill=INK_DIM)
+    d.text((P, y), sig, font=_mono(25, 500), fill=INK_DIM)
 
     # venue + price chip (flat, hairline): pin · venue ............ price
     chip = [P, chip_y, W - P, chip_y + chip_h]

@@ -135,15 +135,21 @@ def reminder_caption(item: dict, now: datetime | None = None) -> str:
 
 
 def reminder_caption_card(item: dict, now: datetime | None = None) -> str:
-    """MINIMAL caption under the fully-composed reminder card — the card itself already shows when /
-    title / code / venue / price, so this is just the urgency line + title, enough for the chat-list
+    """The caption under the fully-composed reminder card — the card itself shows when / title / code
+    / venue / price, so this stays light: a bell + the urgency line (the RELATIVE part bold, the clock
+    time dim) and the title as the bold hero, with breathing room between. Enough for the chat-list
     preview to read the event (vs a bare «Фото») without duplicating the whole wall."""
     raw = str(item.get("title") or "Событие")
     if len(raw) > 100:
         raw = raw[:99].rstrip() + "…"
+    title = f"<b>{escape(raw)}</b>"
     when = when_phrase(item.get("date_start"), item.get("date_end"), now)
-    head = f"{ce('🔔')} <b>{escape(when)}</b>\n" if when else ""
-    return f"{head}{escape(raw)}"
+    if not when:
+        return title
+    # «через 2 часа · сегодня в 21:00» → bold the lead, keep the clock time quiet.
+    lead, _, tail = when.partition(" · ")
+    when_html = f"<b>{escape(lead)}</b>" + (f" · {escape(tail)}" if tail else "")
+    return f"{ce('🔔')} {when_html}\n\n{title}"
 
 
 _BOT_USERNAME = "okrestmap_bot"
