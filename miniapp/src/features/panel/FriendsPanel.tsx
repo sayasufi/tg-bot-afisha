@@ -332,6 +332,7 @@ export function FriendsPanel({
             onClick={() => setTab("activity")}
           >
             Хроника
+            {activity.length > 0 && <span className="friends__tab-count">{activity.length}</span>}
           </button>
           <button
             type="button"
@@ -341,6 +342,9 @@ export function FriendsPanel({
             onClick={() => setTab("friends")}
           >
             Друзья
+            {friends.length > 0 && (
+              <span className="friends__tab-count">{friends.length > 99 ? "99+" : friends.length}</span>
+            )}
             {requests.length > 0 && <span className="friends__tab-badge">{requests.length}</span>}
           </button>
         </div>

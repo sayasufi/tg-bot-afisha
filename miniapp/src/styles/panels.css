@@ -1149,6 +1149,17 @@ mark.hl {
   font-size: 9px;
   font-weight: 700;
 }
+/* Content-volume counter next to each tab label («ХРОНИКА 14 · ДРУЗЬЯ 3») — shows value before the tap.
+   Muted mono so it informs without competing with the label; a notch stronger on the active tab. */
+.friends__tab-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+.friends__tab--on .friends__tab-count {
+  color: var(--ink-dim);
+}
 /* Incoming request row actions: a small acid «принять» + the same × to decline. */
 .profile__req-actions {
   flex: 0 0 auto;
