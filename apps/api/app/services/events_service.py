@@ -42,7 +42,7 @@ def _redis_client() -> aioredis.Redis | None:
     return get_redis(decode=False)
 
 
-def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city=None) -> str:
+def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city=None, fields="full") -> str:
     raw = json.dumps(
         [
             zoom,
@@ -56,6 +56,7 @@ def map_cache_key(zoom, bbox, date_from, date_to, categories, price_min, price_m
             limit,
             offset,
             city,
+            fields,
         ],
         default=str,
         sort_keys=True,
@@ -291,28 +292,37 @@ class EventQueryService:
         offset: int,
         zoom: int | None = None,
         city=None,
+        fields: str = "full",
     ):
         # Below detail zoom → server-aggregated clusters (payload/marker count don't
         # grow with the catalogue); at/above it → individual pins. The WHOLE response
         # is cached as serialized bytes by the route (map_cache_*), so repeat loads
         # across the frontend's per-zoom prefetch and across users skip all of this.
-        # `city` (a CityConfig) scopes everything to one city when given.
+        # `city` (a CityConfig) scopes everything to one city when given. `category_counts`
+        # rides along so the ticker reads server-side totals (not a client-side full scan).
         if zoom is not None and zoom < self._DETAIL_ZOOM:
             clusters = await self._cluster(bbox, zoom, date_from, date_to, categories, price_min, price_max, q, city)
             # total = sum of per-cell counts — avoids a second full-region COUNT(DISTINCT)
             # join on the most common (city-overview) cold path. With no bbox the clusters
             # already span the whole region, so the sum equals the pinnable count.
             total = sum(int(c.get("count", 0)) for c in clusters)
-            return {"clusters": clusters, "items": [], "total": total}
-        items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city)
+            counts = await self._category_counts(date_from, date_to, categories, price_min, price_max, q, city)
+            return {"clusters": clusters, "items": [], "total": total, "category_counts": counts}
+        items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city, fields)
         # "Показать N" = filter-wide count of map-able events. When the whole city is
         # fetched (no bbox, no paging) it EQUALS the result size after DISTINCT ON, so
-        # derive it from `items` instead of firing a second identical ~14k-row join.
+        # derive total + per-category counts from `items` (free) instead of a second join.
         if bbox is None and not limit and not offset:
             total = len(items)
+            counts = {}
+            for it in items:
+                c = it["category"]
+                if c:
+                    counts[c] = counts.get(c, 0) + 1
         else:
             total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q, city)
-        return {"clusters": [], "items": items, "total": total}
+            counts = await self._category_counts(date_from, date_to, categories, price_min, price_max, q, city)
+        return {"clusters": [], "items": items, "total": total, "category_counts": counts}
 
     async def _count_pinnable(self, date_from, date_to, categories, price_min, price_max, q, city=None) -> int:
         stmt = (
@@ -327,6 +337,25 @@ class EventQueryService:
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
         return int(await self.db.scalar(stmt) or 0)
+
+    async def _category_counts(self, date_from, date_to, categories, price_min, price_max, q, city=None) -> dict[str, int]:
+        """Filter-wide pinnable-event count per category — one indexed GROUP BY with the SAME WHERE as
+        _count_pinnable. Lets the ticker show per-category totals without the client iterating the whole set
+        (and without it even needing the whole set once the map fetch is the slim `fields=index` payload)."""
+        stmt = (
+            select(Event.category, func.count(func.distinct(Event.event_id)))
+            .select_from(Event)
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
+            .where(Event.status == "active", Venue.geom.is_not(None))
+            .where(Venue.name.is_distinct_from(_PLACEHOLDER_VENUE))
+            .where(self._region_clause(city))
+            .where(self._concrete_time_clause())
+            .group_by(Event.category)
+        )
+        stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
+        rows = (await self.db.execute(stmt)).all()
+        return {cat: int(n) for cat, n in rows if cat}
 
     async def _cluster(self, bbox, zoom, date_from, date_to, categories, price_min, price_max, q, city=None):
         # One representative point per event (soonest occurrence's venue) within the
@@ -394,7 +423,7 @@ class EventQueryService:
                 merged.append(dict(c))
         return [{"id": f"c{i}", "lat": m["lat"], "lon": m["lon"], "count": m["count"]} for i, m in enumerate(merged)]
 
-    async def _detail(self, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city=None):
+    async def _detail(self, bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city=None, fields="full"):
         # Compute venue lat/lon in the main query (was an N+1 per-row subquery).
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
@@ -450,29 +479,47 @@ class EventQueryService:
         # viewport-bbox fetch is the lever if the dataset ever grows past that.)
         rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
         now_msk = datetime.now(_MSK)
-        items = [
-            {
-                "event_id": r.event_id,
-                "code": event_code(r.display_no, r.venue_city),
-                "title": r.title,
-                "category": r.category,
-                "date_start": r.date_start,
-                "date_end": r.date_end,
-                # float (not Decimal) — JSON-encodable by orjson and the wire type the
-                # client coerces to anyway; avoids per-row Decimal handling.
-                "price_min": float(r.price_min) if r.price_min is not None else None,
-                "venue": r.venue_name,
-                "venue_id": r.venue_id,  # lets the cluster peek / sheet open the venue page
-                # Compact "open now" tri-state instead of the full weekly schedule
-                # (which was ~18% of the gzipped payload). Full hours stay on the
-                # detail endpoint. The client uses this for the "идёт сейчас" highlight.
-                "open_now": _venue_open_now(r.venue_hours, now_msk),
-                "lat": float(r.lat) if r.lat is not None else None,
-                "lon": float(r.lon) if r.lon is not None else None,
-                "primary_image_url": r.cached_image_url or r.primary_image_url,
-            }
-            for r in rows
-        ]
+        if fields == "index":
+            # SLIM "index" payload — only what every-event client features need (clustering, the «Рядом»
+            # radius filter, «можно пойти сейчас», the ticker category counts). Drops title/venue/code/image
+            # (≈60% of the gzipped body) — the in-frame pins / peek / sheet hydrate those by id on demand.
+            items = [
+                {
+                    "event_id": r.event_id,
+                    "category": r.category,
+                    "date_start": r.date_start,
+                    "date_end": r.date_end,
+                    "price_min": float(r.price_min) if r.price_min is not None else None,
+                    "open_now": _venue_open_now(r.venue_hours, now_msk),
+                    "lat": float(r.lat) if r.lat is not None else None,
+                    "lon": float(r.lon) if r.lon is not None else None,
+                }
+                for r in rows
+            ]
+        else:
+            items = [
+                {
+                    "event_id": r.event_id,
+                    "code": event_code(r.display_no, r.venue_city),
+                    "title": r.title,
+                    "category": r.category,
+                    "date_start": r.date_start,
+                    "date_end": r.date_end,
+                    # float (not Decimal) — JSON-encodable by orjson and the wire type the
+                    # client coerces to anyway; avoids per-row Decimal handling.
+                    "price_min": float(r.price_min) if r.price_min is not None else None,
+                    "venue": r.venue_name,
+                    "venue_id": r.venue_id,  # lets the cluster peek / sheet open the venue page
+                    # Compact "open now" tri-state instead of the full weekly schedule
+                    # (which was ~18% of the gzipped payload). Full hours stay on the
+                    # detail endpoint. The client uses this for the "идёт сейчас" highlight.
+                    "open_now": _venue_open_now(r.venue_hours, now_msk),
+                    "lat": float(r.lat) if r.lat is not None else None,
+                    "lon": float(r.lon) if r.lon is not None else None,
+                    "primary_image_url": r.cached_image_url or r.primary_image_url,
+                }
+                for r in rows
+            ]
         # DISTINCT ON forces event_id ordering; present pins by soonest date instead.
         items.sort(key=lambda it: it["date_start"])
         return items

@@ -42,6 +42,7 @@ async def get_map_events(
     limit: int | None = Query(default=None, ge=1, le=20000),
     offset: int = Query(default=0, ge=0),
     city: str | None = Query(default=None, max_length=120, description="city slug or name to scope to"),
+    fields: str = Query(default="full", pattern="^(full|index)$", description="'index' = slim per-event payload"),
     db: AsyncSession = Depends(get_async_db),
 ):
     # Resolve the city to scope the map to one city (multi-city). Unknown/absent → None
@@ -69,14 +70,14 @@ async def get_map_events(
     # front stores it already-compressed.
     accepts_gzip = "gzip" in request.headers.get("accept-encoding", "").lower()
     city_slug = city_cfg.slug if city_cfg else None
-    key = map_cache_key(zoom, bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, city_slug)
+    key = map_cache_key(zoom, bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, city_slug, fields)
     cached = await map_cache_get(key)
     if cached is not None:
         gz_body, etag = cached
     else:
         service = EventQueryService(db)
         result = await service.map_events(
-            bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom, city_cfg
+            bbox_tuple, date_from, date_to, categories, price_min, price_max, q, limit, offset, zoom, city_cfg, fields
         )
         # Return the pooled connection BEFORE the CPU-bound encode/compress (~MB) — `result` is already plain
         # dicts, so nothing below needs the DB. Frees a pool slot during the slowest part of a cache-miss.
