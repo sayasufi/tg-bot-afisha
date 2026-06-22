@@ -14,15 +14,32 @@ CAT_CODE = {
 
 _WEEKDAY_PREP = ["в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу", "в воскресенье"]
 
-# Our VITRINE custom-emoji ids (set "vitrine_by_okrestmap_bot"). ce() wraps a standard
-# emoji so it renders as our acid glyph in bot DMs, with that same emoji as the automatic
-# fallback (shown in push-notification previews, or if the owner's Premium ever lapses).
+# Our VITRINE custom-emoji ids (set "okrest_by_okrestmap_bot" — the full acid-glyph + ink-keyline set,
+# theme-proof on light AND dark). ce() wraps a standard emoji so it renders as our glyph in bot DMs,
+# with that same emoji as the automatic fallback (push-notification previews, or if Premium lapses).
+# Category keys MUST mirror CATEGORY_GLYPH below so glyph() → ce() resolves. NB: custom emoji only
+# render in message text/captions — NOT in button labels / bot name (a Telegram platform limit).
 CUSTOM_EMOJI = {
-    "🔔": "5305380299666925175",
-    "📍": "5305268063581542808",
-    "⚡": "5305445248162371955",
-    "➡️": "5303493739577122144",
-    "🔴": "5305776145327755759",
+    "🔔": "5319091136650846875",
+    "📍": "5318884029032871246",
+    "⚡": "5316981710708057182",
+    "➡️": "5318983891317464386",
+    "🔴": "5317041483767913409",
+    "👥": "5316949885000394240",
+    "✨": "5319300782594502588",
+    "🎉": "5319130955292648772",
+    "❤️": "5319210760079975213",
+    "🎵": "5319020510208628565",
+    "🎭": "5319146949750857465",
+    "🖼": "5318971010710542805",
+    "🎬": "5316904577390389441",
+    "🎤": "5318861742447567727",
+    "🎪": "5316856194583799391",
+    "🎓": "5316913064245764873",
+    "🗺": "5316575419686757244",
+    "🥂": "5317018686081505701",
+    "🗝": "5316698826982072570",
+    "🧸": "5318756537223651379",
 }
 
 
@@ -52,7 +69,9 @@ _MONTHS = [
 
 
 def glyph(category: str | None) -> str:
-    return CATEGORY_GLYPH.get(category or "", "✨")
+    """Category emoji as OUR custom glyph (ce-wrapped) — every category in CATEGORY_GLYPH has a
+    matching id in CUSTOM_EMOJI, so a digest/reminder row shows the acid glyph, not a stock emoji."""
+    return ce(CATEGORY_GLYPH.get(category or "", "✨"))
 
 
 def _plural(n: int, one: str, few: str, many: str) -> str:
@@ -268,7 +287,7 @@ def digest_caption(venue_items: list[dict], friend_items: list[dict], weekend_it
             tail = " · ".join(p for p in [day, price] if p)
             n = int(it.get("nfriends") or 0)  # social proof for the friends block
             if n > 1:
-                tail += (" · " if tail else "") + f"♥{n}"
+                tail += (" · " if tail else "") + f"{ce('❤️')}{n}"
             lines.append(f"{glyph(it.get('category'))} {link}" + (f" · {tail}" if tail else ""))
 
     block("📍", "новое на твоих площадках", venue_items)

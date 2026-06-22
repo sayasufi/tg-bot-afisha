@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.services.geo import reverse_city
 from apps.api.app.services.telegram_auth import validate_init_data
+from apps.bot.bot.formatting import ce
 from core.cities import city_by_name
 from core.config.settings import get_settings as get_app_settings
 from core.invite import sign_friend, verify as invite_verify, verify_friend
@@ -505,7 +506,7 @@ async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_i
     if not token or not inviter_id:
         return
     text = (
-        f"🎉 <b>{escape(name or 'Кто-то')}</b> принял твоё приглашение\n{escape(title or 'на событие')}\n\n"
+        f"{ce('🎉')} <b>{escape(name or 'Кто-то')}</b> принял твоё приглашение\n{escape(title or 'на событие')}\n\n"
         "Теперь вы друзья — смотрите, что друг у друга в избранном."
     )
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
