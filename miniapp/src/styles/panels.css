@@ -1098,6 +1098,57 @@ mark.hl {
 .friends__more:active {
   color: var(--cinnabar);
 }
+/* Two segments — «Хроника» (the feed) / «Друзья» (the list) — so the list isn't buried under the feed.
+   Editorial tab style (matches the list view): ink text, active set apart by weight + an acid underline. */
+.friends__tabs {
+  display: flex;
+  gap: 22px;
+  margin: 12px 0 2px;
+  border-bottom: 1px solid var(--line);
+}
+.friends__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--ink-dim);
+  font-family: var(--grotesk);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.friends__tab--on {
+  color: var(--ink);
+  font-weight: 700;
+}
+.friends__tab--on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  background: var(--acid);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.friends__tab-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  background: var(--cinnabar);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+}
 /* Incoming request row actions: a small acid «принять» + the same × to decline. */
 .profile__req-actions {
   flex: 0 0 auto;

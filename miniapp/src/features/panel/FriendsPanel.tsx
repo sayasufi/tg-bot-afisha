@@ -155,6 +155,7 @@ export function FriendsPanel({
   // the chronicle never buries the friend list, and a big roster doesn't make an endless scroll.
   const [activityFull, setActivityFull] = useState(false);
   const [friendsFull, setFriendsFull] = useState(false);
+  const [tab, setTab] = useState<"activity" | "friends">("activity"); // two segments so the list isn't buried under the feed
   const [disclose, setDisclose] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -322,86 +323,115 @@ export function FriendsPanel({
           </>
         )}
 
-        {requests.length > 0 && (
-          <>
-            <div className="recs__section">Заявки</div>
-            <div className="profile__friends">
-              {requests.map((f) => (
-                <FriendRow key={f.id} f={f}>
-                  <span className="profile__req-actions">
-                    <button type="button" className="profile__req-accept" onClick={() => accept(f.id)}>
-                      принять
-                    </button>
-                    <button
-                      type="button"
-                      className="profile__friend-x"
-                      aria-label={`Отклонить ${f.name || "заявку"}`}
-                      onClick={() => decline(f.id)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                </FriendRow>
-              ))}
-            </div>
-          </>
-        )}
+        <div className="friends__tabs" role="tablist" aria-label="Друзья">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "activity"}
+            className={`friends__tab${tab === "activity" ? " friends__tab--on" : ""}`}
+            onClick={() => setTab("activity")}
+          >
+            Хроника
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "friends"}
+            className={`friends__tab${tab === "friends" ? " friends__tab--on" : ""}`}
+            onClick={() => setTab("friends")}
+          >
+            Друзья
+            {requests.length > 0 && <span className="friends__tab-badge">{requests.length}</span>}
+          </button>
+        </div>
 
-        {activity.length > 0 && (
-          <>
-            <div className="recs__section">Хроника друзей</div>
-            <div className="friends__feed">
-              {(activityFull ? activity : activity.slice(0, ACT_PREVIEW)).map((a, i) => (
-                <ActivityRow key={`${a.friend.id}-${a.event.event_id}-${i}`} a={a} onOpen={onOpenEvent} />
-              ))}
-            </div>
-            {!activityFull && activity.length > ACT_PREVIEW && (
-              <button type="button" className="friends__more" onClick={() => setActivityFull(true)}>
-                вся хроника · ещё {activity.length - ACT_PREVIEW} →
-              </button>
-            )}
-          </>
-        )}
-
-        <div className="recs__section">Ваши друзья</div>
-        {friends.length > 0 ? (
-          <>
-            <div className="profile__friends">
-              {(friendsFull ? friends : friends.slice(0, FR_PREVIEW)).map((f) => (
-                <FriendRow
-                  key={f.id}
-                  f={f}
-                  onOpen={onOpenFriend}
-                  subtitle={tasteLabel(f.top_cats) || (f.username ? `@${f.username}` : "")}
-                >
-                  <button
-                    type="button"
-                    className="profile__friend-x"
-                    aria-label={`Убрать ${f.name || "друга"} из друзей`}
-                    onClick={() => remove(f.id)}
-                  >
-                    ×
-                  </button>
-                </FriendRow>
-              ))}
-            </div>
-            {!friendsFull && friends.length > FR_PREVIEW && (
-              <button type="button" className="friends__more" onClick={() => setFriendsFull(true)}>
-                показать всех · {friends.length} →
-              </button>
-            )}
-          </>
+        {tab === "activity" ? (
+          activity.length > 0 ? (
+            <>
+              <div className="friends__feed">
+                {(activityFull ? activity : activity.slice(0, ACT_PREVIEW)).map((a, i) => (
+                  <ActivityRow key={`${a.friend.id}-${a.event.event_id}-${i}`} a={a} onOpen={onOpenEvent} />
+                ))}
+              </div>
+              {!activityFull && activity.length > ACT_PREVIEW && (
+                <button type="button" className="friends__more" onClick={() => setActivityFull(true)}>
+                  вся хроника · ещё {activity.length - ACT_PREVIEW} →
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="profile__friends-empty">
+              {friends.length === 0
+                ? "Пока нет друзей. Добавь их во вкладке «Друзья» — и тут появится, что они сохраняют."
+                : "Пока тихо — здесь появится, что сохраняют твои друзья."}
+            </p>
+          )
         ) : (
-          <p className="profile__friends-empty">
-            Поделись событием через «Пойдём?» — кто примет приглашение, сразу станет другом. После этого вы
-            будете видеть, что друг у друга в избранном.
-          </p>
-        )}
+          <>
+            {requests.length > 0 && (
+              <>
+                <div className="recs__section">Заявки</div>
+                <div className="profile__friends">
+                  {requests.map((f) => (
+                    <FriendRow key={f.id} f={f}>
+                      <span className="profile__req-actions">
+                        <button type="button" className="profile__req-accept" onClick={() => accept(f.id)}>
+                          принять
+                        </button>
+                        <button
+                          type="button"
+                          className="profile__friend-x"
+                          aria-label={`Отклонить ${f.name || "заявку"}`}
+                          onClick={() => decline(f.id)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </FriendRow>
+                  ))}
+                </div>
+              </>
+            )}
+            {friends.length > 0 ? (
+              <>
+                <div className="profile__friends">
+                  {(friendsFull ? friends : friends.slice(0, FR_PREVIEW)).map((f) => (
+                    <FriendRow
+                      key={f.id}
+                      f={f}
+                      onOpen={onOpenFriend}
+                      subtitle={tasteLabel(f.top_cats) || (f.username ? `@${f.username}` : "")}
+                    >
+                      <button
+                        type="button"
+                        className="profile__friend-x"
+                        aria-label={`Убрать ${f.name || "друга"} из друзей`}
+                        onClick={() => remove(f.id)}
+                      >
+                        ×
+                      </button>
+                    </FriendRow>
+                  ))}
+                </div>
+                {!friendsFull && friends.length > FR_PREVIEW && (
+                  <button type="button" className="friends__more" onClick={() => setFriendsFull(true)}>
+                    показать всех · {friends.length} →
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="profile__friends-empty">
+                Поделись событием через «Пойдём?» — кто примет приглашение, сразу станет другом. После этого
+                вы будете видеть, что друг у друга в избранном.
+              </p>
+            )}
 
-        <button type="button" className="friends__invite" onClick={inviteFriend}>
-          <span className="friends__invite-plus" aria-hidden="true">+</span>
-          пригласить друга
-        </button>
+            <button type="button" className="friends__invite" onClick={inviteFriend}>
+              <span className="friends__invite-plus" aria-hidden="true">+</span>
+              пригласить друга
+            </button>
+          </>
+        )}
       </div>
       {disclose && <FriendDisclosure onClose={() => setDisclose(false)} />}
     </div>
