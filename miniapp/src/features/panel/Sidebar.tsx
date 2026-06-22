@@ -20,7 +20,7 @@ export function Sidebar({
   view,
   favCount = 0,
   venueCount = 0,
-  friendRequests = 0,
+  friendCount = 0,
   user = null,
   onSelect,
   onClose,
@@ -29,12 +29,12 @@ export function Sidebar({
   view: View;
   favCount?: number;
   venueCount?: number; // followed-venue count → badge on «Площадки»
-  friendRequests?: number; // incoming pending requests → badge on «Друзья»
+  friendCount?: number; // total accepted friends → badge on «Друзья»
   user?: TgUser | null;
   onSelect: (v: View) => void;
   onClose: () => void;
 }) {
-  const navCount: Partial<Record<View, number>> = { favorites: favCount, venues: venueCount, friends: friendRequests };
+  const navCount: Partial<Record<View, number>> = { favorites: favCount, venues: venueCount, friends: friendCount };
   // The «Профиль» nav item is gone; this account block at the bottom is the entry to the profile
   // screen (where notifications / city / taste live) — Linear/Slack-style.
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";

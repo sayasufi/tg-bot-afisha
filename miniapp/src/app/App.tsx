@@ -164,13 +164,13 @@ export function App() {
   // First-friend disclosure (fires here when a mutual invite makes you friends instantly) + the menu
   // badge count of incoming friend requests (pulled once on open, kept live by the Friends panel).
   const [friendDisclosure, setFriendDisclosure] = useState(false);
-  const [friendReqCount, setFriendReqCount] = useState(0);
+  const [friendCount, setFriendCount] = useState(0); // total accepted friends → badge on «Друзья»
   const [friendProfile, setFriendProfile] = useState<Friend | null>(null); // open friend's profile overlay
   const [friendCounts, setFriendCounts] = useState<Map<string, number>>(() => new Map()); // event_id → #friends who saved it
   useEffect(() => {
     void manageFriends().then((s) => {
       if (!s) return;
-      setFriendReqCount(s.requests.length);
+      setFriendCount(s.friends.length);
       // You may have become someone's friend while away (they accepted your invite). Show the one-time
       // «friends see your saves» disclosure on open if you have any friend and haven't seen it.
       if (s.friends.length > 0) {
@@ -1067,7 +1067,7 @@ export function App() {
             onToggleFriendsPrivate={toggleFriendsPrivate}
             isSearchable={isSearchable}
             onToggleSearchable={toggleSearchable}
-            onRequestsChange={setFriendReqCount}
+            onFriendsChange={setFriendCount}
             onOpenFriend={setFriendProfile}
             onClose={() => setView("map")}
           />
@@ -1125,7 +1125,7 @@ export function App() {
         view={view}
         favCount={fav.ids.size}
         venueCount={venueFollows.ids.size}
-        friendRequests={friendReqCount}
+        friendCount={friendCount}
         user={tgUser}
         onClose={() => setDrawerOpen(false)}
         onSelect={(v) => {

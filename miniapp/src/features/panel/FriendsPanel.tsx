@@ -51,13 +51,13 @@ function FriendRow({ f, onOpen, children }: { f: Friend; onOpen?: (f: Friend) =>
 
 // «Друзья» — its own screen. Incoming requests (accept/decline) + confirmed friends (unfriend) + the
 // privacy kill-switch. A friend appears here once BOTH sides agreed (you accepted a request, or you
-// each invited the other). onRequestsChange keeps the menu badge in sync.
+// each invited the other). onFriendsChange keeps the menu badge (friend count) in sync.
 export function FriendsPanel({
   friendsPrivate,
   onToggleFriendsPrivate,
   isSearchable,
   onToggleSearchable,
-  onRequestsChange,
+  onFriendsChange,
   onOpenFriend,
   onClose,
 }: {
@@ -65,7 +65,7 @@ export function FriendsPanel({
   onToggleFriendsPrivate: (on: boolean) => void;
   isSearchable: boolean;
   onToggleSearchable: (on: boolean) => void;
-  onRequestsChange?: (n: number) => void;
+  onFriendsChange?: (n: number) => void;
   onOpenFriend?: (f: Friend) => void;
   onClose: () => void;
 }) {
@@ -79,7 +79,7 @@ export function FriendsPanel({
     if (!s) return;
     setFriends(s.friends);
     setRequests(s.requests);
-    onRequestsChange?.(s.requests.length);
+    onFriendsChange?.(s.friends.length);
   };
   useEffect(() => {
     let alive = true;
@@ -95,7 +95,6 @@ export function FriendsPanel({
   const accept = (id: number) => {
     haptic("light");
     setRequests((rs) => rs.filter((r) => r.id !== id)); // optimistic
-    onRequestsChange?.(requests.length - 1);
     void manageFriends("accept", id).then((s) => {
       apply(s);
       if (s?.firstFriend) {
@@ -112,7 +111,6 @@ export function FriendsPanel({
   };
   const decline = (id: number) => {
     setRequests((rs) => rs.filter((r) => r.id !== id)); // optimistic
-    onRequestsChange?.(requests.length - 1);
     void manageFriends("decline", id).then(apply);
   };
   const remove = (id: number) => {
