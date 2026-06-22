@@ -164,6 +164,7 @@ class TimepadConnector:
                 "poster_image": poster.get("default_url") if isinstance(poster, dict) else None,
                 "site_url": rep.get("url"),
                 "sessions": len(grp),
+                "iso_dates": True,  # startDate/endDate ARE the authoritative session → drives occurrence upsert + prune
             }
             if not payload["name"]:
                 continue

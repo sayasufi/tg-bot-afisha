@@ -47,12 +47,30 @@ def _ts_to_dt(value: object) -> datetime | None:
     return datetime.fromtimestamp(ts, tz=timezone.utc)
 
 
+def _iso_dt(value: object) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def _payload_session_dates(payload: object, now: datetime, until: datetime) -> list[tuple[datetime, datetime | None]]:
     """All in-window sessions from a source payload's ``dates`` rows (unix start/end),
     so one source event with several showtimes becomes several occurrences. Returns
     [] for payloads without ``dates`` (LLM/ldjson sources keep the single primary)."""
     rows = payload.get("dates") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
+        # Timepad: ISO startDate/endDate IS the authoritative session (no unix `dates` rows). The
+        # `iso_dates` marker scopes this to Timepad so LLM/ldjson startDates aren't treated as prunable
+        # truth (their re-extraction can drift) — and so prune can actually clean Timepad's stale dates.
+        if isinstance(payload, dict) and payload.get("iso_dates"):
+            start = _iso_dt(payload.get("startDate"))
+            end = _iso_dt(payload.get("endDate"))
+            if start is not None and ((now <= start <= until) or (end is not None and start < now <= end)):
+                return [(start, end)]
         return []
     out: list[tuple[datetime, datetime | None]] = []
     seen: set[int] = set()
