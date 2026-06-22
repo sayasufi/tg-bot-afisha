@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.services.card import ensure_card
 from apps.api.app.services.telegram_auth import validate_init_data
+from core.codes import event_code
 from core.config.settings import get_settings
 from core.invite import sign as invite_sign
 from core.db.models import Event, EventOccurrence, Venue
@@ -46,6 +47,25 @@ def _when(dt: datetime | None) -> str:
     if not dt:
         return ""
     return f"{dt.day} {_MONTHS[dt.month - 1]}, {dt:%H:%M}"
+
+
+def _card_when(dt: datetime | None) -> str:
+    """Event date for the card's lead line — '16 июня · 16:15' (the card uses · separators)."""
+    if not dt:
+        return ""
+    return f"{dt.day} {_MONTHS[dt.month - 1]} · {dt:%H:%M}"
+
+
+def _card_item(event, occ, venue, city) -> dict:
+    """The data the unified share card needs (code · title · category · venue · price · date)."""
+    return {
+        "code": event_code(event.display_no, city) if event.display_no else "",
+        "title": event.canonical_title or "Событие",
+        "category": event.category,
+        "venue": venue,
+        "price_min": float(occ.price_min) if occ and occ.price_min is not None else None,
+        "when": _card_when(occ.date_start if occ else None),
+    }
 
 
 def _safe_image(url: str) -> str:
@@ -118,7 +138,7 @@ _PAGE = """<!doctype html>
 async def share(event_id: UUID, ref: int | None = None, db: AsyncSession = Depends(get_async_db)):
     row = (
         await db.execute(
-            select(Event, EventOccurrence, Venue.name.label("venue"))
+            select(Event, EventOccurrence, Venue.name.label("venue"), Venue.city.label("city"))
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.event_id == event_id)
@@ -129,17 +149,16 @@ async def share(event_id: UUID, ref: int | None = None, db: AsyncSession = Depen
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
-    event, occ, venue = row
+    event, occ, venue, city = row
     title = event.canonical_title or "Событие"
     image = _safe_image(event.cached_image_url or event.primary_image_url or "")
     base = get_settings().telegram_webapp_url.rstrip("/")
     parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
     desc = " · ".join(parts) + (" · " if parts else "") + "Окрест — события рядом"
-    # Branded VITRINE card for the link preview; raw photo for the page cover. The
-    # render is blocking (image fetch + PIL + MinIO), so it runs in a worker thread
-    # rather than on the event loop.
+    # Unified VITRINE card for the link preview; raw photo for the page cover. The render is
+    # blocking (image fetch + PIL + MinIO), so it runs in a worker thread, not the event loop.
     card = await run_in_threadpool(
-        ensure_card, str(event_id), title, " · ".join(parts) or "Событие", event.category, image
+        ensure_card, str(event_id), _card_item(event, occ, venue, city), image
     )
     og_image = card or image
     cover_style = f"background-image:url('{image}')" if image else ""
@@ -174,7 +193,7 @@ async def prepare(payload: PrepareRequest, db: AsyncSession = Depends(get_async_
 
     row = (
         await db.execute(
-            select(Event, EventOccurrence, Venue.name.label("venue"))
+            select(Event, EventOccurrence, Venue.name.label("venue"), Venue.city.label("city"))
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.event_id == payload.event_id)
@@ -185,25 +204,23 @@ async def prepare(payload: PrepareRequest, db: AsyncSession = Depends(get_async_
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
-    event, occ, venue = row
+    event, occ, venue, city = row
     title = event.canonical_title or "Событие"
     image = _safe_image(event.cached_image_url or event.primary_image_url or "")
     parts = [p for p in [_when(occ.date_start if occ else None), venue] if p]
-    # Send the branded VITRINE card as the photo; fall back to the raw image. The
-    # blocking render runs in a worker thread.
+    # Send the unified VITRINE card as the photo; fall back to the raw image. The blocking
+    # render runs in a worker thread.
     photo_url = (
-        await run_in_threadpool(
-            ensure_card, str(payload.event_id), title, " · ".join(parts) or "Событие", event.category, image
-        )
+        await run_in_threadpool(ensure_card, str(payload.event_id), _card_item(event, occ, venue, city), image)
         or image
     )
     if not photo_url:
         return {"ok": False}  # nothing to send → caller falls back to a link share
 
+    # The card already carries date · venue · price; keep the caption light — bold title + a meta line.
     caption = f"<b>{escape(title)}</b>"
     if parts:
-        caption += "\n" + escape(" · ".join(parts))
-    caption += "\nОкрест — события рядом"
+        caption += "\n\n" + escape(" · ".join(parts))
 
     result = {
         "type": "photo",

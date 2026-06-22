@@ -80,11 +80,20 @@ def _bolt(d: ImageDraw.ImageDraw, x: float, y: float, h: float, color) -> None:
 
 
 def _pin_sm(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color=ACID) -> None:
-    """A small map-pin glyph (acid by default, ink hole) for dark chips. Bulb centred near (cx, cy)."""
+    """A small map-pin glyph (ink hole). Bulb centred near (cx, cy)."""
     d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
     d.polygon([(cx - r * 0.62, cy + r * 0.35), (cx + r * 0.62, cy + r * 0.35), (cx, cy + r * 1.9)], fill=color)
     hr = r * 0.42
     d.ellipse([cx - hr, cy - hr, cx + hr, cy + hr], fill=INK)
+
+
+def _calendar(d: ImageDraw.ImageDraw, x: float, y: float, s: float, color) -> None:
+    """A small calendar glyph — the share card's 'date' lead mark. Size s, top-left at (x, y)."""
+    r = max(2, int(s * 0.1))
+    d.rounded_rectangle([x, y + s * 0.16, x + s * 0.9, y + s], radius=int(s * 0.12), outline=color, width=r)
+    d.line([x, y + s * 0.40, x + s * 0.9, y + s * 0.40], fill=color, width=r)             # header divider
+    d.line([x + s * 0.26, y, x + s * 0.26, y + s * 0.26], fill=color, width=r)            # left binding ring
+    d.line([x + s * 0.64, y, x + s * 0.64, y + s * 0.26], fill=color, width=r)            # right binding ring
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int, max_lines: int) -> list[str]:
@@ -121,84 +130,19 @@ def _pin(d: ImageDraw.ImageDraw, cx: int, cy: int, r: int) -> None:
     d.ellipse([cx - dr, cy - dr, cx + dr, cy + dr], fill=INK)
 
 
-def render_card(title: str, meta: str, category: str, photo: bytes | None) -> bytes:
-    img = Image.new("RGB", (W, H), PLASTER)
-    d = ImageDraw.Draw(img)
+# --- composed VITRINE card: ONE fixed 1080×1280 frame shared by the reminder DM and the share image
+# so they look identical. A bright photo hero (code tab · окрест wordmark · cinnabar tick) over a LIGHT
+# plaster body — a lead line, the title, code · category, and a venue+price chip. Only the lead varies:
+# a cinnabar bolt + relative «через 2 часа» for a reminder, an ink calendar + the event date for a
+# share. Type: Unbounded wordmark · Golos Text title · Martian Mono data. Size is FIXED so the image
+# never changes dimensions between sends; the chip is bottom-anchored and the text block centred, so a
+# 1-line and a 3-line title both look balanced without resizing.
+def _compose_card(item: dict, photo: bytes | None, lead_text: str, lead_mark: str = "bolt",
+                  lead_color=CINNABAR) -> bytes:
+    W, P, PH, RULE = 1080, 46, 700, 6
+    LH, chip_h, H = 72, 78, 1280
 
-    # Photo window (cover-fit) or an acid block when there's no image.
-    px0, py0, px1, py1 = 20, 20, W - 20, 800
-    if photo:
-        try:
-            ph = Image.open(io.BytesIO(photo)).convert("RGB")
-            ph = ImageOps.fit(ph, (px1 - px0, py1 - py0), Image.LANCZOS)
-            img.paste(ph, (px0, py0))
-        except Exception:
-            d.rectangle([px0, py0, px1, py1], fill=ACID)
-    else:
-        d.rectangle([px0, py0, px1, py1], fill=ACID)
-
-    # Acid category tag over the photo's bottom-left.
-    label = (CAT_LABEL.get(category, "Событие")).upper()
-    cf = _font(30, 700)
-    tw = d.textlength(label, font=cf)
-    d.rectangle([px0 + 22, py1 - 60, px0 + 22 + tw + 36, py1 - 8], fill=ACID)
-    d.text((px0 + 22 + 18, py1 - 54), label, font=cf, fill=INK)
-
-    # Outer hairline frame + photo divider.
-    d.rectangle([20, 20, W - 21, H - 21], outline=INK, width=3)
-    d.line([px0, py1, px1, py1], fill=INK, width=3)
-
-    # Cinnabar registration tick (signature).
-    d.line([W - 70, 44, W - 44, 44], fill=CINNABAR, width=4)
-    d.line([W - 44, 44, W - 44, 70], fill=CINNABAR, width=4)
-
-    # Title.
-    tf = _font(58, 800)
-    x = 48
-    y = 850
-    for line in _wrap(d, title, tf, W - 96, 3):
-        d.text((x, y), line, font=tf, fill=INK)
-        y += 74
-
-    # Meta (when · venue), single ellipsized line.
-    mf = _font(28, 500)
-    m = meta.upper()
-    while m and d.textlength(m + "…", font=mf) > W - 96:
-        m = m[:-1]
-    if m and m != meta.upper():
-        m = m.rstrip() + "…"
-    d.text((x, y + 10), m, font=mf, fill=INK_DIM)
-
-    # Wordmark lockup at the bottom: pin + окрест + tagline.
-    by = H - 86
-    _pin(d, 60, by - 6, 22)
-    wf = _font(40, 800)
-    d.text((92, by - 30), "окрест", font=wf, fill=INK)
-    tagf = _font(22, 600)
-    tag = "СОБЫТИЯ РЯДОМ"
-    d.text((W - 48 - d.textlength(tag, font=tagf), by - 18), tag, font=tagf, fill=INK_DIM)
-
-    out = io.BytesIO()
-    img.save(out, "JPEG", quality=90, optimize=True)
-    return out.getvalue()
-
-
-# --- reminder CARD: a fully-composed VITRINE notification card ------------------------
-# render_reminder_cover (above) stamped brand chrome on a bare 16:9 photo and left the when /
-# title / venue / price to the Telegram caption — a thin photo over a wall of text. This bakes the
-# WHOLE card (Unbounded wordmark · Familjen Grotesk title · Martian Mono data) into one frame, like
-# the app's EventListRow, so the DM looks designed. The `when` is live, so it's rendered per send
-# (cheap — reminders are low-volume) and streamed to Telegram as bytes, not a cached URL.
-def render_reminder_card(item: dict, photo: bytes | None) -> bytes:
-    W = 1080
-    P = 46            # body padding
-    PH = 700          # photo block height
-    RULE = 6          # acid rule under the photo
-    INK_LINE = (38, 38, 36)
-    WHITE = (243, 243, 238)
-
-    # photo block — kept BRIGHT (only a bottom scrim for the wordmark), the opposite of the old
-    # darken-to-mud cover; cover-fit, acid fallback when there's no usable image.
+    # photo hero — kept BRIGHT (only a bottom scrim for the wordmark); cover-fit, acid fallback.
     try:
         block = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (W, PH), Image.LANCZOS) if photo \
             else Image.new("RGB", (W, PH), ACID)
@@ -221,46 +165,43 @@ def render_reminder_card(item: dict, photo: bytes | None) -> bytes:
     pd.line([W - 70, 40, W - 40, 40], fill=CINNABAR, width=5)  # cinnabar registration tick (signature)
     pd.line([W - 40, 40, W - 40, 70], fill=CINNABAR, width=5)
 
-    # FIXED canvas — every reminder card is EXACTLY 1080×1280, whatever the title length, so it
-    # never changes size between sends in the chat. The chip is anchored to the bottom; the text
-    # block (urgency · title · meta) is vertically centred in the gap between the photo and the chip,
-    # so a 1-line and a 3-line title both look balanced without resizing the card.
+    # LIGHT plaster body; chip bottom-anchored, text block (lead · title · meta) vertically centred.
     title = str(item.get("title") or "Событие").strip()
     tf = _grotesk(62, 700)
-    LH, chip_h, H = 72, 78, 1280
     chip_y = H - P - chip_h
-
-    img = Image.new("RGB", (W, H), INK)
+    img = Image.new("RGB", (W, H), PLASTER)
     img.paste(block, (0, 0))
     d = ImageDraw.Draw(img, "RGBA")
     d.rectangle([0, PH, W, PH + RULE], fill=ACID)
 
     tlines = _wrap(d, title, tf, W - 2 * P, 3)
-    when = str(item.get("when") or "").strip()
-    URG_H, URG_GAP = (38, 30) if when else (0, 0)
+    lead = (lead_text or "").strip()
+    LEAD_H, LEAD_GAP = (38, 30) if lead else (0, 0)
     META_GAP, META_H = 16, 30
-    block_h = URG_H + URG_GAP + len(tlines) * LH + META_GAP + META_H
+    block_h = LEAD_H + LEAD_GAP + len(tlines) * LH + META_GAP + META_H
     region_top, region_bottom = PH + RULE + 24, chip_y - 24
     y = region_top + max(0, (region_bottom - region_top - block_h) // 2)
 
-    if when:  # urgency: bolt + when (mono acid)
-        _bolt(d, P, y, 38, ACID)
-        d.text((P + 42, y + 3), when, font=_mono(28, 500), fill=ACID)
-        y += URG_H + URG_GAP
-    for ln in tlines:  # title (grotesk bold, white)
-        d.text((P, y), ln, font=tf, fill=WHITE)
+    if lead:  # lead: a mark + relative-when (reminder) / event-date (share), mono
+        if lead_mark == "calendar":
+            _calendar(d, P, y + 2, 34, lead_color)
+        else:
+            _bolt(d, P, y, 38, lead_color)
+        d.text((P + 48, y + 3), lead, font=_mono(28, 500), fill=lead_color)
+        y += LEAD_H + LEAD_GAP
+    for ln in tlines:  # title (grotesk bold, ink)
+        d.text((P, y), ln, font=tf, fill=INK)
         y += LH
     y += META_GAP
     cat = CAT_LABEL.get(item.get("category") or "", "Событие").upper()  # code · category (mono dim)
     sig = " · ".join(p for p in [code, cat] if p)
     d.text((P, y), sig, font=_mono(25, 500), fill=INK_DIM)
 
-    # venue + price chip (flat, hairline): pin · venue ............ price
+    # venue + price chip (flat, ink hairline): pin · venue ............ price
     chip = [P, chip_y, W - P, chip_y + chip_h]
-    d.rectangle(chip, fill=(255, 255, 255, 10))
-    d.rectangle(chip, outline=INK_LINE, width=2)
+    d.rectangle(chip, outline=INK, width=2)
     cy = chip_y + chip_h // 2
-    _pin_sm(d, P + 30, cy - 4, 13)
+    _pin_sm(d, P + 30, cy - 4, 13, color=CINNABAR)
     venue = str(item.get("venue") or "").strip()
     vf = _grotesk(31, 600)
     price = item.get("price_min")
@@ -274,13 +215,23 @@ def render_reminder_card(item: dict, photo: bytes | None) -> bytes:
         vv = vv[:-1]
     if vv != venue and vv:
         vv = vv.rstrip() + "…"
-    d.text((P + 58, cy - 21), vv or "—", font=vf, fill=WHITE)
+    d.text((P + 58, cy - 21), vv or "—", font=vf, fill=INK)
     if price_str:
-        d.text((W - P - 24 - pw, cy - 18), price_str, font=pf, fill=ACID)
+        d.text((W - P - 24 - pw, cy - 18), price_str, font=pf, fill=CINNABAR)
 
     out = io.BytesIO()
     img.save(out, "JPEG", quality=92, optimize=True)
     return out.getvalue()
+
+
+def render_reminder_card(item: dict, photo: bytes | None) -> bytes:
+    """Reminder DM card — relative «через N часов» urgency lead (cinnabar bolt)."""
+    return _compose_card(item, photo, str(item.get("when") or ""), "bolt", CINNABAR)
+
+
+def render_share_card(item: dict, photo: bytes | None) -> bytes:
+    """Share image — the same card with the event DATE as the lead (ink calendar, no urgency)."""
+    return _compose_card(item, photo, str(item.get("when") or ""), "calendar", INK)
 
 
 def _event_photo_bytes(event_id: str, src_url: str | None) -> bytes | None:
@@ -392,9 +343,11 @@ def render_digest_poster(items: list[dict], label: str) -> bytes:
     return out.getvalue()
 
 
-def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: str) -> str:
-    """Return the public URL of the cached card, rendering + storing it if needed."""
-    key = f"cards/{event_id}.jpg"
+def ensure_card(event_id: str, item: dict, image_url: str) -> str:
+    """Public URL of the cached unified share card (rendered + stored if missing). `item` carries
+    code / title / category / venue / price_min / when (the event DATE). Empty string on failure.
+    The card is STATIC (an absolute date, not a relative time), so it's safe to cache per event."""
+    key = f"cards/v2/{event_id}.jpg"  # v2: the unified light VITRINE card (was the plaster poster)
     try:
         if object_exists(key):
             return public_url(key)
@@ -419,7 +372,7 @@ def ensure_card(event_id: str, title: str, meta: str, category: str, image_url: 
             photo = None
 
     try:
-        data = render_card(title, meta, category, photo)
+        data = render_share_card(item, photo)
         ensure_bucket()
         put_image(key, data, "image/jpeg")
         return public_url(key)
