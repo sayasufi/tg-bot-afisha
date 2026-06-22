@@ -405,6 +405,64 @@ async def _upsert_occurrences(db: AsyncSession, event: Event, candidate: EventCa
     await db.flush()
 
 
+# --- reprocess CHANGED raws -----------------------------------------------------------
+# Raws are normalized ONCE (unprocessed_raw_ids requires candidate_id IS NULL). When a structured
+# source UPDATES a raw (dates shift as old ones pass, a price appears, sessions are added), the
+# candidate + occurrences would otherwise freeze at first-ingest. These re-normalize the changed raw
+# and propagate the fresh date/price through the SAME _upsert_occurrences the first ingest uses.
+_STRUCTURED_SOURCES = ("yandex_afisha", "afisha_ru", "kudago")
+
+
+async def stale_structured_raw_ids(db: AsyncSession, limit: int = 200) -> list[int]:
+    """Raws whose content changed since the candidate was built (content_hash <> processed_hash, or
+    never stamped) — STRUCTURED sources only (rule-based re-normalization is cheap + deterministic, no
+    LLM), that already resolved into an event. Ordered, bounded."""
+    stmt = (
+        select(RawEvent.raw_id)
+        .join(Source, Source.source_id == RawEvent.source_id)
+        .join(EventCandidate, EventCandidate.raw_id == RawEvent.raw_id)
+        .join(EventSource, EventSource.raw_id == RawEvent.raw_id)
+        .where(Source.name.in_(_STRUCTURED_SOURCES))
+        .where(or_(RawEvent.processed_hash.is_(None), RawEvent.processed_hash != RawEvent.content_hash))
+        .order_by(RawEvent.raw_id.asc())
+        .limit(limit)
+    )
+    return list((await db.execute(stmt)).scalars().unique().all())
+
+
+async def reprocess_raw(db: AsyncSession, raw_id: int, normalizer) -> str:
+    """Re-normalize ONE changed raw and propagate the fresh date/price onto its candidate + the linked
+    event's occurrences — the missing re-ingest trigger. Returns 'refreshed' | 'stamped' (nothing to
+    do). ALWAYS stamps processed_hash so a raw is never reprocessed in a tight loop."""
+    raw = await get_raw(db, raw_id)
+    if raw is None:
+        return "stamped"
+    fresh = next(iter(normalizer.normalize(raw.raw_payload_json, raw.raw_text)), None)
+    cand = (await db.execute(
+        select(EventCandidate).where(EventCandidate.raw_id == raw_id).order_by(EventCandidate.candidate_id.asc())
+    )).scalars().first()
+    if fresh is None or cand is None:
+        raw.processed_hash = raw.content_hash
+        return "stamped"
+    # Refresh the drift-prone fields on the EXISTING candidate (keep its resolved venue_id / category).
+    cand.date_start = fresh.date_start
+    cand.date_end = fresh.date_end
+    cand.price_min = fresh.price_min
+    cand.price_max = fresh.price_max
+    cand.currency = fresh.currency
+    # Propagate to the linked event via the SAME upsert as first ingest: it reads the raw's CURRENT
+    # sessions, sets price from the candidate, stamps last_seen_at — so a new date appears, a stale one
+    # stops being re-seen (falls to prune_stale_occurrences), and the price lands.
+    link = (await db.execute(select(EventSource).where(EventSource.raw_id == raw_id))).scalars().first()
+    if link is not None:
+        event = await db.get(Event, link.event_id)
+        venue = await db.get(Venue, cand.venue_id) if cand.venue_id else None
+        if event is not None:
+            await _upsert_occurrences(db, event, cand, venue, raw_id)
+    raw.processed_hash = raw.content_hash
+    return "refreshed"
+
+
 async def dedup_and_upsert_event(
     db: AsyncSession,
     candidate: EventCandidate,

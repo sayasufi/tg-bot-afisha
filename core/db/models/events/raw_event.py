@@ -25,6 +25,11 @@ class RawEvent(Base):
     # Non-empty when normalize gave up on this raw event; keeps it out of the
     # unprocessed queue so it is not re-sent to the LLM every beat tick.
     skip_reason: Mapped[str] = mapped_column(String(64), default="", server_default="", nullable=False)
+    # The content_hash that produced the CURRENT candidate. Stamped on (re)normalize. When a source
+    # updates a raw (dates shift, a price appears), content_hash diverges from this → the reprocess
+    # flow re-normalizes so the candidate/occurrences don't freeze at first-ingest. NULL = never
+    # stamped (legacy rows / not yet normalized).
+    processed_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     source = relationship("Source", back_populates="raw_events")
     candidates = relationship("EventCandidate", back_populates="raw_event")

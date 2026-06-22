@@ -28,6 +28,9 @@ _SCHEDULE = [
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),
+    # Re-normalize structured-source raws whose content changed since first ingest (a date shifted as
+    # old ones passed, a price appeared) so candidates + occurrences don't freeze at first-seen state.
+    (flows.reprocess_changed, 300),
     # Self-heal venue+event dups every 15 min (ordered: venues then events) so the
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.

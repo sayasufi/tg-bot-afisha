@@ -56,6 +56,13 @@ async def normalize_raw():
     return await normalize._normalize_impl()
 
 
+@flow(name="reprocess-changed", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=900, log_prints=True)
+async def reprocess_changed():
+    # Re-normalize structured-source raws whose content changed since first ingest (date shift / price
+    # appears) so candidates + occurrences don't freeze forever.
+    return await normalize._reprocess_changed_impl()
+
+
 @flow(name="enrich-candidates", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 async def enrich_candidates():
     return await enrich._enrich_impl()

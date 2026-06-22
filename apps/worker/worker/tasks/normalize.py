@@ -4,7 +4,14 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from core.config.settings import get_settings
-from core.db.repositories.ingestion import get_raw, mark_raw_skipped, save_candidate, unprocessed_raw_ids
+from core.db.repositories.ingestion import (
+    get_raw,
+    mark_raw_skipped,
+    reprocess_raw,
+    save_candidate,
+    stale_structured_raw_ids,
+    unprocessed_raw_ids,
+)
 from core.db.session import WorkerAsyncSessionLocal
 from pipeline.llm.extraction_service import LLMExtractionService
 from pipeline.normalizer.rules import RuleBasedNormalizer
@@ -120,7 +127,10 @@ async def _normalize_impl() -> dict:
                 await save_candidate(db, raw_id, c)
                 created += 1
                 saved_for_raw += 1
-            if not saved_for_raw and last_skip_reason:
+            if saved_for_raw:
+                raw.processed_hash = raw.content_hash  # mark the content version this candidate was built from
+                await db.commit()
+            elif last_skip_reason:
                 await mark_raw_skipped(db, raw, last_skip_reason)
         stats = {
             "candidates": created,
@@ -129,3 +139,37 @@ async def _normalize_impl() -> dict:
         }
         logger.info("normalize_summary", extra=stats)
         return stats
+
+
+async def _reprocess_changed_impl(max_batches: int = 12) -> dict:
+    """Re-normalize structured-source raws whose content changed since their candidate was built, so
+    updated dates/prices propagate instead of freezing at first-ingest. Bounded per run (the schedule
+    drains the rest); per-raw commit isolates a bad raw, and processed_hash is always stamped so the
+    selector advances and never loops."""
+    normalizer = RuleBasedNormalizer()
+    refreshed = errors = 0
+    async with WorkerAsyncSessionLocal() as db:
+        for _ in range(max_batches):
+            ids = await stale_structured_raw_ids(db, limit=200)
+            if not ids:
+                break
+            for rid in ids:
+                try:
+                    res = await reprocess_raw(db, rid, normalizer)
+                    await db.commit()
+                    if res == "refreshed":
+                        refreshed += 1
+                except Exception:
+                    await db.rollback()
+                    errors += 1
+                    logger.warning("reprocess_failed", extra={"raw_id": rid}, exc_info=True)
+                    try:  # stamp so a permanently-failing raw doesn't loop the selector forever
+                        raw = await get_raw(db, rid)
+                        if raw is not None:
+                            raw.processed_hash = raw.content_hash
+                            await db.commit()
+                    except Exception:
+                        await db.rollback()
+    stats = {"refreshed": refreshed, "errors": errors}
+    logger.info("reprocess_summary", extra=stats)
+    return stats
