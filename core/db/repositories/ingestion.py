@@ -370,38 +370,28 @@ async def _upsert_occurrences(db: AsyncSession, event: Event, candidate: EventCa
     if not sessions and candidate.date_start:
         sessions = [(candidate.date_start, candidate.date_end)]
     occ_venue_id = venue.venue_id if venue else None
-    venue_filter = EventOccurrence.venue_id.is_(None) if occ_venue_id is None else EventOccurrence.venue_id == occ_venue_id
     for occ_start, occ_end in sessions:
-        occurrence = (await db.execute(
-            select(EventOccurrence).where(
-                and_(
-                    EventOccurrence.event_id == event.event_id,
-                    EventOccurrence.date_start == occ_start,
-                    venue_filter,
-                )
-            )
-        )).scalars().first()
-        if occurrence:
-            occurrence.date_end = occ_end
-            occurrence.price_min = candidate.price_min
-            occurrence.price_max = candidate.price_max
-            occurrence.currency = candidate.currency
-            occurrence.source_best_url = candidate.source_url
-            occurrence.last_seen_at = now  # re-seen this sweep → freshness stamp for stale-pruning
-        else:
-            db.add(
-                EventOccurrence(
-                    event_id=event.event_id,
-                    venue_id=occ_venue_id,
-                    date_start=occ_start,
-                    date_end=occ_end,
-                    price_min=candidate.price_min,
-                    price_max=candidate.price_max,
-                    currency=candidate.currency,
-                    source_best_url=candidate.source_url,
-                    last_seen_at=now,
-                )
-            )
+        ins = pg_insert(EventOccurrence).values(
+            event_id=event.event_id, venue_id=occ_venue_id, date_start=occ_start, date_end=occ_end,
+            price_min=candidate.price_min, price_max=candidate.price_max, currency=candidate.currency,
+            source_best_url=candidate.source_url, last_seen_at=now,
+        )
+        # Single idempotent UPSERT on (event_id, date_start, COALESCE(venue_id,-1)) — race-proof (no
+        # duplicate-key) for multi-source events touching the same session. Price rule: take the incoming
+        # price ONLY when it's a REAL (non-zero) quote, so a free/unknown source can never overwrite a
+        # known paid price (the multi-source «бесплатно» bug). Always refresh last_seen for stale-pruning.
+        take_price = func.coalesce(ins.excluded.price_min, 0) > 0
+        await db.execute(ins.on_conflict_do_update(
+            index_elements=[EventOccurrence.event_id, EventOccurrence.date_start, text("coalesce(venue_id, -1)")],
+            set_={
+                "date_end": ins.excluded.date_end,
+                "price_min": case((take_price, ins.excluded.price_min), else_=EventOccurrence.price_min),
+                "price_max": case((take_price, ins.excluded.price_max), else_=EventOccurrence.price_max),
+                "currency": case((take_price, ins.excluded.currency), else_=EventOccurrence.currency),
+                "source_best_url": ins.excluded.source_best_url,
+                "last_seen_at": ins.excluded.last_seen_at,
+            },
+        ))
     await db.flush()
 
 
