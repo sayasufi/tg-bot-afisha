@@ -69,19 +69,15 @@ class TimepadConnector:
 
     @staticmethod
     def _price_text(reg: object) -> str:
-        """registration_data → a price string parse_price_field round-trips exactly. Absent registration_
-        data, OR a registration_data with NO price fields (just status — e.g. is_registration_open), →
-        "" (UNKNOWN). Only an EXPLICIT 0/0 reads as free — without this a status-only registration_data
-        (price_min/max missing) mislabelled ~half the catalog «бесплатно»."""
+        """registration_data → a price string parse_price_field round-trips exactly. ONLY a POSITIVE price
+        is trustworthy: Timepad reports price 0/0 both for genuinely-free events AND for paid ones whose
+        tickets are external / registration is closed (camps, media-accreditation, business clubs). So
+        0/0 (or missing) → "" (UNKNOWN, no price shown) — never a false «бесплатно»."""
         if not isinstance(reg, dict):
             return ""
         lo = reg.get("price_min"); hi = reg.get("price_max")
-        lo = float(lo) if isinstance(lo, (int, float)) else None
-        hi = float(hi) if isinstance(hi, (int, float)) else None
-        if lo is None and hi is None:
-            return ""  # registration_data present but no price info → unknown, NOT free
-        if (lo or 0) == 0 and (hi or 0) == 0:
-            return "бесплатно"  # explicit zero price
+        lo = float(lo) if isinstance(lo, (int, float)) and lo > 0 else None
+        hi = float(hi) if isinstance(hi, (int, float)) and hi > 0 else None
         if lo and hi and hi > lo:
             return f"от {int(lo)} до {int(hi)} рублей"
         if lo and hi and lo == hi:
