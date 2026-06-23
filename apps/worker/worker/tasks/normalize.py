@@ -76,8 +76,14 @@ async def _normalize_impl() -> dict:
             source_name = raw.source.name if raw.source else ""
             payload = raw.raw_payload_json
             if _is_telegram_source_name(source_name):
+                # Optional venue binding for venue-specific channels (NULL for general channels): a hint to
+                # the LLM + a fill for venue/address when the post itself doesn't name the place.
+                _cfg = (raw.source.config_json if raw.source else None) or {}
+                v_name = _cfg.get("venue_name") or ""
+                v_addr = _cfg.get("venue_address") or ""
+                venue_hint = ", ".join(p for p in (v_name, v_addr) if p)
                 extracted, skip_reason = await llm_extractor.extract_event_with_reason(
-                    raw.raw_text, city_hint=settings.default_city
+                    raw.raw_text, city_hint=settings.default_city, venue_hint=venue_hint
                 )
                 if extracted is None:
                     skipped += 1
@@ -94,8 +100,8 @@ async def _normalize_impl() -> dict:
                     "description": extracted.description,
                     "startDate": extracted.date_start,
                     "endDate": extracted.date_end or None,
-                    "venue": extracted.venue,
-                    "address": extracted.address,
+                    "venue": extracted.venue or v_name,           # fall back to the channel's bound venue
+                    "address": extracted.address or v_addr,       # …and its address (NULL → LLM's own)
                     "address_candidates": extracted.address_candidates,
                     "price": extracted.price_text,
                     "age_restriction": extracted.age_limit,

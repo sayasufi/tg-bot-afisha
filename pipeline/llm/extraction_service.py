@@ -44,7 +44,9 @@ class LLMExtractionService:
         except ValueError:
             return dateparser.parse(value, languages=["ru", "en"])
 
-    async def extract_event_with_reason(self, text: str, city_hint: str = "Moscow") -> tuple[ExtractedEvent | None, str]:
+    async def extract_event_with_reason(
+        self, text: str, city_hint: str = "Moscow", venue_hint: str = ""
+    ) -> tuple[ExtractedEvent | None, str]:
         if not text or len(text.strip()) < 30:
             return None, "too_short"
 
@@ -65,6 +67,12 @@ class LLMExtractionService:
             "city_hint="
             f"{city_hint}."
         )
+        if venue_hint:
+            prompt += (
+                f" Этот канал — площадка: {venue_hint}. Если событие проходит на ЭТОЙ площадке (пост не "
+                "называет другое место) — поставь её в venue/address. Если в посте указано ДРУГОЕ место — "
+                "используй его. Привязка к площадке повышает уверенность, что пост — анонс события."
+            )
         payload = {
             "messages": [
                 {"role": "system", "content": prompt},
@@ -173,6 +181,6 @@ class LLMExtractionService:
         ranked = sorted(candidates, key=lambda addr: score(addr), reverse=True)
         return ranked[0]
 
-    async def extract_event(self, text: str, city_hint: str = "Moscow") -> ExtractedEvent | None:
-        event, _ = await self.extract_event_with_reason(text, city_hint=city_hint)
+    async def extract_event(self, text: str, city_hint: str = "Moscow", venue_hint: str = "") -> ExtractedEvent | None:
+        event, _ = await self.extract_event_with_reason(text, city_hint=city_hint, venue_hint=venue_hint)
         return event

@@ -301,6 +301,9 @@ async def _fetch_telegram_impl() -> dict:
                     **source.config_json,
                     "channel": channel,
                     "city_id": channel_row.city_id,
+                    # Optional venue binding (NULL for general channels) → extraction hint + venue/address fill.
+                    "venue_name": channel_row.venue_name,
+                    "venue_address": channel_row.venue_address,
                     "cursor": next_cursor,
                     "last_fetch": datetime.now(timezone.utc).isoformat(),
                 }
