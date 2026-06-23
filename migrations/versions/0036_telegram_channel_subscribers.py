@@ -5,7 +5,7 @@ the daily refresh-channel-subscribers flow (parses the t.me/<channel> page). Nul
 """
 from alembic import op
 
-revision = "0036_telegram_channel_subscribers"
+revision = "0036_channel_subscribers"  # keep <=32 chars (alembic_version.version_num is varchar(32))
 down_revision = "0035_telegram_channel_venue"
 branch_labels = None
 depends_on = None
