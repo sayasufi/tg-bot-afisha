@@ -13,8 +13,14 @@ from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.codes import event_code, parse_event_code
+from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, UserFavorite, Venue
 from core.redis import get_redis
+from core.search.meili import MeiliClient
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 # The map response (clusters or pins) depends only on (zoom, bbox, filters) and the
 # dataset, which changes only when the pipeline ingests. So the route caches the FULLY
@@ -972,6 +978,36 @@ class EventQueryService:
             "score": float(score),
         }
 
+    def _meili_item(self, h: dict, score: float) -> dict:
+        return {
+            "type": "event",
+            "event_id": h.get("event_id"),
+            "code": h.get("code") or "",
+            "title": h.get("title"),
+            "category": h.get("category"),
+            "date_start": h.get("date_start"),
+            "date_end": h.get("date_end"),
+            "price_min": None,
+            "venue": h.get("venue"),
+            "open_now": None,
+            "lat": h.get("lat"),
+            "lon": h.get("lon"),
+            "primary_image_url": h.get("image") or "",
+            "score": score,
+        }
+
+    async def _search_meili(self, q: str, city, limit: int) -> dict:
+        """Query the Meilisearch index. Scopes to the city via _geoRadius (mirrors the PG region filter).
+        Score is the rank position so the client keeps Meili's relevance order."""
+        filt = ['status = "active"']
+        center = getattr(city, "center", None) if city is not None else None
+        if center:
+            lat0, lon0 = center
+            radius_m = int(getattr(city, "region_radius_km", 350.0) * 1000)
+            filt.append(f"_geoRadius({lat0}, {lon0}, {radius_m})")
+        hits = await MeiliClient().search(q, filter=" AND ".join(filt), limit=limit)
+        return {"items": [self._meili_item(h, score=float(1000 - i)) for i, h in enumerate(hits)]}
+
     async def search(self, q: str, city, limit: int) -> dict:
         """Typeahead search across event CODE, title and venue name, ranked. Fast at this
         scale (GIN trigram + a display_no probe); NEVER touches canonical_description
@@ -1007,6 +1043,15 @@ class EventQueryService:
 
         if len(qn) < 2:
             return {"items": []}
+
+        # Meilisearch typeahead — typo-tolerant + diacritics-folded ("omanko" finds "Ömankö").
+        # Falls through to the Postgres trigram search below if disabled or unavailable, so search
+        # never hard-fails on a Meili hiccup.
+        if get_settings().meili_search_enabled:
+            try:
+                return await self._search_meili(qn, city, limit)
+            except Exception:
+                logger.warning("meili_search_failed; falling back to postgres", exc_info=True)
 
         # Also search the OPPOSITE-script transliteration (latin↔cyrillic) so "bolshoi"
         # finds "Большой" and "стендап" finds "STANDUP". Gated by :has_qt when there's a

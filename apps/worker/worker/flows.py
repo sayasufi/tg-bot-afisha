@@ -6,7 +6,7 @@ run history/observability UI. The logic lives in ``tasks/*`` and is unchanged.
 """
 from prefect import flow
 
-from apps.worker.worker.tasks import dedup, digest, enrich, fetch, media, normalize, reminders
+from apps.worker.worker.tasks import dedup, digest, enrich, fetch, media, normalize, reminders, search_index
 
 _RETRIES = 2
 _RETRY_DELAY = 30  # seconds
@@ -59,6 +59,12 @@ async def prune_telegram_channels():
     """Daily: deactivate channels that went dark (no posts in 60d / preview gone) so the active set stays live."""
     from pipeline.maintenance.telegram_health import prune_stale_channels
     return await prune_stale_channels()
+
+
+@flow(name="reindex-search", retries=1, retry_delay_seconds=30, timeout_seconds=600, log_prints=True)
+async def reindex_search():
+    """Refresh the Meilisearch typeahead index from active events (no-op when search is disabled)."""
+    return await search_index._reindex_search_impl()
 
 
 # --- pipeline (normalize -> enrich -> dedup) ---------------------------------

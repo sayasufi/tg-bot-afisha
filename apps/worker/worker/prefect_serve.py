@@ -32,6 +32,9 @@ _SCHEDULE = [
     # Daily health-check: retire venue channels that went dark (closed/moved/last post >60d ago) so the
     # active set never silently rots (venues do close — Powerhouse, Mutabor→Arma, a 2022-dead fest).
     (flows.prune_telegram_channels, 86400),
+    # Keep the Meilisearch typeahead index fresh (no-op until MEILI_SEARCH_ENABLED). Cheap full
+    # reindex at this scale; the atomic swap means search never sees an empty index.
+    (flows.reindex_search, 120),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),

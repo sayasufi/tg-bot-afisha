@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
 
+    # Meilisearch — typo-tolerant typeahead engine. Disabled by default → the API falls back to the
+    # Postgres trigram search, so nothing breaks if the service isn't up.
+    meili_url: str = Field(default="http://meilisearch:7700", alias="MEILI_URL")
+    meili_master_key: str = Field(default="", alias="MEILI_MASTER_KEY")
+    meili_search_enabled: bool = Field(default=False, alias="MEILI_SEARCH_ENABLED")
+    meili_index: str = Field(default="events", alias="MEILI_INDEX")
+
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
 
     llm_api_base_url: str = Field(default="http://176.109.82.96:5000", alias="LLM_API_BASE_URL")

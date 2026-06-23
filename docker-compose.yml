@@ -88,6 +88,21 @@ services:
       - minio_data:/data
     restart: unless-stopped
 
+  # Typeahead search engine (typo-tolerant, diacritics-folded). Loopback-only port; the app reaches it
+  # over the compose net at meilisearch:7700. Disabled by default app-side (MEILI_SEARCH_ENABLED) → the
+  # API falls back to the Postgres trigram search, so this service being down never breaks search.
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-}
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "127.0.0.1:7700:7700"
+    volumes:
+      - meili_data:/meili_data
+
   api:
     build:
       context: .
@@ -202,3 +217,4 @@ volumes:
   minio_data:
   prefect_data:
   redis_data:
+  meili_data:
