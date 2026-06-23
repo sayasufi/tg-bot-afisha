@@ -54,6 +54,13 @@ async def fetch_telegram_public():
     return await fetch._fetch_telegram_impl()
 
 
+@flow(name="prune-telegram-channels", retries=1, retry_delay_seconds=60, timeout_seconds=600, log_prints=True)
+async def prune_telegram_channels():
+    """Daily: deactivate channels that went dark (no posts in 60d / preview gone) so the active set stays live."""
+    from pipeline.maintenance.telegram_health import prune_stale_channels
+    return await prune_stale_channels()
+
+
 # --- pipeline (normalize -> enrich -> dedup) ---------------------------------
 
 @flow(name="normalize-raw", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)

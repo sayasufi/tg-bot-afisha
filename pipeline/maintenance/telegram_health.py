@@ -1,0 +1,76 @@
+"""Retire Telegram channels that have gone dark.
+
+Venue channels close, move or simply stop (Powerhouse shut down after 13 years, Mutabor→Arma relocated,
+a fest channel whose last post is from 2022). A dead channel yields no events and just wastes fetches,
+so this daily sweep deactivates it and keeps the active set live.
+
+Conservative — only deactivates on a DEFINITIVE signal:
+  * a reachable t.me/s/ preview whose newest post is older than `stale_days`, or
+  * a "gone" preview: 301/302 (s/ redirects to t.me/<u> → web-preview disabled, can't ingest anyway),
+    404 (no channel), or a page with no posts at all.
+A transient network error is SKIPPED (never kill a live channel on a blip).
+"""
+import logging
+import re
+from datetime import datetime, timedelta, timezone
+
+import httpx
+from sqlalchemy import select, update
+
+from core.db.models import TelegramChannel
+from core.db.session import WorkerAsyncSessionLocal
+
+log = logging.getLogger(__name__)
+_TIME_RE = re.compile(r'<time[^>]+datetime="([^"]+)"')
+_UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
+
+
+def _parse_newest(html: str) -> datetime | None:
+    """Newest post datetime on a t.me/s/ preview page (max over its <time datetime="..."> tags)."""
+    out: list[datetime] = []
+    for raw in _TIME_RE.findall(html):
+        try:
+            out.append(datetime.fromisoformat(raw))
+        except ValueError:
+            continue
+    return max(out) if out else None
+
+
+async def _probe(client: httpx.AsyncClient, username: str) -> tuple[str, object]:
+    """('ok', datetime) | ('gone', reason) | ('error', reason)."""
+    try:
+        r = await client.get(f"https://t.me/s/{username}")
+    except Exception as exc:  # network/timeout — transient, don't act on it
+        return "error", repr(exc)[:60]
+    if r.status_code in (301, 302):
+        return "gone", "preview disabled"
+    if r.status_code == 404:
+        return "gone", "no channel"
+    if r.status_code != 200:
+        return "error", f"http {r.status_code}"
+    newest = _parse_newest(r.text)
+    return ("ok", newest) if newest else ("gone", "no posts")
+
+
+async def prune_stale_channels(stale_days: int = 60) -> dict:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
+    async with WorkerAsyncSessionLocal() as db:
+        usernames = (
+            await db.execute(select(TelegramChannel.username).where(TelegramChannel.is_active.is_(True)))
+        ).scalars().all()
+    deactivate: list[str] = []
+    timeout = httpx.Timeout(connect=10, read=20, write=10, pool=10)
+    # follow_redirects=False so a disabled-preview 302 is detected (not silently followed); SSRF-safe.
+    async with httpx.AsyncClient(timeout=timeout, headers=_UA, follow_redirects=False) as client:
+        for u in usernames:
+            status, info = await _probe(client, u)
+            if status == "gone" or (status == "ok" and isinstance(info, datetime) and info < cutoff):
+                deactivate.append(u)
+    if deactivate:
+        async with WorkerAsyncSessionLocal() as db:
+            await db.execute(
+                update(TelegramChannel).where(TelegramChannel.username.in_(deactivate)).values(is_active=False)
+            )
+            await db.commit()
+        log.info("telegram_prune deactivated %s", deactivate)
+    return {"checked": len(usernames), "deactivated": deactivate}

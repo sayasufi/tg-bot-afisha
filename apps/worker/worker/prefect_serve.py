@@ -29,6 +29,9 @@ _SCHEDULE = [
     # until TIMEPAD_TOKEN is set.
     (flows.fetch_timepad, 1800),
     (flows.fetch_telegram_public, 180),
+    # Daily health-check: retire venue channels that went dark (closed/moved/last post >60d ago) so the
+    # active set never silently rots (venues do close — Powerhouse, Mutabor→Arma, a 2022-dead fest).
+    (flows.prune_telegram_channels, 86400),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),
