@@ -121,14 +121,25 @@ def _years(s: str) -> set[str]:
     return set(_YEAR_RE.findall(s or ""))
 
 
+_DECL_TAIL = set("йяюеиаь")  # declension endings
+
+
 def _stem_eq(s: str, t: str) -> bool:
-    """Two cyrillic tokens are the same word modulo a short declension suffix —
-    "пресняков"/"преснякова", "владимир"/"владимира" (one source names the artist,
-    another puts it in the genitive: "концерт Владимира Преснякова")."""
+    """Two cyrillic tokens are the same word modulo a short declension ending.
+
+    (a) suffix growth — "Владимир"/"Владимира", "пресняков"/"преснякова" (one source puts the artist
+        in the genitive); and
+    (b) a final-letter SWAP on a long (>=6-char) stem — masculine -й names form the genitive by
+        replacing й with я ("Сергей"/"Сергея", "Дмитрий"/"Дмитрия"), which a prefix-only rule missed.
+    The >=6 length on (b) keeps short different words apart ("Кошка"/"Кошки", "Лев"/"Льва")."""
     if s == t:
         return True
     short, lng = (s, t) if len(s) <= len(t) else (t, s)
-    return len(short) >= 4 and lng.startswith(short) and len(lng) - len(short) <= 2
+    if len(short) >= 4 and lng.startswith(short) and len(lng) - len(short) <= 2:
+        return True
+    if len(s) == len(t) >= 6 and s[:-1] == t[:-1] and s[-1] in _DECL_TAIL and t[-1] in _DECL_TAIL:
+        return True
+    return False
 
 
 def _subset_extra(small: set[str], big: set[str]):
