@@ -207,20 +207,23 @@ class AfishaRuConnector:
         all_records: list[RawRecord] = []
         seen: set[str] = set()
         pages = 0
-        stop_reason = "max_pages"
+        reasons: list[str] = []
+
         async with self._session() as session:
-            for ri in range(len(self.rubrics)):
+            async def _scan_rubric(ri: int) -> None:
+                nonlocal pages
                 page = 1
                 while page <= max_pages:
                     try:
                         records, total_pages, raw_count = await self._fetch_page(session, ri, page, today, attempts=self._RETRY_ATTEMPTS)
                     except HTTPError as exc:
-                        # Persistent throttle/outage — keep what we have rather than
-                        # failing the whole scan, and stop early.
-                        if "429" in str(exc):
-                            return all_records, pages, "rate_limited"
+                        if "429" in str(exc):  # throttled — keep what we have, stop this rubric
+                            reasons.append("rate_limited")
+                            return
                         raise
                     pages += 1
+                    # The check-and-add below has no await between statements, so concurrent rubrics
+                    # can't race the shared `seen`/`all_records` (asyncio yields only at awaits).
                     fresh = []
                     for rec in records:
                         if rec.external_id not in seen:
@@ -230,18 +233,24 @@ class AfishaRuConnector:
                     if on_page and fresh:
                         await on_page(fresh)
                     if raw_count == 0:
-                        stop_reason = "empty_page"
-                        break
-                    if not records:
-                        # Items present but none in window — past the horizon.
-                        stop_reason = "out_of_window"
-                        break
+                        reasons.append("empty_page")
+                        return
+                    if not records:  # items present but none in window — past the horizon
+                        reasons.append("out_of_window")
+                        return
                     if page >= total_pages:
-                        stop_reason = "exhausted_rubric"
-                        break
+                        reasons.append("exhausted_rubric")
+                        return
                     page += 1
-                    stop_reason = "completed_iteration"
                     await asyncio.sleep(self._PAGE_DELAY + random.random() * self._PAGE_JITTER)
+                reasons.append("max_pages")
+
+            # Rubrics are independent → scan them CONCURRENTLY. Pages WITHIN a rubric stay sequential
+            # with the jittered delay, so this is ~rubric-count× faster WITHOUT hammering afisha's
+            # anti-bot — the deliberate per-rubric throttle is preserved.
+            await asyncio.gather(*(_scan_rubric(ri) for ri in range(len(self.rubrics))))
+
+        stop_reason = "rate_limited" if "rate_limited" in reasons else (reasons[-1] if reasons else "max_pages")
         return all_records, pages, stop_reason
 
     # --- record building ---------------------------------------------------

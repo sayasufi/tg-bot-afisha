@@ -102,21 +102,23 @@ async def _fetch_kudago_full_scan_impl() -> dict:
             pages_scanned = 0
             total_fetched = 0
             stop_reason = "max_pages"
-            while cursor and pages_scanned < max_pages:
-                records, next_cursor = await _fetch_kudago_page(connector, cursor)
-                pages_scanned += 1
-                await bulk_upsert_raw_events(db, source.source_id, records)
-                total_fetched += len(records)
-
-                # Don't stop just because THIS page had no in-window events — with
-                # -publication_date ordering a far-future event published long ago
-                # sits on a deep page behind pages of already-passed events. Page
-                # only until the API itself runs out (cursor stops advancing).
-                if next_cursor == cursor:
-                    stop_reason = "cursor_stable"
-                    break
-                cursor = next_cursor
-                stop_reason = "completed_iteration"
+            # Pages are independent (page-number paging) and the full scan is dates-ordered
+            # (soonest-first), so fetch them in CONCURRENT batches and stop once a page comes back
+            # empty — i.e. we've paged past the in-window horizon. ~8× faster than page-by-page.
+            _PAGE_BATCH = 8
+            page = 1
+            done = False
+            while page <= max_pages and not done:
+                batch = [str(p) for p in range(page, min(page + _PAGE_BATCH, max_pages + 1))]
+                for records, _next in await asyncio.gather(*(_fetch_kudago_page(connector, c) for c in batch)):
+                    pages_scanned += 1
+                    await bulk_upsert_raw_events(db, source.source_id, records)
+                    total_fetched += len(records)
+                    if not records:
+                        done = True  # past the window (dates-ordered) → stop after this batch
+                page += _PAGE_BATCH
+                stop_reason = "empty_page" if done else "completed_iteration"
+            cursor = None
 
             source.config_json = {**source.config_json, "cursor": cursor or "1"}
             db.add(source)

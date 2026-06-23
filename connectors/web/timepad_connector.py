@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import html
 import re
@@ -46,6 +47,7 @@ class TimepadConnector:
                     "лекция", "лекторий", "мастер-класс", "мастер класс", "семинар", "воркшоп")
     _PAGE = 100
     _MAX_PAGES = 60
+    _PAGE_CONCURRENCY = 6  # skip-pages are independent → fetch a batch at a time
 
     def __init__(self, city: str = "Москва", lookahead_days: int = 180) -> None:
         self.settings = get_settings()
@@ -220,14 +222,24 @@ class TimepadConnector:
                 "sort": "+starts_at",
                 "limit": self._PAGE,
             }
-            for page in range(self._MAX_PAGES):
-                resp = await client.get(base, params={**common, "skip": page * self._PAGE})
-                resp.raise_for_status()
-                vals = resp.json().get("values") or []
-                events.extend(vals)
-                if len(vals) < self._PAGE:
-                    break
-                last = self._parse_dt(vals[-1].get("starts_at"))
-                if last and last > until:  # sorted soonest-first → past the window, stop paging
-                    break
+            # skip-offset pages are independent → fetch them in CONCURRENT batches, stopping once a
+            # short page appears (= the last page). build_records is future-only, so over-fetching a
+            # little past the window is harmless. ~6× faster than page-by-page.
+            sem = asyncio.Semaphore(self._PAGE_CONCURRENCY)
+
+            async def _page(p: int) -> list[dict]:
+                async with sem:
+                    resp = await client.get(base, params={**common, "skip": p * self._PAGE})
+                    resp.raise_for_status()
+                    return resp.json().get("values") or []
+
+            done = False
+            start = 0
+            while start < self._MAX_PAGES and not done:
+                batch = range(start, min(start + self._PAGE_CONCURRENCY, self._MAX_PAGES))
+                for vals in await asyncio.gather(*(_page(p) for p in batch)):
+                    events.extend(vals)
+                    if len(vals) < self._PAGE:
+                        done = True  # a short page is the last page
+                start += self._PAGE_CONCURRENCY
         return self.build_records(events), None
