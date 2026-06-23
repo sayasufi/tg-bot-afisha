@@ -272,7 +272,8 @@ async def _fetch_afisha_full_scan_impl() -> dict:
             raise
 
 
-_TELEGRAM_CONCURRENCY = 4  # channels fetched at once (gentle on Telegram's flood limits)
+_TELEGRAM_CONCURRENCY = 8  # channels at once — a load test showed Telethon is clean to ~16 concurrent
+# (floods only at 32, a self-healing 22s wait); 8 keeps headroom for the heavier backfill path.
 
 
 async def _fetch_telegram_impl() -> dict:
