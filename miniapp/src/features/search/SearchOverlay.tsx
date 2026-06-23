@@ -49,7 +49,8 @@ export function SearchOverlay({
   }, [open]);
 
   // Debounced, abortable fetch. Code-shaped queries fire instantly; everything else
-  // waits 250 ms and needs ≥2 chars.
+  // waits 150 ms and needs ≥2 chars (Meilisearch answers in a few ms, so a short debounce
+  // still coalesces fast typing while feeling instant).
   useEffect(() => {
     if (!open) return;
     setActive(-1); // new query → drop the highlight (Enter falls back to the top hit)
@@ -77,7 +78,7 @@ export function SearchOverlay({
             setError(true);
           }
         });
-    }, code ? 0 : 250);
+    }, code ? 0 : 150);
     return () => {
       clearTimeout(t);
       ctrl.abort();

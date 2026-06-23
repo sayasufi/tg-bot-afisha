@@ -22,6 +22,20 @@ INDEX_SETTINGS = {
     "sortableAttributes": ["date_start_ts"],
     "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness"],
     "typoTolerance": {"enabled": True, "minWordSizeForTypos": {"oneTypo": 4, "twoTypos": 8}},
+    # True semantic synonyms (spelling/cross-alphabet variants are already covered by typo-tolerance +
+    # the title_translit field). Bidirectional pairs so either term finds the other.
+    "synonyms": {
+        "кино": ["фильм", "кинопоказ"],
+        "фильм": ["кино", "кинопоказ"],
+        "кинопоказ": ["кино", "фильм"],
+        "выставка": ["экспозиция"],
+        "экспозиция": ["выставка"],
+        "спектакль": ["постановка"],
+        "постановка": ["спектакль"],
+        "вечеринка": ["рейв", "пати"],
+        "рейв": ["вечеринка"],
+        "концерт": ["выступление"],
+    },
 }
 _BATCH = 1000
 
