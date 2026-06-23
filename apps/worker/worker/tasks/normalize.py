@@ -111,14 +111,46 @@ async def _normalize_impl() -> dict:
     llm_extractor = LLMExtractionService()
     async with WorkerAsyncSessionLocal() as db:
         raw_ids = await unprocessed_raw_ids(db)
+        raws = []
+        for rid in raw_ids:
+            r = await get_raw(db, rid)
+            if r is not None:
+                raws.append(r)
+
+        # Telegram posts each need an LLM extraction — the slow part (was ~4s/post, sequential). Do them
+        # CONCURRENTLY: the shared llm_slot limiter caps real concurrency at settings.llm_max_concurrency,
+        # so gather just submits them and they drain 20-at-a-time. Prepare every input as PLAIN values
+        # first so the concurrent tasks never touch the DB session. Structured + split-child raws skip the
+        # LLM and are handled in the serial loop below.
+        tg_jobs = []  # (raw_id, raw_text, venue_hint, post_date, v_name, v_addr)
+        for r in raws:
+            sn = r.source.name if r.source else ""
+            if _is_telegram_source_name(sn) and not (r.raw_payload_json or {}).get("_split_child"):
+                cfg = (r.source.config_json if r.source else None) or {}
+                v_name = cfg.get("venue_name") or ""
+                v_addr = cfg.get("venue_address") or ""
+                venue_hint = ", ".join(p for p in (v_name, v_addr) if p)
+                post_date = str((r.raw_payload_json or {}).get("published_at") or "")[:10]
+                tg_jobs.append((r.raw_id, r.raw_text, venue_hint, post_date, v_name, v_addr))
+
+        async def _extract(raw_text, venue_hint, post_date):
+            return await llm_extractor.extract_events_with_reason(
+                raw_text, city_hint=settings.default_city, venue_hint=venue_hint, post_date=post_date
+            )
+
+        ext_by_raw: dict = {}
+        if tg_jobs:
+            results = await asyncio.gather(
+                *(_extract(rt, vh, pd) for (_i, rt, vh, pd, _vn, _va) in tg_jobs), return_exceptions=True
+            )
+            for (rid, _rt, _vh, _pd, vn, va), res in zip(tg_jobs, results):
+                ext_by_raw[rid] = ([], "llm_error", vn, va) if isinstance(res, BaseException) else (res[0], res[1], vn, va)
+
         created = 0
         skipped = 0
         skipped_reasons: Counter[str] = Counter()
-        for raw_id in raw_ids:
-            raw = await get_raw(db, raw_id)
-            if not raw:
-                continue
-
+        for raw in raws:
+            raw_id = raw.raw_id
             source_name = raw.source.name if raw.source else ""
             payload = raw.raw_payload_json
             if _is_telegram_source_name(source_name):
@@ -127,18 +159,7 @@ async def _normalize_impl() -> dict:
                     # A child of a multi-event post — already structured by the parent pass, no LLM needed.
                     payload = base_payload
                 else:
-                    # Optional venue binding for venue-specific channels (NULL for general channels): a hint
-                    # to the LLM + a fill for venue/address when the post doesn't name the place.
-                    _cfg = (raw.source.config_json if raw.source else None) or {}
-                    v_name = _cfg.get("venue_name") or ""
-                    v_addr = _cfg.get("venue_address") or ""
-                    venue_hint = ", ".join(p for p in (v_name, v_addr) if p)
-                    # The post's publish date anchors relative dates («сегодня»/«завтра») — otherwise the LLM
-                    # resolves «сегодня» to the EXTRACTION day, not the post day.
-                    post_date = str(base_payload.get("published_at") or "")[:10]
-                    events, skip_reason = await llm_extractor.extract_events_with_reason(
-                        raw.raw_text, city_hint=settings.default_city, venue_hint=venue_hint, post_date=post_date
-                    )
+                    events, skip_reason, v_name, v_addr = ext_by_raw.get(raw_id, ([], "llm_error", "", ""))
                     if not events:
                         skipped += 1
                         skipped_reasons[skip_reason] += 1
