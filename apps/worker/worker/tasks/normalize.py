@@ -11,6 +11,7 @@ from core.db.repositories.ingestion import (
     save_candidate,
     stale_structured_raw_ids,
     unprocessed_raw_ids,
+    upsert_raw_event,
 )
 from core.db.session import WorkerAsyncSessionLocal
 from pipeline.llm.extraction_service import LLMExtractionService
@@ -81,6 +82,25 @@ def _is_telegram_candidate_in_window(candidate) -> bool:
     return bool(de and de >= now)  # ongoing run
 
 
+def _telegram_payload(extracted, base_payload: dict, v_name: str, v_addr: str) -> dict:
+    """Fold one extracted event into the structured payload the rule normalizer consumes — keeps the
+    post's images/published_at and fills venue/address from the channel binding when absent."""
+    base = base_payload or {}
+    return {
+        **base,
+        "title": extracted.title,
+        "description": extracted.description,
+        "startDate": extracted.date_start,
+        "endDate": extracted.date_end or None,
+        "venue": extracted.venue or v_name,           # fall back to the channel's bound venue
+        "address": extracted.address or v_addr,       # …and its address (NULL → LLM's own)
+        "address_candidates": extracted.address_candidates,
+        "price": extracted.price_text,
+        "age_restriction": extracted.age_limit,
+        "tags": list(dict.fromkeys([*(base.get("tags", []) if isinstance(base, dict) else []), *extracted.tags])),
+    }
+
+
 async def _normalize_impl() -> dict:
     settings = get_settings()
     normalizer = RuleBasedNormalizer()
@@ -98,45 +118,45 @@ async def _normalize_impl() -> dict:
             source_name = raw.source.name if raw.source else ""
             payload = raw.raw_payload_json
             if _is_telegram_source_name(source_name):
-                # Optional venue binding for venue-specific channels (NULL for general channels): a hint to
-                # the LLM + a fill for venue/address when the post itself doesn't name the place.
-                _cfg = (raw.source.config_json if raw.source else None) or {}
-                v_name = _cfg.get("venue_name") or ""
-                v_addr = _cfg.get("venue_address") or ""
-                venue_hint = ", ".join(p for p in (v_name, v_addr) if p)
-                # The post's publish date anchors relative dates («сегодня»/«завтра») — otherwise the LLM
-                # resolves «сегодня» to the EXTRACTION day, not the post day (a 20 Jun post read on 23 Jun
-                # became a 23 Jun event).
-                post_date = str((raw.raw_payload_json or {}).get("published_at") or "")[:10]
-                extracted, skip_reason = await llm_extractor.extract_event_with_reason(
-                    raw.raw_text, city_hint=settings.default_city, venue_hint=venue_hint, post_date=post_date
-                )
-                if extracted is None:
-                    skipped += 1
-                    skipped_reasons[skip_reason] += 1
-                    await mark_raw_skipped(db, raw, skip_reason)
-                    logger.info(
-                        "normalize_skip_telegram",
-                        extra={"raw_id": raw_id, "source": source_name, "reason": skip_reason},
+                base_payload = raw.raw_payload_json or {}
+                if base_payload.get("_split_child"):
+                    # A child of a multi-event post — already structured by the parent pass, no LLM needed.
+                    payload = base_payload
+                else:
+                    # Optional venue binding for venue-specific channels (NULL for general channels): a hint
+                    # to the LLM + a fill for venue/address when the post doesn't name the place.
+                    _cfg = (raw.source.config_json if raw.source else None) or {}
+                    v_name = _cfg.get("venue_name") or ""
+                    v_addr = _cfg.get("venue_address") or ""
+                    venue_hint = ", ".join(p for p in (v_name, v_addr) if p)
+                    # The post's publish date anchors relative dates («сегодня»/«завтра») — otherwise the LLM
+                    # resolves «сегодня» to the EXTRACTION day, not the post day.
+                    post_date = str(base_payload.get("published_at") or "")[:10]
+                    events, skip_reason = await llm_extractor.extract_events_with_reason(
+                        raw.raw_text, city_hint=settings.default_city, venue_hint=venue_hint, post_date=post_date
                     )
-                    continue
-                payload = {
-                    **(raw.raw_payload_json or {}),
-                    "title": extracted.title,
-                    "description": extracted.description,
-                    "startDate": extracted.date_start,
-                    "endDate": extracted.date_end or None,
-                    "venue": extracted.venue or v_name,           # fall back to the channel's bound venue
-                    "address": extracted.address or v_addr,       # …and its address (NULL → LLM's own)
-                    "address_candidates": extracted.address_candidates,
-                    "price": extracted.price_text,
-                    "age_restriction": extracted.age_limit,
-                    "tags": list(
-                        dict.fromkeys(
-                            [*(raw.raw_payload_json.get("tags", []) if isinstance(raw.raw_payload_json, dict) else []), *extracted.tags]
+                    if not events:
+                        skipped += 1
+                        skipped_reasons[skip_reason] += 1
+                        await mark_raw_skipped(db, raw, skip_reason)
+                        logger.info(
+                            "normalize_skip_telegram",
+                            extra={"raw_id": raw_id, "source": source_name, "reason": skip_reason},
                         )
-                    ),
-                }
+                        continue
+                    if len(events) > 1:
+                        # A schedule post holds many events on different dates. Fan out into one CHILD raw
+                        # per event (external_id "<parent>#<idx>") so each becomes its own event — this
+                        # keeps the one-raw→one-event dedup invariant. The parent raw is just a container:
+                        # mark it processed with no candidate of its own. Children process next cycle.
+                        for idx, ev in enumerate(events):
+                            child_payload = {**_telegram_payload(ev, base_payload, v_name, v_addr), "_split_child": True}
+                            await upsert_raw_event(db, raw.source_id, f"{raw.external_id}#{idx}", child_payload, raw.raw_text)
+                        raw.processed_hash = raw.content_hash
+                        await db.commit()
+                        skipped_reasons["telegram_split"] += 1
+                        continue
+                    payload = _telegram_payload(events[0], base_payload, v_name, v_addr)
 
             candidates = normalizer.normalize(payload, raw.raw_text)
             saved_for_raw = 0

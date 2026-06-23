@@ -62,22 +62,25 @@ class LLMExtractionService:
             dt = dt.replace(tzinfo=_MSK)
         return dt.isoformat()
 
-    async def extract_event_with_reason(
+    async def extract_events_with_reason(
         self, text: str, city_hint: str = "Moscow", venue_hint: str = "", post_date: str = ""
-    ) -> tuple[ExtractedEvent | None, str]:
+    ) -> tuple[list[ExtractedEvent], str]:
+        """Extract ALL events from a post. A schedule post («21.06 — Фильм А, 22.06 — Фильм Б») yields one
+        event per dated line; a normal post yields one; a non-event yields []."""
         if not text or len(text.strip()) < 30:
-            return None, "too_short"
+            return [], "too_short"
 
         prompt = (
-            "Extract a structured event from Telegram post text. "
-            "Return ONLY JSON without markdown. "
-            "If this is not an event announcement or critical fields are missing, return "
-            '{"is_event":false}. '
-            "Critical fields are: title, date_start, and at least one of venue/address. "
-            "JSON format: "
-            '{"is_event":true,"title":"","description":"","date_start":"","date_end":"","venue":"",'
+            "Извлеки события из текста Telegram-поста. Верни ТОЛЬКО JSON без markdown. "
+            'Формат: {"is_event":true,"events":[{...},{...}]}. '
+            "Если пост — РАСПИСАНИЕ/афиша из НЕСКОЛЬКИХ событий на РАЗНЫЕ даты (напр. «21.06 — Фильм А, "
+            "22.06 — Фильм Б»), верни в events ОТДЕЛЬНЫЙ объект на КАЖДОЕ событие, с ЕГО конкретной датой "
+            "из его строки — НЕ общий диапазон шапки. Если событие одно — events из одного объекта. "
+            'Если это не анонс события или нет ключевых полей — верни {"is_event":false}. '
+            "Ключевые поля каждого: title, date_start, и хотя бы одно из venue/address. "
+            'Каждый объект events: {"title":"","description":"","date_start":"","date_end":"","venue":"",'
             '"address":"","price_text":"","age_limit":"","tags":[],"confidence":0.0}. '
-            "date_start/date_end must be ISO-8601. "
+            "date_start/date_end в ISO-8601. "
             "ВСЕ числа пиши ЦИФРАМИ, НЕ словами: дом/строение/корпус в address ("
             "«Петровка 21, стр. 1», а НЕ «двадцать один»), возраст в age_limit («18+», а НЕ «восемнадцать»). "
             "title — реальное название события из текста (НЕ «Новое мероприятие»/«Концерт»); "
@@ -107,7 +110,7 @@ class LLMExtractionService:
             ],
             "stream": False,
             "temperature": 0.1,
-            "max_tokens": 500,
+            "max_tokens": 1200,  # room for a multi-event schedule array
         }
 
         try:
@@ -118,19 +121,37 @@ class LLMExtractionService:
                     data = response.json()
         except (httpx.HTTPError, ValueError):
             # Network/timeout/5xx/non-JSON — skip this one raw, never abort the batch.
-            return None, "llm_error"
+            return [], "llm_error"
 
         raw = data.get("response") or "{}"
         try:
             parsed: dict[str, Any] = parse_llm_json(raw)
         except (json.JSONDecodeError, TypeError):
-            return None, "invalid_json"
+            return [], "invalid_json"
         if not isinstance(parsed, dict):
-            return None, "invalid_json"
+            return [], "invalid_json"
 
-        if not parsed.get("is_event"):
-            return None, "not_event"
+        raw_events = parsed.get("events")
+        if not isinstance(raw_events, list):
+            # Tolerate the old single-object shape ({"is_event":true,"title":…}).
+            raw_events = [parsed] if parsed.get("is_event") else []
+        if not raw_events:
+            return [], "not_event"
 
+        out: list[ExtractedEvent] = []
+        last_reason = "not_event"
+        for ev in raw_events[:25]:  # cap a runaway schedule
+            if not isinstance(ev, dict):
+                continue
+            built, reason = await self._build_one(ev, text, city_hint)
+            if built is not None:
+                out.append(built)
+            else:
+                last_reason = reason
+        return (out, "ok") if out else ([], last_reason)
+
+    async def _build_one(self, parsed: dict, text: str, city_hint: str) -> tuple[ExtractedEvent | None, str]:
+        """Validate one LLM event object into an ExtractedEvent (or a skip reason)."""
         title = str(parsed.get("title") or "").strip()
         description = str(parsed.get("description") or "").strip() or text[:12000]
         date_start = self._to_msk_iso(str(parsed.get("date_start") or "").strip())
@@ -177,6 +198,15 @@ class LLMExtractionService:
             ),
             "ok",
         )
+
+    async def extract_event_with_reason(
+        self, text: str, city_hint: str = "Moscow", venue_hint: str = "", post_date: str = ""
+    ) -> tuple[ExtractedEvent | None, str]:
+        """Back-compat single-event wrapper — returns the first extracted event."""
+        events, reason = await self.extract_events_with_reason(
+            text, city_hint=city_hint, venue_hint=venue_hint, post_date=post_date
+        )
+        return (events[0], "ok") if events else (None, reason)
 
     async def _resolve_address_from_yandex_maps(
         self,
