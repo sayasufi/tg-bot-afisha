@@ -104,18 +104,28 @@ async def _fetch_kudago_full_scan_impl() -> dict:
             stop_reason = "max_pages"
             # Pages are independent (page-number paging) and the full scan is dates-ordered
             # (soonest-first), so fetch them in CONCURRENT batches and stop once a page comes back
-            # empty — i.e. we've paged past the in-window horizon. ~8× faster than page-by-page.
-            _PAGE_BATCH = 8
+            # empty — i.e. we've paged past the in-window horizon. kudago.com is more fragile than the
+            # t.me web (503s under load), so keep the batch modest + tolerate a per-page failure (it's
+            # re-fetched next scan); stop if a whole batch fails (the API is throttling/down).
+            _PAGE_BATCH = 5
             page = 1
             done = False
             while page <= max_pages and not done:
                 batch = [str(p) for p in range(page, min(page + _PAGE_BATCH, max_pages + 1))]
-                for records, _next in await asyncio.gather(*(_fetch_kudago_page(connector, c) for c in batch)):
+                ok_in_batch = 0
+                for res in await asyncio.gather(*(_fetch_kudago_page(connector, c) for c in batch), return_exceptions=True):
                     pages_scanned += 1
+                    if isinstance(res, BaseException):
+                        continue  # transient (e.g. 503) — skip this page
+                    ok_in_batch += 1
+                    records, _next = res
                     await bulk_upsert_raw_events(db, source.source_id, records)
                     total_fetched += len(records)
                     if not records:
-                        done = True  # past the window (dates-ordered) → stop after this batch
+                        done = True  # past the window (dates-ordered)
+                if ok_in_batch == 0:
+                    stop_reason = "errors"
+                    break
                 page += _PAGE_BATCH
                 stop_reason = "empty_page" if done else "completed_iteration"
             cursor = None

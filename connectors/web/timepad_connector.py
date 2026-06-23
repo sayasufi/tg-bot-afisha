@@ -237,7 +237,9 @@ class TimepadConnector:
             start = 0
             while start < self._MAX_PAGES and not done:
                 batch = range(start, min(start + self._PAGE_CONCURRENCY, self._MAX_PAGES))
-                for vals in await asyncio.gather(*(_page(p) for p in batch)):
+                for vals in await asyncio.gather(*(_page(p) for p in batch), return_exceptions=True):
+                    if isinstance(vals, BaseException):
+                        continue  # skip a failed page (re-fetched next sweep), don't mistake it for the end
                     events.extend(vals)
                     if len(vals) < self._PAGE:
                         done = True  # a short page is the last page

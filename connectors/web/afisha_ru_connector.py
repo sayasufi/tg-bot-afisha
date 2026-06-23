@@ -248,7 +248,7 @@ class AfishaRuConnector:
             # Rubrics are independent → scan them CONCURRENTLY. Pages WITHIN a rubric stay sequential
             # with the jittered delay, so this is ~rubric-count× faster WITHOUT hammering afisha's
             # anti-bot — the deliberate per-rubric throttle is preserved.
-            await asyncio.gather(*(_scan_rubric(ri) for ri in range(len(self.rubrics))))
+            await asyncio.gather(*(_scan_rubric(ri) for ri in range(len(self.rubrics))), return_exceptions=True)
 
         stop_reason = "rate_limited" if "rate_limited" in reasons else (reasons[-1] if reasons else "max_pages")
         return all_records, pages, stop_reason
