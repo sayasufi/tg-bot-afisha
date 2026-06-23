@@ -57,7 +57,12 @@ class LLMExtractionService:
             "JSON format: "
             '{"is_event":true,"title":"","description":"","date_start":"","date_end":"","venue":"",'
             '"address":"","price_text":"","age_limit":"","tags":[],"confidence":0.0}. '
-            "date_start/date_end must be ISO-8601. city_hint="
+            "date_start/date_end must be ISO-8601. "
+            "ВСЕ числа пиши ЦИФРАМИ, НЕ словами: дом/строение/корпус в address ("
+            "«Петровка 21, стр. 1», а НЕ «двадцать один»), возраст в age_limit («18+», а НЕ «восемнадцать»). "
+            "title — реальное название события из текста (НЕ «Новое мероприятие»/«Концерт»); "
+            "если в посте только афиша-картинка без названия в тексте — верни is_event:false. "
+            "city_hint="
             f"{city_hint}."
         )
         payload = {
