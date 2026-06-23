@@ -161,3 +161,50 @@ async def _dedup_llm_impl(apply: bool = True, cap: int = _LLM_DEDUP_CAP) -> dict
         db.close()
     res.update({"candidates": len(candidates), "judged": len(candidates), "confirmed": len(confirmed), "clusters": n_clusters})
     return res
+
+
+_FUZZY_LLM_CAP = 300
+_FUZZY_LLM_MIN_CONFIDENCE = 0.95  # higher bar than the exact-time pass — venue+DAY is a weaker anchor
+
+
+async def _dedup_fuzzy_llm_impl(apply: bool = True, cap: int = _FUZZY_LLM_CAP) -> dict:
+    """LLM pass over the REVIEW-tier fuzzy pairs (subset-with-distinctive-word / high-ratio at the same
+    venue+Moscow day) that the rules deliberately never auto-merge — e.g. "Сергей Трофимов" vs
+    "Юбилейный концерт Сергея Трофимова", "Лекция «X»" vs "X". Judge each with the cached LLM
+    same_event and merge only high-confidence twins. Skip any pair whose titles differ by a non-year
+    number (age ranges «(6-10)» vs «(11-15)», parts) so distinct sessions never collapse. Verdicts are
+    Redis-cached (incl. negatives), so steady-state runs are near-free."""
+    from pipeline.maintenance.events import find_pairs, _cluster_to_canon, _commit_event_merges
+    from pipeline.dedup.title_match import _numbers
+    from core.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        title, rank, _safe, fuzzy = find_pairs(db)
+    finally:
+        db.close()
+    fuzzy = fuzzy[:cap]
+    if not fuzzy:
+        return {"fuzzy": 0, "confirmed": 0, "dup_events": 0, "applied": apply}
+
+    llm = LLMService()
+    sem = asyncio.Semaphore(_LLM_DEDUP_CONCURRENCY)
+
+    async def judge(a, b):
+        ta, tb = title.get(a, ""), title.get(b, "")
+        if _numbers(ta) != _numbers(tb):  # different age/part numbers → distinct sessions, never merge
+            return None
+        async with sem:
+            v = await llm.same_event(ta, tb)
+        return (a, b) if (v.get("same") and float(v.get("confidence", 0)) >= _FUZZY_LLM_MIN_CONFIDENCE) else None
+
+    confirmed = [p for p in await asyncio.gather(*[judge(a, b) for a, b in fuzzy]) if p]
+
+    db = SessionLocal()
+    try:
+        n_clusters, canon_pairs = _cluster_to_canon(confirmed, rank)
+        res = _commit_event_merges(db, canon_pairs, apply)
+    finally:
+        db.close()
+    res.update({"fuzzy": len(fuzzy), "confirmed": len(confirmed), "clusters": n_clusters})
+    return res

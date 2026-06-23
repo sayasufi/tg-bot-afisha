@@ -99,6 +99,13 @@ async def dedup_llm():
     return await dedup._dedup_llm_impl(apply=True)
 
 
+@flow(name="dedup-fuzzy-llm", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=900, log_prints=True)
+async def dedup_fuzzy_llm():
+    """Daily: LLM-judge the REVIEW-tier fuzzy pairs (same venue+day, subset/high-ratio titles) and merge
+    only high-confidence twins, so cross-source alt-naming dups self-heal instead of accumulating."""
+    return await dedup._dedup_fuzzy_llm_impl(apply=True)
+
+
 @flow(name="merge-duplicate-venues", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=600, log_prints=True)
 def merge_duplicate_venues():
     return dedup._merge_venues_impl()

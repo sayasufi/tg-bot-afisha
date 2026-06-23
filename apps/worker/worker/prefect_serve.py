@@ -49,6 +49,9 @@ _SCHEDULE = [
     # daily safety net for the rare post-hoc collision: two existing events that come
     # to share a venue+time only after a venue merge (so neither was re-ingested).
     (flows.dedup_llm, 86400),
+    # Daily LLM pass over the review-tier fuzzy pairs (same venue+day alt-naming) so they self-heal.
+    # Cached verdicts (incl. negatives) keep steady-state runs near-free.
+    (flows.dedup_fuzzy_llm, 86400),
     (flows.expire_past_events, 3600),  # hourly — drop events whose day has passed
     (flows.resolve_afisha_dates, 21600),  # 6h — dates for the few afisha-only multi-show events
     (flows.backfill_venues_osm, 86400),
