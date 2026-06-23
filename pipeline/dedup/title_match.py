@@ -52,6 +52,9 @@ _CYR2LAT = str.maketrans({
 _LAT_TOKEN = re.compile(r"[0-9a-z]+")
 _CYR_TOKEN = re.compile(r"[0-9a-zа-я]+")
 _NUM = re.compile(r"\d+")
+# A 4-digit edition year ("Ömankö Day 2026") is an incidental marker, NOT a sequence number
+# ("Часть 2") — it must neither block a match nor count as a distinctive extra word.
+_YEAR_RE = re.compile(r"(?:19|20)\d\d")
 
 # "Filler" words: too generic to anchor a subset merge on their own, and — when
 # they are the only *extra* words on the longer title — descriptive enough that
@@ -109,7 +112,13 @@ def _cyr_tokens(s: str) -> set[str]:
 
 
 def _numbers(s: str) -> set[str]:
-    return set(_NUM.findall(s or ""))
+    # Years are edition markers, not sequence numbers — exclude them so "X" and "X 2026" aren't
+    # rejected as sequels ("Часть 1" vs "Часть 2" still differ and stay blocked).
+    return {n for n in _NUM.findall(s or "") if not _YEAR_RE.fullmatch(n)}
+
+
+def _years(s: str) -> set[str]:
+    return set(_YEAR_RE.findall(s or ""))
 
 
 def _stem_eq(s: str, t: str) -> bool:
@@ -171,6 +180,11 @@ def same_event(a: str, b: str, level: str = "auto", strict_numbers: bool = True)
     ka, kb = translit_key(a), translit_key(b)
     if not ka or not kb:
         return False
+    # Both name an edition year but different ones ("Лето 2025" vs "Лето 2026") → different events.
+    # A year in only one (or neither) is incidental and must not block the match.
+    ya, yb = _years(a), _years(b)
+    if ya and yb and ya != yb:
+        return False
     # Sequels/parts: "Часть 1" vs "Часть 2", "День 1" vs "День 2" — never merge.
     # Skipped for exact-time collisions, where a number is an incidental detail
     # (a film title "«1+1»"), not a sequence — two parts can't run at one instant.
@@ -187,7 +201,7 @@ def same_event(a: str, b: str, level: str = "auto", strict_numbers: bool = True)
     # shared word; the *extra* words decide auto vs fuzzy.
     extra = _subset_extra(small, big) if small else None
     if extra is not None and any(len(t) >= 4 and t not in _GENERIC for t in small):
-        extra_is_filler = all(t in _FILLER or len(t) <= 2 for t in extra)
+        extra_is_filler = all(t in _FILLER or len(t) <= 2 or _YEAR_RE.fullmatch(t) for t in extra)
         if level == "auto":
             if extra_is_filler:
                 return True
