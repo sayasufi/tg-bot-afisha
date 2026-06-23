@@ -19,6 +19,7 @@ from pipeline.normalizer.rules import RuleBasedNormalizer
 
 
 logger = logging.getLogger(__name__)
+_MSK = timezone(timedelta(hours=3))  # Moscow is a fixed UTC+3 (no DST)
 
 
 def _is_telegram_source_name(name: str) -> bool:
@@ -76,10 +77,13 @@ def _is_telegram_candidate_in_window(candidate) -> bool:
     if ds is None:
         return False
     now = datetime.now(timezone.utc)
-    if ds >= now - timedelta(hours=6):  # upcoming, or a tonight-event still within reach
+    # Compare by Moscow CALENDAR DAY, not a 6h grace: a date-only event today anchors to 00:00 MSK
+    # (= 21:00 UTC yesterday), which a 6h grace wrongly treats as past by mid-afternoon. Keep anything
+    # whose MSK day is today or later; a «сегодня»-post from a prior day still resolves to a past day.
+    if ds.astimezone(_MSK).date() >= now.astimezone(_MSK).date():
         return True
     de = _aware(candidate.date_end)
-    return bool(de and de >= now)  # ongoing run
+    return bool(de and de >= now)  # an ongoing run that started on an earlier day
 
 
 def _telegram_payload(extracted, base_payload: dict, v_name: str, v_addr: str) -> dict:
