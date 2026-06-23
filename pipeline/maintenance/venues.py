@@ -87,7 +87,9 @@ def _share_same_show(db, a_id: int, b_id: int) -> bool:
         "join events.events eb on eb.event_id = ob.event_id and eb.event_id <> ea.event_id "
         "where oa.venue_id = :a limit 200"
     ), {"a": a_id, "b": b_id}).all()
-    return any(same_event(ta, tb) for ta, tb in rows)
+    # Fuzzy title match: the co-location (<=30m) + same-day context is the strong signal, so we let a
+    # looser title (subtitle/suffix drift like "Applique 9–Y" vs "APPLIQUE 9—Y FESTIVAL") still count.
+    return any(same_event(ta, tb, level="fuzzy") for ta, tb in rows)
 
 
 def merge_fuzzy_venues(apply: bool, on_preview=None) -> dict:
