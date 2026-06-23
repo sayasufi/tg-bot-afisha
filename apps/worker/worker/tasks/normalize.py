@@ -172,12 +172,18 @@ async def _normalize_impl() -> dict:
                     if len(events) > 1:
                         # A schedule post holds many events on different dates. Fan out into one CHILD raw
                         # per event (external_id "<parent>#<idx>") so each becomes its own event — this
-                        # keeps the one-raw→one-event dedup invariant. The parent raw is just a container:
-                        # mark it processed with no candidate of its own. Children process next cycle.
+                        # keeps the one-raw→one-event dedup invariant. The parent raw is just a container
+                        # with no candidate of its own; its events live on the children.
                         for idx, ev in enumerate(events):
                             child_payload = {**_telegram_payload(ev, base_payload, v_name, v_addr), "_split_child": True}
                             await upsert_raw_event(db, raw.source_id, f"{raw.external_id}#{idx}", child_payload, raw.raw_text)
+                        # skip_reason — NOT just processed_hash — is what retires the container: unprocessed_raw_ids
+                        # filters on (no candidate AND skip_reason==''), so without this the parent (which never
+                        # gets a candidate) is re-selected every cycle and re-runs the LLM split forever, capping
+                        # throughput and never draining. A genuine content change reopens it (upsert resets
+                        # skip_reason='' when content_hash differs), so a re-edited schedule still re-splits.
                         raw.processed_hash = raw.content_hash
+                        raw.skip_reason = "telegram_split"
                         await db.commit()
                         skipped_reasons["telegram_split"] += 1
                         continue
