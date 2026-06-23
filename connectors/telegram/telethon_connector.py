@@ -25,8 +25,9 @@ class TelethonConnector:
     _HASHTAG_RE = re.compile(r"#([\w\d_]+)", re.IGNORECASE)
     _TEXT_LIMIT = 12000
     _LOOKBACK_DAYS = 7
-    # First pull (no cursor) reaches back further so events announced weeks ahead are captured.
-    _BACKFILL_LOOKBACK_DAYS = 60
+    # First pull (no cursor) reaches back a couple weeks — enough to catch events announced ahead,
+    # without dragging in two months of mostly-past posts that just churn the pipeline.
+    _BACKFILL_LOOKBACK_DAYS = 14
     _LIMIT = 120
     _BACKFILL_LIMIT = 500
 

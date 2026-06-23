@@ -27,7 +27,7 @@ class TelegramWebPreviewConnector:
     # the 7-day incremental window) still gets ingested. The post-past-event gate drops anything whose
     # event has actually passed, so a wide post window is safe.
     _BACKFILL_PAGES = 8
-    _BACKFILL_LOOKBACK_DAYS = 35
+    _BACKFILL_LOOKBACK_DAYS = 14
 
     _URL_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
     _HASHTAG_RE = re.compile(r"#([\w\d_]+)", re.IGNORECASE)
