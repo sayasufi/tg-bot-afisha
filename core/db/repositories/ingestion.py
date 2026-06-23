@@ -303,7 +303,7 @@ async def get_or_create_venue(db: AsyncSession, name: str, address: str, city: s
         # for the one-off cleanup of pre-existing duplicates.)
         nearby = (await db.execute(
             text(
-                "SELECT venue_id, name FROM events.venues "
+                "SELECT venue_id, name, address FROM events.venues "
                 "WHERE geom IS NOT NULL AND name <> '' "
                 "  AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :m) "
                 "ORDER BY ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) "
@@ -312,8 +312,8 @@ async def get_or_create_venue(db: AsyncSession, name: str, address: str, city: s
             {"lat": lat, "lon": lon, "m": _VENUE_TIGHT_M},
         )).all()
         best_id, best_score = None, 0.0
-        for vid, vname in nearby:
-            score = name_match_score(name or "", vname or "")
+        for vid, vname, vaddr in nearby:
+            score = name_match_score(name or "", vname or "", addr_a=address or "", addr_b=vaddr or "")
             if score is not None and score > best_score:
                 best_id, best_score = vid, score
         if best_id is not None:

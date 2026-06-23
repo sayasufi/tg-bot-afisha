@@ -12,6 +12,8 @@ radius are compared); this module is the name half of the decision.
 """
 import re
 
+from pipeline.dedup.title_match import translit_tokens
+
 try:
     from rapidfuzz import fuzz
     # rapidfuzz 3.x dropped default processing → token_set_ratio turned case/punctuation-sensitive,
@@ -36,6 +38,14 @@ STRONG_RATIO = 85  # a name match this good is the same place on its own
 COHOST_RATIO = 70  # a weaker match needs the duplicate-pin symptom (co-hosting)
 
 _TOKEN_RE = re.compile(r"[0-9a-zа-я]+")
+
+# Transliterated generic venue words — too common to anchor a cross-field merge on their own.
+_GENERIC_VENUE = {
+    "teatr", "teatry", "klub", "bar", "zal", "dom", "tsentr", "kafe", "kinoteatr", "ploshchadka",
+    "stsena", "kultury", "dvorets", "kontsertny", "music", "hall", "club", "loft", "space",
+    "prostranstvo", "art", "arena", "studiya", "studio", "muzey", "galereya", "only", "kompleks",
+    "center", "centre", "cafe", "moscow", "moskva", "letny", "letniy",
+}
 
 # Words that mark two *distinct* spaces in one building (Большой зал vs Малый зал
 # Консерватории). When the names take opposite sides of such a pair they are
@@ -69,17 +79,42 @@ def is_subset(a: str, b: str) -> bool:
     return small <= big and any(len(t) >= 4 for t in small)
 
 
-def name_match_score(a: str, b: str, co_host: bool = False) -> float | None:
+def _distinctive_translit(s: str) -> set[str]:
+    """Transliterated, non-generic, >=4-char tokens — the words that actually identify a venue."""
+    return {t for t in translit_tokens(s) if len(t) >= 4 and t not in _GENERIC_VENUE}
+
+
+def name_within(name: str, haystack: str) -> bool:
+    """All of ``name``'s distinctive (transliterated) tokens appear in ``haystack`` — and it carries
+    enough signal (>=2 such tokens, or one long >=7-char token) that it isn't a single common word."""
+    d = _distinctive_translit(name)
+    if not d or (len(d) < 2 and not any(len(t) >= 7 for t in d)):
+        return False
+    return d <= set(translit_tokens(haystack))
+
+
+def name_match_score(a: str, b: str, co_host: bool = False, addr_a: str = "", addr_b: str = "") -> float | None:
     """token_set_ratio if the two nearby venue names should be treated as one
     place, else None. ``co_host`` is the duplicate-pin symptom (the two venues
     already share an event on the same date) — it relaxes the name bar. At write
     time co_host is unknown (the event isn't linked yet), so it defaults False
-    and only strong names / structural containment reuse a venue."""
+    and only strong names / structural containment reuse a venue.
+
+    Names are transliterated first so a Latin name matches its Cyrillic twin
+    ("16 Tons" / "16 Тонн"). Cross-field: if one venue's full distinctive name sits
+    inside the OTHER's name OR address it's the same place under an alias
+    ("ДК Альфа Кристалл" lives in the address of "Alfa Only кинотеатр")."""
     if contrasts(a, b):  # different halls of one building — keep apart
         return None
-    ratio = fuzz.token_set_ratio(a or "", b or "", processor=_PROCESS)
+    ratio = fuzz.token_set_ratio(
+        " ".join(translit_tokens(a)) or (a or ""),
+        " ".join(translit_tokens(b)) or (b or ""),
+        processor=_PROCESS,
+    )
     if ratio >= STRONG_RATIO:
         return ratio
+    if name_within(a, f"{b} {addr_b}") or name_within(b, f"{a} {addr_a}"):
+        return max(ratio, float(COHOST_RATIO))
     if co_host and (is_subset(a, b) or ratio >= COHOST_RATIO):
         return ratio
     if not co_host and is_subset(a, b):

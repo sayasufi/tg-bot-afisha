@@ -33,11 +33,11 @@ _RADIUS_M = 150
 
 _CANDIDATES = """
 with v as (
-  select venue_id, name, geom,
+  select venue_id, name, address, geom,
     (select count(*) from events.event_occurrences o where o.venue_id = venues.venue_id) as noc
   from events.venues where geom is not null and name <> ''
 )
-select a.venue_id, a.name, a.noc, b.venue_id, b.name, b.noc,
+select a.venue_id, a.name, a.address, a.noc, b.venue_id, b.name, b.address, b.noc,
        ST_Distance(a.geom::geography, b.geom::geography) as dist,
        exists (
          select 1 from events.event_occurrences oa
@@ -99,10 +99,10 @@ def merge_fuzzy_venues(apply: bool, on_preview=None) -> dict:
                     comp.pop(old, None)
             return True
 
-        for a_id, a_name, a_noc, b_id, b_name, b_noc, dist, co_host in rows:
+        for a_id, a_name, a_addr, a_noc, b_id, b_name, b_addr, b_noc, dist, co_host in rows:
             occ[a_id], occ[b_id] = a_noc, b_noc
             name[a_id], name[b_id] = a_name, b_name
-            ratio = name_match_score(a_name, b_name, co_host)
+            ratio = name_match_score(a_name, b_name, co_host, addr_a=a_addr or "", addr_b=b_addr or "")
             if ratio is not None and _guarded_union(a_id, b_id):
                 merges.append((a_id, b_id, round(dist), round(ratio), co_host))
 
