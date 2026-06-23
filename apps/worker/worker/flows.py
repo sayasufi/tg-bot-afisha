@@ -61,6 +61,13 @@ async def prune_telegram_channels():
     return await prune_stale_channels()
 
 
+@flow(name="refresh-channel-subscribers", retries=1, retry_delay_seconds=60, timeout_seconds=600, log_prints=True)
+async def refresh_channel_subscribers():
+    """Daily: cache each active telegram channel's subscriber count (reach signal) from its t.me page."""
+    from pipeline.maintenance.telegram_health import refresh_subscribers
+    return await refresh_subscribers()
+
+
 @flow(name="reindex-search", retries=1, retry_delay_seconds=30, timeout_seconds=600, log_prints=True)
 async def reindex_search():
     """Refresh the Meilisearch typeahead index from active events (no-op when search is disabled)."""

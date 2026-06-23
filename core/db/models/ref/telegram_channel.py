@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, ForeignKey, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db.base import Base
@@ -18,5 +18,7 @@ class TelegramChannel(Base, TimestampMixin):
     # NULL for a general channel (no fixed place) — then the LLM resolves the venue from each post.
     venue_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     venue_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Cached subscriber count (reach signal — rank/filter by it). Refreshed daily from the t.me page.
+    subscribers: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     city = relationship("City")
