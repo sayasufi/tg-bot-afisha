@@ -12,13 +12,22 @@ class TelegramWebPreviewConnector:
 
     Needs no Telegram account/API keys, unlike TelethonConnector. Produces the
     same payload shape and external_id format, so the two are interchangeable.
-    The preview page only exposes the ~20 latest posts; with the 180s fetch
-    cadence that is enough to not miss anything.
+
+    A preview page shows ~15-20 posts; `?before=<msg_id>` pages further back. On a
+    first fetch (no cursor) we page back to capture announcements made weeks ahead
+    of the event — venues post far in advance, so a single latest page misses most
+    upcoming events. Once a cursor exists, fetches read just the latest page for new
+    posts (the 180s cadence keeps it current).
     """
 
     source_name = "telegram_public"
     _TEXT_LIMIT = 12000
     _LOOKBACK_DAYS = 7
+    # First-fetch backfill: walk further back so a 26 Jun concert announced on 5 Jun (a post older than
+    # the 7-day incremental window) still gets ingested. The post-past-event gate drops anything whose
+    # event has actually passed, so a wide post window is safe.
+    _BACKFILL_PAGES = 8
+    _BACKFILL_LOOKBACK_DAYS = 35
 
     _URL_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
     _HASHTAG_RE = re.compile(r"#([\w\d_]+)", re.IGNORECASE)
@@ -97,10 +106,34 @@ class TelegramWebPreviewConnector:
             )
         return records
 
-    async def fetch(self, cursor: str | None = None) -> tuple[list[RawRecord], str | None]:
-        min_id = int(cursor) if cursor else 0
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self._LOOKBACK_DAYS)
+    def _page_floor(self, page: str) -> tuple[int | None, datetime | None]:
+        """Lowest message id and oldest post datetime on a preview page — drives ?before pagination and
+        tells us when we've paged past the lookback window."""
+        ids: list[int] = []
+        for match in self._MESSAGE_BLOCK_RE.finditer(page):
+            try:
+                ids.append(int(match.group("post").rsplit("/", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+        dts: list[datetime] = []
+        for match in self._TIME_RE.finditer(page):
+            try:
+                dts.append(datetime.fromisoformat(match.group("dt")))
+            except ValueError:
+                continue
+        return (min(ids) if ids else None), (min(dts) if dts else None)
 
+    async def fetch(self, cursor: str | None = None, max_pages: int | None = None) -> tuple[list[RawRecord], str | None]:
+        min_id = int(cursor) if cursor else 0
+        backfill = min_id == 0
+        if max_pages is None:
+            max_pages = self._BACKFILL_PAGES if backfill else 1
+        lookback = self._BACKFILL_LOOKBACK_DAYS if backfill else self._LOOKBACK_DAYS
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback)
+
+        collected: dict[str, RawRecord] = {}
+        newest = min_id
+        before: int | None = None
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(connect=10, read=30, write=10, pool=10),
             follow_redirects=False,  # SSRF guard: don't follow redirects into internal space
@@ -109,10 +142,24 @@ class TelegramWebPreviewConnector:
                 "Accept-Language": "ru,en;q=0.8",
             },
         ) as client:
-            response = await client.get(f"{self.base_url}/s/{self.channel_username}")
-            response.raise_for_status()
-            page = response.text
+            for _ in range(max(1, max_pages)):
+                url = f"{self.base_url}/s/{self.channel_username}"
+                if before is not None:
+                    url += f"?before={before}"
+                response = await client.get(url)
+                response.raise_for_status()
+                page = response.text
 
-        records = self.parse_page(page, min_id=min_id, cutoff=cutoff)
-        newest = max((rec.payload["id"] for rec in records), default=min_id)
+                for rec in self.parse_page(page, min_id=min_id, cutoff=cutoff):
+                    collected[rec.external_id] = rec
+                    newest = max(newest, rec.payload["id"])
+
+                page_min, oldest_dt = self._page_floor(page)
+                if page_min is None or (before is not None and page_min >= before):
+                    break  # empty page, or pagination made no progress
+                before = page_min
+                if oldest_dt is not None and oldest_dt.tzinfo and oldest_dt < cutoff:
+                    break  # paged past the lookback window — stop
+
+        records = list(collected.values())
         return records, str(newest) if newest else cursor
