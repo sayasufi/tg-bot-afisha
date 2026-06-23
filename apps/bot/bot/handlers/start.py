@@ -2,7 +2,7 @@ import json
 
 from aiogram import Router
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import Message
 
 from apps.bot.bot.formatting import ce
 from apps.bot.bot.keyboards.main import webapp_keyboard
@@ -84,9 +84,9 @@ async def start_handler(message: Message, command: CommandObject) -> None:
     if arg.startswith("report_"):  # «сообщить о неточности» from an event sheet
         await _handle_report(message, arg[len("report_"):])
         return
-    # No persistent reply keyboard — the map lives on the bot's menu button + in-message links.
-    # ReplyKeyboardRemove also clears the old «Открыть карту» bottom button for existing users.
-    await message.answer(WELCOME, reply_markup=ReplyKeyboardRemove())
+    # A prominent inline «Открыть карту» button right in the welcome — the key conversion moment for a
+    # new user. (The persistent menu button next to the input is easy to miss on first run.)
+    await message.answer(WELCOME, reply_markup=webapp_keyboard(get_settings().telegram_webapp_url))
 
 
 @router.message(Command("help"))
