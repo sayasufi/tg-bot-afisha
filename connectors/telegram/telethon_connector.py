@@ -80,7 +80,9 @@ class TelethonConnector:
             "forwards": getattr(msg, "forwards", None),
         }
 
-    async def fetch(self, cursor: str | None = None) -> tuple[list[RawRecord], str | None]:
+    async def fetch(self, cursor: str | None = None, client: TelegramClient | None = None) -> tuple[list[RawRecord], str | None]:
+        """`client` lets the caller share ONE Telethon client across channels (multiplexed over a
+        single connection) so channels can be fetched concurrently without 16 clients on one session."""
         if not (self.settings.telethon_api_id and self.settings.telethon_api_hash and self.settings.telethon_session):
             return [], cursor
 
@@ -91,14 +93,16 @@ class TelethonConnector:
         min_date = datetime.now(timezone.utc) - timedelta(days=lookback)
         ensure_bucket()
 
-        records: list[RawRecord] = []
-        newest = min_id
-        async with TelegramClient(
-            StringSession(self.settings.telethon_session), self.settings.telethon_api_id, self.settings.telethon_api_hash
-        ) as client:
+        own = client is None
+        if own:
+            client = TelegramClient(StringSession(self.settings.telethon_session), self.settings.telethon_api_id, self.settings.telethon_api_hash)
+            await client.connect()
+        try:
             if not await client.is_user_authorized():
                 log.warning("telethon_not_authorized — set TELETHON_SESSION via scripts/telethon_login.py")
                 return [], cursor
+            records: list[RawRecord] = []
+            newest = min_id
             async for msg in client.iter_messages(self.channel_username, min_id=min_id, limit=limit):
                 if not msg.message:  # skip media-only / service messages (album extra frames, etc.)
                     continue
@@ -108,4 +112,7 @@ class TelethonConnector:
                 payload = self._build_payload(msg, images)
                 records.append(RawRecord(external_id=f"{self.channel_username}:{msg.id}", payload=payload, raw_text=payload["description"]))
                 newest = max(newest, msg.id)
-        return records, str(newest) if newest else cursor
+            return records, str(newest) if newest else cursor
+        finally:
+            if own:
+                await client.disconnect()

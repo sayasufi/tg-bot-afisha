@@ -272,6 +272,9 @@ async def _fetch_afisha_full_scan_impl() -> dict:
             raise
 
 
+_TELEGRAM_CONCURRENCY = 4  # channels fetched at once (gentle on Telegram's flood limits)
+
+
 async def _fetch_telegram_impl() -> dict:
     settings = get_settings()
     # Prefer Telethon (full text + history, no joining) only once a session string is configured;
@@ -283,42 +286,67 @@ async def _fetch_telegram_impl() -> dict:
         channels = await get_active_telegram_channels(db)
         if not channels:
             return {"channels": 0, "fetched": 0}
+
+        # Pass 1 (serial): ensure each channel's source + run and read its cursor.
+        items: list[tuple] = []
         for channel_row in channels:
             channel = channel_row.username.lstrip("@").strip().lower()
             if not channel:
                 continue
-
             source = await ensure_source(
-                db,
-                f"telegram_public:{channel}",
-                "telegram",
-                f"https://t.me/{channel}",
+                db, f"telegram_public:{channel}", "telegram", f"https://t.me/{channel}",
                 {"cursor": None, "channel": channel, "city_id": channel_row.city_id},
             )
             run = await create_source_run(db, source.source_id)
-            try:
-                cursor = source.config_json.get("cursor")
+            items.append((channel_row, channel, source, run, source.config_json.get("cursor")))
+
+        # Pass 2 (CONCURRENT fetch): one shared Telethon client (multiplexed over a single MTProto
+        # connection — far safer than 16 clients on one session), channels behind a small semaphore so
+        # we don't trip Telegram's flood limits. Web-preview connectors are independent HTTP, also safe.
+        shared_client = None
+        if use_telethon:
+            from telethon import TelegramClient
+            from telethon.sessions import StringSession
+            shared_client = TelegramClient(
+                StringSession(settings.telethon_session), settings.telethon_api_id, settings.telethon_api_hash
+            )
+            await shared_client.connect()
+        sem = asyncio.Semaphore(_TELEGRAM_CONCURRENCY)
+
+        async def _fetch_channel(channel: str, cursor):
+            async with sem:
                 connector = TelethonConnector(channel) if use_telethon else TelegramWebPreviewConnector(channel)
-                records, next_cursor = await connector.fetch(cursor=cursor)
-                await bulk_upsert_raw_events(db, source.source_id, records)
-                source.config_json = {
-                    **source.config_json,
-                    "channel": channel,
-                    "city_id": channel_row.city_id,
-                    # Optional venue binding (NULL for general channels) → extraction hint + venue/address fill.
-                    "venue_name": channel_row.venue_name,
-                    "venue_address": channel_row.venue_address,
-                    "cursor": next_cursor,
-                    "last_fetch": datetime.now(timezone.utc).isoformat(),
-                }
-                db.add(source)
-                await db.commit()
-                await finish_source_run(db, run, "success", {"fetched": len(records), "channel": channel})
-                total_fetched += len(records)
-                runs_summary.append({"channel": channel, "fetched": len(records), "cursor": next_cursor})
-            except Exception as exc:
-                await db.rollback()
-                await finish_source_run(db, run, "failed", {"fetched": 0, "channel": channel}, str(exc))
-                raise
+                return await connector.fetch(cursor=cursor, client=shared_client)
+
+        try:
+            results = await asyncio.gather(
+                *(_fetch_channel(it[1], it[4]) for it in items), return_exceptions=True
+            )
+        finally:
+            if shared_client is not None:
+                await shared_client.disconnect()
+
+        # Pass 3 (serial writes): a single async DB session can't be written concurrently.
+        for (channel_row, channel, source, run, _cursor), result in zip(items, results):
+            if isinstance(result, BaseException):
+                await finish_source_run(db, run, "failed", {"fetched": 0, "channel": channel}, str(result)[:300])
+                continue
+            records, next_cursor = result
+            await bulk_upsert_raw_events(db, source.source_id, records)
+            source.config_json = {
+                **source.config_json,
+                "channel": channel,
+                "city_id": channel_row.city_id,
+                # Optional venue binding (NULL for general channels) → extraction hint + venue/address fill.
+                "venue_name": channel_row.venue_name,
+                "venue_address": channel_row.venue_address,
+                "cursor": next_cursor,
+                "last_fetch": datetime.now(timezone.utc).isoformat(),
+            }
+            db.add(source)
+            await db.commit()
+            await finish_source_run(db, run, "success", {"fetched": len(records), "channel": channel})
+            total_fetched += len(records)
+            runs_summary.append({"channel": channel, "fetched": len(records), "cursor": next_cursor})
 
     return {"channels": len(runs_summary), "fetched": total_fetched, "runs": runs_summary}

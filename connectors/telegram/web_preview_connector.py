@@ -155,7 +155,9 @@ class TelegramWebPreviewConnector:
                 return og
         return None
 
-    async def fetch(self, cursor: str | None = None, max_pages: int | None = None) -> tuple[list[RawRecord], str | None]:
+    async def fetch(self, cursor: str | None = None, max_pages: int | None = None, client=None) -> tuple[list[RawRecord], str | None]:
+        # `client` is accepted for a uniform call signature with TelethonConnector; web-preview is
+        # plain HTTP and ignores it (each fetch opens its own client).
         min_id = int(cursor) if cursor else 0
         backfill = min_id == 0
         if max_pages is None:
