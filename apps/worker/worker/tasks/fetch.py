@@ -272,7 +272,9 @@ async def _fetch_afisha_full_scan_impl() -> dict:
 
 async def _fetch_telegram_impl() -> dict:
     settings = get_settings()
-    use_telethon = bool(settings.telethon_api_id and settings.telethon_api_hash)
+    # Prefer Telethon (full text + history, no joining) only once a session string is configured;
+    # otherwise the public web-preview scraper.
+    use_telethon = bool(settings.telethon_api_id and settings.telethon_api_hash and settings.telethon_session)
     total_fetched = 0
     runs_summary: list[dict] = []
     async with WorkerAsyncSessionLocal() as db:

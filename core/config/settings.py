@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     telethon_api_id: int | None = Field(default=None, alias="TELETHON_API_ID")
     telethon_api_hash: str = Field(default="", alias="TELETHON_API_HASH")
-    telethon_session: str = Field(default="afisha_session", alias="TELETHON_SESSION")
+    telethon_session: str = Field(default="", alias="TELETHON_SESSION")  # StringSession; empty → web-preview
 
     kudago_base_url: str = "https://kudago.com/public-api/v1.4"
     yandex_afisha_base_url: str = "https://afisha.yandex.ru/api/graphql"
