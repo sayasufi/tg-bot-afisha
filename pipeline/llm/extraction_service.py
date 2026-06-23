@@ -80,6 +80,8 @@ class LLMExtractionService:
             "Ключевые поля каждого: title, date_start, и хотя бы одно из venue/address. "
             'Каждый объект events: {"title":"","description":"","date_start":"","date_end":"","venue":"",'
             '"address":"","price_text":"","age_limit":"","tags":[],"confidence":0.0}. '
+            "description держи КРАТКИМ (одно предложение) или пустым — это экономит место, чтобы влезли ВСЕ "
+            "события расписания. "
             "date_start/date_end в ISO-8601. "
             "ВСЕ числа пиши ЦИФРАМИ, НЕ словами: дом/строение/корпус в address ("
             "«Петровка 21, стр. 1», а НЕ «двадцать один»), возраст в age_limit («18+», а НЕ «восемнадцать»). "
@@ -110,7 +112,9 @@ class LLMExtractionService:
             ],
             "stream": False,
             "temperature": 0.1,
-            "max_tokens": 1200,  # room for a multi-event schedule array
+            # A full schedule array (e.g. 7 films × all fields) overran 1200 and got truncated, so the
+            # JSON salvaged only the first few events. Give it room for ~a dozen events.
+            "max_tokens": 2500,
         }
 
         try:
