@@ -174,6 +174,12 @@ def cache_event_images():
     return media._cache_event_images_impl()
 
 
+@flow(name="cache-telegram-images", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
+async def cache_telegram_images():
+    """Lazily download photos only for telegram EVENTS (posts that survived the pipeline), via Telethon."""
+    return await media._cache_telegram_images_impl()
+
+
 # --- re-engagement (outbound) ------------------------------------------------
 
 @flow(name="send-reminders", retries=1, retry_delay_seconds=15, timeout_seconds=300, log_prints=True)

@@ -57,6 +57,8 @@ _SCHEDULE = [
     (flows.backfill_venues_osm, 86400),
     (flows.resolve_venue_hours, 600),
     (flows.cache_event_images, 120),
+    # Lazily pull photos only for telegram EVENTS (the connector no longer downloads one per post).
+    (flows.cache_telegram_images, 180),
     # Re-engagement: DM saved-event reminders as they come due. Cheap (a partial-index
     # scan + a few sends), so run it often enough that "~2h before" is accurate.
     (flows.send_reminders, 60),

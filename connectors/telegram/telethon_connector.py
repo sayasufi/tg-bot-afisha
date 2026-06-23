@@ -15,7 +15,6 @@ from telethon.sessions import StringSession
 
 from connectors.base import RawRecord
 from core.config.settings import get_settings
-from core.media.storage import ensure_bucket, object_exists, public_url, put_image
 
 log = logging.getLogger(__name__)
 
@@ -45,23 +44,7 @@ class TelethonConnector:
         channel = self.channel_username.lstrip("@")
         return f"https://t.me/{channel}/{msg_id}" if channel else ""
 
-    async def _cache_photo(self, client: TelegramClient, msg) -> list[str]:
-        """Download the post's photo once into MinIO and return its public URL (idempotent by msg id)."""
-        if not getattr(msg, "photo", None):
-            return []
-        key = f"telegram/{self.channel_username.lstrip('@')}/{msg.id}.jpg"
-        try:
-            if not object_exists(key):
-                data = await client.download_media(msg, file=bytes)
-                if not data:
-                    return []
-                put_image(key, data, "image/jpeg")
-            return [public_url(key)]
-        except Exception:
-            log.warning("telethon_photo_cache_failed", extra={"channel": self.channel_username, "id": msg.id}, exc_info=True)
-            return []
-
-    def _build_payload(self, msg, images: list[str]) -> dict:
+    def _build_payload(self, msg) -> dict:
         text = (msg.message or "").strip()
         urls = list(dict.fromkeys(self._URL_RE.findall(text)))
         tags = [tag.lower() for tag in self._HASHTAG_RE.findall(text)]
@@ -73,7 +56,8 @@ class TelethonConnector:
             "title": self._first_line(text),
             "description": text[: self._TEXT_LIMIT],
             "site_url": self._message_url(msg.id),
-            "images": images,
+            "images": [],  # photos are downloaded lazily — only for posts that become events
+            "has_photo": bool(getattr(msg, "photo", None)),  # the lazy media flow keys off this
             "url_entities": urls,
             "tags": list(dict.fromkeys(tags)),
             "views": getattr(msg, "views", None),
@@ -91,7 +75,6 @@ class TelethonConnector:
         lookback = self._BACKFILL_LOOKBACK_DAYS if backfill else self._LOOKBACK_DAYS
         limit = self._BACKFILL_LIMIT if backfill else self._LIMIT
         min_date = datetime.now(timezone.utc) - timedelta(days=lookback)
-        ensure_bucket()
 
         own = client is None
         if own:
@@ -108,8 +91,7 @@ class TelethonConnector:
                     continue
                 if msg.date and msg.date < min_date:
                     break  # newest→oldest, so once we cross the window we're done
-                images = await self._cache_photo(client, msg)
-                payload = self._build_payload(msg, images)
+                payload = self._build_payload(msg)
                 records.append(RawRecord(external_id=f"{self.channel_username}:{msg.id}", payload=payload, raw_text=payload["description"]))
                 newest = max(newest, msg.id)
             return records, str(newest) if newest else cursor
