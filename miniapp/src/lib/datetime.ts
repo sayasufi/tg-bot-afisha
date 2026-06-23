@@ -43,6 +43,14 @@ export function mskEndOfTodayMs(now: Date = new Date()): number {
   return (mskDayIdx(now) + 1) * 86400000 - MSK_OFFSET_MS - 1;
 }
 
+// True when `iso` falls on TODAY's Moscow calendar day. Gates "today-only" UI — e.g. a date-only
+// event's venue-hours line ("сегодня 12:00–24:00") only makes sense if the event is actually today;
+// on a future day it would read as a misleading "сегодня".
+export function isMskToday(iso?: string | null, now: Date = new Date()): boolean {
+  const d = parse(iso);
+  return !!d && mskDayIdx(d) === mskDayIdx(now);
+}
+
 const hmToMin = (hm: string): number => {
   const [h, m] = String(hm).split(":");
   return (Number(h) || 0) * 60 + (Number(m) || 0);

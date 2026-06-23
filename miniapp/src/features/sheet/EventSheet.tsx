@@ -4,7 +4,7 @@ import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from
 import { fetchFriendsFavorited, type Friend } from "../../api/users";
 import { logIntent } from "../../api/intent";
 import { categoryMeta } from "../../lib/categories";
-import { formatDateChip, formatWhen, goNowState, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
+import { formatDateChip, formatWhen, goNowState, isMskToday, venueHoursToday, venueOpenNow, whenTimeNote } from "../../lib/datetime";
 import { formatDistance, nearLabel, walkMinutes, type LatLon } from "../../lib/distance";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { Highlight } from "../../lib/highlight";
@@ -284,9 +284,14 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   // For an all-day event, show the venue's REAL hours today ("сегодня 10:00–20:00")
   // when we have them; otherwise an honest "время уточняйте". Never a misleading
   // "в часы работы" or a 24/7 "круглосуточно" (that's a matched-territory artefact —
-  // venueHoursToday returns null for it).
-  const baseNote = whenTimeNote(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end);
-  const timeNote = baseNote ? venueHoursToday(occ?.venue_hours) ?? baseNote : "";
+  // venueHoursToday returns null for it). The "сегодня …" hours describe TODAY, so attach
+  // them ONLY when the event is actually today — a date-only event on a FUTURE day must
+  // stay "время уточняйте", never read as "сегодня 12:00–24:00".
+  const noteStart = occ?.date_start ?? selected.date_start;
+  const baseNote = whenTimeNote(noteStart, occ?.date_end ?? selected.date_end);
+  const timeNote = baseNote
+    ? (isMskToday(noteStart) ? venueHoursToday(occ?.venue_hours) ?? baseNote : baseNote)
+    : "";
   // "Можно пойти сейчас" badge for the headline session — the soonest you can
   // still get to (occurrences are future-first): timed within 3 h, or open now.
   // The detail occurrence carries full hours → derive open-now from them; before the
