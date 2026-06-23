@@ -59,16 +59,26 @@ def _is_kudago_candidate_in_window(candidate) -> bool:
     return bool(candidate.date_end and candidate.date_start <= now <= candidate.date_end)
 
 
+def _aware(dt: datetime | None) -> datetime | None:
+    """Treat a naive datetime as UTC — the LLM returns ISO without an offset, so candidate dates can be
+    naive while now() is aware (a direct comparison raises TypeError)."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def _is_telegram_candidate_in_window(candidate) -> bool:
     """Keep only upcoming (or still-ongoing) telegram events. A «сегодня»-post, resolved to the post's
     date, is already PAST by the time we extract it (fetch lag) — drop it rather than surface a passed
     event with a today-looking date."""
-    if candidate.date_start is None:
+    ds = _aware(candidate.date_start)
+    if ds is None:
         return False
     now = datetime.now(timezone.utc)
-    if candidate.date_start >= now - timedelta(hours=6):  # upcoming, or a tonight-event still within reach
+    if ds >= now - timedelta(hours=6):  # upcoming, or a tonight-event still within reach
         return True
-    return bool(candidate.date_end and candidate.date_end >= now)  # ongoing run
+    de = _aware(candidate.date_end)
+    return bool(de and de >= now)  # ongoing run
 
 
 async def _normalize_impl() -> dict:
