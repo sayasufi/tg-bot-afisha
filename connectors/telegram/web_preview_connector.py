@@ -37,6 +37,11 @@ class TelegramWebPreviewConnector:
     _PHOTO_RE = re.compile(r"background-image:url\('(?P<url>https://[^']+)'\)")
     _BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
     _TAG_RE = re.compile(r"<[^>]+>")
+    # The single-post page carries the FULL message text in og:description (the s/ preview truncates
+    # long posts with a trailing «…»). Match either attribute order.
+    _OG_RE = re.compile(r'<meta[^>]+property="og:description"[^>]+content="([^"]*)"', re.DOTALL)
+    _OG_RE2 = re.compile(r'<meta[^>]+content="([^"]*)"[^>]+property="og:description"', re.DOTALL)
+    _TRUNCATED_SUFFIX = "…"  # «…» that Telegram appends to a clipped preview
 
     def __init__(self, channel_username: str, base_url: str = "https://t.me") -> None:
         self.channel_username = channel_username.lstrip("@").strip().lower()
@@ -123,6 +128,33 @@ class TelegramWebPreviewConnector:
                 continue
         return (min(ids) if ids else None), (min(dts) if dts else None)
 
+    def _og_description(self, page: str) -> str:
+        for rx in (self._OG_RE, self._OG_RE2):
+            m = rx.search(page)
+            if m:
+                return html_lib.unescape(m.group(1)).strip()
+        return ""
+
+    async def _resolve_full_text(self, client: httpx.AsyncClient, msgid: int, truncated: str) -> str | None:
+        """A long post is clipped in the s/ preview; the single-post page's og:description carries the
+        FULL text. For an album the text sits on the FIRST grouped message (a lower id than the one the
+        feed tags), so scan a small window down from msgid and accept the og whose text starts with the
+        truncated prefix — that guard stops us grabbing a neighbouring post."""
+        prefix = " ".join(truncated.rstrip("… \n").split())[:24]
+        if not prefix:
+            return None
+        for mid in range(msgid, max(msgid - 9, 0), -1):
+            try:
+                r = await client.get(f"{self.base_url}/{self.channel_username}/{mid}")
+            except httpx.HTTPError:
+                continue
+            if r.status_code != 200:
+                continue
+            og = self._og_description(r.text)
+            if og and " ".join(og.split()).startswith(prefix):
+                return og
+        return None
+
     async def fetch(self, cursor: str | None = None, max_pages: int | None = None) -> tuple[list[RawRecord], str | None]:
         min_id = int(cursor) if cursor else 0
         backfill = min_id == 0
@@ -161,5 +193,21 @@ class TelegramWebPreviewConnector:
                 if oldest_dt is not None and oldest_dt.tzinfo and oldest_dt < cutoff:
                     break  # paged past the lookback window — stop
 
-        records = list(collected.values())
+            records = list(collected.values())
+            # A long post is clipped in the s/ preview («…»); pull its full text from the single-post
+            # og:description so multi-event schedules and detailed posts aren't silently truncated.
+            resolved: list[RawRecord] = []
+            for rec in records:
+                if rec.raw_text.rstrip().endswith(self._TRUNCATED_SUFFIX):
+                    full = await self._resolve_full_text(client, int(rec.payload["id"]), rec.raw_text)
+                    if full and len(full) > len(rec.raw_text):
+                        text = full[: self._TEXT_LIMIT]
+                        rec = RawRecord(
+                            external_id=rec.external_id,
+                            payload={**rec.payload, "title": self._first_line(text), "description": text},
+                            raw_text=text,
+                        )
+                resolved.append(rec)
+            records = resolved
+
         return records, str(newest) if newest else cursor
