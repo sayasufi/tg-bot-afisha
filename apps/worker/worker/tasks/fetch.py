@@ -105,9 +105,9 @@ async def _fetch_kudago_full_scan_impl() -> dict:
             # Pages are independent (page-number paging) and the full scan is dates-ordered
             # (soonest-first), so fetch them in CONCURRENT batches and stop once a page comes back
             # empty — i.e. we've paged past the in-window horizon. kudago.com is more fragile than the
-            # t.me web (503s under load), so keep the batch modest + tolerate a per-page failure (it's
-            # re-fetched next scan); stop if a whole batch fails (the API is throttling/down).
-            _PAGE_BATCH = 5
+            # t.me web (503s/timeouts under load — repeated scans can throttle the IP), so keep the batch
+            # small + tolerate a per-page failure (re-fetched next scan); stop if a whole batch fails.
+            _PAGE_BATCH = 3
             page = 1
             done = False
             while page <= max_pages and not done:
