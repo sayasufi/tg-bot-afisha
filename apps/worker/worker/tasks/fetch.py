@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import httpx
 
 from connectors.telegram.telethon_connector import TelethonConnector
-from connectors.telegram.web_preview_connector import TelegramWebPreviewConnector
+from connectors.telegram.web_preview_connector import PreviewUnavailable, TelegramWebPreviewConnector
 from connectors.web.afisha_ru_connector import AfishaRuConnector
 from connectors.web.kudago_connector import KudaGoConnector
 from connectors.web.timepad_connector import TimepadConnector
@@ -288,9 +288,10 @@ _TELEGRAM_CONCURRENCY = 8  # channels at once — a load test showed Telethon is
 
 async def _fetch_telegram_impl() -> dict:
     settings = get_settings()
-    # Prefer Telethon (full text + history, no joining) only once a session string is configured;
-    # otherwise the public web-preview scraper.
-    use_telethon = bool(settings.telethon_api_id and settings.telethon_api_hash and settings.telethon_session)
+    # Plain HTTP (public web-preview scraper) is the DEFAULT — no account, no MTProto flood limits, and
+    # it parallelises freely. Telethon is kept only as a per-channel FALLBACK for channels whose web
+    # preview is disabled (s/ redirects) — detected via PreviewUnavailable below. It needs a session.
+    telethon_available = bool(settings.telethon_api_id and settings.telethon_api_hash and settings.telethon_session)
     total_fetched = 0
     runs_summary: list[dict] = []
     async with WorkerAsyncSessionLocal() as db:
@@ -311,11 +312,11 @@ async def _fetch_telegram_impl() -> dict:
             run = await create_source_run(db, source.source_id)
             items.append((channel_row, channel, source, run, source.config_json.get("cursor")))
 
-        # Pass 2 (CONCURRENT fetch): one shared Telethon client (multiplexed over a single MTProto
-        # connection — far safer than 16 clients on one session), channels behind a small semaphore so
-        # we don't trip Telegram's flood limits. Web-preview connectors are independent HTTP, also safe.
+        # Pass 2 (CONCURRENT fetch): every channel goes over plain-HTTP web-preview first. Only the few
+        # that signal PreviewUnavailable (preview disabled) fall back to Telethon, sharing ONE client
+        # (multiplexed over a single MTProto connection — far safer than many clients on one session).
         shared_client = None
-        if use_telethon:
+        if telethon_available:
             from telethon import TelegramClient
             from telethon.sessions import StringSession
             shared_client = TelegramClient(
@@ -326,8 +327,12 @@ async def _fetch_telegram_impl() -> dict:
 
         async def _fetch_channel(channel: str, cursor):
             async with sem:
-                connector = TelethonConnector(channel) if use_telethon else TelegramWebPreviewConnector(channel)
-                return await connector.fetch(cursor=cursor, client=shared_client)
+                try:
+                    return await TelegramWebPreviewConnector(channel).fetch(cursor=cursor)
+                except PreviewUnavailable:
+                    if shared_client is None:
+                        raise  # no session → can't reach this channel; surfaced as a failed run
+                    return await TelethonConnector(channel).fetch(cursor=cursor, client=shared_client)
 
         try:
             results = await asyncio.gather(

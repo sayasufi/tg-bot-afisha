@@ -7,6 +7,11 @@ import httpx
 from connectors.base import RawRecord
 
 
+class PreviewUnavailable(Exception):
+    """t.me/s/<channel> can't be read over plain HTTP — web-preview is disabled (s/ redirects to the
+    private page) or the channel shows no posts at all. The fetch caller falls back to Telethon."""
+
+
 class TelegramWebPreviewConnector:
     """Fetches channel posts from the public t.me/s/<channel> preview page.
 
@@ -176,19 +181,28 @@ class TelegramWebPreviewConnector:
                 "Accept-Language": "ru,en;q=0.8",
             },
         ) as client:
-            for _ in range(max(1, max_pages)):
+            for page_idx in range(max(1, max_pages)):
                 url = f"{self.base_url}/s/{self.channel_username}"
                 if before is not None:
                     url += f"?before={before}"
                 response = await client.get(url)
+                # Web-preview disabled → s/ 301/302-redirects to the private page; signal so the caller
+                # falls back to Telethon instead of silently ingesting nothing.
+                if response.status_code in (301, 302):
+                    raise PreviewUnavailable(self.channel_username)
                 response.raise_for_status()
                 page = response.text
+
+                page_min, oldest_dt = self._page_floor(page)
+                # Zero messages on the FIRST page = preview off / dead channel (an incremental fetch with
+                # no NEW posts still shows the OLD ones, so page_min is set — that's not unavailable).
+                if page_idx == 0 and page_min is None:
+                    raise PreviewUnavailable(self.channel_username)
 
                 for rec in self.parse_page(page, min_id=min_id, cutoff=cutoff):
                     collected[rec.external_id] = rec
                     newest = max(newest, rec.payload["id"])
 
-                page_min, oldest_dt = self._page_floor(page)
                 if page_min is None or (before is not None and page_min >= before):
                     break  # empty page, or pagination made no progress
                 before = page_min

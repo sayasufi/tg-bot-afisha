@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from sqlalchemy import select, update
 
+from core.config.settings import get_settings
 from core.db.models import TelegramChannel
 from core.db.session import WorkerAsyncSessionLocal
 
@@ -42,13 +43,15 @@ def _parse_newest(html: str) -> datetime | None:
 
 
 async def _probe(client: httpx.AsyncClient, username: str) -> tuple[str, object]:
-    """('ok', datetime) | ('gone', reason) | ('error', reason)."""
+    """('ok', datetime) | ('preview_off', reason) | ('gone', reason) | ('error', reason). preview_off is
+    kept SEPARATE from gone: the channel may be perfectly alive but with web-preview disabled, which the
+    Telethon fallback can still read — so we only retire it when there is no Telethon session."""
     try:
         r = await client.get(f"https://t.me/s/{username}")
     except Exception as exc:  # network/timeout — transient, don't act on it
         return "error", repr(exc)[:60]
     if r.status_code in (301, 302):
-        return "gone", "preview disabled"
+        return "preview_off", "preview disabled"
     if r.status_code == 404:
         return "gone", "no channel"
     if r.status_code != 200:
@@ -59,6 +62,10 @@ async def _probe(client: httpx.AsyncClient, username: str) -> tuple[str, object]
 
 async def prune_stale_channels(stale_days: int = 60) -> dict:
     cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
+    # A preview-off channel is still ingestable via the Telethon fallback, so retire it ONLY when no
+    # session is configured (then HTTP is the only transport and it genuinely can't be read).
+    s = get_settings()
+    telethon_available = bool(s.telethon_api_id and s.telethon_api_hash and s.telethon_session)
     async with WorkerAsyncSessionLocal() as db:
         usernames = (
             await db.execute(select(TelegramChannel.username).where(TelegramChannel.is_active.is_(True)))
@@ -69,7 +76,11 @@ async def prune_stale_channels(stale_days: int = 60) -> dict:
     async with httpx.AsyncClient(timeout=timeout, headers=_UA, follow_redirects=False) as client:
         for u in usernames:
             status, info = await _probe(client, u)
-            if status == "gone" or (status == "ok" and isinstance(info, datetime) and info < cutoff):
+            if (
+                status == "gone"
+                or (status == "ok" and isinstance(info, datetime) and info < cutoff)
+                or (status == "preview_off" and not telethon_available)
+            ):
                 deactivate.append(u)
     if deactivate:
         async with WorkerAsyncSessionLocal() as db:
