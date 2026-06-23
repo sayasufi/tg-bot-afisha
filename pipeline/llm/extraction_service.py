@@ -45,7 +45,7 @@ class LLMExtractionService:
             return dateparser.parse(value, languages=["ru", "en"])
 
     async def extract_event_with_reason(
-        self, text: str, city_hint: str = "Moscow", venue_hint: str = ""
+        self, text: str, city_hint: str = "Moscow", venue_hint: str = "", post_date: str = ""
     ) -> tuple[ExtractedEvent | None, str]:
         if not text or len(text.strip()) < 30:
             return None, "too_short"
@@ -67,6 +67,13 @@ class LLMExtractionService:
             "city_hint="
             f"{city_hint}."
         )
+        if post_date:
+            prompt += (
+                f" Пост опубликован {post_date}. Относительные даты в тексте («сегодня», «сегодня вечером», "
+                "«завтра», «в субботу», «на этой неделе») считай ОТНОСИТЕЛЬНО ДАТЫ ПУБЛИКАЦИИ поста, а НЕ "
+                "относительно текущего дня. Если КОНКРЕТНОЙ даты события в тексте НЕТ — НЕ придумывай и НЕ "
+                "ставь дату публикации наугад, верни is_event:false."
+            )
         if venue_hint:
             prompt += (
                 f" Этот канал — площадка: {venue_hint}. Если событие проходит на ЭТОЙ площадке (пост не "
@@ -181,6 +188,6 @@ class LLMExtractionService:
         ranked = sorted(candidates, key=lambda addr: score(addr), reverse=True)
         return ranked[0]
 
-    async def extract_event(self, text: str, city_hint: str = "Moscow", venue_hint: str = "") -> ExtractedEvent | None:
-        event, _ = await self.extract_event_with_reason(text, city_hint=city_hint, venue_hint=venue_hint)
+    async def extract_event(self, text: str, city_hint: str = "Moscow", venue_hint: str = "", post_date: str = "") -> ExtractedEvent | None:
+        event, _ = await self.extract_event_with_reason(text, city_hint=city_hint, venue_hint=venue_hint, post_date=post_date)
         return event

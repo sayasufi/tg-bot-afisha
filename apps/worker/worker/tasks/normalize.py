@@ -59,6 +59,18 @@ def _is_kudago_candidate_in_window(candidate) -> bool:
     return bool(candidate.date_end and candidate.date_start <= now <= candidate.date_end)
 
 
+def _is_telegram_candidate_in_window(candidate) -> bool:
+    """Keep only upcoming (or still-ongoing) telegram events. A «сегодня»-post, resolved to the post's
+    date, is already PAST by the time we extract it (fetch lag) — drop it rather than surface a passed
+    event with a today-looking date."""
+    if candidate.date_start is None:
+        return False
+    now = datetime.now(timezone.utc)
+    if candidate.date_start >= now - timedelta(hours=6):  # upcoming, or a tonight-event still within reach
+        return True
+    return bool(candidate.date_end and candidate.date_end >= now)  # ongoing run
+
+
 async def _normalize_impl() -> dict:
     settings = get_settings()
     normalizer = RuleBasedNormalizer()
@@ -82,8 +94,12 @@ async def _normalize_impl() -> dict:
                 v_name = _cfg.get("venue_name") or ""
                 v_addr = _cfg.get("venue_address") or ""
                 venue_hint = ", ".join(p for p in (v_name, v_addr) if p)
+                # The post's publish date anchors relative dates («сегодня»/«завтра») — otherwise the LLM
+                # resolves «сегодня» to the EXTRACTION day, not the post day (a 20 Jun post read on 23 Jun
+                # became a 23 Jun event).
+                post_date = str((raw.raw_payload_json or {}).get("published_at") or "")[:10]
                 extracted, skip_reason = await llm_extractor.extract_event_with_reason(
-                    raw.raw_text, city_hint=settings.default_city, venue_hint=venue_hint
+                    raw.raw_text, city_hint=settings.default_city, venue_hint=venue_hint, post_date=post_date
                 )
                 if extracted is None:
                     skipped += 1
@@ -119,6 +135,11 @@ async def _normalize_impl() -> dict:
                 if source_name == "kudago" and not _is_kudago_candidate_in_window(c):
                     skipped += 1
                     last_skip_reason = "kudago_out_of_window"
+                    skipped_reasons[last_skip_reason] += 1
+                    continue
+                if _is_telegram_source_name(source_name) and not _is_telegram_candidate_in_window(c):
+                    skipped += 1
+                    last_skip_reason = "telegram_past_event"
                     skipped_reasons[last_skip_reason] += 1
                     continue
                 if _is_telegram_source_name(source_name) and not _is_candidate_complete(c):
