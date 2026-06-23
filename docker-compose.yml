@@ -179,8 +179,8 @@ services:
       # stack on this host); the in-network link prefect-serve -> prefect-server:4200
       # is unaffected.
       - "127.0.0.1:4201:4200"
-    volumes:
-      - prefect_data:/data
+    # No volume: the orchestration store is now prefect-postgres, and PREFECT_HOME=/data holds only
+    # regenerable config (no SQLite is created while PREFECT_API_DATABASE_CONNECTION_URL points at PG).
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
       interval: 10s
@@ -248,7 +248,6 @@ services:
 volumes:
   pg_data:
   minio_data:
-  prefect_data:
   prefect_pg_data:
   redis_data:
   meili_data:
