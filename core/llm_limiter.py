@@ -16,9 +16,26 @@ import asyncio
 import contextlib
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from core.config.settings import get_settings
 from core.redis import get_redis
+
+# Higher concurrency at night (MSK 22:00–06:00), when user traffic is low, so batch LLM work (Telegram
+# extraction) drains faster without crowding out user-facing calls. Moscow is a fixed UTC+3 (no DST).
+_MSK = timezone(timedelta(hours=3))
+_NIGHT_START_H = 22  # 22:00 MSK
+_NIGHT_END_H = 6     # 06:00 MSK
+
+
+def _current_limit() -> int:
+    """The concurrent-LLM cap for right now — read FRESH on every acquire so it follows the clock with
+    no restart: the night budget during MSK 22:00–06:00, otherwise the day budget."""
+    s = get_settings()
+    h = datetime.now(_MSK).hour
+    is_night = h >= _NIGHT_START_H or h < _NIGHT_END_H
+    return s.llm_night_max_concurrency if is_night else s.llm_max_concurrency
+
 
 _KEY = "llm:slots"
 _LEASE_TTL = 90.0        # seconds — comfortably above the LLM request timeout (~20s) a slow call holds
@@ -43,14 +60,14 @@ def _local_sem() -> asyncio.Semaphore:
     """Per-process fallback (Redis down). Lazily built inside the running loop."""
     global _local
     if _local is None:
-        _local = asyncio.Semaphore(get_settings().llm_max_concurrency)
+        _local = asyncio.Semaphore(_current_limit())
     return _local
 
 
 @contextlib.asynccontextmanager
 async def llm_slot():
     """Hold one service-wide LLM slot for the duration of the call (an async context manager)."""
-    limit = get_settings().llm_max_concurrency
+    limit = _current_limit()
     client = get_redis(decode=True)
     if client is None:
         async with _local_sem():

@@ -3,7 +3,6 @@ misbehaves. These exercise the degraded paths deterministically (no Redis needed
 import asyncio
 
 import core.llm_limiter as lim
-from core.config.settings import get_settings
 
 
 def _run_workers(n: int, hold: float = 0.01) -> int:
@@ -28,7 +27,7 @@ def test_bounds_concurrency_when_redis_absent(monkeypatch):
     monkeypatch.setattr(lim, "get_redis", lambda **kw: None)  # force the local-semaphore fallback
     lim._local = None  # fresh semaphore inside this test's loop
     try:
-        limit = get_settings().llm_max_concurrency
+        limit = lim._current_limit()  # the cap that actually applies now (day vs night), so it's deterministic
         peak = _run_workers(limit * 3)
         assert peak <= limit  # never exceeds the budget
         assert peak >= min(limit, 5)  # and it parallelises (doesn't serialise to 1)
@@ -48,6 +47,6 @@ def test_redis_error_degrades_to_local_not_block(monkeypatch):
     lim._local = None
     try:
         peak = _run_workers(10)
-        assert 1 <= peak <= get_settings().llm_max_concurrency  # ran (no deadlock), still bounded
+        assert 1 <= peak <= lim._current_limit()  # ran (no deadlock), still bounded
     finally:
         lim._local = None

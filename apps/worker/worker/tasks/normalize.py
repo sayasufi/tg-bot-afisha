@@ -105,12 +105,33 @@ def _telegram_payload(extracted, base_payload: dict, v_name: str, v_addr: str) -
     }
 
 
-async def _normalize_impl() -> dict:
+async def _normalize_impl(max_batches: int = 8) -> dict:
+    """Drain up to ``max_batches`` of 100-raw batches in ONE run. A backfill burst would otherwise sit a
+    scheduler tick between batches (a run finishes in ~32s but the next fires up to a tick later → ~28%
+    idle); looping here keeps the LLM busy until the queue empties. Steady state = one batch, then stop."""
+    created = skipped = batches = 0
+    reasons: Counter[str] = Counter()
+    for _ in range(max_batches):
+        stats = await _normalize_batch()
+        if stats is None:
+            break  # queue drained — nothing left to do this run
+        created += stats["candidates"]
+        skipped += stats["skipped"]
+        reasons.update(stats["skipped_reasons"])
+        batches += 1
+    summary = {"candidates": created, "skipped": skipped, "skipped_reasons": dict(reasons), "batches": batches}
+    logger.info("normalize_run", extra=summary)
+    return summary
+
+
+async def _normalize_batch() -> dict | None:
     settings = get_settings()
     normalizer = RuleBasedNormalizer()
     llm_extractor = LLMExtractionService()
     async with WorkerAsyncSessionLocal() as db:
         raw_ids = await unprocessed_raw_ids(db)
+        if not raw_ids:
+            return None  # empty queue — the drain loop stops here
         raws = []
         for rid in raw_ids:
             r = await get_raw(db, rid)
