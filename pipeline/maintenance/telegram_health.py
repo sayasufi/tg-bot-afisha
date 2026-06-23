@@ -23,6 +23,9 @@ from core.db.models import TelegramChannel
 from core.db.session import WorkerAsyncSessionLocal
 
 log = logging.getLogger(__name__)
+# Reach floor: a venue channel below this many subscribers is too small/dead to be worth ingesting, so
+# the daily subscriber refresh retires it (and keeps it retired). NULL count (unfetchable) is left alone.
+_MIN_SUBSCRIBERS = 500
 _TIME_RE = re.compile(r'<time[^>]+datetime="([^"]+)"')
 # The public t.me/<channel> page shows the FULL count: <div class="tgme_page_extra">12 345 subscribers</div>
 # (thousands separated by space / nbsp / narrow-nbsp). The s/ feed header only carries an abbreviated
@@ -107,9 +110,9 @@ async def _fetch_subs(client: httpx.AsyncClient, username: str) -> int | None:
 
 
 async def refresh_subscribers() -> dict:
-    """Cache each active channel's subscriber count in ref.telegram_channels.subscribers (reach signal).
-    Concurrent + polite; a channel that doesn't yield a count (private/preview-off/transient) keeps its
-    last value. Returns checked/updated + the min/median/max so the smallest channels are visible."""
+    """Cache each active channel's subscriber count (reach signal) AND enforce the _MIN_SUBSCRIBERS floor:
+    channels that come back below it are retired (is_active=False). Concurrent + polite; a channel that
+    doesn't yield a count (private/preview-off/transient) keeps its last value and is NOT retired."""
     async with WorkerAsyncSessionLocal() as db:
         usernames = (
             await db.execute(select(TelegramChannel.username).where(TelegramChannel.is_active.is_(True)))
@@ -124,6 +127,7 @@ async def refresh_subscribers() -> dict:
                 if c is not None:
                     counts[u] = c
         await asyncio.gather(*(one(u) for u in usernames))
+    retired: list[str] = []
     if counts:
         async with WorkerAsyncSessionLocal() as db:
             for u, c in counts.items():
@@ -131,11 +135,24 @@ async def refresh_subscribers() -> dict:
                     update(TelegramChannel).where(TelegramChannel.username == u).values(subscribers=c)
                 )
             await db.commit()
+            # Reach floor — retire channels now known to be below the threshold (NULL = unknown → kept).
+            res = await db.execute(
+                update(TelegramChannel)
+                .where(TelegramChannel.is_active.is_(True), TelegramChannel.subscribers < _MIN_SUBSCRIBERS)
+                .values(is_active=False)
+                .returning(TelegramChannel.username)
+            )
+            retired = list(res.scalars().all())
+            await db.commit()
+            if retired:
+                log.info("telegram_subscribers retired %s below %s", retired, _MIN_SUBSCRIBERS)
     vals = sorted(counts.values())
     return {
         "checked": len(usernames),
         "updated": len(counts),
-        "min": vals[0] if vals else None,
+        "min_kept": next((v for v in vals if v >= _MIN_SUBSCRIBERS), None),
         "median": vals[len(vals) // 2] if vals else None,
         "max": vals[-1] if vals else None,
+        "retired_below_min": retired,
+        "min_subscribers": _MIN_SUBSCRIBERS,
     }
