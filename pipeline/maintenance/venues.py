@@ -26,10 +26,15 @@ import sys
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
+from pipeline.dedup.title_match import same_event
 from pipeline.dedup.venue_match import contrasts, is_subset, name_match_score
 
 # Every venue pair within this radius is a *candidate*; name + co-host decide.
 _RADIUS_M = 150
+# Tighter radius for the name-blind "same-show" merge below: two venues this close that list the SAME
+# show on the SAME day are one place even when their names share nothing. Kept small so genuinely
+# distinct neighbours / adjacent festival stages aren't swept in on a coincidental title.
+_SHOW_RADIUS_M = 30
 
 _CANDIDATES = """
 with v as (
@@ -64,6 +69,25 @@ class _UF:
 
     def union(self, a: int, b: int) -> None:
         self.p[self.find(a)] = self.find(b)
+
+
+def _share_same_show(db, a_id: int, b_id: int) -> bool:
+    """True if the two venues each carry an event with the SAME title on the same Moscow day, as
+    DISTINCT event rows. That's the un-merged twin of co_host (which needs the events already merged
+    onto one event_id): here the duplicate split a venue in two so hard the name matcher gave up, yet
+    both list the same show at the same spot — proof it's one place ("Dex" / «легендарный завод на
+    Дубровке», "ДК Альфа Кристалл" / "Alfa Only кинотеатр"). Bounded scan; Moscow-day to match dedup."""
+    rows = db.execute(text(
+        "select ea.canonical_title, eb.canonical_title "
+        "from events.event_occurrences oa "
+        "join events.events ea on ea.event_id = oa.event_id "
+        "join events.event_occurrences ob on ob.venue_id = :b "
+        "  and (ob.date_start at time zone 'Europe/Moscow')::date "
+        "      = (oa.date_start at time zone 'Europe/Moscow')::date "
+        "join events.events eb on eb.event_id = ob.event_id and eb.event_id <> ea.event_id "
+        "where oa.venue_id = :a limit 200"
+    ), {"a": a_id, "b": b_id}).all()
+    return any(same_event(ta, tb) for ta, tb in rows)
 
 
 def merge_fuzzy_venues(apply: bool, on_preview=None) -> dict:
@@ -105,6 +129,12 @@ def merge_fuzzy_venues(apply: bool, on_preview=None) -> dict:
             ratio = name_match_score(a_name, b_name, co_host, addr_a=a_addr or "", addr_b=b_addr or "")
             if ratio is not None and _guarded_union(a_id, b_id):
                 merges.append((a_id, b_id, round(dist), round(ratio), co_host))
+            # Names too divergent for the matcher, but the pair sits on top of each other AND lists the
+            # same show on the same day — one place under two unrelated names. Tight radius + antonym
+            # guard keep distinct-but-close spaces (Большой/Малый зал, adjacent stages) apart.
+            elif ratio is None and dist <= _SHOW_RADIUS_M and not contrasts(a_name, b_name) and _share_same_show(db, a_id, b_id):
+                if _guarded_union(a_id, b_id):
+                    merges.append((a_id, b_id, round(dist), 0, "same-show"))
 
         # Per cluster, the canonical venue keeps the most occurrences.
         clusters: dict[int, list[int]] = {}
