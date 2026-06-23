@@ -2,6 +2,7 @@ import json
 
 import httpx
 
+from core.llm_limiter import llm_slot
 from pipeline.llm.adapters.base import CATEGORIES, CategoryResult, LLMAdapter
 from pipeline.llm.json_utils import parse_llm_json
 
@@ -76,6 +77,14 @@ class HTTPChatAdapter(LLMAdapter):
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
 
+    async def _chat(self, payload: dict) -> dict:
+        """POST to the LLM endpoint while holding ONE service-wide concurrency slot (see core.llm_limiter)."""
+        async with llm_slot():
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.post(f"{self.base_url}/api/chat", json=payload)
+                response.raise_for_status()
+                return response.json()
+
     async def judge_same_event(self, title_a: str, title_b: str) -> tuple[bool, float]:
         """Ask whether two same-venue+same-time titles are one event. Returns
         (same, confidence). Raises on transport error (caller decides the fallback)."""
@@ -88,10 +97,7 @@ class HTTPChatAdapter(LLMAdapter):
             "temperature": 0.0,
             "max_tokens": 60,
         }
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(f"{self.base_url}/api/chat", json=payload)
-            response.raise_for_status()
-            data = response.json()
+        data = await self._chat(payload)
         try:
             parsed = parse_llm_json(data.get("response") or "{}")
         except (json.JSONDecodeError, TypeError):
@@ -118,10 +124,7 @@ class HTTPChatAdapter(LLMAdapter):
             "temperature": 0.2,
             "max_tokens": 300,
         }
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(f"{self.base_url}/api/chat", json=payload)
-            response.raise_for_status()
-            data = response.json()
+        data = await self._chat(payload)
 
         raw_content = data.get("response") or "{}"
         try:

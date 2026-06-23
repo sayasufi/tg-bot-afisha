@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     llm_api_base_url: str = Field(default="http://176.109.82.96:5000", alias="LLM_API_BASE_URL")
     llm_timeout_seconds: float = Field(default=20.0, alias="LLM_TIMEOUT_SECONDS")
+    # Service-wide cap on concurrent in-flight LLM requests (a shared Redis budget across api + worker).
+    llm_max_concurrency: int = Field(default=20, alias="LLM_MAX_CONCURRENCY")
 
     yandex_geocoder_key: str = Field(default="", alias="YANDEX_GEOCODER_KEY")
     nominatim_base_url: str = Field(default="https://nominatim.openstreetmap.org", alias="NOMINATIM_BASE_URL")

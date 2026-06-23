@@ -3,6 +3,7 @@ import logging
 
 from sqlalchemy import select
 
+from core.config.settings import get_settings
 from core.db.models import EventCandidate, EventSource, RawEvent, Source
 from core.db.repositories.ingestion import dedup_and_upsert_event, get_venue
 from core.db.session import WorkerAsyncSessionLocal
@@ -10,7 +11,10 @@ from pipeline.llm.service import LLMService
 
 _log = logging.getLogger(__name__)
 
-_CLASSIFY_CONCURRENCY = 4  # parallel in-flight LLM classify calls during dedup
+# Batch fan-out for in-flight LLM classify calls. The REAL service-wide cap is the shared limiter in
+# core.llm_limiter (settings.llm_max_concurrency); this just sizes the gather so it can fill that
+# budget without spawning idle pollers beyond it.
+_CLASSIFY_CONCURRENCY = get_settings().llm_max_concurrency
 
 
 async def _dedup_impl() -> dict:
@@ -115,7 +119,7 @@ def _merge_events_impl() -> dict:
 
 
 _LLM_DEDUP_CAP = 200  # pairs judged per run (cached, so this is mostly a first-run bound)
-_LLM_DEDUP_CONCURRENCY = 4
+_LLM_DEDUP_CONCURRENCY = get_settings().llm_max_concurrency  # capped service-wide by core.llm_limiter
 _LLM_DEDUP_MIN_CONFIDENCE = 0.7
 
 

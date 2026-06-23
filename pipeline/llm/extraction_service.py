@@ -8,6 +8,7 @@ import dateparser
 import httpx
 
 from core.config.settings import get_settings
+from core.llm_limiter import llm_slot
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.llm.json_utils import parse_llm_json
 
@@ -70,10 +71,11 @@ class LLMExtractionService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.post(f"{self.base_url}/api/chat", json=payload)
-                response.raise_for_status()
-                data = response.json()
+            async with llm_slot():  # one of the service-wide LLM concurrency slots
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    response = await client.post(f"{self.base_url}/api/chat", json=payload)
+                    response.raise_for_status()
+                    data = response.json()
         except (httpx.HTTPError, ValueError):
             # Network/timeout/5xx/non-JSON — skip this one raw, never abort the batch.
             return None, "llm_error"
