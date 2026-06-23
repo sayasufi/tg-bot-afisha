@@ -2,12 +2,12 @@
 import asyncio
 import io
 import logging
+import re
 
 import httpx
 from PIL import Image
 from sqlalchemy import func, select, update
 
-from core.config.settings import get_settings
 from core.db.models import Event, EventSource, RawEvent, Source
 from core.db.session import SessionLocal, WorkerAsyncSessionLocal
 from core.http_safety import is_public_http_url
@@ -91,17 +91,36 @@ def _downscale_jpeg(data: bytes, max_width: int = MAX_WIDTH) -> bytes:
         return data
 
 
-_TG_IMG_CONCURRENCY = 4  # concurrent Telethon downloads (heavier than the t.me web; keep modest)
+_TG_IMG_CONCURRENCY = 8  # concurrent HTTP fetches (lighter than the old Telethon download path)
+_UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
+# The single-post page carries the post's photo as og:image (a cdn*.telesco.pe URL). Match either order.
+_OG_IMAGE_RE = re.compile(r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"')
+_OG_IMAGE_RE2 = re.compile(r'<meta[^>]+content="([^"]+)"[^>]+property="og:image"')
+
+
+async def _post_image_url(client: httpx.AsyncClient, channel: str, msgid: int) -> str | None:
+    """The post's photo URL from t.me/<channel>/<msgid> og:image — plain HTTP, no Telethon/flood limits."""
+    try:
+        r = await client.get(f"https://t.me/{channel}/{msgid}")
+    except httpx.HTTPError:
+        return None
+    if r.status_code != 200:
+        return None
+    for rx in (_OG_IMAGE_RE, _OG_IMAGE_RE2):
+        m = rx.search(r.text)
+        if m:
+            url = m.group(1).strip()
+            if url.startswith("http"):
+                return url
+    return None
 
 
 async def _cache_telegram_images_impl(cap: int = 400) -> dict:
-    """Lazily fetch the photo for telegram EVENTS that have no image yet — i.e. posts that survived
-    the whole pipeline (extraction → enrich → dedup → Event). The connector no longer downloads a
-    photo per post (most posts aren't events); this pulls only the ones that matter, via Telethon.
-    No-op without a Telethon session."""
-    s = get_settings()
-    if not (s.telethon_api_id and s.telethon_api_hash and s.telethon_session):
-        return {"skipped": "no_telethon"}
+    """Fetch the photo for telegram EVENTS that have no image yet, over PLAIN HTTP: the single-post page
+    (t.me/<channel>/<msgid>) carries the photo as og:image. Replaces the old Telethon downloader, which
+    hit flood limits and failed; aligns with the web-preview fetch. Web-preview-fetched events already
+    carry image URLs in their payload and are handled by _cache_event_images_impl, so this targets the
+    has_photo posts that have no URL of their own."""
     async with WorkerAsyncSessionLocal() as db:
         rows = (await db.execute(
             select(Event.event_id, RawEvent.raw_payload_json)
@@ -124,27 +143,24 @@ async def _cache_telegram_images_impl(cap: int = 400) -> dict:
     if not targets:
         return {"cached": 0, "candidates": 0}
 
-    from telethon import TelegramClient
-    from telethon.sessions import StringSession
     ensure_bucket()
-    client = TelegramClient(StringSession(s.telethon_session), s.telethon_api_id, s.telethon_api_hash)
-    await client.connect()
-    if not await client.is_user_authorized():
-        await client.disconnect()
-        return {"skipped": "not_authorized"}
     sem = asyncio.Semaphore(_TG_IMG_CONCURRENCY)
     cached = 0
+    timeout = httpx.Timeout(connect=10, read=20, write=10, pool=10)
 
-    async def _one(eid, channel: str, msgid: int) -> None:
+    async def _one(http: httpx.AsyncClient, eid, channel: str, msgid: int) -> None:
         nonlocal cached
         key = f"telegram/{channel}/{msgid}.jpg"
         try:
             if not object_exists(key):
                 async with sem:
-                    msg = await client.get_messages(channel, ids=msgid)
-                    if not msg or not getattr(msg, "photo", None):
+                    img_url = await _post_image_url(http, channel, msgid)
+                    if not img_url or not is_public_http_url(img_url):
                         return
-                    data = await client.download_media(msg, file=bytes)
+                    # follow_redirects=False on the actual download → a URL can't 30x into internal space.
+                    resp = await http.get(img_url, follow_redirects=False)
+                    resp.raise_for_status()
+                    data = resp.content
                 if not data:
                     return
                 put_image(key, _downscale_jpeg(data), "image/jpeg")
@@ -155,8 +171,6 @@ async def _cache_telegram_images_impl(cap: int = 400) -> dict:
         except Exception:
             logger.warning("telegram_image_cache_failed", extra={"event_id": str(eid), "channel": channel, "msgid": msgid}, exc_info=True)
 
-    try:
-        await asyncio.gather(*(_one(eid, ch, mid) for eid, (ch, mid) in targets.items()), return_exceptions=True)
-    finally:
-        await client.disconnect()
+    async with httpx.AsyncClient(timeout=timeout, headers=_UA, follow_redirects=True) as http:
+        await asyncio.gather(*(_one(http, eid, ch, mid) for eid, (ch, mid) in targets.items()), return_exceptions=True)
     return {"cached": cached, "candidates": len(targets)}
