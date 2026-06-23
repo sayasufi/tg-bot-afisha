@@ -36,9 +36,10 @@ def _doc(r) -> dict:
     title = r["title"] or ""
     lat, lon = r["lat"], r["lon"]
     ds, de = r["date_start"], r["date_end"]
+    eid = str(r["event_id"])  # event_id is a UUID — Meili needs a string/int primary key
     doc = {
-        "id": r["event_id"],
-        "event_id": r["event_id"],
+        "id": eid,
+        "event_id": eid,
         "title": title,
         "title_translit": " ".join(translit_tokens(title)),  # latin query → cyrillic title
         "venue": r["venue_name"] or "",
