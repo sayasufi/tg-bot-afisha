@@ -1,11 +1,14 @@
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import dateparser
 import httpx
+
+# Moscow is a fixed UTC+3 (no DST since 2014). Telegram posts state local MSK time with no offset.
+_MSK = timezone(timedelta(hours=3))
 
 from core.config.settings import get_settings
 from core.llm_limiter import llm_slot
@@ -43,6 +46,21 @@ class LLMExtractionService:
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return dateparser.parse(value, languages=["ru", "en"])
+
+    @staticmethod
+    def _to_msk_iso(value: str) -> str:
+        """Anchor a naive LLM date to MSK. A post says «23.06 21:00» (Moscow local); the LLM returns a
+        naive «2026-06-23T21:00:00», which the timezone-aware DB column then mis-reads as 21:00 UTC =
+        00:00 next day (so a 23 Jun 21:00 event surfaced as «24 июня»). Tag naive datetimes as UTC+3 so
+        the stored instant is the real Moscow time. Offset-aware values pass through untouched."""
+        if not value:
+            return value
+        dt = LLMExtractionService._parse_dt(value)
+        if dt is None:
+            return value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_MSK)
+        return dt.isoformat()
 
     async def extract_event_with_reason(
         self, text: str, city_hint: str = "Moscow", venue_hint: str = "", post_date: str = ""
@@ -113,8 +131,8 @@ class LLMExtractionService:
 
         title = str(parsed.get("title") or "").strip()
         description = str(parsed.get("description") or "").strip() or text[:12000]
-        date_start = str(parsed.get("date_start") or "").strip()
-        date_end = str(parsed.get("date_end") or "").strip()
+        date_start = self._to_msk_iso(str(parsed.get("date_start") or "").strip())
+        date_end = self._to_msk_iso(str(parsed.get("date_end") or "").strip())
         venue = str(parsed.get("venue") or "").strip()
         address = str(parsed.get("address") or "").strip()
         address_candidates: list[str] = []
