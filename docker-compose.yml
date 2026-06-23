@@ -129,6 +129,31 @@ services:
       start_period: 20s
 
   # --- Prefect orchestration (schedules + runs every flow) ---
+  # Dedicated Postgres for Prefect's orchestration store (flow/task-run state, schedules, logs). Kept
+  # SEPARATE from the app `postgres` ON PURPOSE: Prefect writes a constant stream of small state-change
+  # transactions, and the SQLite store it replaces serialized those on one writer lock — throttling the
+  # runner (overdue-run pileup / "Aborted submission" spam). A standalone instance means that churn never
+  # competes with app queries for buffers/WAL/vacuum/connections, and a problem in either DB can't touch
+  # the other. Tiny + untuned (the orchestration DB is small); no host port — only prefect-server reaches
+  # it over the compose net.
+  prefect-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: prefect
+      POSTGRES_USER: prefect
+      # Internal-only (no host port), but still set a strong value in prod .env. URL-safe (it goes into a
+      # connection URL); dev falls back to a benign default.
+      POSTGRES_PASSWORD: ${PREFECT_DB_PASSWORD:-prefect}
+    volumes:
+      - prefect_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   prefect-server:
     image: prefecthq/prefect:3-latest
     restart: unless-stopped
@@ -136,10 +161,18 @@ services:
     environment:
       PREFECT_HOME: /data
       PREFECT_SERVER_API_HOST: 0.0.0.0
+      # Back the orchestration store with the dedicated Postgres above (was SQLite in /data). asyncpg is
+      # already in the prefect image; the schema is auto-migrated on first start. DIRECT to the instance,
+      # NOT through Odyssey — Prefect leans on session state / prepared statements that a transaction
+      # pooler would break.
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD:-prefect}@prefect-postgres:5432/prefect
       # So the browser-served UI talks to the API at the right origin. Default
       # works via an SSH tunnel (ssh -L 4201:localhost:4201 …); override in .env
       # with the public host for direct access.
       PREFECT_UI_API_URL: ${PREFECT_UI_API_URL-http://localhost:4201/api}
+    depends_on:
+      prefect-postgres:
+        condition: service_healthy
     ports:
       # Loopback-only: the Prefect API/UI has no auth — reach it via SSH tunnel
       # (ssh -L 4201:localhost:4201 …). Host 4201 (4200 is taken by another Prefect
@@ -216,5 +249,6 @@ volumes:
   pg_data:
   minio_data:
   prefect_data:
+  prefect_pg_data:
   redis_data:
   meili_data:
