@@ -345,16 +345,24 @@ async def find_cached_venue(db: AsyncSession, name: str, city: str, country: str
     normalized_country = (country or "").strip()
     if not normalized_name:
         return None
-    stmt = select(Venue).where(
-        and_(
-            func.lower(Venue.name) == normalized_name.lower(),
-            func.lower(Venue.city) == normalized_city.lower(),
-            func.lower(Venue.country) == normalized_country.lower(),
-            Venue.address != "",
-            Venue.geom.is_not(None),
+    stmt = (
+        select(Venue)
+        .where(
+            and_(
+                func.lower(Venue.name) == normalized_name.lower(),
+                func.lower(Venue.city) == normalized_city.lower(),
+                func.lower(Venue.country) == normalized_country.lower(),
+                Venue.address != "",
+                Venue.geom.is_not(None),
+            )
         )
+        # Duplicate cached venues can coexist (the venue-dedup flow merges them async); pick the oldest
+        # deterministically instead of letting scalar_one_or_none() raise MultipleResultsFound and abort
+        # the whole enrich pass.
+        .order_by(Venue.venue_id)
+        .limit(1)
     )
-    return (await db.execute(stmt)).scalar_one_or_none()
+    return (await db.execute(stmt)).scalars().first()
 
 
 async def unresolved_venue_ids(db: AsyncSession, limit: int = 200) -> list[int]:
