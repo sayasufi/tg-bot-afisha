@@ -80,10 +80,19 @@ _MILLIONNIKI = [
     ("perm", "Пермь", "Asia/Yekaterinburg", 5, 58.01046, 56.25017, "perm", None, "prm"),
     ("volgograd", "Волгоград", "Europe/Volgograd", 3, 48.70708, 44.51683, "volgograd", None, "volgograd"),
 ]
+# ref.cities.city_id per million-city — bridges DB-keyed Telegram venue channels
+# (ref.telegram_channels.city_id) back to this registry so a channel's posts geocode in the right city.
+# Moscow (1/2) and SPb (3) already exist; these rows are added in ref.cities for the million-plus cities.
+_CITY_IDS = {
+    "novosibirsk": 4, "ekaterinburg": 5, "kazan": 6, "krasnoyarsk": 7, "nizhny-novgorod": 8,
+    "chelyabinsk": 9, "ufa": 10, "krasnodar": 11, "samara": 12, "rostov-on-don": 13,
+    "omsk": 14, "voronezh": 15, "perm": 16, "volgograd": 17,
+}
 for _s, _n, _tz, _off, _lat, _lon, _y, _k, _a in _MILLIONNIKI:
     CITIES[_s] = CityConfig(
         slug=_s, name=_n, country="RU", timezone=_tz, kudago_location=_k, yandex_city=_y,
         afisha_city=_a, active=True, center=(_lat, _lon), utc_offset_hours=_off,
+        city_id=_CITY_IDS.get(_s),
     )
 
 DEFAULT_CITY = CITIES["moscow"]
