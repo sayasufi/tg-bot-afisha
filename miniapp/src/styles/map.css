@@ -323,8 +323,10 @@ html[data-theme="dark"] .vpin--active::before {
   0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.7; }
   50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
 }
-/* The acid constellation line "flows" — dashes drift along the network, a quiet sense of live data. */
-.vcity-line {
+/* The acid constellation line "flows" — dashes drift along the network, a quiet sense of live data. The
+   far-zoom constellation is the only DASHED overlay path, so animating the overlay pane's paths is safe +
+   reliable (react-leaflet doesn't forward a className to the path; dashoffset is a no-op on solid paths). */
+.leaflet-overlay-pane path {
   animation: dashFlow 1.6s linear infinite;
 }
 @keyframes dashFlow {
@@ -334,7 +336,7 @@ html[data-theme="dark"] .vpin--active::before {
 }
 @media (prefers-reduced-motion: reduce) {
   .vcity__glow,
-  .vcity-line {
+  .leaflet-overlay-pane path {
     animation: none;
   }
 }
