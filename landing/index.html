@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Окрест — афиша твоего города на карте</title>
+    <meta name="description" content="Концерты, выставки, спектакли, стендап и кино в 16 городах России — всё на одной карте, прямо в Telegram." />
+    <meta name="theme-color" content="#f4f4ef" />
+    <meta property="og:title" content="Окрест — афиша на карте" />
+    <meta property="og:description" content="События вокруг тебя в 16 городах России, прямо в Telegram." />
+    <meta property="og:type" content="website" />
+    <!-- If opened INSIDE Telegram (the bot's Mini App), go straight to the app host — the landing is for
+         browsers only. Sync so the bounce happens before the page paints (no landing flash in Telegram). -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      (function () {
+        var tg = window.Telegram && window.Telegram.WebApp;
+        if (tg && (tg.initData || (tg.platform && tg.platform !== "unknown"))) {
+          location.replace("https://app.okrestmap.ru/");
+        }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
+    />
+    <style>
+      :root {
+        --paper: #f4f4ef;
+        --ink: #0b0b0b;
+        --acid: #ccff00;
+        --cinnabar: #e0451f;
+        --ink-dim: #6b6b66;
+        --grotesk: "Familjen Grotesk", system-ui, sans-serif;
+        --display: "Unbounded", var(--grotesk);
+        --mono: "Martian Mono", ui-monospace, monospace;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--grotesk);
+        -webkit-font-smoothing: antialiased;
+        min-height: 100svh;
+        display: flex;
+        flex-direction: column;
+        /* faint cartographic grid — the "map" texture under the type */
+        background-image:
+          linear-gradient(rgba(11, 11, 11, 0.045) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(11, 11, 11, 0.045) 1px, transparent 1px);
+        background-size: 34px 34px;
+      }
+      .wrap { width: 100%; max-width: 780px; margin: 0 auto; padding: 0 22px; display: flex; flex-direction: column; flex: 1; }
+      .top { display: flex; align-items: center; gap: 9px; padding: 24px 0; }
+      .top__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 1.5px var(--ink); }
+      .top__mark { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: -0.03em; }
+      .hero { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 36px 0 52px; }
+      .hero__emblem { width: 80px; height: 80px; margin-bottom: 26px; filter: drop-shadow(2px 2px 0 rgba(224, 69, 31, 0.18)); }
+      .hero__title {
+        font-family: var(--display);
+        font-weight: 800;
+        font-size: clamp(42px, 12.5vw, 78px);
+        line-height: 0.95;
+        letter-spacing: -0.045em;
+      }
+      .hero__title em { font-style: normal; color: var(--cinnabar); }
+      .hero__sub {
+        margin-top: 22px;
+        max-width: 32ch;
+        font-size: clamp(17px, 4.6vw, 21px);
+        font-weight: 500;
+        line-height: 1.36;
+      }
+      .hero__sub b { font-weight: 700; }
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 11px;
+        align-self: flex-start;
+        margin-top: 34px;
+        padding: 15px 26px;
+        background: var(--acid);
+        color: var(--ink);
+        font-weight: 700;
+        font-size: 17px;
+        text-decoration: none;
+        box-shadow: inset 0 0 0 1.5px var(--ink), 3px 3px 0 var(--cinnabar);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .cta:hover { transform: translate(-1px, -1px); box-shadow: inset 0 0 0 1.5px var(--ink), 4px 4px 0 var(--cinnabar); }
+      .cta:active { transform: translate(3px, 3px); box-shadow: inset 0 0 0 1.5px var(--ink); }
+      .cta__arrow { font-family: var(--mono); font-size: 18px; }
+      .cta__note { margin-top: 13px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim); letter-spacing: 0.01em; }
+      .feat { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 4px 0 46px; }
+      .feat__c {
+        padding: 16px 16px 18px;
+        background: #fff;
+        box-shadow: inset 0 0 0 1px var(--ink), 2px 2px 0 rgba(11, 11, 11, 0.1);
+      }
+      .feat__k {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--cinnabar);
+      }
+      .feat__t { margin-top: 9px; font-size: 15px; font-weight: 600; line-height: 1.32; }
+      .foot {
+        border-top: 1px solid rgba(11, 11, 11, 0.12);
+        padding: 20px 0 34px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .foot a { color: var(--ink); text-decoration: none; font-family: var(--mono); font-size: 13px; }
+      .foot a:hover { color: var(--cinnabar); }
+      .foot__sm { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+      @media (max-width: 470px) { .feat { grid-template-columns: 1fr; } }
+      @media (prefers-reduced-motion: reduce) { .cta { transition: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <span class="top__dot"></span>
+        <span class="top__mark">ОКРЕСТ</span>
+      </header>
+
+      <main class="hero">
+        <svg class="hero__emblem" viewBox="0 0 512 512" aria-hidden="true">
+          <path d="M256 56 C168.9 56 98 126.9 98 214 C98 320 256 456 256 456 C256 456 414 320 414 214 C414 126.9 343.1 56 256 56 Z" fill="#0b0b0b" />
+          <circle cx="256" cy="202" r="84" fill="#ccff00" />
+          <circle cx="256" cy="202" r="32" fill="#0b0b0b" />
+        </svg>
+        <h1 class="hero__title">Афиша вокруг тебя — <em>на&nbsp;карте</em>.</h1>
+        <p class="hero__sub">
+          Концерты, выставки, спектакли, стендап и кино в <b>16 городах России</b>. Всё на одной карте — прямо в Telegram.
+        </p>
+        <a class="cta" href="https://t.me/okrestmap_bot">
+          <span>Открыть в Telegram</span><span class="cta__arrow">→</span>
+        </a>
+        <span class="cta__note">бесплатно · без рекламы · @okrestmap_bot</span>
+      </main>
+
+      <section class="feat">
+        <div class="feat__c"><div class="feat__k">Рядом</div><div class="feat__t">События вокруг тебя на карте — видно, что рядом и куда пойти прямо сейчас.</div></div>
+        <div class="feat__c"><div class="feat__k">16 городов</div><div class="feat__t">Москва, Санкт-Петербург и 14 городов-миллионников России.</div></div>
+        <div class="feat__c"><div class="feat__k">Своё</div><div class="feat__t">Избранное, рекомендации под твой вкус и напоминания, чтобы не пропустить.</div></div>
+        <div class="feat__c"><div class="feat__k">Чисто</div><div class="feat__t">Только события из официальных источников. Без рекламы и спама.</div></div>
+      </section>
+
+      <footer class="foot">
+        <a href="https://t.me/okrestmap_bot">→ t.me/okrestmap_bot</a>
+        <span class="foot__sm">Окрест · афиша на карте</span>
+      </footer>
+    </div>
+  </body>
+</html>

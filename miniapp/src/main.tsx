@@ -1,26 +1,11 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
+// Entry gate. The map mini-app runs ONLY inside Telegram (it lives at app.okrestmap.ru). A plain browser
+// is bounced to the landing (okrestmap.ru). The heavy map bundle is a dynamic import, so it's never even
+// fetched outside Telegram — the browser just loads this tiny gate and redirects.
+const tg = (window as { Telegram?: { WebApp?: { initData?: string; platform?: string } } }).Telegram?.WebApp;
+const inTelegram = !!(tg && (tg.initData?.length || (tg.platform && tg.platform !== "unknown")));
 
-import { App } from "./app/App";
-import { ErrorBoundary } from "./app/ErrorBoundary";
-import "leaflet/dist/leaflet.css";
-import "./styles.css";
-
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-);
-
-// The splash is normally removed by App once the basemap has rendered (so the
-// map never flashes in blank). This is only a safety fallback in case the map
-// never signals ready.
-window.setTimeout(() => {
-  const splash = document.getElementById("splash");
-  if (splash) {
-    splash.classList.add("hide");
-    setTimeout(() => splash.remove(), 400);
-  }
-}, 7000);
+if (inTelegram) {
+  void import("./app/bootstrapApp").then((m) => m.mountApp());
+} else {
+  window.location.replace("https://okrestmap.ru/");
+}
