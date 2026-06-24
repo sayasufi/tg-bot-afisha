@@ -134,6 +134,22 @@ async def finish_source_run(db: AsyncSession, run: SourceRun, status: str, stats
     await db.commit()
 
 
+async def sweep_stale_source_runs(db: AsyncSession, older_than_hours: int = 2) -> dict:
+    """Mark runs stuck in 'running' past any sane duration as 'interrupted' — they were orphaned when a
+    process restart/crash hit between create_source_run and finish_source_run, and would otherwise linger
+    as 'running' forever (cluttering health checks). A genuinely-slow live run that gets swept
+    self-corrects: its own finish_source_run overwrites the status on completion."""
+    res = await db.execute(
+        text(
+            "UPDATE events.source_runs SET status = 'interrupted', finished_at = now() "
+            "WHERE status = 'running' AND started_at < now() - make_interval(hours => :h)"
+        ),
+        {"h": older_than_hours},
+    )
+    await db.commit()
+    return {"swept": res.rowcount}
+
+
 async def upsert_raw_event(db: AsyncSession, source_id: int, external_id: str, payload: dict, raw_text: str) -> RawEvent:
     # Atomic INSERT ... ON CONFLICT DO UPDATE on (source_id, external_id): avoids the
     # SELECT-then-INSERT race when several workers ingest the same event concurrently.

@@ -34,6 +34,9 @@ _SCHEDULE = [
     (flows.prune_telegram_channels, 86400),
     # Daily: cache each active channel's subscriber count (reach signal) in ref.telegram_channels.
     (flows.refresh_channel_subscribers, 86400),
+    # Every 30 min: mark source_runs orphaned by a deploy/crash (stuck in 'running') as 'interrupted',
+    # so the run log doesn't accumulate phantom in-flight rows. The 2h threshold is well above any run.
+    (flows.sweep_stale_runs, 1800),
     # Keep the Meilisearch typeahead index fresh (no-op until MEILI_SEARCH_ENABLED). Cheap full
     # reindex at this scale; the atomic swap means search never sees an empty index.
     (flows.reindex_search, 120),

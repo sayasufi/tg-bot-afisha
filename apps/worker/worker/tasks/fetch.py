@@ -398,7 +398,17 @@ async def _fetch_telegram_impl() -> dict:
         # Pass 3 (serial writes): a single async DB session can't be written concurrently.
         for (channel_row, channel, source, run, _cursor), result in zip(items, results):
             if isinstance(result, BaseException):
-                await finish_source_run(db, run, "failed", {"fetched": 0, "channel": channel}, str(result)[:300])
+                msg = str(result)
+                # A DEAD username (the channel was deleted/renamed) is permanent — retire it now so it
+                # stops erroring every cycle (Telethon raises UsernameNotOccupied/UsernameInvalid; the
+                # message carries "No user has <x> as username"). Transient errors — flood-wait, network,
+                # redirect — are NOT a death signal, so they keep the channel active for the next cycle.
+                dead = type(result).__name__ in ("UsernameNotOccupiedError", "UsernameInvalidError") or "No user has" in msg
+                if dead:
+                    channel_row.is_active = False
+                    db.add(channel_row)
+                    print(f"telegram: retired dead channel {channel} ({type(result).__name__})")
+                await finish_source_run(db, run, "failed", {"fetched": 0, "channel": channel, "retired": dead}, msg[:300])
                 continue
             records, next_cursor = result
             await bulk_upsert_raw_events(db, source.source_id, records)

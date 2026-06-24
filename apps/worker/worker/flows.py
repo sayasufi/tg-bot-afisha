@@ -61,6 +61,16 @@ async def prune_telegram_channels():
     return await prune_stale_channels()
 
 
+@flow(name="sweep-stale-runs", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
+async def sweep_stale_runs():
+    """Mark source_runs stuck in 'running' (a fetch orphaned by a deploy/crash between create_source_run
+    and finish_source_run) as 'interrupted', so the run log doesn't fill with phantom in-flight rows."""
+    from core.db.repositories.ingestion import sweep_stale_source_runs
+    from core.db.session import WorkerAsyncSessionLocal
+    async with WorkerAsyncSessionLocal() as db:
+        return await sweep_stale_source_runs(db)
+
+
 @flow(name="refresh-channel-subscribers", retries=1, retry_delay_seconds=60, timeout_seconds=600, log_prints=True)
 async def refresh_channel_subscribers():
     """Daily: cache each active telegram channel's subscriber count (reach signal) from its t.me page."""
