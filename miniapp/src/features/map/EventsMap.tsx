@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import L from "leaflet";
-import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { AttributionControl, MapContainer, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { City, EventItem, MapCluster } from "../../api/client";
@@ -76,6 +76,42 @@ function CityRecenter({ center }: { center: [number, number] | null }) {
 // hidden at this zoom (see `constellation`), so the cards stand in for it.
 const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the city cards take over (and event markers hide)
 
+// Prim's MST over the city points — joins every city into ONE network with the least total line length
+// (no cycles, minimal crossings): the thin acid "constellation" drawn behind the pins at the far zoom.
+function cityConstellation(cities: City[]): [number, number][][] {
+  const n = cities.length;
+  if (n < 2) return [];
+  const inTree = new Array(n).fill(false);
+  const best = new Array(n).fill(Infinity);
+  const from = new Array(n).fill(-1);
+  const d2 = (a: City, b: City) => (a.lat - b.lat) ** 2 + (a.lon - b.lon) ** 2;
+  const edges: [number, number][][] = [];
+  inTree[0] = true;
+  for (let k = 0; k < n; k++) {
+    best[k] = d2(cities[0], cities[k]);
+    from[k] = 0;
+  }
+  for (let added = 1; added < n; added++) {
+    let u = -1;
+    for (let i = 0; i < n; i++) if (!inTree[i] && (u === -1 || best[i] < best[u])) u = i;
+    if (u === -1) break;
+    inTree[u] = true;
+    edges.push([
+      [cities[from[u]].lat, cities[from[u]].lon],
+      [cities[u].lat, cities[u].lon],
+    ]);
+    for (let v = 0; v < n; v++) {
+      if (inTree[v]) continue;
+      const dd = d2(cities[u], cities[v]);
+      if (dd < best[v]) {
+        best[v] = dd;
+        from[v] = u;
+      }
+    }
+  }
+  return edges;
+}
+
 function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
@@ -103,11 +139,19 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
     return kept;
   }, [cities, currentSlug, zoom, map]);
 
+  // Thin acid constellation joining every city (MST — one network). Geographic, not zoom-dependent.
+  const constellation = useMemo(() => cityConstellation(cities), [cities]);
+
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
   const shown = new Set(cards.map((c) => c.slug));
 
   return (
     <>
+      {/* Thin dashed acid lines joining the cities into a constellation — behind the pins, non-interactive. */}
+      <Polyline
+        positions={constellation}
+        pathOptions={{ color: "#ccff00", weight: 1.3, opacity: 0.82, dashArray: "2 7", lineCap: "round", interactive: false }}
+      />
       {/* Cities whose card was culled (it overlaps a higher-priority one) → a small tappable dot, so a
           hidden city is still visible and reachable. Tapping flies in, where its card has room to show. */}
       {cities
