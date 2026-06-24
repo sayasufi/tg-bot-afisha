@@ -92,8 +92,8 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
     for (const c of ordered) {
       const active = c.slug === currentSlug;
       const pt = map.project([c.lat, c.lon], zoom);
-      const hw = active ? (c.name.length * 9 + 70) / 2 : (c.name.length * 7 + 22) / 2; // active is bigger + "событий"
-      const hh = active ? 22 : 17;
+      const hw = active ? (c.name.length * 8 + 56) / 2 : (c.name.length * 7 + 32) / 2; // active card + "событий"; non-active gets extra gap so cards don't touch
+      const hh = active ? 20 : 19;
       if (placed.some((p) => Math.abs(p.x - pt.x) < p.hw + hw && Math.abs(p.y - pt.y) < p.hh + hh)) continue;
       placed.push({ x: pt.x, y: pt.y, hw, hh });
       kept.push(c);
