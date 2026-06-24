@@ -66,6 +66,10 @@ left join events.venues vv on vv.venue_id = o.venue_id
 where e.status = 'active' and s.name = 'afisha_ru' and e.category <> 'exhibition'
   -- only types with a GraphQL schedule op; /exhibition/ runs are open-ended spans by design
   and (es.source_event_url like '%afisha.ru/performance/%' or es.source_event_url like '%afisha.ru/concert/%')
+  -- MOSCOW-ONLY: the schedule filter uses Moscow's City_2 (_AFISHA_CITY_ID), so resolving a
+  -- non-Moscow event would drop its sessions or mis-attach Moscow ones. SPb afisha events keep
+  -- their listing date span until a per-city resolve (with the SPb city id) is added.
+  and lower(coalesce(vv.city, 'москва')) = 'москва'
 group by e.event_id
 having
   -- a multi-show event whose stored dates are still sparse (missing the middle ones)

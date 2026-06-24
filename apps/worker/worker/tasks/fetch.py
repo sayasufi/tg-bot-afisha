@@ -85,27 +85,31 @@ async def _kudago_one(db, city) -> dict:
 
 
 async def _fetch_timepad_impl() -> dict:
-    """One curated Timepad sweep: the connector fetches the whitelisted cultural categories, collapses
-    recurrences and drops junk, returning ~distinct events. A full scan each run (the curated set is
-    small) — no cursor. A no-op when TIMEPAD_TOKEN is unset (connector returns []), so it's safe off."""
+    """One curated Timepad sweep per active city: the connector fetches the whitelisted cultural
+    categories, collapses recurrences and drops junk, returning ~distinct events. A full scan each
+    run (the curated set is small) — no cursor. A no-op when TIMEPAD_TOKEN is unset (connector
+    returns []), so it's safe off. Timepad filters by the Russian city NAME (city.name)."""
+    return await _per_city(_timepad_one)
+
+
+async def _timepad_one(db, city) -> dict:
     settings = get_settings()
-    async with WorkerAsyncSessionLocal() as db:
-        source = await ensure_source(
-            db, "timepad", "web", settings.timepad_base_url,
-            {"city": DEFAULT_CITY.slug, "tp_city": "Москва"},
-        )
-        run = await create_source_run(db, source.source_id)
-        try:
-            connector = TimepadConnector(city=source.config_json.get("tp_city", "Москва"))
-            records, _ = await connector.fetch()
-            await bulk_upsert_raw_events(db, source.source_id, records)
-            await db.commit()
-            await finish_source_run(db, run, "success", {"fetched": len(records)})
-            return {"fetched": len(records)}
-        except Exception as exc:
-            await db.rollback()
-            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
-            raise
+    source = await ensure_source(
+        db, _src("timepad", city), "web", settings.timepad_base_url,
+        {"city": city.slug, "tp_city": city.name},
+    )
+    run = await create_source_run(db, source.source_id)
+    try:
+        connector = TimepadConnector(city=source.config_json.get("tp_city", city.name))
+        records, _ = await connector.fetch()
+        await bulk_upsert_raw_events(db, source.source_id, records)
+        await db.commit()
+        await finish_source_run(db, run, "success", {"fetched": len(records)})
+        return {"fetched": len(records)}
+    except Exception as exc:
+        await db.rollback()
+        await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise
 
 
 async def _fetch_kudago_full_scan_impl() -> dict:
@@ -259,62 +263,68 @@ async def _yandex_full_scan_one(db, city) -> dict:
         raise
 
 
-def _afisha_config() -> dict:
-    return {"cursor": "0", "city": DEFAULT_CITY.afisha_city}
+def _afisha_config(city=DEFAULT_CITY) -> dict:
+    return {"cursor": "0", "city": city.afisha_city}
 
 
 async def _fetch_afisha_impl() -> dict:
-    settings = get_settings()
-    if not settings.afisha_enabled:
+    if not get_settings().afisha_enabled:
         return {"fetched": 0, "skipped": "afisha disabled"}
-    async with WorkerAsyncSessionLocal() as db:
-        source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
-        run = await create_source_run(db, source.source_id)
-        try:
-            cursor = source.config_json.get("cursor", "0")
-            city = source.config_json.get("city", DEFAULT_CITY.afisha_city)
-            connector = AfishaRuConnector(city=city, proxy=settings.afisha_proxy)
-            records, next_cursor = await connector.fetch(cursor=cursor)
-            await bulk_upsert_raw_events(db, source.source_id, records)
-            source.config_json = {**source.config_json, "cursor": next_cursor}
-            db.add(source)
-            await db.commit()
-            await finish_source_run(db, run, "success", {"fetched": len(records)})
-            return {"fetched": len(records), "cursor": next_cursor}
-        except Exception as exc:
-            await db.rollback()
-            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
-            raise
+    return await _per_city(_afisha_one)
+
+
+async def _afisha_one(db, city) -> dict:
+    settings = get_settings()
+    source = await ensure_source(db, _src("afisha_ru", city), "web", settings.afisha_ru_base_url, _afisha_config(city))
+    run = await create_source_run(db, source.source_id)
+    try:
+        cursor = source.config_json.get("cursor", "0")
+        acity = source.config_json.get("city", city.afisha_city)
+        connector = AfishaRuConnector(city=acity, proxy=settings.afisha_proxy)
+        records, next_cursor = await connector.fetch(cursor=cursor)
+        await bulk_upsert_raw_events(db, source.source_id, records)
+        source.config_json = {**source.config_json, "cursor": next_cursor}
+        db.add(source)
+        await db.commit()
+        await finish_source_run(db, run, "success", {"fetched": len(records)})
+        return {"fetched": len(records), "cursor": next_cursor}
+    except Exception as exc:
+        await db.rollback()
+        await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise
 
 
 async def _fetch_afisha_full_scan_impl() -> dict:
-    settings = get_settings()
-    if not settings.afisha_enabled:
+    if not get_settings().afisha_enabled:
         return {"fetched": 0, "skipped": "afisha disabled"}
-    async with WorkerAsyncSessionLocal() as db:
-        source = await ensure_source(db, "afisha_ru", "web", settings.afisha_ru_base_url, _afisha_config())
-        run = await create_source_run(db, source.source_id)
-        try:
-            city = source.config_json.get("city", DEFAULT_CITY.afisha_city)
-            max_pages = int(source.config_json.get("full_scan_max_pages", 80))
-            connector = AfishaRuConnector(city=city, proxy=settings.afisha_proxy or None)
+    return await _per_city(_afisha_full_scan_one)
 
-            async def _persist(recs):
-                # bulk_upsert commits internally, so each page is durable as it's
-                # fetched — a crash mid-scan keeps everything fetched so far.
-                await bulk_upsert_raw_events(db, source.source_id, recs)
 
-            records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages, on_page=_persist)
-            source.config_json = {**source.config_json, "cursor": "0"}
-            db.add(source)
-            await db.commit()
-            stats = {"fetched": len(records), "pages_scanned": pages_scanned, "stop_reason": stop_reason}
-            await finish_source_run(db, run, "success", stats)
-            return stats
-        except Exception as exc:
-            await db.rollback()
-            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
-            raise
+async def _afisha_full_scan_one(db, city) -> dict:
+    settings = get_settings()
+    source = await ensure_source(db, _src("afisha_ru", city), "web", settings.afisha_ru_base_url, _afisha_config(city))
+    run = await create_source_run(db, source.source_id)
+    try:
+        acity = source.config_json.get("city", city.afisha_city)
+        max_pages = int(source.config_json.get("full_scan_max_pages", 80))
+        connector = AfishaRuConnector(city=acity, proxy=settings.afisha_proxy or None)
+
+        async def _persist(recs):
+            # bulk_upsert commits internally, so each page is durable as it's
+            # fetched — a crash mid-scan keeps everything fetched so far.
+            await bulk_upsert_raw_events(db, source.source_id, recs)
+
+        records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages, on_page=_persist)
+        source.config_json = {**source.config_json, "cursor": "0"}
+        db.add(source)
+        await db.commit()
+        stats = {"fetched": len(records), "pages_scanned": pages_scanned, "stop_reason": stop_reason}
+        await finish_source_run(db, run, "success", stats)
+        return stats
+    except Exception as exc:
+        await db.rollback()
+        await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise
 
 
 _TELEGRAM_CONCURRENCY = 8  # channels at once — a load test showed Telethon is clean to ~16 concurrent
