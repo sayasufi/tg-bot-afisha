@@ -39,7 +39,7 @@
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
-      body { background: var(--paper); color: var(--ink); font-family: var(--grotesk); -webkit-font-smoothing: antialiased; }
+      body { background: var(--paper); color: var(--ink); font-family: var(--grotesk); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
       .wrap { width: 100%; max-width: 1060px; margin: 0 auto; padding: 0 22px; }
       a { color: inherit; }
 
@@ -52,13 +52,13 @@
       .top__bot:hover { color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 
       /* hero */
-      .hero { display: grid; grid-template-columns: 1fr 1.05fr; gap: 40px; align-items: center; padding: 32px 0 24px; }
-      .hero__title { font-family: var(--display); font-weight: 800; font-size: clamp(38px, 6vw, 64px); line-height: 0.96; letter-spacing: -0.045em; }
+      .hero { display: grid; grid-template-columns: 1fr 0.82fr; gap: 36px; align-items: center; padding: 28px 0 18px; }
+      .hero__title { font-family: var(--display); font-weight: 800; font-size: clamp(38px, 6vw, 62px); line-height: 0.96; letter-spacing: -0.045em; }
       .hero__title em { font-style: normal; color: var(--cinnabar); }
       .hero__sub { margin-top: 20px; max-width: 34ch; font-size: clamp(16px, 2.4vw, 19px); font-weight: 500; line-height: 1.4; }
       .hero__sub b { font-weight: 700; }
       .cta {
-        display: inline-flex; align-items: center; gap: 11px; margin-top: 28px;
+        display: inline-flex; align-items: center; gap: 11px; margin-top: 26px;
         padding: 15px 26px; background: var(--acid); color: var(--ink);
         font-weight: 700; font-size: 17px; text-decoration: none;
         box-shadow: inset 0 0 0 1.5px var(--ink), 3px 3px 0 var(--cinnabar);
@@ -69,75 +69,29 @@
       .cta__a { font-family: var(--mono); font-size: 18px; }
 
       /* stats */
-      .stats { display: flex; gap: 26px; margin-top: 28px; flex-wrap: wrap; }
+      .stats { display: flex; gap: 26px; margin-top: 26px; flex-wrap: wrap; }
       .stat__n { font-family: var(--display); font-weight: 700; font-size: clamp(22px, 4vw, 30px); letter-spacing: -0.03em; line-height: 1; }
       .stat__n em { font-style: normal; color: var(--cinnabar); }
       .stat__k { display: block; margin-top: 6px; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-dim); }
 
-      /* hero map — Russia with the 16 cities (events map at a glance) */
-      .map {
-        position: relative; aspect-ratio: 16 / 10; background: #fff;
-        box-shadow: inset 0 0 0 1px var(--ink), 4px 4px 0 rgba(11, 11, 11, 0.08);
-        background-image:
-          linear-gradient(rgba(11, 11, 11, 0.05) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(11, 11, 11, 0.05) 1px, transparent 1px);
-        background-size: 30px 30px;
-        overflow: hidden;
-      }
-      .map__tag { position: absolute; left: 12px; top: 11px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); }
-      .city { position: absolute; transform: translate(-50%, -50%); }
-      .city__d { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px #fff; }
-      .city__l { position: absolute; left: 12px; top: -13px; white-space: nowrap; }
-      .city--lft .city__l { left: auto; right: 12px; text-align: right; }
-      .city__n { display: block; font-family: var(--grotesk); font-weight: 700; font-size: 11px; line-height: 1.15; }
-      .city__c { display: block; margin-top: 1px; font-family: var(--mono); font-size: 10px; color: var(--ink-dim); }
-      /* Moscow — the dominant, glowing acid node */
-      .city--msk .city__d { width: 16px; height: 16px; background: var(--acid); box-shadow: 0 0 0 2px var(--ink), 0 0 22px 6px rgba(204, 255, 0, 0.7); }
-      .city--msk .city__l { left: 17px; top: -16px; }
-      .city--msk .city__n { font-size: 13px; }
-      .city--msk .city__c { color: var(--ink); font-weight: 600; }
+      /* phone with a real screenshot */
+      .hero__media { display: flex; justify-content: center; }
+      .phone { width: 100%; max-width: 232px; padding: 8px; background: var(--ink); border-radius: 32px; box-shadow: 5px 5px 0 rgba(11, 11, 11, 0.14); }
+      .phone__screen { border-radius: 24px; overflow: hidden; display: block; background: var(--paper); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+      .phone__screen img { width: 100%; height: auto; display: block; }
+      .phone--hero { max-width: 286px; box-shadow: 8px 8px 0 var(--cinnabar); }
 
       /* demos */
-      .demos { padding: 56px 0 30px; }
+      .demos { padding: 52px 0 26px; }
       .demos__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
-      .demos__s { margin-top: 10px; font-size: 16px; color: var(--ink-dim); max-width: 46ch; }
-      .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 34px; }
+      .demos__s { margin-top: 10px; font-size: 16px; color: var(--ink-dim); max-width: 50ch; }
+      .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin-top: 36px; }
       .col { display: flex; flex-direction: column; align-items: center; text-align: center; }
-      .phone {
-        width: 100%; max-width: 240px; aspect-ratio: 1 / 2.05; padding: 9px;
-        background: var(--ink); border-radius: 30px; box-shadow: 5px 5px 0 rgba(11, 11, 11, 0.12);
-      }
-      .screen { width: 100%; height: 100%; background: var(--paper); border-radius: 22px; overflow: hidden; position: relative; }
-      .col__k { margin-top: 18px; font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cinnabar); }
-      .col__t { margin-top: 7px; font-size: 15px; font-weight: 600; line-height: 1.32; max-width: 24ch; }
-
-      /* screen 1 — mini map with pins */
-      .s-map { background-image: linear-gradient(rgba(11,11,11,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(11,11,11,.06) 1px, transparent 1px); background-size: 22px 22px; }
-      .s-bar { position: absolute; left: 9px; right: 9px; top: 9px; height: 26px; background: #fff; box-shadow: inset 0 0 0 1px var(--ink); display: flex; align-items: center; padding: 0 9px; font-family: var(--mono); font-size: 9px; color: var(--ink-dim); }
-      .pin { position: absolute; padding: 3px 6px; background: #fff; box-shadow: inset 0 0 0 1px var(--ink), 1.5px 1.5px 0 rgba(11,11,11,.12); font-family: var(--grotesk); font-weight: 700; font-size: 9px; transform: translate(-50%, -50%); }
-      .pin--acid { background: var(--acid); box-shadow: inset 0 0 0 1px var(--ink), 1.5px 1.5px 0 var(--cinnabar); }
-
-      /* screen 2 — event card */
-      .s-card { display: flex; flex-direction: column; }
-      .s-poster { height: 52%; background: linear-gradient(135deg, var(--acid), #8fbf00); position: relative; }
-      .s-poster::after { content: "♪"; position: absolute; right: 12px; bottom: 8px; font-size: 30px; color: var(--ink); opacity: .5; }
-      .s-cat { position: absolute; left: 9px; top: 9px; background: var(--ink); color: var(--acid); font-family: var(--mono); font-size: 8px; padding: 3px 6px; text-transform: uppercase; letter-spacing: .05em; }
-      .s-body { padding: 11px 11px 0; }
-      .s-title { font-family: var(--grotesk); font-weight: 700; font-size: 13px; line-height: 1.15; }
-      .s-meta { margin-top: 7px; font-family: var(--mono); font-size: 9px; color: var(--ink-dim); line-height: 1.5; }
-      .s-heart { position: absolute; right: 11px; bottom: 11px; width: 26px; height: 26px; display: grid; place-items: center; background: var(--acid); box-shadow: inset 0 0 0 1px var(--ink); font-size: 13px; }
-
-      /* screen 3 — telegram notification */
-      .s-chat { background: #e7ebef; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; justify-content: flex-end; }
-      .s-msg { background: #fff; border-radius: 12px 12px 12px 3px; padding: 9px 10px; box-shadow: 0 1px 2px rgba(11,11,11,.12); max-width: 88%; }
-      .s-msg__h { display: flex; align-items: center; gap: 5px; font-family: var(--grotesk); font-weight: 700; font-size: 10px; }
-      .s-msg__h b { color: var(--cinnabar); }
-      .s-msg__t { margin-top: 5px; font-size: 10px; line-height: 1.35; color: #1a1a1a; }
-      .s-msg__b { margin-top: 8px; display: inline-block; background: var(--acid); box-shadow: inset 0 0 0 1px var(--ink); font-family: var(--mono); font-size: 8px; padding: 4px 7px; }
-      .s-mark { font-family: var(--display); font-weight: 800; font-size: 9px; }
+      .col__k { margin-top: 20px; font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cinnabar); }
+      .col__t { margin-top: 8px; font-size: 15px; font-weight: 500; line-height: 1.36; max-width: 26ch; color: #1c1c1a; }
 
       /* closing CTA */
-      .end { padding: 24px 0 14px; text-align: center; }
+      .end { padding: 26px 0 14px; text-align: center; }
       .end__h { font-family: var(--display); font-weight: 800; font-size: clamp(24px, 4.6vw, 36px); letter-spacing: -0.035em; }
       .end .cta { margin-top: 22px; }
 
@@ -147,12 +101,13 @@
       .foot__sm { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
 
       @media (max-width: 820px) {
-        .hero { grid-template-columns: 1fr; gap: 26px; }
+        .hero { grid-template-columns: 1fr; gap: 30px; text-align: center; }
+        .hero__sub { margin-left: auto; margin-right: auto; }
+        .stats { justify-content: center; }
         .hero__media { order: 2; }
       }
       @media (max-width: 560px) {
-        .row { grid-template-columns: 1fr; gap: 30px; max-width: 300px; margin-left: auto; margin-right: auto; }
-        .city--dim .city__l { display: none; }
+        .row { grid-template-columns: 1fr; gap: 38px; max-width: 300px; margin-left: auto; margin-right: auto; }
       }
       @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .cta { transition: none; } }
     </style>
@@ -177,67 +132,38 @@
         </div>
 
         <div class="hero__media">
-          <div class="map" aria-label="Карта городов Окреста">
-            <span class="map__tag">16 городов · вся Россия</span>
-            <!-- labelled cities — balanced spread across the frame (not pixel-accurate; designed for read) -->
-            <span class="city" style="left:10%;top:17%"><span class="city__d"></span><span class="city__l"><span class="city__n">Санкт-Петербург</span><span class="city__c">4.9k</span></span></span>
-            <span class="city" style="left:53%;top:20%"><span class="city__d"></span><span class="city__l"><span class="city__n">Екатеринбург</span><span class="city__c">1.1k</span></span></span>
-            <span class="city city--lft" style="left:90%;top:27%"><span class="city__d"></span><span class="city__l"><span class="city__n">Красноярск</span><span class="city__c">547</span></span></span>
-            <span class="city city--msk" style="left:18%;top:47%"><span class="city__d"></span><span class="city__l"><span class="city__n">Москва</span><span class="city__c">8.6k событий</span></span></span>
-            <span class="city" style="left:40%;top:45%"><span class="city__d"></span><span class="city__l"><span class="city__n">Казань</span><span class="city__c">672</span></span></span>
-            <span class="city city--lft" style="left:77%;top:51%"><span class="city__d"></span><span class="city__l"><span class="city__n">Новосибирск</span><span class="city__c">686</span></span></span>
-            <span class="city" style="left:20%;top:85%"><span class="city__d"></span><span class="city__l"><span class="city__n">Краснодар</span><span class="city__c">578</span></span></span>
-            <span class="city" style="left:46%;top:72%"><span class="city__d"></span><span class="city__l"><span class="city__n">Самара</span><span class="city__c">333</span></span></span>
-            <!-- unlabelled dots — fill the field -->
-            <span class="city city--dim" style="left:30%;top:33%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:47%;top:31%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:58%;top:40%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:64%;top:33%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:70%;top:41%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:25%;top:64%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:35%;top:79%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:60%;top:64%"><span class="city__d"></span></span>
+          <div class="phone phone--hero">
+            <div class="phone__screen">
+              <img src="shots/cities.jpg" width="720" height="1548" alt="Карта России с городами в приложении Окрест — 16 городов, 21 000+ событий" />
+            </div>
           </div>
         </div>
       </section>
 
       <section class="demos">
         <h2 class="demos__h">Как это работает</h2>
-        <p class="demos__s">Открываешь карту — видишь, что вокруг. Сохраняешь — мы напомним. Никакой рекламы.</p>
+        <p class="demos__s">Открываешь карту — видишь, что вокруг. Сохраняешь — напомним. Без рекламы и левых каналов.</p>
         <div class="row">
           <div class="col">
-            <div class="phone"><div class="screen s-map">
-              <div class="s-bar">Выберите город · 234 события</div>
-              <span class="pin pin--acid" style="left:46%;top:48%">Самара 333</span>
-              <span class="pin" style="left:24%;top:34%">19</span>
-              <span class="pin" style="left:70%;top:40%">41</span>
-              <span class="pin" style="left:38%;top:70%">3</span>
-            </div></div>
+            <div class="phone">
+              <div class="phone__screen"><img src="shots/map.jpg" width="720" height="1548" loading="lazy" alt="Карта событий вокруг — приложение Окрест" /></div>
+            </div>
             <div class="col__k">Рядом</div>
-            <div class="col__t">Видно, что вокруг тебя и куда пойти прямо сейчас.</div>
+            <div class="col__t">Карта показывает, что происходит вокруг тебя — прямо сейчас.</div>
           </div>
           <div class="col">
-            <div class="phone"><div class="screen s-card">
-              <div class="s-poster"><span class="s-cat">Концерт</span></div>
-              <div class="s-body">
-                <div class="s-title">Вечер джаза в Доме музыки</div>
-                <div class="s-meta">сегодня · 19:00<br />ул. Кирова, 12 · 0.4 км</div>
-              </div>
-              <span class="s-heart">♥</span>
-            </div></div>
+            <div class="phone">
+              <div class="phone__screen"><img src="shots/event.jpg" width="720" height="1548" loading="lazy" alt="Карточка события — приложение Окрест" /></div>
+            </div>
             <div class="col__k">Не пропусти</div>
-            <div class="col__t">Сохрани в избранное — напомним за 2 часа до начала.</div>
+            <div class="col__t">Где, когда, почём и как добраться. Сохрани — напомним за 2 часа.</div>
           </div>
           <div class="col">
-            <div class="phone"><div class="screen s-chat">
-              <div class="s-msg">
-                <div class="s-msg__h"><span class="s-mark">◉ Окрест</span></div>
-                <div class="s-msg__t"><b>🔔 Через 2 часа</b> — «Вечер джаза» в Доме музыки. Не забудь!</div>
-                <span class="s-msg__b">Открыть на карте →</span>
-              </div>
-            </div></div>
-            <div class="col__k">Без шума</div>
-            <div class="col__t">Только события из официальных источников. Ноль рекламы.</div>
+            <div class="phone">
+              <div class="phone__screen"><img src="shots/list.jpg" width="720" height="1548" loading="lazy" alt="Список событий — приложение Окрест" /></div>
+            </div>
+            <div class="col__k">Списком</div>
+            <div class="col__t">Не любишь карту? Листай и сортируй по дате, цене и близости.</div>
           </div>
         </div>
       </section>
@@ -262,8 +188,7 @@
           var total = d.cities.reduce(function (s, c) { return s + (c.count || 0); }, 0);
           if (total > 1000) {
             var rounded = Math.floor(total / 100) * 100;
-            document.getElementById("evcount").innerHTML =
-              rounded.toLocaleString("ru-RU") + "<em>+</em>";
+            document.getElementById("evcount").innerHTML = rounded.toLocaleString("ru-RU") + "<em>+</em>";
           }
         })
         .catch(function () {});
