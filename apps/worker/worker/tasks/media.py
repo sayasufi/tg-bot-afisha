@@ -5,7 +5,7 @@ import logging
 import re
 
 import httpx
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import func, select, update
 
 from core.db.models import Event, EventSource, RawEvent, Source
@@ -38,6 +38,12 @@ def _cache_one(db, event: Event) -> bool:
         event.cached_image_url = public_url(key)
         db.add(event)
         return True
+    except (httpx.HTTPError, UnidentifiedImageError) as exc:
+        # Expected at scale — a blocked/dead/malformed image URL, or bytes that aren't an image.
+        # Skip just this one image (the event keeps its source URL); a one-line INFO, not a
+        # stack-trace WARNING, so health checks aren't drowned in benign image-cache noise.
+        logger.info("media cache skip %s: %s", event.event_id, type(exc).__name__)
+        return False
     except Exception:
         logger.warning("media cache failed for %s (%s)", event.event_id, src, exc_info=True)
         return False
@@ -168,6 +174,9 @@ async def _cache_telegram_images_impl(cap: int = 400) -> dict:
                 await db2.execute(update(Event).where(Event.event_id == eid).values(cached_image_url=public_url(key)))
                 await db2.commit()
             cached += 1
+        except httpx.HTTPError as exc:
+            # Expected — a dead/blocked og:image URL or a transient fetch drop; skip just this image.
+            logger.info("telegram image cache skip %s: %s", eid, type(exc).__name__)
         except Exception:
             logger.warning("telegram_image_cache_failed", extra={"event_id": str(eid), "channel": channel, "msgid": msgid}, exc_info=True)
 
