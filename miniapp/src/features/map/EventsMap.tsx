@@ -69,63 +69,50 @@ function CityRecenter({ center }: { center: [number, number] | null }) {
   return null;
 }
 
-// City bubbles — the far-zoom regional/country overview. Tap a city ON THE MAP to jump there (replaces
-// the dropdown). Every active city is a DISC sized by its event volume — Moscow reads huge, a small city
-// reads small — so the field carries a real sense of scale. The active city (where you are) is the one
-// acid disc. Bigger / non-overlapping cities also get a name + count label; the rest stay bare discs and
-// pick up their label as you zoom in. The event layer is hidden at this zoom (see `constellation`), so
-// the bubbles stand in for it. No connecting lines — they read as meaningless.
-const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the bubble field takes over (and event markers hide)
-const DISC_MIN = 5; // px — radius of the smallest city's disc
-const DISC_MAX = 24; // px — radius of the biggest city's disc
+// City cards — the far-zoom regional/country overview. A clean nameplate per city (name + event count);
+// tap one to jump there (replaces the dropdown). The ACTIVE city (where you are) is a BIG acid card that
+// dominates — "Москва 8.5k событий" — others are smaller plinth cards. No dots, bubbles or lines. Cards
+// are culled so they never pile up; a city hidden by overlap reappears as you zoom in. The event layer is
+// hidden at this zoom (see `constellation`), so the cards stand in for it.
+const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the city cards take over (and event markers hide)
 
 function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
 
-  // Disc radius encodes event volume: area ∝ count → radius ∝ √count, normalised across the active
-  // cities. This is the "sense of scale" equal-size chips lacked (Москва 8.5k vs Уфа 298).
-  const radiusOf = useMemo(() => {
-    const roots = cities.map((c) => Math.sqrt(Math.max(0, c.count)));
-    const lo = Math.min(...roots);
-    const span = Math.max(...roots) - lo;
-    return (count: number) =>
-      span <= 0 ? DISC_MIN : DISC_MIN + ((Math.sqrt(Math.max(0, count)) - lo) / span) * (DISC_MAX - DISC_MIN);
-  }, [cities]);
-
-  // Cull only the LABELS — every disc stays (that's the bubble field). The active city's label is forced
-  // first (always kept). Each label sits to the RIGHT of its disc; boxes are in CRS pixels at this zoom,
-  // and overlap is zoom-only (panning shifts every point equally), so the labelled set is pan-stable.
-  const labelSlugs = useMemo<Set<string>>(() => {
-    if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return new Set();
+  // Cull the cards so they never overlap. The ACTIVE card is forced first (always kept) and gets a bigger
+  // box (it's the dominant acid card). Cards are centred on their city point; overlap is zoom-only (panning
+  // shifts every point equally), so the kept set is stable while panning and recomputes only on zoom.
+  const cards = useMemo<City[]>(() => {
+    if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return [];
     const ordered = [...cities].sort((a, b) => (a.slug === currentSlug ? -1 : b.slug === currentSlug ? 1 : 0));
-    const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
-    const kept = new Set<string>();
+    const placed: { x: number; y: number; hw: number; hh: number }[] = [];
+    const kept: City[] = [];
     for (const c of ordered) {
+      const active = c.slug === currentSlug;
       const pt = map.project([c.lat, c.lon], zoom);
-      const x0 = pt.x + radiusOf(c.count) + 5;
-      const box = { x0, x1: x0 + (c.name.length * 7 + 10), y0: pt.y - 12, y1: pt.y + 12 };
-      if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
-      placed.push(box);
-      kept.add(c.slug);
+      const hw = active ? (c.name.length * 9 + 70) / 2 : (c.name.length * 7 + 22) / 2; // active is bigger + "событий"
+      const hh = active ? 22 : 17;
+      if (placed.some((p) => Math.abs(p.x - pt.x) < p.hw + hw && Math.abs(p.y - pt.y) < p.hh + hh)) continue;
+      placed.push({ x: pt.x, y: pt.y, hw, hh });
+      kept.push(c);
     }
     return kept;
-  }, [cities, currentSlug, zoom, map, radiusOf]);
+  }, [cities, currentSlug, zoom, map]);
 
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
 
   return (
     <>
-      {cities.map((c) => {
+      {cards.map((c) => {
         const active = c.slug === currentSlug;
-        const labelled = labelSlugs.has(c.slug);
         return (
           <Marker
             key={c.slug}
             position={[c.lat, c.lon]}
-            icon={cityIcon(c.name, c.count, radiusOf(c.count), active, labelled)}
-            zIndexOffset={active ? 900 : labelled ? 700 : 500}
+            icon={cityIcon(c.name, c.count, active)}
+            zIndexOffset={active ? 900 : 700}
             interactive={!active}
             eventHandlers={active ? undefined : { click: () => onSelect(c.slug) }}
           />

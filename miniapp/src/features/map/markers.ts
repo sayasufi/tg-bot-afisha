@@ -98,19 +98,17 @@ function countCluster(count: number): L.DivIcon {
   });
 }
 
-// City bubble — the far-zoom overview. A flat DISC sized by event volume (radius set via --r) marks the
-// city; the ACTIVE one (where you are now) is the single acid disc. Prominent / non-overlapping cities
-// also carry a name + count label (paper halo for legibility) to the right of the disc; the rest stay
-// bare discs and pick up a label as you zoom in. No box, no lines — a bubble field, so size reads as scale.
-export function cityIcon(name: string, count: number, radius: number, active = false, showLabel = false): L.DivIcon {
+// City card — the far-zoom overview. A clean nameplate per city (name + event count); tap to jump there
+// (replaces the dropdown). The ACTIVE city (where you are) is a BIG acid card that dominates the map —
+// "Москва 8.5k событий" — the others are smaller plinth cards. No dots, no bubbles, no lines: just the
+// cards, culled so they never pile up. Cards are uniform (only the active one is big), so nothing reads
+// as "why is this city bigger" — the single acid card carries the whole hierarchy.
+export function cityIcon(name: string, count: number, active = false): L.DivIcon {
   const safe = name.replace(/[<>&"]/g, "");
   const n = count >= 1000 ? `${Math.round(count / 100) / 10}k` : String(count);
-  const label = showLabel
-    ? `<span class="vcity__label"><span class="vcity__name">${safe}</span><span class="vcity__count">${n}</span></span>`
-    : "";
   return L.divIcon({
     className: "vcity-wrap",
-    html: `<div class="vcity${active ? " vcity--active" : ""}" style="--r:${radius}px"><span class="vcity__disc"></span>${label}</div>`,
+    html: `<div class="vcity${active ? " vcity--active" : ""}"><span class="vcity__name">${safe}</span><span class="vcity__count">${active ? `${n} событий` : n}</span></div>`,
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });

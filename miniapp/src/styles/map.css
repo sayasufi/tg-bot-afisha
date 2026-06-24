@@ -290,10 +290,10 @@ html[data-theme="dark"] .vpin--active::before {
   }
 }
 
-/* ---------- City bubbles (far-zoom regional/country overview) ---------- */
-/* Every active city is a flat DISC sized by its event volume; tap one to jump there (no dropdown). The
-   disc is centred on the city point; prominent / non-overlapping cities also carry a name + count label
-   to its right. Size = scale, the one acid disc = where you are. No boxes, no connecting lines. */
+/* ---------- City cards (far-zoom regional/country overview) ---------- */
+/* A clean nameplate per city (name + event count); tap one to jump there (no dropdown). The ACTIVE city
+   is a BIG acid card that dominates — "Москва 8.5k событий" — others are smaller plinth cards. Centred on
+   the city point, culled so they never pile up. No dots, bubbles or lines. */
 .vcity-wrap {
   background: none;
 }
@@ -301,40 +301,16 @@ html[data-theme="dark"] .vpin--active::before {
   position: absolute;
   left: 0;
   top: 0;
-  cursor: pointer;
-}
-/* The bubble — area ∝ events (radius arrives as --r). INK by default; the ACTIVE city is the one acid
-   disc with a cinnabar registration ring. A pale halo lifts each disc off the map. Centred on the point. */
-.vcity__disc {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: calc(var(--r) * 2);
-  height: calc(var(--r) * 2);
   transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: var(--ink);
-  box-shadow: 0 0 0 1.5px var(--bg);
-}
-.vcity--active {
-  cursor: default;
-}
-.vcity--active .vcity__disc {
-  background: var(--acid);
-  box-shadow: 0 0 0 2px var(--cinnabar), inset 0 0 0 1px var(--ink);
-}
-/* Name (grotesk) over count (mono), set to the RIGHT of the disc with a paper halo so they read over the
-   map — the basemap's "vinyl label" idiom. Vertically centred on the city point. */
-.vcity__label {
-  position: absolute;
-  left: calc(var(--r) + 6px);
-  top: 0;
-  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  line-height: 1.04;
+  gap: 1px;
+  padding: 5px 9px;
+  background: var(--plinth);
+  box-shadow: inset 0 0 0 1px var(--ink), 1.5px 1.5px 0 rgba(11, 11, 11, 0.16);
+  line-height: 1.12;
   white-space: nowrap;
-  text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 3px var(--bg);
+  cursor: pointer;
 }
 .vcity__name {
   font-family: var(--grotesk);
@@ -343,9 +319,6 @@ html[data-theme="dark"] .vpin--active::before {
   letter-spacing: 0.01em;
   color: var(--ink);
 }
-.vcity--active .vcity__name {
-  font-size: 13px;
-}
 .vcity__count {
   font-family: var(--mono);
   font-weight: 600;
@@ -353,6 +326,21 @@ html[data-theme="dark"] .vpin--active::before {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: var(--ink-dim);
+}
+/* The ACTIVE city (where you are now) — a bigger acid card with the cinnabar registration offset (the
+   signature selected-exhibit look). Dominates the map; non-interactive — pure "you are here". */
+.vcity--active {
+  background: var(--acid);
+  box-shadow: inset 0 0 0 1px var(--ink), 2px 2px 0 var(--cinnabar);
+  padding: 7px 12px;
+  cursor: default;
+}
+.vcity--active .vcity__name {
+  font-size: 16px;
+}
+.vcity--active .vcity__count {
+  font-size: 11px;
+  color: var(--ink);
 }
 
 /* ---------- Clusters — stacked frames ---------- */
