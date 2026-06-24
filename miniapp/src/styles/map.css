@@ -367,7 +367,8 @@ html[data-theme="dark"] .vpin--active::before {
 .city-pick-banner {
   position: absolute;
   left: 50%;
-  bottom: 78px;
+  /* Level with the list FAB (left) and locate FAB (right) — same bottom baseline. */
+  bottom: calc(env(safe-area-inset-bottom) + 28px);
   transform: translateX(-50%);
   z-index: 500;
   display: flex;
