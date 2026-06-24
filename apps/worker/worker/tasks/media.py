@@ -5,7 +5,7 @@ import logging
 import re
 
 import httpx
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageFile, UnidentifiedImageError
 from sqlalchemy import func, select, update
 
 from core.db.models import Event, EventSource, RawEvent, Source
@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 MAX_WIDTH = 1080  # retina-sharp for the full-width poster in the event sheet
 BATCH = 40
 
+# Some source posters arrive truncated (a dropped connection mid-download) — let PIL render the
+# partial image instead of raising OSError, so a good-enough poster still caches.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 
 def _cache_one(db, event: Event) -> bool:
     src = (event.primary_image_url or "").strip()
@@ -28,6 +32,7 @@ def _cache_one(db, event: Event) -> bool:
         resp = httpx.get(src, timeout=20, follow_redirects=False, headers={"User-Agent": "okrest-media/1.0"})
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+        img.info.pop("xmp", None)  # some posters carry XMP > 64 KB, which overflows the JPEG marker on save
         if img.width > MAX_WIDTH:
             height = round(img.height * MAX_WIDTH / img.width)
             img = img.resize((MAX_WIDTH, height), Image.LANCZOS)
@@ -87,6 +92,7 @@ def _downscale_jpeg(data: bytes, max_width: int = MAX_WIDTH) -> bytes:
     """Downscale to <=max_width and re-encode JPEG (mirrors _cache_one); original bytes on failure."""
     try:
         img = Image.open(io.BytesIO(data)).convert("RGB")
+        img.info.pop("xmp", None)  # strip oversized XMP so the JPEG re-encode can't raise
         if img.width > max_width:
             height = round(img.height * max_width / img.width)
             img = img.resize((max_width, height), Image.LANCZOS)
