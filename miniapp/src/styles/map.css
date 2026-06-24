@@ -317,6 +317,26 @@ html[data-theme="dark"] .vpin--active::before {
   border-radius: 50%;
   background: radial-gradient(circle, rgba(204, 255, 0, 0.42) 0%, rgba(204, 255, 0, 0.13) 42%, transparent 70%);
   pointer-events: none;
+  animation: cityPulse 3.6s ease-in-out var(--gd, 0s) infinite;
+}
+@keyframes cityPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.7; }
+  50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+}
+/* The acid constellation line "flows" — dashes drift along the network, a quiet sense of live data. */
+.vcity-line {
+  animation: dashFlow 1.6s linear infinite;
+}
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vcity__glow,
+  .vcity-line {
+    animation: none;
+  }
 }
 .vcity__pin {
   position: absolute;

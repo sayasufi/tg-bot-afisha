@@ -155,7 +155,7 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
       />
       <Polyline
         positions={constellation}
-        pathOptions={{ color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
+        pathOptions={{ color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false, className: "vcity-line" }}
       />
       {/* Cities whose card was culled (it overlaps a higher-priority one) → a small tappable dot, so a
           hidden city is still visible and reachable. Tapping flies in, where its card has room to show. */}
