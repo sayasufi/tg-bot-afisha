@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Окрест — афиша твоего города на карте</title>
-    <meta name="description" content="20 000+ событий в 16 городах России — концерты, выставки, спектакли, стендап и кино на одной карте, прямо в Telegram." />
+    <meta name="description" content="21 000+ событий в 16 городах России — концерты, выставки, спектакли, стендап и кино на одной карте, прямо в Telegram. Обновляется каждый день." />
     <meta name="theme-color" content="#f4f4ef" />
     <meta property="og:title" content="Окрест — афиша на карте" />
-    <meta property="og:description" content="20 000+ событий в 16 городах России, прямо в Telegram." />
+    <meta property="og:description" content="21 000+ событий в 16 городах России, прямо в Telegram." />
     <meta property="og:type" content="website" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
@@ -39,8 +39,16 @@
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
-      body { background: var(--paper); color: var(--ink); font-family: var(--grotesk); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-      .wrap { width: 100%; max-width: 1060px; margin: 0 auto; padding: 0 22px; }
+      body {
+        color: var(--ink); font-family: var(--grotesk); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+        background-color: var(--paper);
+        background-image:
+          linear-gradient(rgba(11, 11, 11, 0.045) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(11, 11, 11, 0.045) 1px, transparent 1px);
+        background-size: 32px 32px;
+        background-position: center top;
+      }
+      .wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 22px; }
       a { color: inherit; }
 
       /* header */
@@ -48,18 +56,18 @@
       .top__l { display: flex; align-items: center; gap: 9px; }
       .top__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 1.5px var(--ink); }
       .top__mark { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: -0.03em; }
-      .top__bot { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); text-decoration: none; padding: 5px 9px; box-shadow: inset 0 0 0 1px var(--line); }
+      .top__bot { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); text-decoration: none; padding: 5px 9px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); }
       .top__bot:hover { color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 
       /* hero */
-      .hero { display: grid; grid-template-columns: 1fr 0.82fr; gap: 36px; align-items: center; padding: 28px 0 18px; }
-      .hero__title { font-family: var(--display); font-weight: 800; font-size: clamp(38px, 6vw, 62px); line-height: 0.96; letter-spacing: -0.045em; }
+      .hero { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 30px; align-items: center; padding: 30px 0 8px; overflow: visible; }
+      .hero__title { font-family: var(--display); font-weight: 800; font-size: clamp(42px, 6.6vw, 70px); line-height: 0.94; letter-spacing: -0.046em; }
       .hero__title em { font-style: normal; color: var(--cinnabar); }
-      .hero__sub { margin-top: 20px; max-width: 34ch; font-size: clamp(16px, 2.4vw, 19px); font-weight: 500; line-height: 1.4; }
+      .hero__sub { margin-top: 20px; max-width: 33ch; font-size: clamp(16px, 2.4vw, 19px); font-weight: 500; line-height: 1.4; }
       .hero__sub b { font-weight: 700; }
       .cta {
         display: inline-flex; align-items: center; gap: 11px; margin-top: 26px;
-        padding: 15px 26px; background: var(--acid); color: var(--ink);
+        padding: 16px 28px; background: var(--acid); color: var(--ink);
         font-weight: 700; font-size: 17px; text-decoration: none;
         box-shadow: inset 0 0 0 1.5px var(--ink), 3px 3px 0 var(--cinnabar);
         transition: transform 0.12s ease, box-shadow 0.12s ease;
@@ -68,46 +76,72 @@
       .cta:active { transform: translate(3px, 3px); box-shadow: inset 0 0 0 1.5px var(--ink); }
       .cta__a { font-family: var(--mono); font-size: 18px; }
 
-      /* stats */
-      .stats { display: flex; gap: 26px; margin-top: 26px; flex-wrap: wrap; }
-      .stat__n { font-family: var(--display); font-weight: 700; font-size: clamp(22px, 4vw, 30px); letter-spacing: -0.03em; line-height: 1; }
+      /* big stats — the "wow / scale" moment */
+      .stats { display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap; }
+      .stat__n { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 5.2vw, 46px); letter-spacing: -0.035em; line-height: 0.95; }
       .stat__n em { font-style: normal; color: var(--cinnabar); }
-      .stat__k { display: block; margin-top: 6px; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-dim); }
+      .stat__k { display: block; margin-top: 7px; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); }
+      .stats__note { margin-top: 16px; font-family: var(--mono); font-size: 12.5px; color: var(--cinnabar); display: inline-flex; align-items: center; gap: 7px; }
+      .stats__note::before { content: "↻"; font-size: 14px; }
 
       /* phone with a real screenshot */
-      .hero__media { display: flex; justify-content: center; }
-      .phone { width: 100%; max-width: 232px; padding: 8px; background: var(--ink); border-radius: 32px; box-shadow: 5px 5px 0 rgba(11, 11, 11, 0.14); }
-      .phone__screen { border-radius: 24px; overflow: hidden; display: block; background: var(--paper); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+      .hero__media { display: flex; justify-content: center; align-items: center; }
+      .phone { width: 100%; max-width: 218px; padding: 8px; background: var(--ink); border-radius: 30px; box-shadow: 5px 5px 0 rgba(11, 11, 11, 0.14); }
+      .phone__screen { border-radius: 22px; overflow: hidden; display: block; background: var(--paper); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
       .phone__screen img { width: 100%; height: auto; display: block; }
-      .phone--hero { max-width: 286px; box-shadow: 8px 8px 0 var(--cinnabar); }
+      .phone--hero {
+        max-width: 332px; border-radius: 40px; padding: 10px; margin-bottom: -46px;
+        box-shadow: 0 30px 55px -14px rgba(11, 11, 11, 0.34), 0 10px 22px -10px rgba(11, 11, 11, 0.24);
+      }
+      .phone--hero .phone__screen { border-radius: 30px; }
 
-      /* demos */
-      .demos { padding: 52px 0 26px; }
+      /* demos — map is feature #1 (big), event/list smaller */
+      .demos { padding: 64px 0 26px; }
       .demos__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
-      .demos__s { margin-top: 10px; font-size: 16px; color: var(--ink-dim); max-width: 50ch; }
-      .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin-top: 36px; }
+      .demos__s { margin-top: 10px; font-size: 16px; color: var(--ink-dim); max-width: 52ch; }
+      .feat { display: grid; grid-template-columns: 1fr 1.32fr; gap: 34px; margin-top: 34px; align-items: start; }
+      .feat__small { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
       .col { display: flex; flex-direction: column; align-items: center; text-align: center; }
-      .col__k { margin-top: 20px; font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cinnabar); }
-      .col__t { margin-top: 8px; font-size: 15px; font-weight: 500; line-height: 1.36; max-width: 26ch; color: #1c1c1a; }
+      .col--lead .phone { max-width: 282px; }
+      .col__tag { margin-bottom: 12px; align-self: flex-start; font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink); background: var(--acid); padding: 4px 9px; box-shadow: inset 0 0 0 1.5px var(--ink); }
+      .col--lead { align-items: stretch; }
+      .col--lead .phone { align-self: center; }
+      .col__k { margin-top: 18px; font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cinnabar); }
+      .col--lead .col__k { font-size: 13px; align-self: center; }
+      .col__t { margin-top: 8px; font-size: 14.5px; font-weight: 500; line-height: 1.36; max-width: 26ch; color: #1c1c1a; }
+      .col--lead .col__t { font-size: 16px; max-width: 30ch; }
+
+      /* "Что внутри" — proof of value */
+      .inside { padding: 44px 0 20px; }
+      .inside__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
+      .checks { list-style: none; margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 36px; max-width: 800px; }
+      .checks li { display: flex; align-items: center; gap: 13px; font-size: clamp(16px, 2.2vw, 18px); font-weight: 500; }
+      .checks b { font-weight: 700; }
+      .ck { flex: none; width: 25px; height: 25px; display: grid; place-items: center; background: var(--acid); box-shadow: inset 0 0 0 1.5px var(--ink); font-size: 13px; font-weight: 800; }
 
       /* closing CTA */
-      .end { padding: 26px 0 14px; text-align: center; }
-      .end__h { font-family: var(--display); font-weight: 800; font-size: clamp(24px, 4.6vw, 36px); letter-spacing: -0.035em; }
-      .end .cta { margin-top: 22px; }
+      .end { padding: 44px 0 14px; text-align: center; }
+      .end__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.8vw, 40px); letter-spacing: -0.035em; }
+      .end .cta { margin-top: 24px; }
 
-      .foot { border-top: 1px solid var(--line); margin-top: 30px; padding: 22px 0 36px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .foot { border-top: 1px solid var(--line); margin-top: 34px; padding: 22px 0 38px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
       .foot a { font-family: var(--mono); font-size: 13px; text-decoration: none; }
       .foot a:hover { color: var(--cinnabar); }
       .foot__sm { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
 
-      @media (max-width: 820px) {
-        .hero { grid-template-columns: 1fr; gap: 30px; text-align: center; }
+      @media (max-width: 860px) {
+        .hero { grid-template-columns: 1fr; gap: 26px; text-align: center; padding-top: 18px; }
         .hero__sub { margin-left: auto; margin-right: auto; }
         .stats { justify-content: center; }
+        .stats__note { justify-content: center; width: 100%; }
         .hero__media { order: 2; }
+        .phone--hero { margin-bottom: 0; max-width: 300px; }
+        .feat { grid-template-columns: 1fr; gap: 38px; }
+        .col__tag, .col--lead .col__k { align-self: center; }
       }
       @media (max-width: 560px) {
-        .row { grid-template-columns: 1fr; gap: 38px; max-width: 300px; margin-left: auto; margin-right: auto; }
+        .feat__small { grid-template-columns: 1fr; gap: 38px; max-width: 300px; margin: 0 auto; }
+        .checks { grid-template-columns: 1fr; gap: 14px; }
       }
       @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .cta { transition: none; } }
     </style>
@@ -123,18 +157,19 @@
         <div class="hero__text">
           <h1 class="hero__title">Афиша вокруг тебя — <em>на&nbsp;карте</em>.</h1>
           <p class="hero__sub">Концерты, выставки, спектакли, стендап и кино в <b>16 городах России</b>. Всё на одной карте — прямо в Telegram.</p>
-          <a class="cta" href="https://t.me/okrestmap_bot"><span>Открыть в Telegram</span><span class="cta__a">→</span></a>
           <div class="stats">
-            <div><span class="stat__n" id="evcount">20&nbsp;000<em>+</em></span><span class="stat__k">событий</span></div>
+            <div><span class="stat__n"><span class="js-count">21&nbsp;100</span><em>+</em></span><span class="stat__k">событий</span></div>
             <div><span class="stat__n">16</span><span class="stat__k">городов</span></div>
             <div><span class="stat__n">0₽</span><span class="stat__k">без рекламы</span></div>
           </div>
+          <div class="stats__note">обновляется каждый день</div>
+          <div><a class="cta" href="https://t.me/okrestmap_bot"><span>Открыть в Telegram</span><span class="cta__a">→</span></a></div>
         </div>
 
         <div class="hero__media">
           <div class="phone phone--hero">
             <div class="phone__screen">
-              <img src="shots/cities.jpg" width="720" height="1548" alt="Карта России с городами в приложении Окрест — 16 городов, 21 000+ событий" />
+              <img src="shots/cities.jpg" width="720" height="1548" fetchpriority="high" alt="Карта России с городами в приложении Окрест — 16 городов, 21 000+ событий" />
             </div>
           </div>
         </div>
@@ -143,29 +178,38 @@
       <section class="demos">
         <h2 class="demos__h">Как это работает</h2>
         <p class="demos__s">Открываешь карту — видишь, что вокруг. Сохраняешь — напомним. Без рекламы и левых каналов.</p>
-        <div class="row">
-          <div class="col">
-            <div class="phone">
-              <div class="phone__screen"><img src="shots/map.jpg" width="720" height="1548" loading="lazy" alt="Карта событий вокруг — приложение Окрест" /></div>
-            </div>
+        <div class="feat">
+          <div class="col col--lead">
+            <span class="col__tag">Главное</span>
+            <div class="phone"><div class="phone__screen"><img src="shots/map.jpg" width="720" height="1548" loading="lazy" alt="Карта событий вокруг — приложение Окрест" /></div></div>
             <div class="col__k">Рядом</div>
-            <div class="col__t">Карта показывает, что происходит вокруг тебя — прямо сейчас.</div>
+            <div class="col__t">Карта показывает, что происходит вокруг тебя — прямо сейчас. Это главное.</div>
           </div>
-          <div class="col">
-            <div class="phone">
-              <div class="phone__screen"><img src="shots/event.jpg" width="720" height="1548" loading="lazy" alt="Карточка события — приложение Окрест" /></div>
+          <div class="feat__small">
+            <div class="col">
+              <div class="phone"><div class="phone__screen"><img src="shots/event.jpg" width="720" height="1548" loading="lazy" alt="Карточка события — приложение Окрест" /></div></div>
+              <div class="col__k">Не пропусти</div>
+              <div class="col__t">Где, когда, почём и как добраться. Сохрани — напомним за 2 часа.</div>
             </div>
-            <div class="col__k">Не пропусти</div>
-            <div class="col__t">Где, когда, почём и как добраться. Сохрани — напомним за 2 часа.</div>
-          </div>
-          <div class="col">
-            <div class="phone">
-              <div class="phone__screen"><img src="shots/list.jpg" width="720" height="1548" loading="lazy" alt="Список событий — приложение Окрест" /></div>
+            <div class="col">
+              <div class="phone"><div class="phone__screen"><img src="shots/list.jpg" width="720" height="1548" loading="lazy" alt="Список событий — приложение Окрест" /></div></div>
+              <div class="col__k">Списком</div>
+              <div class="col__t">Не любишь карту? Листай и сортируй по дате, цене и близости.</div>
             </div>
-            <div class="col__k">Списком</div>
-            <div class="col__t">Не любишь карту? Листай и сортируй по дате, цене и близости.</div>
           </div>
         </div>
+      </section>
+
+      <section class="inside">
+        <h2 class="inside__h">Что внутри</h2>
+        <ul class="checks">
+          <li><span class="ck">✓</span><span><b class="js-count">21&nbsp;100</b>+ событий по всей стране</span></li>
+          <li><span class="ck">✓</span><span>16 городов России</span></li>
+          <li><span class="ck">✓</span><span>Напоминания за 2 часа до начала</span></li>
+          <li><span class="ck">✓</span><span>Друзья и совместные события</span></li>
+          <li><span class="ck">✓</span><span>Подборки недели</span></li>
+          <li><span class="ck">✓</span><span>Площадки и подписки на них</span></li>
+        </ul>
       </section>
 
       <section class="end">
@@ -180,15 +224,15 @@
     </div>
 
     <script>
-      // Live event count — sum the per-city counts from the public API. Falls back to "20 000+".
+      // Live event count — sum the per-city counts from the public API. Falls back to the static markup.
       fetch("/v1/cities")
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (!d || !d.cities) return;
           var total = d.cities.reduce(function (s, c) { return s + (c.count || 0); }, 0);
           if (total > 1000) {
-            var rounded = Math.floor(total / 100) * 100;
-            document.getElementById("evcount").innerHTML = rounded.toLocaleString("ru-RU") + "<em>+</em>";
+            var txt = (Math.floor(total / 100) * 100).toLocaleString("ru-RU");
+            document.querySelectorAll(".js-count").forEach(function (el) { el.textContent = txt; });
           }
         })
         .catch(function () {});
