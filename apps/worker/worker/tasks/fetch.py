@@ -109,68 +109,71 @@ async def _fetch_timepad_impl() -> dict:
 
 
 async def _fetch_kudago_full_scan_impl() -> dict:
+    return await _per_city(_kudago_full_scan_one)
+
+
+async def _kudago_full_scan_one(db, city) -> dict:
     settings = get_settings()
-    async with WorkerAsyncSessionLocal() as db:
-        source = await ensure_source(
-            db, "kudago", "web", settings.kudago_base_url,
-            {"cursor": "1", "location": DEFAULT_CITY.kudago_location, "page_size": 100},
-        )
-        run = await create_source_run(db, source.source_id)
-        try:
-            location = source.config_json.get("location", DEFAULT_CITY.kudago_location)
-            page_size = int(source.config_json.get("page_size", 100))
-            max_pages = int(source.config_json.get("full_scan_max_pages", 50))
-            # Date order so pagination walks the window soonest-first and ends when
-            # it runs past it (instead of trawling years of -publication_date pages).
-            connector = KudaGoConnector(location=location, page_size=page_size, order_by="dates")
+    source = await ensure_source(
+        db, _src("kudago", city), "web", settings.kudago_base_url,
+        {"cursor": "1", "location": city.kudago_location, "page_size": 100},
+    )
+    run = await create_source_run(db, source.source_id)
+    try:
+        location = source.config_json.get("location", city.kudago_location)
+        page_size = int(source.config_json.get("page_size", 100))
+        max_pages = int(source.config_json.get("full_scan_max_pages", 50))
+        # Date order so pagination walks the window soonest-first and ends when
+        # it runs past it (instead of trawling years of -publication_date pages).
+        connector = KudaGoConnector(location=location, page_size=page_size, order_by="dates")
 
-            cursor: str | None = "1"
-            pages_scanned = 0
-            total_fetched = 0
-            stop_reason = "max_pages"
-            # Pages are independent (page-number paging) and the full scan is dates-ordered
-            # (soonest-first), so fetch them in CONCURRENT batches and stop once a page comes back
-            # empty — i.e. we've paged past the in-window horizon. kudago.com is more fragile than the
-            # t.me web (503s/timeouts under load — repeated scans can throttle the IP), so keep the batch
-            # small + tolerate a per-page failure (re-fetched next scan); stop if a whole batch fails.
-            _PAGE_BATCH = 3
-            page = 1
-            done = False
-            while page <= max_pages and not done:
-                batch = [str(p) for p in range(page, min(page + _PAGE_BATCH, max_pages + 1))]
-                ok_in_batch = 0
-                for res in await asyncio.gather(*(_fetch_kudago_page(connector, c) for c in batch), return_exceptions=True):
-                    pages_scanned += 1
-                    if isinstance(res, BaseException):
-                        continue  # transient (e.g. 503) — skip this page
-                    ok_in_batch += 1
-                    records, _next = res
-                    await bulk_upsert_raw_events(db, source.source_id, records)
-                    total_fetched += len(records)
-                    if not records:
-                        done = True  # past the window (dates-ordered)
-                if ok_in_batch == 0:
-                    stop_reason = "errors"
-                    break
-                page += _PAGE_BATCH
-                stop_reason = "empty_page" if done else "completed_iteration"
-            cursor = None
+        cursor: str | None = "1"
+        pages_scanned = 0
+        total_fetched = 0
+        stop_reason = "max_pages"
+        # Pages are independent (page-number paging) and the full scan is dates-ordered
+        # (soonest-first), so fetch them in CONCURRENT batches and stop once a page comes back
+        # empty — i.e. we've paged past the in-window horizon. kudago.com is more fragile than the
+        # t.me web (503s/timeouts under load — repeated scans can throttle the IP), so keep the batch
+        # small + tolerate a per-page failure (re-fetched next scan); stop if a whole batch fails.
+        _PAGE_BATCH = 3
+        page = 1
+        done = False
+        while page <= max_pages and not done:
+            batch = [str(p) for p in range(page, min(page + _PAGE_BATCH, max_pages + 1))]
+            ok_in_batch = 0
+            for res in await asyncio.gather(*(_fetch_kudago_page(connector, c) for c in batch), return_exceptions=True):
+                pages_scanned += 1
+                if isinstance(res, BaseException):
+                    continue  # transient (e.g. 503) — skip this page
+                ok_in_batch += 1
+                records, _next = res
+                await bulk_upsert_raw_events(db, source.source_id, records)
+                total_fetched += len(records)
+                if not records:
+                    done = True  # past the window (dates-ordered)
+            if ok_in_batch == 0:
+                stop_reason = "errors"
+                break
+            page += _PAGE_BATCH
+            stop_reason = "empty_page" if done else "completed_iteration"
+        cursor = None
 
-            source.config_json = {**source.config_json, "cursor": cursor or "1"}
-            db.add(source)
-            await db.commit()
-            stats = {
-                "fetched": total_fetched,
-                "pages_scanned": pages_scanned,
-                "stop_reason": stop_reason,
-                "next_cursor": cursor,
-            }
-            await finish_source_run(db, run, "success", stats)
-            return stats
-        except Exception as exc:
-            await db.rollback()
-            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
-            raise
+        source.config_json = {**source.config_json, "cursor": cursor or "1"}
+        db.add(source)
+        await db.commit()
+        stats = {
+            "fetched": total_fetched,
+            "pages_scanned": pages_scanned,
+            "stop_reason": stop_reason,
+            "next_cursor": cursor,
+        }
+        await finish_source_run(db, run, "success", stats)
+        return stats
+    except Exception as exc:
+        await db.rollback()
+        await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise
 
 
 def _yandex_config(city=DEFAULT_CITY) -> dict:
@@ -223,34 +226,37 @@ async def _yandex_one(db, city) -> dict:
 
 
 async def _fetch_yandex_full_scan_impl() -> dict:
+    return await _per_city(_yandex_full_scan_one)
+
+
+async def _yandex_full_scan_one(db, city) -> dict:
     settings = get_settings()
-    async with WorkerAsyncSessionLocal() as db:
-        source = await ensure_source(db, "yandex_afisha", "web", settings.yandex_afisha_base_url, _yandex_config())
-        run = await create_source_run(db, source.source_id)
-        try:
-            city = source.config_json.get("city", DEFAULT_CITY.yandex_city)
-            page_size = int(source.config_json.get("page_size", 100))
-            max_pages = int(source.config_json.get("full_scan_max_pages", 40))
-            connector = YandexAfishaConnector(city=city, page_size=page_size)
+    source = await ensure_source(db, _src("yandex_afisha", city), "web", settings.yandex_afisha_base_url, _yandex_config(city))
+    run = await create_source_run(db, source.source_id)
+    try:
+        ycity = source.config_json.get("city", city.yandex_city)
+        page_size = int(source.config_json.get("page_size", 100))
+        max_pages = int(source.config_json.get("full_scan_max_pages", 40))
+        connector = YandexAfishaConnector(city=ycity, page_size=page_size)
 
-            async def _persist(recs):
-                # Per-page durable write (bulk_upsert commits) so a crash mid-scan
-                # keeps everything fetched so far instead of losing the whole sweep.
-                await bulk_upsert_raw_events(db, source.source_id, recs)
+        async def _persist(recs):
+            # Per-page durable write (bulk_upsert commits) so a crash mid-scan
+            # keeps everything fetched so far instead of losing the whole sweep.
+            await bulk_upsert_raw_events(db, source.source_id, recs)
 
-            # One session/handshake paginates the whole in-window catalogue.
-            records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages, on_page=_persist)
+        # One session/handshake paginates the whole in-window catalogue.
+        records, pages_scanned, stop_reason = await connector.scan(max_pages=max_pages, on_page=_persist)
 
-            source.config_json = {**source.config_json, "cursor": "0"}
-            db.add(source)
-            await db.commit()
-            stats = {"fetched": len(records), "pages_scanned": pages_scanned, "stop_reason": stop_reason}
-            await finish_source_run(db, run, "success", stats)
-            return stats
-        except Exception as exc:
-            await db.rollback()
-            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
-            raise
+        source.config_json = {**source.config_json, "cursor": "0"}
+        db.add(source)
+        await db.commit()
+        stats = {"fetched": len(records), "pages_scanned": pages_scanned, "stop_reason": stop_reason}
+        await finish_source_run(db, run, "success", stats)
+        return stats
+    except Exception as exc:
+        await db.rollback()
+        await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise
 
 
 def _afisha_config() -> dict:

@@ -38,7 +38,9 @@ CITIES: dict[str, CityConfig] = {
         active=True,
         center=(55.75582, 37.61764),
     ),
-    # Defined and ready — flip active=True and add beat tasks for it to ingest SPb.
+    # ACTIVE (Phase 1): ingested via the per-city kudago + yandex fetch flows that loop
+    # active_cities(). Telegram channels, afisha.ru (needs the SPb GraphQL city id) and
+    # Timepad stay Moscow-only for now (Phase 2).
     "spb": CityConfig(
         slug="spb",
         name="Санкт-Петербург",
@@ -47,7 +49,7 @@ CITIES: dict[str, CityConfig] = {
         kudago_location="spb",
         yandex_city="saint-petersburg",
         afisha_city="spb",
-        active=False,
+        active=True,
         center=(59.93863, 30.31413),
     ),
 }

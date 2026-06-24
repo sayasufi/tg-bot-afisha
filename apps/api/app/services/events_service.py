@@ -411,9 +411,11 @@ class EventQueryService:
         # clusters are placed first so dense areas anchor the merged centre.
         # Web-Mercator: 256*2**zoom px span 360° of longitude; a latitude degree
         # spans more px (÷cos φ), so we scale Δlat to longitude-equivalent units to
-        # compare distances as they look ON SCREEN at Moscow's latitude.
+        # compare distances as they look ON SCREEN — at the ACTUAL latitude of the cells
+        # being merged (per-city: Moscow ~55.75, SPb ~59.94), not a fixed Moscow constant.
         sep_lon = sep_px * 360.0 / (256.0 * (2 ** zoom))
-        lat_scale = math.cos(math.radians(55.75)) or 1.0
+        mean_lat = sum(c["lat"] for c in cells) / len(cells) if cells else 55.75
+        lat_scale = math.cos(math.radians(mean_lat)) or 1.0
         merged: list[dict] = []
         for c in sorted(cells, key=lambda x: -x["count"]):
             for m in merged:

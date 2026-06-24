@@ -461,7 +461,7 @@ export function App() {
 
   // Gallery ticker line: total + city + can-go-now + the busiest categories.
   const tickerText = useMemo(() => {
-    const segs = [`${shownTotal} СОБЫТИЙ`, "МОСКВА", "ОКРЕСТ"];
+    const segs = [`${shownTotal} СОБЫТИЙ`, (currentCity?.name ?? "Город").toUpperCase(), "ОКРЕСТ"];
     if (liveCount > 0) segs.push(`МОЖНО ПОЙТИ ${liveCount}`);
     const counts: Record<string, number> = {};
     for (const it of shownItems) counts[it.category] = (counts[it.category] || 0) + 1;
@@ -470,16 +470,22 @@ export function App() {
       .slice(0, 3)
       .forEach(([k, n]) => segs.push(`${categoryMeta(k).label.toUpperCase()} ${n}`));
     return segs.join(" ● ");
-  }, [shownItems, shownTotal, liveCount]);
+  }, [shownItems, shownTotal, liveCount, currentCity?.name]);
 
-  // Load metro stations once (for the nearest-station label + map ping).
+  // Load metro stations (for the nearest-station label + map ping). Only Moscow has a baked
+  // metro layer for now, so other cities get an empty set — no wrong Moscow station on a SPb
+  // event. Re-runs on city switch.
   useEffect(() => {
+    if ((currentCity?.slug ?? "moscow") !== "moscow") {
+      setMetro([]);
+      return;
+    }
     const ctrl = new AbortController();
     fetchMetro(ctrl.signal)
       .then(setMetro)
       .catch(() => undefined);
     return () => ctrl.abort();
-  }, []);
+  }, [currentCity?.slug]);
 
   // Fetch the whole city's pins ONCE per server-scope (categories/dates/price/city) — the
   // payload is gzip+Redis-cached server-side, so every client shares ONE warm cache key
