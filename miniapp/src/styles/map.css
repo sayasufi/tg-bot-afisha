@@ -290,77 +290,69 @@ html[data-theme="dark"] .vpin--active::before {
   }
 }
 
-/* ---------- City switch pins (far-zoom regional overview) ---------- */
-/* One tappable chip per OTHER active city, shown only when zoomed out far enough to reach
-   them; tap a city ON THE MAP to jump there (no dropdown). Centred on the city point. */
+/* ---------- City bubbles (far-zoom regional/country overview) ---------- */
+/* Every active city is a flat DISC sized by its event volume; tap one to jump there (no dropdown). The
+   disc is centred on the city point; prominent / non-overlapping cities also carry a name + count label
+   to its right. Size = scale, the one acid disc = where you are. No boxes, no connecting lines. */
 .vcity-wrap {
   background: none;
 }
 .vcity {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  cursor: pointer;
+}
+/* The bubble — area ∝ events (radius arrives as --r). INK by default; the ACTIVE city is the one acid
+   disc with a cinnabar registration ring. A pale halo lifts each disc off the map. Centred on the point. */
+.vcity__disc {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
   transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--bg);
+}
+.vcity--active {
+  cursor: default;
+}
+.vcity--active .vcity__disc {
+  background: var(--acid);
+  box-shadow: 0 0 0 2px var(--cinnabar), inset 0 0 0 1px var(--ink);
+}
+/* Name (grotesk) over count (mono), set to the RIGHT of the disc with a paper halo so they read over the
+   map — the basemap's "vinyl label" idiom. Vertically centred on the city point. */
+.vcity__label {
+  position: absolute;
+  left: calc(var(--r) + 6px);
+  top: 0;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  line-height: 1.04;
   white-space: nowrap;
-  padding: 4px 8px;
-  background: var(--plinth);
-  box-shadow: inset 0 0 0 1.5px var(--ink), 2px 2px 0 var(--cinnabar);
-  color: var(--ink);
+  text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 3px var(--bg);
+}
+.vcity__name {
   font-family: var(--grotesk);
   font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.01em;
-  cursor: pointer;
-  transition: box-shadow 0.12s var(--ease-cut), transform 0.12s var(--ease-cut);
+  color: var(--ink);
 }
-.vcity:active {
-  box-shadow: inset 0 0 0 1.5px var(--ink);
-  transform: translate(-50%, -50%) translate(2px, 2px);
+.vcity--active .vcity__name {
+  font-size: 13px;
 }
-.vcity__dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cinnabar);
-}
-
-/* The mono event count beside the city name — the "accession number" treatment. */
 .vcity__count {
   font-family: var(--mono);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: var(--ink-dim);
-}
-
-/* The ACTIVE city (where you are now) — the selected-exhibit look: an acid plate, a touch larger, so it
-   dominates the constellation (like the reference "Москва 8.5k"). Non-interactive — pure emphasis. */
-.vcity--active {
-  background: var(--acid);
-  transform: translate(-50%, -50%) scale(1.1);
-  cursor: default;
-}
-.vcity--active .vcity__dot {
-  background: var(--ink);
-}
-.vcity--active .vcity__count {
-  color: var(--ink);
-}
-
-/* The cultural-network hairlines (an MST) + culled-city node dots — flat ink, theme-adaptive. The class
-   sits on the Leaflet SVG path; an author CSS rule outranks the presentation attributes Leaflet sets,
-   so we recolour without !important. */
-.vcity-link {
-  stroke: var(--ink);
-  stroke-opacity: 0.22;
-  fill: none;
-}
-.vcity-node {
-  fill: var(--ink);
-  fill-opacity: 0.5;
-  stroke: none;
 }
 
 /* ---------- Clusters — stacked frames ---------- */

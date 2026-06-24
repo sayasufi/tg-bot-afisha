@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import L from "leaflet";
-import { AttributionControl, CircleMarker, MapContainer, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
+import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { City, EventItem, MapCluster } from "../../api/client";
@@ -69,94 +69,63 @@ function CityRecenter({ center }: { center: [number, number] | null }) {
   return null;
 }
 
-// City constellation — the far-zoom regional/country overview. Tap a city ON THE MAP to jump there
-// (replaces the dropdown). Each active city is a node showing its name + event count; the ACTIVE city
-// (where you are) is emphasised in acid — the selected-exhibit look — and isn't tappable. Thin ink
-// hairlines (an MST) link the cities into one cultural network. At this zoom the event layer is hidden
-// (see `constellation` in the map), so the per-city counts stand in for it — no double markers.
-const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the constellation takes over (and event markers hide)
-
-// Minimum spanning tree over the city points (Prim, O(n²) — trivial for tens of cities) → the
-// constellation's edges. Longitude is scaled by cos(lat) so the tree follows real proximity, not raw
-// degrees. Returned as [[lat,lon],[lat,lon]] segments ready for one Leaflet (multi-)Polyline.
-function buildMST(cities: City[]): [number, number][][] {
-  const n = cities.length;
-  if (n < 2) return [];
-  const inTree = new Array(n).fill(false);
-  const best = new Array(n).fill(Infinity);
-  const parent = new Array(n).fill(-1);
-  best[0] = 0;
-  for (let k = 0; k < n; k++) {
-    let u = -1;
-    for (let i = 0; i < n; i++) if (!inTree[i] && (u === -1 || best[i] < best[u])) u = i;
-    if (u === -1) break;
-    inTree[u] = true;
-    const latU = cities[u].lat;
-    for (let v = 0; v < n; v++) {
-      if (inTree[v]) continue;
-      const dy = latU - cities[v].lat;
-      const dx = (cities[u].lon - cities[v].lon) * Math.cos((latU * Math.PI) / 180);
-      const d = dx * dx + dy * dy;
-      if (d < best[v]) {
-        best[v] = d;
-        parent[v] = u;
-      }
-    }
-  }
-  const edges: [number, number][][] = [];
-  for (let v = 0; v < n; v++) {
-    if (parent[v] >= 0) edges.push([[cities[v].lat, cities[v].lon], [cities[parent[v]].lat, cities[parent[v]].lon]]);
-  }
-  return edges;
-}
+// City bubbles — the far-zoom regional/country overview. Tap a city ON THE MAP to jump there (replaces
+// the dropdown). Every active city is a DISC sized by its event volume — Moscow reads huge, a small city
+// reads small — so the field carries a real sense of scale. The active city (where you are) is the one
+// acid disc. Bigger / non-overlapping cities also get a name + count label; the rest stay bare discs and
+// pick up their label as you zoom in. The event layer is hidden at this zoom (see `constellation`), so
+// the bubbles stand in for it. No connecting lines — they read as meaningless.
+const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the bubble field takes over (and event markers hide)
+const DISC_MIN = 5; // px — radius of the smallest city's disc
+const DISC_MAX = 24; // px — radius of the biggest city's disc
 
 function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
 
-  const mst = useMemo(() => buildMST(cities), [cities]);
+  // Disc radius encodes event volume: area ∝ count → radius ∝ √count, normalised across the active
+  // cities. This is the "sense of scale" equal-size chips lacked (Москва 8.5k vs Уфа 298).
+  const radiusOf = useMemo(() => {
+    const roots = cities.map((c) => Math.sqrt(Math.max(0, c.count)));
+    const lo = Math.min(...roots);
+    const span = Math.max(...roots) - lo;
+    return (count: number) =>
+      span <= 0 ? DISC_MIN : DISC_MIN + ((Math.sqrt(Math.max(0, count)) - lo) / span) * (DISC_MAX - DISC_MIN);
+  }, [cities]);
 
-  // Collision cull for the labelled CHIPS. Project each to CRS pixels at this zoom and greedily keep
-  // only those that don't overlap a higher-priority chip already kept. The ACTIVE city is forced first
-  // (always kept, drawn emphasised). Overlap is zoom-only — panning shifts every point equally — so the
-  // kept set is stable while panning and recomputes only on zoom. Culled cities still get a node DOT so
-  // the network keeps its anchors; zoom in and more chips take over their dots.
-  const labels = useMemo<City[]>(() => {
-    if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return [];
+  // Cull only the LABELS — every disc stays (that's the bubble field). The active city's label is forced
+  // first (always kept). Each label sits to the RIGHT of its disc; boxes are in CRS pixels at this zoom,
+  // and overlap is zoom-only (panning shifts every point equally), so the labelled set is pan-stable.
+  const labelSlugs = useMemo<Set<string>>(() => {
+    if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return new Set();
     const ordered = [...cities].sort((a, b) => (a.slug === currentSlug ? -1 : b.slug === currentSlug ? 1 : 0));
-    const placed: { x: number; y: number; hw: number; hh: number }[] = [];
-    const kept: City[] = [];
+    const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+    const kept = new Set<string>();
     for (const c of ordered) {
       const pt = map.project([c.lat, c.lon], zoom);
-      const hw = (c.name.length * 7 + 72) / 2; // chip half-extent (px): dot + name + mono count + gaps
-      const hh = 15;
-      if (placed.some((p) => Math.abs(p.x - pt.x) < p.hw + hw && Math.abs(p.y - pt.y) < p.hh + hh)) continue;
-      placed.push({ x: pt.x, y: pt.y, hw, hh });
-      kept.push(c);
+      const x0 = pt.x + radiusOf(c.count) + 5;
+      const box = { x0, x1: x0 + (c.name.length * 7 + 10), y0: pt.y - 12, y1: pt.y + 12 };
+      if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+      placed.push(box);
+      kept.add(c.slug);
     }
     return kept;
-  }, [cities, currentSlug, zoom, map]);
+  }, [cities, currentSlug, zoom, map, radiusOf]);
 
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
-  const keptSlugs = new Set(labels.map((c) => c.slug));
 
   return (
     <>
-      {mst.length > 0 && <Polyline positions={mst} interactive={false} pathOptions={{ className: "vcity-link", weight: 1 }} />}
-      {cities
-        .filter((c) => !keptSlugs.has(c.slug))
-        .map((c) => (
-          <CircleMarker key={`node-${c.slug}`} center={[c.lat, c.lon]} radius={2.5} interactive={false} pathOptions={{ className: "vcity-node" }} />
-        ))}
-      {labels.map((c) => {
+      {cities.map((c) => {
         const active = c.slug === currentSlug;
+        const labelled = labelSlugs.has(c.slug);
         return (
           <Marker
             key={c.slug}
             position={[c.lat, c.lon]}
-            icon={cityIcon(c.name, c.count, active)}
-            zIndexOffset={active ? 900 : 700}
+            icon={cityIcon(c.name, c.count, radiusOf(c.count), active, labelled)}
+            zIndexOffset={active ? 900 : labelled ? 700 : 500}
             interactive={!active}
             eventHandlers={active ? undefined : { click: () => onSelect(c.slug) }}
           />
