@@ -41,7 +41,7 @@ import { ProofFrame, Ticker } from "../features/proof/Proof";
 import { EventSheet } from "../features/sheet/EventSheet";
 import { categoryMeta } from "../lib/categories";
 import { rangeFor } from "../lib/datePresets";
-import { goNowState } from "../lib/datetime";
+import { goNowState, setCityTimezone } from "../lib/datetime";
 import { distanceMeters, nearestOf } from "../lib/distance";
 import { beginFavoritesAdopt, syncFavorites, useFavorites } from "../lib/favorites";
 import { beginVenueFollowsAdopt, syncVenueFollows, useVenueFollows } from "../lib/venueFollows";
@@ -161,6 +161,11 @@ export function App() {
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
   // only when more than one city is active.
   const { cities, current: currentCity, select: selectCity, seed: seedCity } = useCities(userPos);
+  // Render every event time in the ACTIVE city's wall-clock (Novosibirsk +7 ≠ Moscow +3), not a
+  // fixed Moscow offset. datetime.ts holds a module-level offset; flip it whenever the city changes.
+  useEffect(() => {
+    setCityTimezone(currentCity?.utc_offset ?? 3);
+  }, [currentCity?.utc_offset]);
   // If the user changes theme/city before the settings GET resolves, don't let the (older)
   // account value snap it back. Set when they act; checked when the load lands.
   const settingsTouched = useRef({ theme: false, city: false });

@@ -60,6 +60,8 @@ async def _fetch_kudago_impl() -> dict:
 
 
 async def _kudago_one(db, city) -> dict:
+    if not city.kudago_location:
+        return {"skipped": "no kudago"}
     settings = get_settings()
     source = await ensure_source(
         db, _src("kudago", city), "web", settings.kudago_base_url,
@@ -117,6 +119,8 @@ async def _fetch_kudago_full_scan_impl() -> dict:
 
 
 async def _kudago_full_scan_one(db, city) -> dict:
+    if not city.kudago_location:
+        return {"skipped": "no kudago"}
     settings = get_settings()
     source = await ensure_source(
         db, _src("kudago", city), "web", settings.kudago_base_url,
@@ -274,6 +278,8 @@ async def _fetch_afisha_impl() -> dict:
 
 
 async def _afisha_one(db, city) -> dict:
+    if not city.afisha_city:
+        return {"skipped": "no afisha"}
     settings = get_settings()
     source = await ensure_source(db, _src("afisha_ru", city), "web", settings.afisha_ru_base_url, _afisha_config(city))
     run = await create_source_run(db, source.source_id)
@@ -301,6 +307,8 @@ async def _fetch_afisha_full_scan_impl() -> dict:
 
 
 async def _afisha_full_scan_one(db, city) -> dict:
+    if not city.afisha_city:
+        return {"skipped": "no afisha"}
     settings = get_settings()
     source = await ensure_source(db, _src("afisha_ru", city), "web", settings.afisha_ru_base_url, _afisha_config(city))
     run = await create_source_run(db, source.source_id)

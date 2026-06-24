@@ -136,7 +136,7 @@ async def get_cities():
     per-city map centring. From the core.cities registry (the multi-city source of truth)."""
     return {
         "cities": [
-            {"slug": c.slug, "name": c.name, "lat": c.center[0], "lon": c.center[1], "radius_km": c.region_radius_km}
+            {"slug": c.slug, "name": c.name, "lat": c.center[0], "lon": c.center[1], "radius_km": c.region_radius_km, "utc_offset": c.utc_offset_hours}
             for c in active_cities()
         ]
     }

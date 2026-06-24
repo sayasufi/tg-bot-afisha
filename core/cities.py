@@ -14,9 +14,9 @@ class CityConfig:
     name: str  # display / venue city, e.g. "Москва"
     country: str  # ISO, e.g. "RU"
     timezone: str  # IANA tz
-    kudago_location: str  # KudaGo location slug
-    yandex_city: str  # Yandex Afisha city slug (afisha.yandex.ru/<slug>)
-    afisha_city: str  # afisha.ru city slug (afisha.ru/<slug>/schedule_*)
+    kudago_location: str | None  # KudaGo location slug, or None if KudaGo doesn't cover the city
+    yandex_city: str  # Yandex Afisha city slug (afisha.yandex.ru/<slug>) — the backbone, covers every city
+    afisha_city: str | None  # afisha.ru city slug (afisha.ru/<slug>/schedule_*), or None if not covered
     active: bool  # whether the pipeline currently ingests this city
     center: tuple[float, float]  # (lat, lon) city centre — anchors geo heuristics
     # How far the city's region reaches (day-trip oblast venues + far festivals). Used
@@ -24,6 +24,7 @@ class CityConfig:
     # cross-oblast festival (~330 km) yet far short of another city (SPb 635 km) or
     # transposed/foreign coords (Caspian/Almaty >1000 km).
     region_radius_km: float = 350.0
+    utc_offset_hours: int = 3  # fixed UTC offset (Russia has no DST) — drives per-city wall-clock display
     city_id: int | None = None  # ref.cities.city_id — bridges DB-keyed sources (Telegram channels) to this registry
 
 
@@ -56,6 +57,34 @@ CITIES: dict[str, CityConfig] = {
         city_id=3,
     ),
 }
+
+# The million-plus cities (added 2026-06-24). Yandex.Afisha is the backbone (covers every one);
+# KudaGo only has ekb/kzn/nnv (None elsewhere); afisha.ru covers all; Timepad filters by name.
+# All slugs verified live. Russia has no DST, so utc_offset is a fixed, exact value used for the
+# per-city wall-clock display. No ref.cities.city_id yet — those are only needed once a city gets
+# its own Telegram venue channels.
+_MILLIONNIKI = [
+    # slug, name, tz, utc_offset, lat, lon, yandex_city, kudago_location, afisha_city
+    ("novosibirsk", "Новосибирск", "Asia/Novosibirsk", 7, 55.03977, 82.89163, "novosibirsk", None, "novosibirsk"),
+    ("ekaterinburg", "Екатеринбург", "Asia/Yekaterinburg", 5, 56.83894, 60.60570, "yekaterinburg", "ekb", "ekaterinburg"),
+    ("kazan", "Казань", "Europe/Moscow", 3, 55.79636, 49.10889, "kazan", "kzn", "kazan"),
+    ("krasnoyarsk", "Красноярск", "Asia/Krasnoyarsk", 7, 56.01083, 92.85237, "krasnoyarsk", None, "krasnoyarsk"),
+    ("nizhny-novgorod", "Нижний Новгород", "Europe/Moscow", 3, 56.32867, 44.00205, "nizhny-novgorod", "nnv", "nnovgorod"),
+    ("chelyabinsk", "Челябинск", "Asia/Yekaterinburg", 5, 55.15402, 61.42915, "chelyabinsk", None, "chelyabinsk"),
+    ("ufa", "Уфа", "Asia/Yekaterinburg", 5, 54.73479, 55.95790, "ufa", None, "ufa"),
+    ("krasnodar", "Краснодар", "Europe/Moscow", 3, 45.03547, 38.97532, "krasnodar", None, "krasnodar"),
+    ("samara", "Самара", "Europe/Samara", 4, 53.19506, 50.10199, "samara", None, "samara"),
+    ("rostov-on-don", "Ростов-на-Дону", "Europe/Moscow", 3, 47.22209, 39.71889, "rostov-na-donu", None, "rostov-na-donu"),
+    ("omsk", "Омск", "Asia/Omsk", 6, 54.98855, 73.32426, "omsk", None, "omsk"),
+    ("voronezh", "Воронеж", "Europe/Moscow", 3, 51.66078, 39.20029, "voronezh", None, "voronezh"),
+    ("perm", "Пермь", "Asia/Yekaterinburg", 5, 58.01046, 56.25017, "perm", None, "prm"),
+    ("volgograd", "Волгоград", "Europe/Volgograd", 3, 48.70708, 44.51683, "volgograd", None, "volgograd"),
+]
+for _s, _n, _tz, _off, _lat, _lon, _y, _k, _a in _MILLIONNIKI:
+    CITIES[_s] = CityConfig(
+        slug=_s, name=_n, country="RU", timezone=_tz, kudago_location=_k, yandex_city=_y,
+        afisha_city=_a, active=True, center=(_lat, _lon), utc_offset_hours=_off,
+    )
 
 DEFAULT_CITY = CITIES["moscow"]
 # Resolvable by display name ("Москва") OR slug ("moscow"). The slug keys also catch

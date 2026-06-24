@@ -10,15 +10,20 @@ const MONTHS = [
 ];
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
-// Every event datetime arrives as an absolute UTC instant (e.g. "…T16:00:00+00:00" = 19:00 MSK).
-// The UI must show MOSCOW wall-clock regardless of the device's timezone, so all field reads (hour,
-// day, weekday, year…) go through `_msk` — never Date.getHours()/getDate(), which render the
-// VIEWER's local time. Moscow is a FIXED UTC+3 (no DST since 2014), so shifting +3h and reading the
-// UTC getters is both correct and far cheaper than Intl for the thousands of live/goNow checks per
-// tick. getTime() comparisons stay on the TRUE instant (timezone-independent) and are left as-is.
-const MSK_OFFSET_MS = 3 * 3600 * 1000;
-const _msk = (d: Date) => new Date(d.getTime() + MSK_OFFSET_MS); // read ONLY via getUTC* → MSK fields
-const mskDayIdx = (d: Date) => Math.floor((d.getTime() + MSK_OFFSET_MS) / 86400000); // MSK calendar day
+// Every event datetime arrives as an absolute UTC instant. The UI shows the ACTIVE CITY's wall-clock
+// regardless of the device's timezone, so all field reads (hour, day, weekday, year…) go through
+// `_msk` — never Date.getHours()/getDate(), which render the VIEWER's local time. Russian cities are
+// FIXED offsets (no DST), so shifting by the city offset + reading the UTC getters is both correct and
+// far cheaper than Intl for the thousands of live/goNow checks per tick. getTime() comparisons stay on
+// the TRUE instant (timezone-independent) and are left as-is. (`_msk`/`mskDayIdx` keep their names for
+// brevity but now mean "active city", not literally Moscow.)
+let CITY_OFFSET_MS = 3 * 3600 * 1000; // active city's offset (default Moscow +3); set via setCityTimezone
+// Switch the wall-clock the UI renders in to the ACTIVE city's timezone (called on city change).
+export function setCityTimezone(offsetHours: number) {
+  CITY_OFFSET_MS = offsetHours * 3_600_000;
+}
+const _msk = (d: Date) => new Date(d.getTime() + CITY_OFFSET_MS); // read ONLY via getUTC* → MSK fields
+const mskDayIdx = (d: Date) => Math.floor((d.getTime() + CITY_OFFSET_MS) / 86400000); // MSK calendar day
 
 function parse(iso?: string | null): Date | null {
   if (!iso) return null;
@@ -40,7 +45,7 @@ const dayDiff = (a: Date, b: Date) => mskDayIdx(b) - mskDayIdx(a);
 // The instant (ms) of the END of *today* in Moscow — for "is this on/by today?" checks that must
 // use the Moscow calendar day, not the viewer's. Next MSK midnight minus 1ms.
 export function mskEndOfTodayMs(now: Date = new Date()): number {
-  return (mskDayIdx(now) + 1) * 86400000 - MSK_OFFSET_MS - 1;
+  return (mskDayIdx(now) + 1) * 86400000 - CITY_OFFSET_MS - 1;
 }
 
 // True when `iso` falls on TODAY's Moscow calendar day. Gates "today-only" UI — e.g. a date-only
