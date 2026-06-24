@@ -423,10 +423,11 @@ html[data-theme="dark"] .vpin--active::before {
 .city-pick-banner {
   position: absolute;
   left: 50%;
-  /* Level with the list FAB (left) and locate FAB (right) — same bottom baseline. */
+  /* Level with the list FAB (left, z 1180) and locate FAB (right, z 1000) on the same bottom baseline, but
+     stacked ABOVE them so the caption + its own shadow sit on top — not tucked under the buttons' shadows. */
   bottom: calc(env(safe-area-inset-bottom) + 28px);
   transform: translateX(-50%);
-  z-index: 500;
+  z-index: 1190;
   display: flex;
   flex-direction: column;
   align-items: center;
