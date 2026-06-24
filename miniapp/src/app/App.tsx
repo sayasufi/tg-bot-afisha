@@ -605,7 +605,6 @@ export function App() {
     if (interests.length) {
       setPickedInterests(interests);
       pushSetting("interests", interests); // sync the cold-start taste to the account
-      setView("recs"); // PAYOFF: «собрать афишу» → land straight on the personalised «Для тебя» feed
     }
   }, []);
 

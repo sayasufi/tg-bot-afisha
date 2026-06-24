@@ -951,20 +951,6 @@ class EventQueryService:
         rows = (await self.db.execute(select(Event.category).distinct().order_by(Event.category.asc()))).scalars().all()
         return {"categories": rows}
 
-    async def category_covers(self):
-        """One representative cover image per category — the most recent active event that has a photo.
-        Powers the onboarding photo-tiles (a real, local poster behind each theme, not a stock icon).
-        DISTINCT ON (category) over an indexed scan; tiny payload, cached at the edge like the rest."""
-        img = func.coalesce(func.nullif(Event.cached_image_url, ""), func.nullif(Event.primary_image_url, ""))
-        stmt = (
-            select(Event.category, img.label("image"))
-            .where(Event.status == "active", img.is_not(None))
-            .order_by(Event.category.asc(), Event.display_no.desc().nullslast())
-            .distinct(Event.category)
-        )
-        rows = (await self.db.execute(stmt)).all()
-        return {"covers": {cat: image for cat, image in rows if image}}
-
     # Lean projection shared by the code fast-path and the text CTE — exactly the fields
     # a search row needs to render AND to open the sheet with no extra round-trip.
     _SEARCH_COLS = (
