@@ -9,7 +9,7 @@ from connectors.web.afisha_ru_connector import AfishaRuConnector
 from connectors.web.kudago_connector import KudaGoConnector
 from connectors.web.timepad_connector import TimepadConnector
 from connectors.web.yandex_afisha_connector import YandexAfishaConnector
-from core.cities import DEFAULT_CITY
+from core.cities import DEFAULT_CITY, active_cities
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
     bulk_upsert_raw_events,
@@ -19,6 +19,29 @@ from core.db.repositories.ingestion import (
     get_active_telegram_channels,
 )
 from core.db.session import WorkerAsyncSessionLocal
+
+
+def _src(base: str, city) -> str:
+    """Per-city source identity. The default city keeps the bare connector name so its existing
+    source row + pagination cursor are preserved; every other active city gets a slug suffix
+    (e.g. ``kudago-spb``) with its own cursor. A city that is active=False is never looped."""
+    return base if city.slug == DEFAULT_CITY.slug else f"{base}-{city.slug}"
+
+
+async def _per_city(one) -> dict:
+    """Run a single-city fetch ``one(db, city)`` for every ACTIVE city, sharing one DB session.
+    A city's failure is recorded under its slug and skipped — it never aborts the others (so a
+    SPb outage can't stall Moscow, and vice versa). While SPb is active=False this loops Moscow
+    only, i.e. behaves exactly as the old single-city flow until the second city is switched on."""
+    out: dict = {}
+    async with WorkerAsyncSessionLocal() as db:
+        for city in active_cities():
+            try:
+                out[city.slug] = await one(db, city)
+            except Exception as exc:  # the inner flow already recorded the failed source_run
+                await db.rollback()
+                out[city.slug] = {"error": repr(exc)}
+    return out
 
 
 async def _fetch_kudago_page(connector: KudaGoConnector, cursor: str | None) -> tuple[list, str | None]:
@@ -33,29 +56,32 @@ async def _fetch_kudago_page(connector: KudaGoConnector, cursor: str | None) -> 
 
 
 async def _fetch_kudago_impl() -> dict:
+    return await _per_city(_kudago_one)
+
+
+async def _kudago_one(db, city) -> dict:
     settings = get_settings()
-    async with WorkerAsyncSessionLocal() as db:
-        source = await ensure_source(
-            db, "kudago", "web", settings.kudago_base_url,
-            {"cursor": "1", "location": DEFAULT_CITY.kudago_location, "page_size": 100},
-        )
-        run = await create_source_run(db, source.source_id)
-        try:
-            cursor = source.config_json.get("cursor")
-            location = source.config_json.get("location", DEFAULT_CITY.kudago_location)
-            page_size = int(source.config_json.get("page_size", 100))
-            connector = KudaGoConnector(location=location, page_size=page_size)
-            records, next_cursor = await _fetch_kudago_page(connector, cursor)
-            await bulk_upsert_raw_events(db, source.source_id, records)
-            source.config_json = {**source.config_json, "cursor": next_cursor}
-            db.add(source)
-            await db.commit()
-            await finish_source_run(db, run, "success", {"fetched": len(records)})
-            return {"fetched": len(records), "cursor": next_cursor}
-        except Exception as exc:
-            await db.rollback()
-            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
-            raise
+    source = await ensure_source(
+        db, _src("kudago", city), "web", settings.kudago_base_url,
+        {"cursor": "1", "location": city.kudago_location, "page_size": 100},
+    )
+    run = await create_source_run(db, source.source_id)
+    try:
+        cursor = source.config_json.get("cursor")
+        location = source.config_json.get("location", city.kudago_location)
+        page_size = int(source.config_json.get("page_size", 100))
+        connector = KudaGoConnector(location=location, page_size=page_size)
+        records, next_cursor = await _fetch_kudago_page(connector, cursor)
+        await bulk_upsert_raw_events(db, source.source_id, records)
+        source.config_json = {**source.config_json, "cursor": next_cursor}
+        db.add(source)
+        await db.commit()
+        await finish_source_run(db, run, "success", {"fetched": len(records)})
+        return {"fetched": len(records), "cursor": next_cursor}
+    except Exception as exc:
+        await db.rollback()
+        await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise
 
 
 async def _fetch_timepad_impl() -> dict:
@@ -147,50 +173,53 @@ async def _fetch_kudago_full_scan_impl() -> dict:
             raise
 
 
-def _yandex_config() -> dict:
-    return {"cursor": "0", "city": DEFAULT_CITY.yandex_city, "page_size": 100}
+def _yandex_config(city=DEFAULT_CITY) -> dict:
+    return {"cursor": "0", "city": city.yandex_city, "page_size": 100}
 
 
 async def _fetch_yandex_impl() -> dict:
+    return await _per_city(_yandex_one)
+
+
+async def _yandex_one(db, city) -> dict:
     settings = get_settings()
-    async with WorkerAsyncSessionLocal() as db:
-        source = await ensure_source(db, "yandex_afisha", "web", settings.yandex_afisha_base_url, _yandex_config())
-        run = await create_source_run(db, source.source_id)
+    source = await ensure_source(db, _src("yandex_afisha", city), "web", settings.yandex_afisha_base_url, _yandex_config(city))
+    run = await create_source_run(db, source.source_id)
+    try:
+        cursor = source.config_json.get("cursor", "0")
+        ycity = source.config_json.get("city", city.yandex_city)
+        page_size = int(source.config_json.get("page_size", 100))
+        connector = YandexAfishaConnector(city=ycity, page_size=page_size)
         try:
-            cursor = source.config_json.get("cursor", "0")
-            city = source.config_json.get("city", DEFAULT_CITY.yandex_city)
-            page_size = int(source.config_json.get("page_size", 100))
-            connector = YandexAfishaConnector(city=city, page_size=page_size)
-            try:
-                records, next_cursor = await connector.fetch(cursor=cursor)
-            except Exception as exc:
-                # Yandex's actualEvents resolver times out (its own ~600ms budget) for DEEP offsets — past
-                # ~6000 of the ~6360-event Moscow catalogue the tail is simply unreachable via offset
-                # pagination. Without this, the incremental cursor sticks at the first failing offset and
-                # the WHOLE source dies: every run re-fetches the same dead page, nothing refreshes, and the
-                # catalogue drains as events expire. Treat a deep-page timeout as end-of-catalogue — wrap to
-                # 0 and keep cycling (the far-future tail resurfaces later as those events move to lower
-                # offsets). A failure at offset 0 is a genuine outage, so re-raise that.
-                if cursor and str(cursor) != "0":
-                    print(f"yandex: deep-offset timeout at {cursor} — wrapping cursor to 0 (tail unreachable): {exc!r}")
-                    source.config_json = {**source.config_json, "cursor": "0"}
-                    db.add(source)
-                    await db.commit()
-                    await finish_source_run(db, run, "success", {"fetched": 0, "wrapped_from": cursor})
-                    return {"fetched": 0, "wrapped_from": cursor}
-                raise
-            await bulk_upsert_raw_events(db, source.source_id, records)
-            # Stable cursor (== current) means we reached the end — wrap to restart.
-            stored_cursor = "0" if next_cursor == cursor else next_cursor
-            source.config_json = {**source.config_json, "cursor": stored_cursor}
-            db.add(source)
-            await db.commit()
-            await finish_source_run(db, run, "success", {"fetched": len(records)})
-            return {"fetched": len(records), "cursor": stored_cursor}
+            records, next_cursor = await connector.fetch(cursor=cursor)
         except Exception as exc:
-            await db.rollback()
-            await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+            # Yandex's actualEvents resolver times out (its own ~600ms budget) for DEEP offsets — past
+            # ~6000 of the ~6360-event Moscow catalogue the tail is simply unreachable via offset
+            # pagination. Without this, the incremental cursor sticks at the first failing offset and
+            # the WHOLE source dies: every run re-fetches the same dead page, nothing refreshes, and the
+            # catalogue drains as events expire. Treat a deep-page timeout as end-of-catalogue — wrap to
+            # 0 and keep cycling (the far-future tail resurfaces later as those events move to lower
+            # offsets). A failure at offset 0 is a genuine outage, so re-raise that.
+            if cursor and str(cursor) != "0":
+                print(f"yandex[{city.slug}]: deep-offset timeout at {cursor} — wrapping cursor to 0 (tail unreachable): {exc!r}")
+                source.config_json = {**source.config_json, "cursor": "0"}
+                db.add(source)
+                await db.commit()
+                await finish_source_run(db, run, "success", {"fetched": 0, "wrapped_from": cursor})
+                return {"fetched": 0, "wrapped_from": cursor}
             raise
+        await bulk_upsert_raw_events(db, source.source_id, records)
+        # Stable cursor (== current) means we reached the end — wrap to restart.
+        stored_cursor = "0" if next_cursor == cursor else next_cursor
+        source.config_json = {**source.config_json, "cursor": stored_cursor}
+        db.add(source)
+        await db.commit()
+        await finish_source_run(db, run, "success", {"fetched": len(records)})
+        return {"fetched": len(records), "cursor": stored_cursor}
+    except Exception as exc:
+        await db.rollback()
+        await finish_source_run(db, run, "failed", {"fetched": 0}, repr(exc))
+        raise
 
 
 async def _fetch_yandex_full_scan_impl() -> dict:
