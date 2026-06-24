@@ -72,7 +72,7 @@ function CityRecenter({ center }: { center: [number, number] | null }) {
 // City switch pins — at the regional overview (far zoom) only, one per OTHER active city, so
 // you tap a city ON THE MAP to jump there. Tapping changes the active city; CityRecenter then
 // flies + zooms in (lifting past the threshold, which hides these again). Replaces the dropdown.
-const CITY_PICK_MAX_ZOOM = 6;
+const CITY_PICK_MAX_ZOOM = 9;
 function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
   const [zoom, setZoom] = useState(Math.round(map.getZoom()));
