@@ -117,6 +117,17 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
       for (const layer of layers) {
         if (layer.type !== "symbol" || !layer.layout || layer.layout["text-field"] == null) continue;
         if (layer.id === "ofm-housenumbers" || layer["source-layer"] === "housenumber") continue;
+        // Drop the basemap's own settlement NAME labels (city/town/village/capital). At the far-zoom city
+        // picker our pins already carry the city name + count, so the tile's "Москва"/"Казань" doubles up
+        // right under them. Hide those; districts (suburb) and country/region labels stay for context.
+        if (layer["source-layer"] === "place" && /city|town|village|hamlet|capital/i.test(layer.id)) {
+          try {
+            mlMap.setLayoutProperty(layer.id, "visibility", "none");
+          } catch {
+            /* layer rejects the override — leave it */
+          }
+          continue;
+        }
         // Road-ref SHIELDS draw a sprite badge (a white box) + the road number as text. Re-pointing
         // their text-field to the cyrillic NAME — which a shield doesn't have (it carries `ref`) —
         // blanks the number and leaves an empty white badge scattered along the roads (the "пустые
