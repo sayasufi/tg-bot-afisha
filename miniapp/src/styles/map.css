@@ -299,34 +299,30 @@ html[data-theme="dark"] .vpin--active::before {
 .vcity {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   transform: translate(-50%, -50%);
   white-space: nowrap;
-  padding: 7px 11px;
+  padding: 4px 8px;
   background: var(--plinth);
-  box-shadow: inset 0 0 0 1.5px var(--ink), 3px 3px 0 var(--cinnabar);
+  box-shadow: inset 0 0 0 1.5px var(--ink), 2px 2px 0 var(--cinnabar);
   color: var(--ink);
   font-family: var(--grotesk);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 0.01em;
   cursor: pointer;
   transition: box-shadow 0.12s var(--ease-cut), transform 0.12s var(--ease-cut);
 }
 .vcity:active {
   box-shadow: inset 0 0 0 1.5px var(--ink);
-  transform: translate(-50%, -50%) translate(3px, 3px);
+  transform: translate(-50%, -50%) translate(2px, 2px);
 }
 .vcity__dot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--cinnabar);
-}
-.vcity__go {
-  font-weight: 800;
-  color: var(--cinnabar);
 }
 
 /* ---------- Clusters — stacked frames ---------- */

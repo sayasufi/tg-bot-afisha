@@ -105,7 +105,7 @@ export function cityIcon(name: string): L.DivIcon {
   const safe = name.replace(/[<>&"]/g, "");
   return L.divIcon({
     className: "vcity-wrap",
-    html: `<div class="vcity"><span class="vcity__dot"></span><span class="vcity__name">${safe}</span><span class="vcity__go">→</span></div>`,
+    html: `<div class="vcity"><span class="vcity__dot"></span><span class="vcity__name">${safe}</span></div>`,
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
