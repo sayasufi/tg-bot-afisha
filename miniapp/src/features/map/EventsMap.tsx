@@ -3,11 +3,11 @@ import L from "leaflet";
 import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
-import type { EventItem, MapCluster } from "../../api/client";
+import type { City, EventItem, MapCluster } from "../../api/client";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
-import { clusterIcon, metroIcon, pinIcon, serverClusterIcon, userIcon } from "./markers";
+import { cityIcon, clusterIcon, metroIcon, pinIcon, serverClusterIcon, userIcon } from "./markers";
 
 type MetroPing = { name: string; lat: number; lon: number; meters: number };
 type Bbox = [number, number, number, number]; // [west, south, east, north]
@@ -39,6 +39,9 @@ type Props = {
   center?: [number, number] | null;
   onReady?: () => void;
   onViewport?: (bbox: Bbox, zoom: number) => void; // reports the bbox to the parent (list view)
+  cities: City[];
+  currentCitySlug: string | null;
+  onSelectCity: (slug: string) => void;
 };
 
 // Last-resort initial centre only (before /v1/cities resolves); the real centre comes
@@ -64,6 +67,32 @@ function CityRecenter({ center }: { center: [number, number] | null }) {
     map.flyTo(center, Math.max(map.getZoom(), 11), { duration: 0.8 }); // city switch → glide
   }, [center, map]);
   return null;
+}
+
+// City switch pins — at the regional overview (far zoom) only, one per OTHER active city, so
+// you tap a city ON THE MAP to jump there. Tapping changes the active city; CityRecenter then
+// flies + zooms in (lifting past the threshold, which hides these again). Replaces the dropdown.
+const CITY_PICK_MAX_ZOOM = 8;
+function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(Math.round(map.getZoom()));
+  useMapEvents({ zoomend: () => setZoom(Math.round(map.getZoom())) });
+  if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
+  return (
+    <>
+      {cities
+        .filter((c) => c.slug !== currentSlug)
+        .map((c) => (
+          <Marker
+            key={c.slug}
+            position={[c.lat, c.lon]}
+            icon={cityIcon(c.name)}
+            zIndexOffset={700}
+            eventHandlers={{ click: () => onSelect(c.slug) }}
+          />
+        ))}
+    </>
+  );
 }
 
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
@@ -252,6 +281,9 @@ export function EventsMap({
   locating,
   onReady,
   onViewport,
+  cities,
+  currentCitySlug,
+  onSelectCity,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const revealedRef = useRef(false);
@@ -473,6 +505,7 @@ export function EventsMap({
         {userPos && <Marker position={userPos} icon={userIco} pane="shadowPane" interactive={false} />}
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
         <CityRecenter center={center ?? null} />
+        <CityMarkers cities={cities} currentSlug={currentCitySlug} onSelect={onSelectCity} />
       </MapContainer>
     </div>
   );

@@ -46,7 +46,6 @@ import { distanceMeters, nearestOf } from "../lib/distance";
 import { beginFavoritesAdopt, syncFavorites, useFavorites } from "../lib/favorites";
 import { beginVenueFollowsAdopt, syncVenueFollows, useVenueFollows } from "../lib/venueFollows";
 import { applyTheme, getUser, getWebApp, haptic, hapticNotify, initTelegram, type ThemeName } from "../lib/telegram";
-import { CitySwitcher } from "../features/map/CitySwitcher";
 import { SearchOverlay } from "../features/search/SearchOverlay";
 import { loadSettings, pushSetting, type Settings } from "../lib/settings";
 import { useCities } from "../lib/useCities";
@@ -950,17 +949,6 @@ export function App() {
           }}
         />
       )}
-      {view === "map" && !selected && !filtersOpen && (
-        <CitySwitcher
-          cities={cities}
-          current={currentCity}
-          onSelect={(slug) => {
-            settingsTouched.current.city = true;
-            selectCity(slug);
-          }}
-        />
-      )}
-
       <Suspense fallback={null}>
         <EventsMap
           items={shownItems}
@@ -976,6 +964,12 @@ export function App() {
           locateNonce={locateNonce}
           theme={theme}
           center={currentCity ? [currentCity.lat, currentCity.lon] : null}
+          cities={cities}
+          currentCitySlug={currentCity?.slug ?? null}
+          onSelectCity={(slug) => {
+            settingsTouched.current.city = true;
+            selectCity(slug);
+          }}
           metro={nearMetro}
           onSelect={openEvent}
           onCluster={onCluster}

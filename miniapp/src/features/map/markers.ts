@@ -97,3 +97,16 @@ function countCluster(count: number): L.DivIcon {
     iconSize: [size, size],
   });
 }
+
+// City switch pin — shown only at the regional overview (far zoom), one per OTHER active
+// city, so you tap a city ON THE MAP to jump there (replaces the dropdown). A plinth chip
+// with a cinnabar geo-dot + the name + an arrow; the cinnabar offset reads as a button.
+export function cityIcon(name: string): L.DivIcon {
+  const safe = name.replace(/[<>&"]/g, "");
+  return L.divIcon({
+    className: "vcity-wrap",
+    html: `<div class="vcity"><span class="vcity__dot"></span><span class="vcity__name">${safe}</span><span class="vcity__go">→</span></div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
