@@ -16,7 +16,9 @@
       (function () {
         var tg = window.Telegram && window.Telegram.WebApp;
         if (tg && (tg.initData || (tg.platform && tg.platform !== "unknown"))) {
-          location.replace("https://app.okrestmap.ru/");
+          // Carry the Telegram WebApp params forward — initData lives in the URL hash, and the subdomain
+          // is a different origin (no shared storage), so without this the app would lose its auth.
+          location.replace("https://app.okrestmap.ru/" + location.search + location.hash);
         }
       })();
     </script>
