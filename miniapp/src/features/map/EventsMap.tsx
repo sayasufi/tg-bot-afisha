@@ -75,22 +75,43 @@ function CityRecenter({ center }: { center: [number, number] | null }) {
 const CITY_PICK_MAX_ZOOM = 9;
 function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
-  const [zoom, setZoom] = useState(Math.round(map.getZoom()));
-  useMapEvents({ zoomend: () => setZoom(Math.round(map.getZoom())) });
-  if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
+
+  // Far-zoom collision cull. Zoomed out to the whole country, all 15 other-city chips pile into one
+  // unreadable stack. Project each to CRS pixels at this zoom and greedily KEEP only those that don't
+  // overlap a higher-priority chip already kept (priority = API order, which is population-ish, so the
+  // big cities win the spot). Overlap is zoom-only — panning shifts every point equally — so the kept
+  // set is stable while panning and recomputes only on zoom. Zoom back in and the chips separate, so
+  // more reappear; lift past the threshold and they all hide (you're inside a city by then).
+  const visible = useMemo<City[]>(() => {
+    if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return [];
+    const placed: { x: number; y: number; hw: number; hh: number }[] = [];
+    const kept: City[] = [];
+    for (const c of cities) {
+      if (c.slug === currentSlug) continue;
+      const pt = map.project([c.lat, c.lon], zoom);
+      const hw = (c.name.length * 7 + 40) / 2; // generous chip half-extent (px) so kept chips keep a clear gap
+      const hh = 15;
+      if (placed.some((p) => Math.abs(p.x - pt.x) < p.hw + hw && Math.abs(p.y - pt.y) < p.hh + hh)) continue;
+      placed.push({ x: pt.x, y: pt.y, hw, hh });
+      kept.push(c);
+    }
+    return kept;
+  }, [cities, currentSlug, zoom, map]);
+
+  if (!visible.length) return null;
   return (
     <>
-      {cities
-        .filter((c) => c.slug !== currentSlug)
-        .map((c) => (
-          <Marker
-            key={c.slug}
-            position={[c.lat, c.lon]}
-            icon={cityIcon(c.name)}
-            zIndexOffset={700}
-            eventHandlers={{ click: () => onSelect(c.slug) }}
-          />
-        ))}
+      {visible.map((c) => (
+        <Marker
+          key={c.slug}
+          position={[c.lat, c.lon]}
+          icon={cityIcon(c.name)}
+          zIndexOffset={700}
+          eventHandlers={{ click: () => onSelect(c.slug) }}
+        />
+      ))}
     </>
   );
 }
