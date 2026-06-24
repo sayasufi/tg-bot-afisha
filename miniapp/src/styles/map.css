@@ -304,6 +304,7 @@ html[data-theme="dark"] .vpin--active::before {
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 1px;
   padding: 5px 9px;
   background: var(--plinth);
@@ -341,6 +342,52 @@ html[data-theme="dark"] .vpin--active::before {
 .vcity--active .vcity__count {
   font-size: 11px;
   color: var(--ink);
+}
+/* The acid hierarchy bar — scaled by --p (0..1 = this city's share of the busiest). Москва = full, small
+   cities = a stub, so volume reads at a glance without resizing the cards (which read as "why bigger"). */
+.vcity__bar {
+  margin-top: 3px;
+  width: 44px;
+  height: 3px;
+  background: var(--acid);
+  transform: scaleX(var(--p, 0));
+  transform-origin: left center;
+}
+.vcity--active .vcity__bar {
+  background: var(--ink);
+}
+
+/* Far-zoom picker caption + running total — what this mode is and how much is on offer. Bottom-centre,
+   above the map controls; pure caption (no tap), shown only while the city cards are up. */
+.city-pick-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 78px;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 7px 16px;
+  background: var(--plinth);
+  box-shadow: inset 0 0 0 1px var(--ink), 2px 2px 0 var(--cinnabar);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.city-pick-banner__title {
+  font-family: var(--grotesk);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.city-pick-banner__sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  color: var(--ink-dim);
 }
 
 /* ---------- Clusters — stacked frames ---------- */

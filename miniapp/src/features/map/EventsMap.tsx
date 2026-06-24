@@ -81,6 +81,9 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
 
+  // The busiest city's count — normalises every card's acid hierarchy bar (Москва = full).
+  const maxCount = useMemo(() => Math.max(1, ...cities.map((c) => c.count)), [cities]);
+
   // Cull the cards so they never overlap. The ACTIVE card is forced first (always kept) and gets a bigger
   // box (it's the dominant acid card). Cards are centred on their city point; overlap is zoom-only (panning
   // shifts every point equally), so the kept set is stable while panning and recomputes only on zoom.
@@ -111,7 +114,7 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
           <Marker
             key={c.slug}
             position={[c.lat, c.lon]}
-            icon={cityIcon(c.name, c.count, active)}
+            icon={cityIcon(c.name, c.count, active, Math.max(0.05, c.count / maxCount))}
             zIndexOffset={active ? 900 : 700}
             interactive={!active}
             eventHandlers={active ? undefined : { click: () => onSelect(c.slug) }}
@@ -120,6 +123,22 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
       })}
     </>
   );
+}
+
+// When the far-zoom city picker first appears (you zoom out past the threshold), frame the whole set of
+// cities so Россия fills the screen instead of half-empty neighbouring countries. One flyToBounds per
+// activation — it doesn't fight later panning, and re-frames only if you leave and re-enter the picker.
+function CityOverview({ active, cities }: { active: boolean; cities: City[] }) {
+  const map = useMap();
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (active && !wasActive.current && cities.length > 1) {
+      const bounds = L.latLngBounds(cities.map((c) => [c.lat, c.lon] as [number, number]));
+      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: CITY_PICK_MAX_ZOOM, duration: 0.7 });
+    }
+    wasActive.current = active;
+  }, [active, cities, map]);
+  return null;
 }
 
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
@@ -537,7 +556,16 @@ export function EventsMap({
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
         <CityRecenter center={center ?? null} />
         <CityMarkers cities={cities} currentSlug={currentCitySlug} onSelect={onSelectCity} />
+        <CityOverview active={constellation} cities={cities} />
       </MapContainer>
+      {constellation && cities.length > 1 && (
+        <div className="city-pick-banner">
+          <span className="city-pick-banner__title">Выберите город</span>
+          <span className="city-pick-banner__sub">
+            {cities.length} городов · {cities.reduce((s, c) => s + c.count, 0).toLocaleString("ru-RU")} событий
+          </span>
+        </div>
+      )}
     </div>
   );
 }

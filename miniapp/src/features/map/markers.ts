@@ -103,12 +103,15 @@ function countCluster(count: number): L.DivIcon {
 // "Москва 8.5k событий" — the others are smaller plinth cards. No dots, no bubbles, no lines: just the
 // cards, culled so they never pile up. Cards are uniform (only the active one is big), so nothing reads
 // as "why is this city bigger" — the single acid card carries the whole hierarchy.
-export function cityIcon(name: string, count: number, active = false): L.DivIcon {
+export function cityIcon(name: string, count: number, active = false, fillPct = 0): L.DivIcon {
   const safe = name.replace(/[<>&"]/g, "");
   const n = count >= 1000 ? `${Math.round(count / 100) / 10}k` : String(count);
+  // A thin acid bar scaled to the city's share of the busiest city's events — the at-a-glance hierarchy
+  // (Москва full, Воронеж a stub) without resizing the cards (which read as "why is this one bigger").
+  const bar = `<span class="vcity__bar" style="--p:${fillPct.toFixed(3)}"></span>`;
   return L.divIcon({
     className: "vcity-wrap",
-    html: `<div class="vcity${active ? " vcity--active" : ""}"><span class="vcity__name">${safe}</span><span class="vcity__count">${active ? `${n} событий` : n}</span></div>`,
+    html: `<div class="vcity${active ? " vcity--active" : ""}"><span class="vcity__name">${safe}</span><span class="vcity__count">${active ? `${n} событий` : n}</span>${bar}</div>`,
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
