@@ -621,14 +621,11 @@ export function EventsMap({
         <CityOverview active={constellation} cities={cities} />
       </MapContainer>
       {constellation && cities.length > 1 && (
-        <div className="city-pick-hero">
-          <span className="city-pick-hero__num">{cities.reduce((s, c) => s + c.count, 0).toLocaleString("ru-RU")}</span>
-          <span className="city-pick-hero__lab">событий в {cities.length} городах России</span>
-        </div>
-      )}
-      {constellation && cities.length > 1 && (
         <div className="city-pick-banner">
           <span className="city-pick-banner__title">Выберите город</span>
+          <span className="city-pick-banner__sub">
+            {cities.reduce((s, c) => s + c.count, 0).toLocaleString("ru-RU")} событий в {cities.length} городах России
+          </span>
         </div>
       )}
     </div>
