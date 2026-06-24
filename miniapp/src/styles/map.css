@@ -325,6 +325,44 @@ html[data-theme="dark"] .vpin--active::before {
   background: var(--cinnabar);
 }
 
+/* The mono event count beside the city name — the "accession number" treatment. */
+.vcity__count {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--ink-dim);
+}
+
+/* The ACTIVE city (where you are now) — the selected-exhibit look: an acid plate, a touch larger, so it
+   dominates the constellation (like the reference "Москва 8.5k"). Non-interactive — pure emphasis. */
+.vcity--active {
+  background: var(--acid);
+  transform: translate(-50%, -50%) scale(1.1);
+  cursor: default;
+}
+.vcity--active .vcity__dot {
+  background: var(--ink);
+}
+.vcity--active .vcity__count {
+  color: var(--ink);
+}
+
+/* The cultural-network hairlines (an MST) + culled-city node dots — flat ink, theme-adaptive. The class
+   sits on the Leaflet SVG path; an author CSS rule outranks the presentation attributes Leaflet sets,
+   so we recolour without !important. */
+.vcity-link {
+  stroke: var(--ink);
+  stroke-opacity: 0.22;
+  fill: none;
+}
+.vcity-node {
+  fill: var(--ink);
+  fill-opacity: 0.5;
+  stroke: none;
+}
+
 /* ---------- Clusters — stacked frames ---------- */
 .vcluster-wrap {
   background: none;

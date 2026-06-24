@@ -1,11 +1,14 @@
 import gzip
 import hashlib
+import logging
+import time
 from datetime import datetime
 from uuid import UUID
 
 import orjson
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.schemas.events import (
@@ -22,6 +25,7 @@ from core.cities import active_cities, city_by_name
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["events"])
+logger = logging.getLogger(__name__)
 
 # Map data changes only on ingest; let the browser cache it and revalidate cheaply
 # (ETag → 304) after the window. Same value the cache_control middleware would set.
@@ -130,13 +134,66 @@ async def list_events(
     )
 
 
+# Per-city event counts power the far-zoom "созвездие" picker (a number on each city chip). It's a
+# 16-region spatial COUNT over slow-moving data (changes only on ingest), so cache it in-process for
+# a few minutes instead of recomputing per call. Per-worker staleness of a few minutes is harmless.
+_CITY_COUNTS: dict[str, object] = {"at": 0.0, "data": {}}
+_CITY_COUNTS_TTL = 600.0  # seconds
+
+
+async def _city_event_counts(db: AsyncSession) -> dict[str, int]:
+    """{slug: active-event count in that city's region}. Cached; degrades to stale/empty on error so
+    the (load-critical) city list never breaks over a count."""
+    now = time.monotonic()
+    cached: dict = _CITY_COUNTS["data"]  # type: ignore[assignment]
+    if cached and now - float(_CITY_COUNTS["at"]) < _CITY_COUNTS_TTL:
+        return cached
+    cities = active_cities()
+    # Coords come from the trusted core.cities registry (not user input), so interpolating the VALUES
+    # list is not an injection vector — same rationale as core.cities.region_predicate_sql.
+    values = ", ".join(
+        f"('{c.slug}', {c.center[0]}, {c.center[1]}, {c.region_radius_km * 1000.0})" for c in cities
+    )
+    sql = text(
+        f"""
+        WITH city(slug, lat, lon, r) AS (VALUES {values})
+        SELECT c.slug, COUNT(DISTINCT e.event_id) AS n
+        FROM city c
+        JOIN events.venues v
+          ON ST_DWithin(v.geom, ST_SetSRID(ST_MakePoint(c.lon, c.lat), 4326)::geography, c.r)
+        JOIN events.event_occurrences o ON o.venue_id = v.venue_id
+        JOIN events.events e ON e.event_id = o.event_id AND e.status = 'active'
+        GROUP BY c.slug
+        """
+    )
+    try:
+        rows = (await db.execute(sql)).all()
+        data = {row[0]: int(row[1]) for row in rows}
+        _CITY_COUNTS["at"] = now
+        _CITY_COUNTS["data"] = data
+        return data
+    except Exception:
+        logger.warning("city_event_counts failed", exc_info=True)
+        return cached or {}
+
+
 @router.get("/cities")
-async def get_cities():
-    """Active cities the app serves — for the frontend's city picker / auto-detect and
-    per-city map centring. From the core.cities registry (the multi-city source of truth)."""
+async def get_cities(db: AsyncSession = Depends(get_async_db)):
+    """Active cities the app serves — for the frontend's city picker / auto-detect and per-city map
+    centring. From the core.cities registry (the multi-city source of truth). `count` = active events
+    in the city's region; the far-zoom constellation picker shows it on each city chip."""
+    counts = await _city_event_counts(db)
     return {
         "cities": [
-            {"slug": c.slug, "name": c.name, "lat": c.center[0], "lon": c.center[1], "radius_km": c.region_radius_km, "utc_offset": c.utc_offset_hours}
+            {
+                "slug": c.slug,
+                "name": c.name,
+                "lat": c.center[0],
+                "lon": c.center[1],
+                "radius_km": c.region_radius_km,
+                "utc_offset": c.utc_offset_hours,
+                "count": counts.get(c.slug, 0),
+            }
             for c in active_cities()
         ]
     }

@@ -98,14 +98,16 @@ function countCluster(count: number): L.DivIcon {
   });
 }
 
-// City switch pin — shown only at the regional overview (far zoom), one per OTHER active
-// city, so you tap a city ON THE MAP to jump there (replaces the dropdown). A plinth chip
-// with a cinnabar geo-dot + the name + an arrow; the cinnabar offset reads as a button.
-export function cityIcon(name: string): L.DivIcon {
+// City node — shown at the far-zoom regional overview ("созвездие"), so you tap a city ON THE MAP to
+// jump there (replaces the dropdown). A plinth chip: cinnabar geo-dot + name + a mono event count (the
+// "accession number" treatment). The ACTIVE city (where you are now) gets the acid plate + cinnabar
+// misregistration — the signature selected-exhibit look — and is non-interactive.
+export function cityIcon(name: string, count: number, active = false): L.DivIcon {
   const safe = name.replace(/[<>&"]/g, "");
+  const n = count >= 1000 ? `${Math.round(count / 100) / 10}k` : String(count);
   return L.divIcon({
     className: "vcity-wrap",
-    html: `<div class="vcity"><span class="vcity__dot"></span><span class="vcity__name">${safe}</span></div>`,
+    html: `<div class="vcity${active ? " vcity--active" : ""}"><span class="vcity__dot"></span><span class="vcity__name">${safe}</span><span class="vcity__count">${n}</span></div>`,
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
