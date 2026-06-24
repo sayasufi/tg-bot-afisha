@@ -7,7 +7,7 @@ import type { City, EventItem, MapCluster } from "../../api/client";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
-import { cityIcon, clusterIcon, metroIcon, pinIcon, serverClusterIcon, userIcon } from "./markers";
+import { cityDotIcon, cityIcon, clusterIcon, metroIcon, pinIcon, serverClusterIcon, userIcon } from "./markers";
 
 type MetroPing = { name: string; lat: number; lon: number; meters: number };
 type Bbox = [number, number, number, number]; // [west, south, east, north]
@@ -81,9 +81,6 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
 
-  // The busiest city's count — normalises every card's acid hierarchy bar (Москва = full).
-  const maxCount = useMemo(() => Math.max(1, ...cities.map((c) => c.count)), [cities]);
-
   // Cull the cards so they never overlap. The ACTIVE card is forced first (always kept) and gets a bigger
   // box (it's the dominant acid card). Cards are centred on their city point; overlap is zoom-only (panning
   // shifts every point equally), so the kept set is stable while panning and recomputes only on zoom.
@@ -105,16 +102,30 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
   }, [cities, currentSlug, zoom, map]);
 
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
+  const shown = new Set(cards.map((c) => c.slug));
 
   return (
     <>
+      {/* Cities whose card was culled (it overlaps a higher-priority one) → a small tappable dot, so a
+          hidden city is still visible and reachable. Tapping flies in, where its card has room to show. */}
+      {cities
+        .filter((c) => !shown.has(c.slug))
+        .map((c) => (
+          <Marker
+            key={`dot-${c.slug}`}
+            position={[c.lat, c.lon]}
+            icon={cityDotIcon()}
+            zIndexOffset={400}
+            eventHandlers={{ click: () => onSelect(c.slug) }}
+          />
+        ))}
       {cards.map((c) => {
         const active = c.slug === currentSlug;
         return (
           <Marker
             key={c.slug}
             position={[c.lat, c.lon]}
-            icon={cityIcon(c.name, c.count, active, Math.max(0.05, c.count / maxCount))}
+            icon={cityIcon(c.name, c.count, active)}
             zIndexOffset={active ? 900 : 700}
             interactive={!active}
             eventHandlers={active ? undefined : { click: () => onSelect(c.slug) }}

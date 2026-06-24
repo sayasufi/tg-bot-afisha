@@ -304,7 +304,6 @@ html[data-theme="dark"] .vpin--active::before {
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 1px;
   padding: 5px 9px;
   background: var(--plinth);
@@ -343,18 +342,24 @@ html[data-theme="dark"] .vpin--active::before {
   font-size: 11px;
   color: var(--ink);
 }
-/* The acid hierarchy bar — scaled by --p (0..1 = this city's share of the busiest). Москва = full, small
-   cities = a stub, so volume reads at a glance without resizing the cards (which read as "why bigger"). */
-.vcity__bar {
-  margin-top: 3px;
-  width: 44px;
-  height: 3px;
-  background: var(--acid);
-  transform: scaleX(var(--p, 0));
-  transform-origin: left center;
-}
-.vcity--active .vcity__bar {
+/* A culled city's marker — a small ink dot (its card is hidden behind a higher-priority one). A pale halo
+   lifts it off the map; an invisible pad enlarges the tap target. Centred on the city point. */
+.vcity-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
   background: var(--ink);
+  box-shadow: 0 0 0 2px var(--bg);
+  cursor: pointer;
+}
+.vcity-dot::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
 }
 
 /* Far-zoom picker caption + running total — what this mode is and how much is on offer. Bottom-centre,
