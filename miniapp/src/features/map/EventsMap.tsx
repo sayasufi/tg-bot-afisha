@@ -81,21 +81,23 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
 
-  // Cull the cards so they never overlap. The ACTIVE card is forced first (always kept) and gets a bigger
-  // box (it's the dominant acid card). Cards are centred on their city point; overlap is zoom-only (panning
-  // shifts every point equally), so the kept set is stable while panning and recomputes only on zoom.
+  // Cull labels so they never overlap. Each marker is a dot ON the city point with the name+count label to
+  // its RIGHT, so the box is asymmetric (extends right from the point, not centred). Overlap is zoom-only
+  // (panning shifts every point equally), so the kept set is stable while panning and recomputes only on
+  // zoom. The active city is forced first (always kept).
   const cards = useMemo<City[]>(() => {
     if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return [];
     const ordered = [...cities].sort((a, b) => (a.slug === currentSlug ? -1 : b.slug === currentSlug ? 1 : 0));
-    const placed: { x: number; y: number; hw: number; hh: number }[] = [];
+    const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
     const kept: City[] = [];
     for (const c of ordered) {
-      const active = c.slug === currentSlug;
       const pt = map.project([c.lat, c.lon], zoom);
-      const hw = active ? (c.name.length * 8 + 56) / 2 : (c.name.length * 7 + 32) / 2; // active card + "событий"; non-active gets extra gap so cards don't touch
-      const hh = active ? 20 : 19;
-      if (placed.some((p) => Math.abs(p.x - pt.x) < p.hw + hw && Math.abs(p.y - pt.y) < p.hh + hh)) continue;
-      placed.push({ x: pt.x, y: pt.y, hw, hh });
+      const x0 = pt.x - 7; // the dot
+      const x1 = pt.x + 14 + c.name.length * 7.2; // gap + label (the name drives the width) + a touch of margin
+      const y0 = pt.y - 15;
+      const y1 = pt.y + 15;
+      if (placed.some((p) => x0 < p.x1 && x1 > p.x0 && y0 < p.y1 && y1 > p.y0)) continue;
+      placed.push({ x0, x1, y0, y1 });
       kept.push(c);
     }
     return kept;

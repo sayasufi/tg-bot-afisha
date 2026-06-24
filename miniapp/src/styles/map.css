@@ -297,27 +297,42 @@ html[data-theme="dark"] .vpin--active::before {
 .vcity-wrap {
   background: none;
 }
+/* Minimalist pin + label (no card box): a filled dot on the city point, name + count beside it on a soft
+   paper halo so the text reads over any basemap. The dot scales subtly with the city size (--r). */
 .vcity {
   position: absolute;
   left: 0;
   top: 0;
+  cursor: pointer;
+}
+.vcity__pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--r, 9px);
+  height: var(--r, 9px);
   transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 2.5px var(--bg), 0 1px 3px rgba(11, 11, 11, 0.4);
+}
+.vcity__lab {
+  position: absolute;
+  left: 10px;
+  top: 0;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 5px 9px;
-  background: var(--plinth);
-  box-shadow: inset 0 0 0 1px var(--ink), 1.5px 1.5px 0 rgba(11, 11, 11, 0.16);
-  line-height: 1.12;
+  line-height: 1.08;
   white-space: nowrap;
-  cursor: pointer;
 }
 .vcity__name {
   font-family: var(--grotesk);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 12.5px;
   letter-spacing: 0.01em;
   color: var(--ink);
+  text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 6px var(--bg), 0 1px 1px var(--bg);
 }
 .vcity__count {
   font-family: var(--mono);
@@ -326,40 +341,38 @@ html[data-theme="dark"] .vpin--active::before {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: var(--ink-dim);
+  text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 5px var(--bg);
 }
-/* The ACTIVE city (where you are now) — a bigger acid card with the cinnabar registration offset (the
-   signature selected-exhibit look). Dominates the map; non-interactive — pure "you are here". */
+/* The ACTIVE city (where you are now) — an acid dot with a quiet glow + a cinnabar count. A small, calm
+   "you are here", not a dominating billboard. */
 .vcity--active {
-  background: var(--acid);
-  box-shadow: inset 0 0 0 1px var(--ink), 2px 2px 0 var(--cinnabar);
-  padding: 6px 10px;
   cursor: default;
 }
-.vcity--active .vcity__name {
-  font-size: 14px;
+.vcity--active .vcity__pin {
+  background: var(--acid);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 4.5px var(--bg), 0 0 14px 2px rgba(204, 255, 0, 0.55);
 }
 .vcity--active .vcity__count {
-  font-size: 11px;
-  color: var(--ink);
+  color: var(--cinnabar);
 }
-/* A culled city's marker — a small ink dot (its card is hidden behind a higher-priority one). A pale halo
-   lifts it off the map; an invisible pad enlarges the tap target. Centred on the city point. */
+/* A culled city's marker — just the dot (its label is hidden behind a higher-priority one), same pin look;
+   an invisible pad enlarges the tap target. Centred on the city point. */
 .vcity-dot {
   position: absolute;
   left: 0;
   top: 0;
-  width: 7px;
-  height: 7px;
+  width: 7.5px;
+  height: 7.5px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: var(--ink);
-  box-shadow: 0 0 0 2px var(--bg);
+  box-shadow: 0 0 0 2.5px var(--bg), 0 1px 3px rgba(11, 11, 11, 0.4);
   cursor: pointer;
 }
 .vcity-dot::before {
   content: "";
   position: absolute;
-  inset: -9px;
+  inset: -10px;
 }
 
 /* Far-zoom picker caption + running total — what this mode is and how much is on offer. Bottom-centre,
