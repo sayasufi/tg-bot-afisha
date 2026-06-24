@@ -19,11 +19,11 @@ class CityConfig:
     afisha_city: str | None  # afisha.ru city slug (afisha.ru/<slug>/schedule_*), or None if not covered
     active: bool  # whether the pipeline currently ingests this city
     center: tuple[float, float]  # (lat, lon) city centre — anchors geo heuristics
-    # How far the city's region reaches (day-trip oblast venues + far festivals). Used
-    # both to keep events on the map and to bound venue relocation. Wide enough for a
-    # cross-oblast festival (~330 km) yet far short of another city (SPb 635 km) or
-    # transposed/foreign coords (Caspian/Almaty >1000 km).
-    region_radius_km: float = 350.0
+    # How far the city's region reaches. Tight enough to SEPARATE adjacent cities so an event
+    # belongs to ONE city (the closest pair, Екатеринбург–Челябинск, is ~194 km apart), yet wide
+    # enough to cover a metro + its near suburbs. Also bounds venue relocation. Was 350 km, which
+    # badly over-overlapped once the Volga/Ural million-plus cities were added (Казань–Самара ~296 km).
+    region_radius_km: float = 100.0
     utc_offset_hours: int = 3  # fixed UTC offset (Russia has no DST) — drives per-city wall-clock display
     city_id: int | None = None  # ref.cities.city_id — bridges DB-keyed sources (Telegram channels) to this registry
 

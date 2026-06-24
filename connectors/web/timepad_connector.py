@@ -11,6 +11,21 @@ from core.config.settings import get_settings
 
 _MSK = timezone(timedelta(hours=3))
 
+# Timepad's poster_image.default_url is sometimes a MALFORMED concatenation of two uploadcare URLs
+# (the org poster + the event poster joined) → 400 on fetch, so the image never caches. Rebuild a
+# clean uploadcare transform URL from just the file UUID; fall back to default_url for non-uploadcare.
+_UCARE_UUID = re.compile(r"ucare\.timepad\.ru/([0-9a-fA-F-]{36})")
+
+
+def _clean_poster(poster) -> str | None:
+    if not isinstance(poster, dict):
+        return None
+    url = poster.get("default_url") or ""
+    m = _UCARE_UUID.search(url)
+    if m:
+        return f"https://ucare.timepad.ru/{m.group(1)}/-/preview/720x960/-/format/jpeg/"
+    return url or None
+
 
 class TimepadConnector:
     """Timepad (api.timepad.ru) — independent-organiser events the big aggregators under-cover:
@@ -163,7 +178,7 @@ class TimepadConnector:
                 "price": self._price_text(rep.get("registration_data")),
                 "age_restriction": int(age) if age.isdigit() else None,
                 "categories": cats,
-                "poster_image": poster.get("default_url") if isinstance(poster, dict) else None,
+                "poster_image": _clean_poster(poster),
                 "site_url": rep.get("url"),
                 "sessions": len(grp),
                 "iso_dates": True,  # startDate/endDate ARE the authoritative session → drives occurrence upsert + prune
