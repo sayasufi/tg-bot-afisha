@@ -41,6 +41,8 @@ export function ProfilePanel({
   onClose: () => void;
 }) {
   const [cityOpen, setCityOpen] = useState(false);
+  // Cities A→Z (Cyrillic-aware) so the picker stays scannable as it grows past a dozen.
+  const sortedCities = [...cities].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
@@ -101,7 +103,7 @@ export function ProfilePanel({
           </button>
           {cityOpen && (
             <div className="profile__city-list">
-              {cities.map((c) => (
+              {sortedCities.map((c) => (
                 <button
                   key={c.slug}
                   type="button"

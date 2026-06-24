@@ -466,6 +466,12 @@ mark.hl {
   display: flex;
   flex-direction: column;
   border-bottom: 1px solid var(--line-soft);
+  /* Cap the open list to a few rows and scroll the rest — with 16+ cities a full list runs off
+     the screen. overscroll-behavior keeps the flick inside the list (doesn't drag the panel). */
+  max-height: min(300px, 42vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .profile__city-opt {
   display: flex;
