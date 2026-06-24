@@ -6,6 +6,8 @@
     <title>Окрест — афиша твоего города на карте</title>
     <meta name="description" content="21 000+ событий в 16 городах России — концерты, выставки, спектакли, стендап и кино на одной карте, прямо в Telegram. Обновляется каждый день." />
     <meta name="theme-color" content="#f4f4ef" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="favicon.svg" />
     <meta property="og:title" content="Окрест — афиша на карте" />
     <meta property="og:description" content="21 000+ событий в 16 городах России, прямо в Telegram." />
     <meta property="og:type" content="website" />
@@ -53,9 +55,9 @@
 
       /* header */
       .top { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
-      .top__l { display: flex; align-items: center; gap: 9px; }
-      .top__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 1.5px var(--ink); }
-      .top__mark { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: -0.03em; }
+      .top__l { display: flex; align-items: center; gap: 10px; }
+      .top__logo { width: 28px; height: 28px; display: block; }
+      .top__mark { font-family: var(--display); font-weight: 800; font-size: 19px; letter-spacing: -0.03em; }
       .top__bot { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); text-decoration: none; padding: 5px 9px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); }
       .top__bot:hover { color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 
@@ -76,9 +78,9 @@
       .cta:active { transform: translate(3px, 3px); box-shadow: inset 0 0 0 1.5px var(--ink); }
       .cta__a { font-family: var(--mono); font-size: 18px; }
 
-      /* big stats — the "wow / scale" moment */
-      .stats { display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap; }
-      .stat__n { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 5.2vw, 46px); letter-spacing: -0.035em; line-height: 0.95; }
+      /* big stats — the scale moment */
+      .stats { display: flex; gap: 34px; margin-top: 30px; flex-wrap: wrap; }
+      .stat__n { font-family: var(--display); font-weight: 800; font-size: clamp(32px, 5.4vw, 48px); letter-spacing: -0.035em; line-height: 0.95; }
       .stat__n em { font-style: normal; color: var(--cinnabar); }
       .stat__k { display: block; margin-top: 7px; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-dim); }
       .stats__note { margin-top: 16px; font-family: var(--mono); font-size: 12.5px; color: var(--cinnabar); display: inline-flex; align-items: center; gap: 7px; }
@@ -86,7 +88,7 @@
 
       /* phone with a real screenshot */
       .hero__media { display: flex; justify-content: center; align-items: center; }
-      .phone { width: 100%; max-width: 218px; padding: 8px; background: var(--ink); border-radius: 30px; box-shadow: 5px 5px 0 rgba(11, 11, 11, 0.14); }
+      .phone { width: 100%; max-width: 212px; padding: 8px; background: var(--ink); border-radius: 30px; box-shadow: 5px 5px 0 rgba(11, 11, 11, 0.14); }
       .phone__screen { border-radius: 22px; overflow: hidden; display: block; background: var(--paper); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
       .phone__screen img { width: 100%; height: auto; display: block; }
       .phone--hero {
@@ -95,21 +97,14 @@
       }
       .phone--hero .phone__screen { border-radius: 30px; }
 
-      /* demos — map is feature #1 (big), event/list smaller */
-      .demos { padding: 64px 0 26px; }
+      /* demos — three equal blocks */
+      .demos { padding: 60px 0 26px; }
       .demos__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
       .demos__s { margin-top: 10px; font-size: 16px; color: var(--ink-dim); max-width: 52ch; }
-      .feat { display: grid; grid-template-columns: 1fr 1.32fr; gap: 34px; margin-top: 34px; align-items: start; }
-      .feat__small { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+      .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin-top: 38px; align-items: start; }
       .col { display: flex; flex-direction: column; align-items: center; text-align: center; }
-      .col--lead .phone { max-width: 282px; }
-      .col__tag { margin-bottom: 12px; align-self: flex-start; font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink); background: var(--acid); padding: 4px 9px; box-shadow: inset 0 0 0 1.5px var(--ink); }
-      .col--lead { align-items: stretch; }
-      .col--lead .phone { align-self: center; }
-      .col__k { margin-top: 18px; font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cinnabar); }
-      .col--lead .col__k { font-size: 13px; align-self: center; }
-      .col__t { margin-top: 8px; font-size: 14.5px; font-weight: 500; line-height: 1.36; max-width: 26ch; color: #1c1c1a; }
-      .col--lead .col__t { font-size: 16px; max-width: 30ch; }
+      .col__k { margin-top: 18px; font-family: var(--mono); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cinnabar); }
+      .col__t { margin-top: 8px; font-size: 15px; font-weight: 500; line-height: 1.42; max-width: 23ch; color: #1c1c1a; }
 
       /* "Что внутри" — proof of value */
       .inside { padding: 44px 0 20px; }
@@ -136,11 +131,11 @@
         .stats__note { justify-content: center; width: 100%; }
         .hero__media { order: 2; }
         .phone--hero { margin-bottom: 0; max-width: 300px; }
-        .feat { grid-template-columns: 1fr; gap: 38px; }
-        .col__tag, .col--lead .col__k { align-self: center; }
+      }
+      @media (max-width: 760px) {
+        .row { grid-template-columns: 1fr; gap: 42px; max-width: 300px; margin-left: auto; margin-right: auto; }
       }
       @media (max-width: 560px) {
-        .feat__small { grid-template-columns: 1fr; gap: 38px; max-width: 300px; margin: 0 auto; }
         .checks { grid-template-columns: 1fr; gap: 14px; }
       }
       @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .cta { transition: none; } }
@@ -149,7 +144,15 @@
   <body>
     <div class="wrap">
       <header class="top">
-        <span class="top__l"><span class="top__dot"></span><span class="top__mark">ОКРЕСТ</span></span>
+        <span class="top__l">
+          <svg class="top__logo" viewBox="0 0 100 100" aria-label="Окрест" role="img">
+            <rect width="100" height="100" rx="24" fill="#ccff00" />
+            <path d="M50 15 C32.9 15 19 28.9 19 46 C19 65 38 77 50 91 C62 77 81 65 81 46 C81 28.9 67.1 15 50 15 Z" fill="#0b0b0b" />
+            <circle cx="50" cy="45" r="15.5" fill="#ccff00" />
+            <circle cx="50" cy="45" r="5" fill="#0b0b0b" />
+          </svg>
+          <span class="top__mark">ОКРЕСТ</span>
+        </span>
         <a class="top__bot" href="https://t.me/okrestmap_bot">@okrestmap_bot</a>
       </header>
 
@@ -158,9 +161,8 @@
           <h1 class="hero__title">Афиша вокруг тебя — <em>на&nbsp;карте</em>.</h1>
           <p class="hero__sub">Концерты, выставки, спектакли, стендап и кино в <b>16 городах России</b>. Всё на одной карте — прямо в Telegram.</p>
           <div class="stats">
-            <div><span class="stat__n"><span class="js-count">21&nbsp;100</span><em>+</em></span><span class="stat__k">событий</span></div>
+            <div><span class="stat__n"><span class="js-count">21&nbsp;200</span><em>+</em></span><span class="stat__k">событий</span></div>
             <div><span class="stat__n">16</span><span class="stat__k">городов</span></div>
-            <div><span class="stat__n">0₽</span><span class="stat__k">без рекламы</span></div>
           </div>
           <div class="stats__note">обновляется каждый день</div>
           <div><a class="cta" href="https://t.me/okrestmap_bot"><span>Открыть в Telegram</span><span class="cta__a">→</span></a></div>
@@ -177,25 +179,22 @@
 
       <section class="demos">
         <h2 class="demos__h">Как это работает</h2>
-        <p class="demos__s">Открываешь карту — видишь, что вокруг. Сохраняешь — напомним. Без рекламы и левых каналов.</p>
-        <div class="feat">
-          <div class="col col--lead">
-            <span class="col__tag">Главное</span>
+        <p class="demos__s">Открываешь карту — видишь, что вокруг. Сохраняешь — напомним.</p>
+        <div class="row">
+          <div class="col">
             <div class="phone"><div class="phone__screen"><img src="shots/map.jpg" width="720" height="1548" loading="lazy" alt="Карта событий вокруг — приложение Окрест" /></div></div>
             <div class="col__k">Рядом</div>
-            <div class="col__t">Карта показывает, что происходит вокруг тебя — прямо сейчас. Это главное.</div>
+            <div class="col__t">Открыл карту — видно, что происходит вокруг прямо сейчас.</div>
           </div>
-          <div class="feat__small">
-            <div class="col">
-              <div class="phone"><div class="phone__screen"><img src="shots/event.jpg" width="720" height="1548" loading="lazy" alt="Карточка события — приложение Окрест" /></div></div>
-              <div class="col__k">Не пропусти</div>
-              <div class="col__t">Где, когда, почём и как добраться. Сохрани — напомним за 2 часа.</div>
-            </div>
-            <div class="col">
-              <div class="phone"><div class="phone__screen"><img src="shots/list.jpg" width="720" height="1548" loading="lazy" alt="Список событий — приложение Окрест" /></div></div>
-              <div class="col__k">Списком</div>
-              <div class="col__t">Не любишь карту? Листай и сортируй по дате, цене и близости.</div>
-            </div>
+          <div class="col">
+            <div class="phone"><div class="phone__screen"><img src="shots/event.jpg" width="720" height="1548" loading="lazy" alt="Карточка события — приложение Окрест" /></div></div>
+            <div class="col__k">Не пропустишь</div>
+            <div class="col__t">Время, цена, адрес, метро. Сохрани — напомним за 2 часа.</div>
+          </div>
+          <div class="col">
+            <div class="phone"><div class="phone__screen"><img src="shots/list.jpg" width="720" height="1548" loading="lazy" alt="Список событий — приложение Окрест" /></div></div>
+            <div class="col__k">Не любишь карту?</div>
+            <div class="col__t">Смотри списком и сортируй по дате, цене, близости.</div>
           </div>
         </div>
       </section>
@@ -203,7 +202,7 @@
       <section class="inside">
         <h2 class="inside__h">Что внутри</h2>
         <ul class="checks">
-          <li><span class="ck">✓</span><span><b class="js-count">21&nbsp;100</b>+ событий по всей стране</span></li>
+          <li><span class="ck">✓</span><span><b class="js-count">21&nbsp;200</b>+ событий по всей стране</span></li>
           <li><span class="ck">✓</span><span>16 городов России</span></li>
           <li><span class="ck">✓</span><span>Напоминания за 2 часа до начала</span></li>
           <li><span class="ck">✓</span><span>Друзья и совместные события</span></li>
