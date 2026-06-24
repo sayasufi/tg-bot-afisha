@@ -147,10 +147,15 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
 
   return (
     <>
-      {/* Thin dashed acid lines joining the cities into a constellation — behind the pins, non-interactive. */}
+      {/* Thin dashed acid lines joining the cities into a constellation. A faint ink casing under the acid
+          keeps it legible over water/parks; both sit behind the pins and ignore taps. */}
       <Polyline
         positions={constellation}
-        pathOptions={{ color: "#ccff00", weight: 1.3, opacity: 0.82, dashArray: "2 7", lineCap: "round", interactive: false }}
+        pathOptions={{ color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", lineCap: "round", interactive: false }}
+      />
+      <Polyline
+        positions={constellation}
+        pathOptions={{ color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
       />
       {/* Cities whose card was culled (it overlaps a higher-priority one) → a small tappable dot, so a
           hidden city is still visible and reachable. Tapping flies in, where its card has room to show. */}
