@@ -209,6 +209,13 @@ async def get_categories(db: AsyncSession = Depends(get_async_db)):
     return await service.categories()
 
 
+@router.get("/categories/covers")
+async def get_category_covers(db: AsyncSession = Depends(get_async_db)):
+    """{category: image_url} — a real poster per theme for the onboarding photo-tiles."""
+    service = EventQueryService(db)
+    return await service.category_covers()
+
+
 @router.get("/search")
 async def search(
     q: str = Query(min_length=1, max_length=200),
