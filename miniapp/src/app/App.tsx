@@ -465,6 +465,12 @@ export function App() {
 
   // Gallery ticker line: total + city + can-go-now + the busiest categories.
   const tickerText = useMemo(() => {
+    // Far-zoom city picker (zoom <= 6): one city's category counts are out of context — show the country-wide
+    // line instead (matches the picker caption), so the ticker can't contradict "21 087 событий".
+    if ((zoom ?? 99) <= 6 && cities.length > 1) {
+      const countryTotal = cities.reduce((s, c) => s + c.count, 0);
+      return [`${countryTotal.toLocaleString("ru-RU")} СОБЫТИЙ`, `${cities.length} ГОРОДОВ`, "ВСЯ РОССИЯ", "ОКРЕСТ"].join(" ● ");
+    }
     const segs = [`${shownTotal} СОБЫТИЙ`, (currentCity?.name ?? "Город").toUpperCase(), "ОКРЕСТ"];
     if (liveCount > 0) segs.push(`МОЖНО ПОЙТИ ${liveCount}`);
     const counts: Record<string, number> = {};
@@ -474,7 +480,7 @@ export function App() {
       .slice(0, 3)
       .forEach(([k, n]) => segs.push(`${categoryMeta(k).label.toUpperCase()} ${n}`));
     return segs.join(" ● ");
-  }, [shownItems, shownTotal, liveCount, currentCity?.name]);
+  }, [shownItems, shownTotal, liveCount, currentCity?.name, zoom, cities]);
 
   // Load metro stations (for the nearest-station label + map ping). Only Moscow has a baked
   // metro layer for now, so other cities get an empty set — no wrong Moscow station on a SPb
