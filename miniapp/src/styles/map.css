@@ -336,6 +336,8 @@ html[data-theme="dark"] .vpin--active::before {
 }
 @media (prefers-reduced-motion: reduce) {
   .vcity__glow,
+  .vcity__pin,
+  .vcity-dot,
   .leaflet-overlay-pane path {
     animation: none;
   }
@@ -350,10 +352,15 @@ html[data-theme="dark"] .vpin--active::before {
   border-radius: 50%;
   background: var(--ink);
   box-shadow: 0 0 0 2.5px var(--bg), 0 1px 3px rgba(11, 11, 11, 0.4);
+  animation: pinPulse 3.6s ease-in-out var(--gd, 0s) infinite;
+}
+@keyframes pinPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.16); }
 }
 .vcity__lab {
   position: absolute;
-  left: 10px;
+  left: calc(var(--r, 12px) / 2 + 7px);
   top: 0;
   transform: translateY(-50%);
   display: flex;
@@ -396,13 +403,14 @@ html[data-theme="dark"] .vpin--active::before {
   position: absolute;
   left: 0;
   top: 0;
-  width: 7.5px;
-  height: 7.5px;
+  width: 9px;
+  height: 9px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: var(--ink);
   box-shadow: 0 0 0 2.5px var(--bg), 0 1px 3px rgba(11, 11, 11, 0.4);
   cursor: pointer;
+  animation: pinPulse 3.6s ease-in-out infinite;
 }
 .vcity-dot::before {
   content: "";

@@ -106,15 +106,16 @@ function countCluster(count: number): L.DivIcon {
 export function cityIcon(name: string, count: number, active = false): L.DivIcon {
   const safe = name.replace(/[<>&"]/g, "");
   const n = count >= 1000 ? `${Math.round(count / 100) / 10}k` : String(count);
-  const r = count >= 5000 ? 13 : count >= 1500 ? 11 : count >= 600 ? 9 : 7.5;
+  const r = count >= 5000 ? 15 : count >= 1500 ? 12.5 : count >= 600 ? 10.5 : 9; // bigger dots overall
   const g = count >= 5000 ? 72 : count >= 1500 ? 56 : count >= 600 ? 44 : 34; // soft activity glow, sized by events
   const gd = ((count % 36) / 10).toFixed(1); // varied pulse phase so the cities don't all breathe in sync
+  // --r + --gd on the parent so BOTH the pin (size + pulse) and the label (offset) read them.
   return L.divIcon({
     className: "vcity-wrap",
     html:
-      `<div class="vcity${active ? " vcity--active" : ""}">` +
-      `<span class="vcity__glow" style="--g:${g}px;--gd:${gd}s"></span>` +
-      `<span class="vcity__pin" style="--r:${r}px"></span>` +
+      `<div class="vcity${active ? " vcity--active" : ""}" style="--gd:${gd}s;--r:${r}px">` +
+      `<span class="vcity__glow" style="--g:${g}px"></span>` +
+      `<span class="vcity__pin"></span>` +
       `<span class="vcity__lab"><b class="vcity__name">${safe}</b><span class="vcity__count">${n}</span></span>` +
       `</div>`,
     iconSize: [0, 0],
