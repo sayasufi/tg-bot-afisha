@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 
-const allowedHosts = ["okrestmap.ru", "www.okrestmap.ru", "tgbot-afisha.ru", "www.tgbot-afisha.ru"];
+const allowedHosts = ["okrestmap.ru", "www.okrestmap.ru", "app.okrestmap.ru", "tgbot-afisha.ru", "www.tgbot-afisha.ru"];
 
 export default defineConfig({
   server: {
