@@ -42,12 +42,12 @@ export function Onboarding({ onClose }: { onClose: (interests: string[]) => void
                 key={c.key}
                 type="button"
                 className={`onboard__cat${on ? " onboard__cat--active" : ""}`}
-                style={{ animationDelay: `${0.04 * i + 0.04}s` }}
+                style={{ animationDelay: `${0.04 * i + 0.04}s`, ["--cat" as string]: c.color }}
                 aria-pressed={on}
                 onClick={() => toggle(c.key)}
               >
                 <span className="onboard__caticon" aria-hidden="true">
-                  <CategoryIcon cat={c.key} size={24} />
+                  <CategoryIcon cat={c.key} size={25} />
                 </span>
                 <span className="onboard__catlabel">{c.label}</span>
               </button>
