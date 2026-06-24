@@ -369,9 +369,10 @@ html[data-theme="dark"] .aurora::before {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(11, 11, 11, 0.66);
-  -webkit-backdrop-filter: blur(4px) saturate(1.08);
-  backdrop-filter: blur(4px) saturate(1.08);
+  /* Flat ink dim — NO backdrop blur. Blurring the live map underneath is GPU-heavy
+     (re-blurs every frame → jank on mid/low-end phones) AND off-brand (we dropped
+     glassmorphism for flat). A solid dim is smooth everywhere and keeps the sheet focal. */
+  background: rgba(11, 11, 11, 0.72);
   animation: fadeIn 0.2s ease both;
 }
 
