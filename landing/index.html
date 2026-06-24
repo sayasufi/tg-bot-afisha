@@ -76,7 +76,7 @@
 
       /* hero map — Russia with the 16 cities (events map at a glance) */
       .map {
-        position: relative; aspect-ratio: 16 / 11; background: #fff;
+        position: relative; aspect-ratio: 16 / 10; background: #fff;
         box-shadow: inset 0 0 0 1px var(--ink), 4px 4px 0 rgba(11, 11, 11, 0.08);
         background-image:
           linear-gradient(rgba(11, 11, 11, 0.05) 1px, transparent 1px),
@@ -87,13 +87,13 @@
       .map__tag { position: absolute; left: 12px; top: 11px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); }
       .city { position: absolute; transform: translate(-50%, -50%); }
       .city__d { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px #fff; }
-      .city__l { position: absolute; left: 11px; top: -7px; white-space: nowrap; }
-      .city--lft .city__l { left: auto; right: 11px; text-align: right; }
-      .city__n { display: block; font-family: var(--grotesk); font-weight: 700; font-size: 11px; line-height: 1.1; }
-      .city__c { font-family: var(--mono); font-size: 10px; color: var(--ink-dim); }
+      .city__l { position: absolute; left: 12px; top: -13px; white-space: nowrap; }
+      .city--lft .city__l { left: auto; right: 12px; text-align: right; }
+      .city__n { display: block; font-family: var(--grotesk); font-weight: 700; font-size: 11px; line-height: 1.15; }
+      .city__c { display: block; margin-top: 1px; font-family: var(--mono); font-size: 10px; color: var(--ink-dim); }
       /* Moscow — the dominant, glowing acid node */
       .city--msk .city__d { width: 16px; height: 16px; background: var(--acid); box-shadow: 0 0 0 2px var(--ink), 0 0 22px 6px rgba(204, 255, 0, 0.7); }
-      .city--msk .city__l { left: 16px; top: -10px; }
+      .city--msk .city__l { left: 17px; top: -16px; }
       .city--msk .city__n { font-size: 13px; }
       .city--msk .city__c { color: var(--ink); font-weight: 600; }
 
@@ -179,24 +179,24 @@
         <div class="hero__media">
           <div class="map" aria-label="Карта городов Окреста">
             <span class="map__tag">16 городов · вся Россия</span>
-            <!-- labelled cities (name + count) -->
-            <span class="city city--msk" style="left:13%;top:31%"><span class="city__d"></span><span class="city__l"><span class="city__n">Москва</span><span class="city__c">8.6k событий</span></span></span>
-            <span class="city" style="left:6%;top:9%"><span class="city__d"></span><span class="city__l"><span class="city__n">Санкт-Петербург</span><span class="city__c">4.9k</span></span></span>
-            <span class="city" style="left:31%;top:31%"><span class="city__d"></span><span class="city__l"><span class="city__n">Казань</span><span class="city__c">672</span></span></span>
-            <span class="city" style="left:49%;top:23%"><span class="city__d"></span><span class="city__l"><span class="city__n">Екатеринбург</span><span class="city__c">1.1k</span></span></span>
-            <span class="city city--lft" style="left:82%;top:35%"><span class="city__d"></span><span class="city__l"><span class="city__n">Новосибирск</span><span class="city__c">686</span></span></span>
-            <span class="city city--lft" style="left:93%;top:29%"><span class="city__d"></span><span class="city__l"><span class="city__n">Красноярск</span><span class="city__c">547</span></span></span>
-            <span class="city" style="left:15%;top:86%"><span class="city__d"></span><span class="city__l"><span class="city__n">Краснодар</span><span class="city__c">578</span></span></span>
-            <!-- unlabelled dots -->
-            <span class="city city--dim" style="left:22%;top:26%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:33%;top:46%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:42%;top:37%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:43%;top:15%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:51%;top:34%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:69%;top:35%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:24%;top:74%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:16%;top:57%"><span class="city__d"></span></span>
-            <span class="city city--dim" style="left:17%;top:82%"><span class="city__d"></span></span>
+            <!-- labelled cities — balanced spread across the frame (not pixel-accurate; designed for read) -->
+            <span class="city" style="left:10%;top:17%"><span class="city__d"></span><span class="city__l"><span class="city__n">Санкт-Петербург</span><span class="city__c">4.9k</span></span></span>
+            <span class="city" style="left:53%;top:20%"><span class="city__d"></span><span class="city__l"><span class="city__n">Екатеринбург</span><span class="city__c">1.1k</span></span></span>
+            <span class="city city--lft" style="left:90%;top:27%"><span class="city__d"></span><span class="city__l"><span class="city__n">Красноярск</span><span class="city__c">547</span></span></span>
+            <span class="city city--msk" style="left:18%;top:47%"><span class="city__d"></span><span class="city__l"><span class="city__n">Москва</span><span class="city__c">8.6k событий</span></span></span>
+            <span class="city" style="left:40%;top:45%"><span class="city__d"></span><span class="city__l"><span class="city__n">Казань</span><span class="city__c">672</span></span></span>
+            <span class="city city--lft" style="left:77%;top:51%"><span class="city__d"></span><span class="city__l"><span class="city__n">Новосибирск</span><span class="city__c">686</span></span></span>
+            <span class="city" style="left:20%;top:85%"><span class="city__d"></span><span class="city__l"><span class="city__n">Краснодар</span><span class="city__c">578</span></span></span>
+            <span class="city" style="left:46%;top:72%"><span class="city__d"></span><span class="city__l"><span class="city__n">Самара</span><span class="city__c">333</span></span></span>
+            <!-- unlabelled dots — fill the field -->
+            <span class="city city--dim" style="left:30%;top:33%"><span class="city__d"></span></span>
+            <span class="city city--dim" style="left:47%;top:31%"><span class="city__d"></span></span>
+            <span class="city city--dim" style="left:58%;top:40%"><span class="city__d"></span></span>
+            <span class="city city--dim" style="left:64%;top:33%"><span class="city__d"></span></span>
+            <span class="city city--dim" style="left:70%;top:41%"><span class="city__d"></span></span>
+            <span class="city city--dim" style="left:25%;top:64%"><span class="city__d"></span></span>
+            <span class="city city--dim" style="left:35%;top:79%"><span class="city__d"></span></span>
+            <span class="city city--dim" style="left:60%;top:64%"><span class="city__d"></span></span>
           </div>
         </div>
       </section>
