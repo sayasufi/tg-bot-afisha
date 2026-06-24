@@ -47,12 +47,13 @@ _LABEL_TO_CATEGORY: dict[str, str] = {
     "kids": "kids", "детям": "kids", "дети": "kids", "children": "kids",
 }
 
-# When a source carries several mappable labels, the most specific wins. `kids`
-# is highest so a children's show/excursion/film surfaces under the family
-# filter rather than being buried under theatre/tour/cinema; `quest` sits just
-# below it (a kids quest is still best found under «Детям»).
+# When a source carries several mappable labels, the most specific wins. `quest`
+# is highest: a quest IS the activity (an escape room) — a quest-seeker won't find
+# it under «Детям», so a kid-friendly «нестрашный квест» belongs in quest, not kids.
+# `kids` sits just below, so a children's show / excursion / film still surfaces
+# under the family filter rather than being buried under theatre/tour/cinema.
 _PRIORITY = (
-    "kids", "quest", "standup", "concert", "theatre", "cinema",
+    "quest", "kids", "standup", "concert", "theatre", "cinema",
     "exhibition", "festival", "tour", "lecture", "party",
 )
 

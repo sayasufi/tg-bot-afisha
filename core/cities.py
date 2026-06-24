@@ -24,6 +24,7 @@ class CityConfig:
     # cross-oblast festival (~330 km) yet far short of another city (SPb 635 km) or
     # transposed/foreign coords (Caspian/Almaty >1000 km).
     region_radius_km: float = 350.0
+    city_id: int | None = None  # ref.cities.city_id — bridges DB-keyed sources (Telegram channels) to this registry
 
 
 CITIES: dict[str, CityConfig] = {
@@ -37,10 +38,11 @@ CITIES: dict[str, CityConfig] = {
         afisha_city="msk",
         active=True,
         center=(55.75582, 37.61764),
+        city_id=1,
     ),
-    # ACTIVE (Phase 1): ingested via the per-city kudago + yandex fetch flows that loop
-    # active_cities(). Telegram channels, afisha.ru (needs the SPb GraphQL city id) and
-    # Timepad stay Moscow-only for now (Phase 2).
+    # ACTIVE: ingested via the per-city kudago/yandex/timepad/afisha fetch flows AND its own
+    # Telegram venue channels (ref.cities city_id=3). afisha date-RESOLUTION stays Moscow-only
+    # (its GraphQL schedule filter uses Moscow's City_2), so SPb afisha keeps listing spans for now.
     "spb": CityConfig(
         slug="spb",
         name="Санкт-Петербург",
@@ -51,6 +53,7 @@ CITIES: dict[str, CityConfig] = {
         afisha_city="spb",
         active=True,
         center=(59.93863, 30.31413),
+        city_id=3,
     ),
 }
 
@@ -91,12 +94,17 @@ def city_by_name(name: str | None) -> CityConfig | None:
 
 
 def city_for_source_config(config: dict | None) -> CityConfig:
-    """Resolve a city from a source's config_json (it stores a Yandex `city` or
-    KudaGo `location` slug). Falls back to the default city."""
+    """Resolve a city from a source's config_json — a Yandex `city` / KudaGo `location`
+    slug, or a Telegram channel's numeric `city_id` (ref.cities PK). Falls back to default."""
     if isinstance(config, dict):
         token = config.get("city") or config.get("location")
         if token:
             for city in CITIES.values():
                 if token in (city.slug, city.kudago_location, city.yandex_city):
+                    return city
+        cid = config.get("city_id")
+        if cid is not None:
+            for city in CITIES.values():
+                if city.city_id == cid:
                     return city
     return DEFAULT_CITY

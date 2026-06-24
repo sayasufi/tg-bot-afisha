@@ -8,9 +8,9 @@ import { CatalogFeed } from "./CatalogFeed";
 
 const PAGE = 20;
 const SORTS: { key: ListSort; label: string }[] = [
+  { key: "popularity", label: "Популярные" },
   { key: "date", label: "По дате" },
   { key: "distance", label: "Рядом" },
-  { key: "popularity", label: "Популярные" },
   { key: "price", label: "Дешевле" },
 ];
 
@@ -50,7 +50,7 @@ export function ListView({
   onSelect: (i: EventItem) => void;
   onClose: () => void;
 }) {
-  const [sort, setSort] = useState<ListSort>("date");
+  const [sort, setSort] = useState<ListSort>("popularity");
   const [items, setItems] = useState<EventItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
