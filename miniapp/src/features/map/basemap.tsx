@@ -117,6 +117,18 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
       for (const layer of layers) {
         if (layer.type !== "symbol" || !layer.layout || layer.layout["text-field"] == null) continue;
         if (layer.id === "ofm-housenumbers" || layer["source-layer"] === "housenumber") continue;
+        // Road-ref SHIELDS draw a sprite badge (a white box) + the road number as text. Re-pointing
+        // their text-field to the cyrillic NAME — which a shield doesn't have (it carries `ref`) —
+        // blanks the number and leaves an empty white badge scattered along the roads (the "пустые
+        // белые прямоугольники"). The gallery basemap is pure text, so drop the shields entirely.
+        if (layer.layout["icon-image"] != null && JSON.stringify(layer.layout["text-field"]).includes('"ref"')) {
+          try {
+            mlMap.setLayoutProperty(layer.id, "visibility", "none");
+          } catch {
+            /* layer rejects the override — leave it */
+          }
+          continue;
+        }
         try {
           mlMap.setLayoutProperty(layer.id, "text-field", cyrillic);
           // "Vinyl" labels with a paper halo — gallery wall-text, inverted after dark.
