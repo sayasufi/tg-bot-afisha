@@ -51,7 +51,7 @@
       href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
     />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <style>
       :root {
         --paper: #f4f4ef;
@@ -392,20 +392,23 @@
         });
       }
 
-      var heroMap = initHeroMap();
-      fetch("/v1/cities")
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          if (!d || !d.cities) return;
-          var total = d.cities.reduce(function (s, c) { return s + (c.count || 0); }, 0);
-          if (total > 1000) {
-            var txt = (Math.floor(total / 100) * 100).toLocaleString("ru-RU");
-            document.querySelectorAll(".js-count").forEach(function (el) { el.textContent = txt; });
-            document.querySelectorAll(".hmticker__t").forEach(function (el) { el.textContent = txt + " СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ"; });
-          }
-          renderCities(heroMap, d.cities);
-        })
-        .catch(function () {});
+      // Leaflet is deferred (doesn't block first paint), so init the map once the DOM is parsed.
+      window.addEventListener("DOMContentLoaded", function () {
+        var heroMap = initHeroMap();
+        fetch("/v1/cities")
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.cities) return;
+            var total = d.cities.reduce(function (s, c) { return s + (c.count || 0); }, 0);
+            if (total > 1000) {
+              var txt = (Math.floor(total / 100) * 100).toLocaleString("ru-RU");
+              document.querySelectorAll(".js-count").forEach(function (el) { el.textContent = txt; });
+              document.querySelectorAll(".hmticker__t").forEach(function (el) { el.textContent = txt + " СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ"; });
+            }
+            renderCities(heroMap, d.cities);
+          })
+          .catch(function () {});
+      });
     </script>
   </body>
 </html>
