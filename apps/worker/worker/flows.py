@@ -12,6 +12,21 @@ _RETRIES = 2
 _RETRY_DELAY = 30  # seconds
 
 
+# --- adstat (рекламный ресёрч каналов) ---------------------------------------
+
+@flow(name="scrape-adstat", retries=1, retry_delay_seconds=120, timeout_seconds=3600, log_prints=True)
+async def scrape_adstat():
+    """Daily: скрап статистики каналов-кандидатов (Telemetr/TGStat) в схему adstat.
+    No-op при ADSTAT_ENABLED=false или отсутствии куки-сессии."""
+    import asyncio
+
+    from apps.worker.worker.adstat.service import scrape
+
+    rows = await asyncio.to_thread(scrape)
+    ok = sum(1 for r in rows if not r.get("error"))
+    return {"rows": len(rows), "ok": ok}
+
+
 # --- fetch (sources) ---------------------------------------------------------
 
 @flow(name="fetch-kudago", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)

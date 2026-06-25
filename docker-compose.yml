@@ -103,6 +103,17 @@ services:
     volumes:
       - meili_data:/meili_data
 
+  # Cloudflare-solver для adstat-скрапера TGStat: реальный браузер на СЕРВЕРНОМ IP решает challenge
+  # (cf_clearance из браузера владельца привязан к его IP и на сервере не годится). Loopback-only; воркер
+  # ходит на flaresolverr:8191 по compose-сети. Простаивает, пока ADSTAT_TGSTAT_ENABLED=false.
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: warning
+    ports:
+      - "127.0.0.1:8191:8191"
+
   api:
     build:
       context: .

@@ -1,0 +1,49 @@
+"""Standalone-раннер скрапера adstat.
+
+Примеры:
+  python -m apps.worker.worker.adstat.run --dry-run kudago mscculture   # скрап без записи в БД (печать JSON)
+  python -m apps.worker.worker.adstat.run kudago mscculture             # скрап + запись в adstat
+  python -m apps.worker.worker.adstat.run                               # все активные adstat.targets → БД
+
+Куки: ADSTAT_COOKIES_PATH (Netscape-экспорт залогиненной сессии). Запись в БД требует ADSTAT_ENABLED=true.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+
+from apps.worker.worker.adstat.service import scrape
+
+
+def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # Windows-консоль печатает кириллицу/эмодзи без падений
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    ap = argparse.ArgumentParser(description="adstat channel scraper")
+    ap.add_argument("usernames", nargs="*", help="@username каналов (пусто → активные adstat.targets)")
+    ap.add_argument("--discover", action="store_true", help="автопоиск афиша-каналов → targets + снимки")
+    ap.add_argument("--min-subs", type=int, default=2000, help="порог подписчиков для discovery")
+    ap.add_argument("--dry-run", action="store_true", help="не писать в БД, напечатать результаты")
+    args = ap.parse_args()
+
+    if args.discover:
+        from apps.worker.worker.adstat.discover import discover
+        rows = discover(min_subscribers=args.min_subs, dry_run=args.dry_run)
+        if args.dry_run:
+            print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
+        else:
+            print(f"adstat discover: {len(rows)} каналов → targets + снимки")
+        return
+
+    rows = scrape(usernames=args.usernames or None, dry_run=args.dry_run)
+    if args.dry_run:
+        print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
+    else:
+        ok = sum(1 for r in rows if not r.get("error"))
+        print(f"adstat: {ok}/{len(rows)} снимков записано")
+
+
+if __name__ == "__main__":
+    main()

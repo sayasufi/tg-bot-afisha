@@ -17,6 +17,9 @@ celerybeat-schedule
 
 # Personal browser cookie export — never commit
 cookies.txt
+# adstat scraper session cookies (Telemetr/TGStat) — server secret, never commit
+secrets/
+*cookies*.txt
 
 # Playwright MCP browser scratch
 .playwright-mcp/

@@ -70,6 +70,20 @@ class Settings(BaseSettings):
     default_city: str = Field(default="Москва", alias="DEFAULT_CITY")
     default_country: str = Field(default="RU", alias="DEFAULT_COUNTRY")
 
+    # adstat — рекламный ресёрч TG-каналов (изолированная схема adstat). Off by default; скрапер
+    # читает залогиненную сессию из cookies-файла (Netscape). Telemetr — чистый JSON-API, без
+    # Cloudflare, работает на сервере с одной сессией. TGStat за Cloudflare (cf_clearance привязан
+    # к IP) → на сервере выключен по умолчанию; включать только при наличии валидного clearance.
+    adstat_enabled: bool = Field(default=False, alias="ADSTAT_ENABLED")
+    adstat_cookies_path: str = Field(default="/app/secrets/adstat_cookies.txt", alias="ADSTAT_COOKIES_PATH")
+    adstat_telemetr_enabled: bool = Field(default=True, alias="ADSTAT_TELEMETR_ENABLED")
+    adstat_tgstat_enabled: bool = Field(default=False, alias="ADSTAT_TGSTAT_ENABLED")
+    adstat_delay_sec: float = Field(default=1.2, alias="ADSTAT_DELAY_SEC")
+    # FlareSolverr — прокси, решающий Cloudflare-challenge реальным браузером на СЕРВЕРНОМ IP.
+    # Нужен, чтобы TGStat работал на сервере (cf_clearance из браузера владельца привязан к его IP).
+    # Пусто → TGStat ходит напрямую curl_cffi (только при валидном clearance, т.е. локально).
+    adstat_flaresolverr_url: str = Field(default="", alias="ADSTAT_FLARESOLVERR_URL")
+
     # MinIO (S3-compatible) object storage for cached event images.
     minio_endpoint: str = Field(default="http://minio:9000", alias="MINIO_ENDPOINT")
     minio_access_key: str = Field(default="okrest", alias="MINIO_ROOT_USER")
