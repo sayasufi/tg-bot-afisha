@@ -92,36 +92,40 @@ def _afisha_seeds(limit: int = 60) -> list[str]:
         ).scalars().all())
 
 
-async def _crawl(seeds: list[str], max_channels: int, with_metrics: bool) -> list[dict]:
+async def _crawl(seeds: list[str], max_channels: int, sink=None) -> int:
+    """Interleaved BFS по рекомендациям: на каждый канал снимаем метрики + тянем «похожих»,
+    батч (20) сбрасываем в БД через sink — инкрементально, устойчиво к обрыву/таймауту."""
     client = _make_client()
     if client is None:
         log.warning("telethon: нет TELETHON_SESSION/api — пропуск")
-        return []
+        return 0
     await client.connect()
     try:
         if not await client.is_user_authorized():
             log.warning("telethon: сессия не авторизована")
-            return []
+            return 0
         found: set[str] = set()
         queue = list(dict.fromkeys(s.lstrip("@") for s in seeds))
-        # BFS по рекомендациям Telegram
+        batch: list[dict] = []
+        done = 0
         while queue and len(found) < max_channels:
             u = queue.pop(0)
             if u in found:
                 continue
             found.add(u)
+            m = await _metrics(client, u)
+            if not m.get("error"):
+                batch.append(m)
             for r in await _recs(client, u):
                 if r not in found and r not in queue:
                     queue.append(r)
+            if sink and len(batch) >= 20:
+                sink(batch); done += len(batch); batch = []
+                log.info("telethon bootstrap: записано %d, найдено %d, очередь %d", done, len(found), len(queue))
             await asyncio.sleep(0.25)
-        usernames = list(found)[:max_channels]
-        if not with_metrics:
-            return [{"source": "telethon", "username": u} for u in usernames]
-        out = []
-        for u in usernames:
-            out.append(await _metrics(client, u))
-            await asyncio.sleep(0.25)
-        return out
+        if sink and batch:
+            sink(batch); done += len(batch)
+        return done if sink else len(found)
     finally:
         await client.disconnect()
 
@@ -143,24 +147,25 @@ async def _enrich(usernames: list[str]) -> list[dict]:
         await client.disconnect()
 
 
-def discover_telethon(seeds: list[str] | None = None, max_channels: int = 400, dry_run: bool = False) -> list[dict]:
-    """Развернуть афиша-граф через рекомендации Telegram + снять метрики. seeds=None → афиша-таргеты."""
+def discover_telethon(seeds: list[str] | None = None, max_channels: int = 400, dry_run: bool = False) -> int:
+    """Развернуть афиша-граф через рекомендации Telegram + снять метрики (инкрементальная запись).
+    seeds=None → афиша-таргеты. Возвращает число записанных каналов."""
     settings = get_settings()
     if not dry_run and not settings.adstat_enabled:
         log.info("adstat telethon: ADSTAT_ENABLED=false — пропуск")
-        return []
+        return 0
     seeds = seeds or _afisha_seeds()
     if not seeds:
         log.warning("adstat telethon: нет сидов")
-        return []
-    rows = asyncio.run(_crawl(seeds, max_channels, with_metrics=True))
-    ok = [r for r in rows if not r.get("error")]
-    log.info("adstat telethon discover: %d каналов (из %d сидов, max=%d), %d ok",
-             len(rows), len(seeds), max_channels, len(ok))
-    if not dry_run:
-        upsert_targets([{"username": r["username"], "city": None} for r in ok])
-        persist_snapshots(ok)
-    return rows
+        return 0
+
+    def sink(batch: list[dict]) -> None:
+        upsert_targets([{"username": r["username"], "city": None} for r in batch])
+        persist_snapshots(batch)
+
+    n = asyncio.run(_crawl(seeds, max_channels, sink=None if dry_run else sink))
+    log.info("adstat telethon discover: %d каналов (из %d сидов, max=%d)", n, len(seeds), max_channels)
+    return n
 
 
 def enrich_telethon(usernames: list[str], dry_run: bool = False) -> list[dict]:

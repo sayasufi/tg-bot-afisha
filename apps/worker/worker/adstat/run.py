@@ -45,12 +45,8 @@ def main() -> None:
 
     if args.telethon:
         from apps.worker.worker.adstat.telethon_src import discover_telethon
-        rows = discover_telethon(max_channels=args.max_channels, dry_run=args.dry_run)
-        if args.dry_run:
-            print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
-        else:
-            ok = sum(1 for r in rows if not r.get("error"))
-            print(f"adstat telethon: {len(rows)} каналов ({ok} ok) → targets + снимки")
+        n = discover_telethon(max_channels=args.max_channels, dry_run=args.dry_run)
+        print(f"adstat telethon: записано {n} каналов → targets + снимки")
         return
 
     if args.telega:

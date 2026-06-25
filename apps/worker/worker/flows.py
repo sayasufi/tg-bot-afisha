@@ -45,9 +45,8 @@ async def discover_telethon_flow():
 
     from apps.worker.worker.adstat.telethon_src import discover_telethon
 
-    rows = await asyncio.to_thread(discover_telethon, None, 400, False)
-    ok = sum(1 for r in rows if not r.get("error"))
-    return {"found": len(rows), "ok": ok}
+    n = await asyncio.to_thread(discover_telethon, None, 400, False)
+    return {"written": n}
 
 
 @flow(name="discover-telega", retries=1, retry_delay_seconds=300, timeout_seconds=5400, log_prints=True)
