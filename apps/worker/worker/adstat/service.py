@@ -141,7 +141,7 @@ def persist_snapshots(rows: list[dict]) -> None:
             db.add(AdSnapshot(
                 channel_id=channel_id, source=d["source"], captured_at=now,
                 subscribers=d.get("subscribers"), er=d.get("er"), err=d.get("err"),
-                post_price=d.get("post_price"),
+                post_price=d.get("post_price"), cpm=d.get("cpm"), rating=d.get("rating"),
                 avg_reach=d.get("avg_reach"), quality_score=d.get("quality_score"),
                 premium_subs=d.get("premium_subs"), month_growth=d.get("month_growth"),
                 mentions=d.get("mentions"), is_scam=d.get("is_scam"), is_boosting=d.get("is_boosting"),

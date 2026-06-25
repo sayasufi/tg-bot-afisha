@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 from core.config.settings import get_settings
@@ -75,10 +76,25 @@ def discover(min_subscribers: int = 2000, dry_run: bool = False) -> list[dict]:
     return rows
 
 
-def discover_telega(category_id: int = 52, max_pages: int = 60,
-                    with_prices: bool = True, dry_run: bool = False) -> list[dict]:
-    """Telega.in: каталог афиша-категории (тысячи каналов) + реальная цена размещения поста.
-    category_id=52 = «Культура и события» (Афиша/Концерты/Выставки/Музеи)."""
+# Категория 52 «Культура и события» широкая — в неё попадают и крупные новостники.
+# Оставляем только афиша/культура-релевантные по названию (точность важнее полноты).
+_AFISHA_RE = re.compile(
+    r"афиш|afish|событи|куда[ _](?:сход|пойти|пойд|ид)|концерт|выставк|театр|кино|"
+    r"фестивал|стендап|stand[- ]?up|вечеринк|тусовк|музе|спектакл|мероприят|развлеч|"
+    r"досуг|гастрол|экскурс|лектори|перформанс|джаз|рейв|\bparty\b|\bevent",
+    re.I,
+)
+
+
+def _is_afisha(r: dict) -> bool:
+    t = (r.get("title") or "") + " " + (r.get("username") or "")
+    return bool(_AFISHA_RE.search(t))
+
+
+def discover_telega(category_id: int = 52, max_pages: int = 60, with_prices: bool = True,
+                    afisha_only: bool = True, dry_run: bool = False) -> list[dict]:
+    """Telega.in: каталог афиша-категории + реальная цена размещения + CPM.
+    category_id=52 = «Культура и события»; afisha_only отсекает новостники по названию."""
     settings = get_settings()
     if not dry_run and not settings.adstat_enabled:
         log.info("adstat discover_telega: ADSTAT_ENABLED=false — пропуск")
@@ -87,9 +103,16 @@ def discover_telega(category_id: int = 52, max_pages: int = 60,
 
     client = TelegaClient()
     rows = client.discover(category_id, max_pages)
+    total = len(rows)
+    if afisha_only:
+        rows = [r for r in rows if _is_afisha(r)]
     if with_prices and rows:
         rows = client.enrich_prices(rows)
-    log.info("adstat discover_telega: %d каналов (cat=%d, цены=%s)", len(rows), category_id, with_prices)
+    for r in rows:  # CPM = цена / охват × 1000
+        if r.get("post_price") and r.get("avg_reach"):
+            r["cpm"] = round(r["post_price"] / r["avg_reach"] * 1000, 1)
+    log.info("adstat discover_telega: %d/%d афиша-каналов (cat=%d, цены=%s)",
+             len(rows), total, category_id, with_prices)
     if not dry_run:
         upsert_targets([{"username": r["username"], "city": None} for r in rows])
         persist_snapshots(rows)

@@ -49,11 +49,16 @@ class TelegaClient:
                 return m.group(1) if m else None
 
             cnt, reach, err = g("data-count"), g("data-avg-post-reach"), g("data-err-percent")
+            rating = g("data-raiting")
+            mt = re.search(r'channel_title[\s\S]{0,140}?title="([^"]+)"', chunk)
+            title = mt.group(1) if mt else None
             out[u] = {
-                "source": self.SOURCE, "username": u,
+                "source": self.SOURCE, "username": u, "title": title,
                 "subscribers": int(float(cnt)) if cnt else None,
                 "avg_reach": int(float(reach)) if reach else None,
-                "err": _f(err),
+                "err": _f(err), "rating": _f(rating),
+                "raw": {"telega_catalog": {"subscribers": cnt, "reach": reach, "err": err,
+                                           "rating": rating, "title": title}},
             }
         return list(out.values())
 
