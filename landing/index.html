@@ -11,22 +11,23 @@
     <meta property="og:title" content="Окрест — афиша на карте" />
     <meta property="og:description" content="21 000+ событий в 16 городах России, прямо в Telegram." />
     <meta property="og:type" content="website" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
       (function () {
         var tg = window.Telegram && window.Telegram.WebApp;
         if (tg && (tg.initData || (tg.platform && tg.platform !== "unknown"))) {
-          // initData lives in the URL hash; the subdomain is a different origin, so carry it forward.
           location.replace("https://app.okrestmap.ru/" + location.search + location.hash);
         }
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600&family=Unbounded:wght@400;700;800&display=swap"
     />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <style>
       :root {
         --paper: #f4f4ef;
@@ -78,7 +79,7 @@
       .cta:active { transform: translate(3px, 3px); box-shadow: inset 0 0 0 1.5px var(--ink); }
       .cta__a { font-family: var(--mono); font-size: 18px; }
 
-      /* big stats — the scale moment */
+      /* big stats */
       .stats { display: flex; gap: 34px; margin-top: 30px; flex-wrap: wrap; }
       .stat__n { font-family: var(--display); font-weight: 800; font-size: clamp(32px, 5.4vw, 48px); letter-spacing: -0.035em; line-height: 0.95; }
       .stat__n em { font-style: normal; color: var(--cinnabar); }
@@ -86,7 +87,7 @@
       .stats__note { margin-top: 16px; font-family: var(--mono); font-size: 12.5px; color: var(--cinnabar); display: inline-flex; align-items: center; gap: 7px; }
       .stats__note::before { content: "↻"; font-size: 14px; }
 
-      /* phone with a real screenshot */
+      /* hero phone */
       .hero__media { display: flex; justify-content: center; align-items: center; }
       .phone { width: 100%; max-width: 212px; padding: 8px; background: var(--ink); border-radius: 30px; box-shadow: 5px 5px 0 rgba(11, 11, 11, 0.14); }
       .phone__screen { border-radius: 22px; overflow: hidden; display: block; background: var(--paper); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
@@ -97,7 +98,68 @@
       }
       .phone--hero .phone__screen { border-radius: 30px; }
 
-      /* demos — three equal blocks */
+      /* === LIVE hero map (pan-only, no zoom, no controls; chrome is decorative + non-clickable) === */
+      .hmwrap { position: relative; aspect-ratio: 1 / 2.04; overflow: hidden; background: #e6eaec; }
+      .heromap { position: absolute; inset: 0; z-index: 1; background: #e6eaec; cursor: grab; }
+      .heromap:active { cursor: grabbing; }
+      .heromap .leaflet-control-container,
+      .heromap .leaflet-control-attribution { display: none !important; }
+      /* flowing acid constellation (only dashed overlay path in this map) */
+      .heromap .leaflet-overlay-pane path { animation: hmDash 1.6s linear infinite; }
+      @keyframes hmDash { to { stroke-dashoffset: -8; } }
+
+      .hvcity-wrap { background: none; }
+      .hvcity { position: absolute; left: 0; top: 0; }
+      .hvcity__glow {
+        position: absolute; left: 0; top: 0; width: var(--g, 40px); height: var(--g, 40px);
+        transform: translate(-50%, -50%); border-radius: 50%;
+        background: radial-gradient(circle, rgba(204, 255, 0, 0.42) 0%, rgba(204, 255, 0, 0.13) 42%, transparent 70%);
+        animation: hmPulse 3.6s ease-in-out var(--gd, 0s) infinite;
+      }
+      @keyframes hmPulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.7; }
+        50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+      }
+      .hvcity__pin {
+        position: absolute; left: 0; top: 0; width: var(--r, 9px); height: var(--r, 9px);
+        transform: translate(-50%, -50%); border-radius: 50%; background: var(--ink);
+        box-shadow: 0 0 0 2.5px #fff, 0 1px 3px rgba(11, 11, 11, 0.4);
+        animation: hmPin 3.6s ease-in-out var(--gd, 0s) infinite;
+      }
+      @keyframes hmPin {
+        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+        50% { transform: translate(-50%, -50%) scale(1.16); }
+      }
+      .hvcity__lab { position: absolute; left: calc(var(--r, 12px) / 2 + 7px); top: 0; transform: translateY(-50%); display: flex; flex-direction: column; line-height: 1.08; white-space: nowrap; }
+      .hvcity__lab b { font-family: var(--grotesk); font-weight: 700; font-size: 12px; letter-spacing: 0.01em; color: var(--ink); text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff, 0 1px 1px #fff; }
+      .hvcity__lab span { font-family: var(--mono); font-weight: 600; font-size: 9.5px; color: var(--ink-dim); text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+      .hvcity--active .hvcity__pin { background: var(--acid); box-shadow: 0 0 0 2px var(--ink), 0 0 0 4.5px #fff, 0 0 14px 2px rgba(204, 255, 0, 0.55); }
+      .hvcity--active .hvcity__lab span { color: var(--cinnabar); }
+
+      /* decorative app chrome over the map — pointer-events:none so it never blocks the pan */
+      .hmchrome, .hmbanner, .hmcredit { position: absolute; z-index: 3; pointer-events: none; }
+      .hmchrome { top: 0; left: 0; right: 0; }
+      .hmbar { display: flex; align-items: center; gap: 6px; padding: 8px 9px; background: #fff; box-shadow: 0 1px 0 rgba(11, 11, 11, 0.08); }
+      .hmbar__menu { font-size: 13px; color: var(--ink); }
+      .hmbar__logo { display: flex; align-items: center; gap: 4px; }
+      .hmbar__logo svg { width: 15px; height: 15px; display: block; }
+      .hmbar__logo b { font-family: var(--display); font-weight: 800; font-size: 12px; letter-spacing: -0.03em; }
+      .hmbar__search { flex: 1; font-family: var(--mono); font-size: 8.5px; color: var(--ink-dim); padding: 5px 7px; box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; overflow: hidden; }
+      .hmbar__q { font-size: 11px; color: var(--ink); }
+      .hmticker { background: var(--ink); overflow: hidden; padding: 3px 0; }
+      .hmticker__track { display: inline-flex; width: max-content; animation: hmMarquee 20s linear infinite; }
+      .hmticker__t { font-family: var(--mono); font-size: 8px; letter-spacing: 0.05em; color: #fff; padding-right: 4px; white-space: nowrap; }
+      .hmticker__t::before { content: "·····"; color: var(--acid); letter-spacing: -1px; padding-right: 8px; }
+      @keyframes hmMarquee { to { transform: translateX(-50%); } }
+      .hmbanner { bottom: 12px; left: 12px; right: 12px; height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink), 1.5px 1.5px 0 rgba(11, 11, 11, 0.16); }
+      .hmbanner b { font-family: var(--grotesk); font-weight: 800; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+      .hmbanner span { font-family: var(--mono); font-size: 8.5px; color: var(--ink-dim); }
+      .hmcredit { bottom: 60px; right: 8px; font-family: var(--mono); font-size: 7px; color: rgba(11, 11, 11, 0.4); }
+      @media (prefers-reduced-motion: reduce) {
+        .hvcity__glow, .hvcity__pin, .heromap .leaflet-overlay-pane path, .hmticker__track { animation: none; }
+      }
+
+      /* demos */
       .demos { padding: 60px 0 26px; }
       .demos__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
       .demos__s { margin-top: 10px; font-size: 16px; color: var(--ink-dim); max-width: 52ch; }
@@ -106,7 +168,7 @@
       .col__k { margin-top: 18px; font-family: var(--mono); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cinnabar); }
       .col__t { margin-top: 8px; font-size: 15px; font-weight: 500; line-height: 1.42; max-width: 23ch; color: #1c1c1a; }
 
-      /* "Что внутри" — proof of value */
+      /* "Что внутри" */
       .inside { padding: 44px 0 20px; }
       .inside__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
       .checks { list-style: none; margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 36px; max-width: 800px; }
@@ -114,7 +176,6 @@
       .checks b { font-weight: 700; }
       .ck { flex: none; width: 25px; height: 25px; display: grid; place-items: center; background: var(--acid); box-shadow: inset 0 0 0 1.5px var(--ink); font-size: 13px; font-weight: 800; }
 
-      /* closing CTA */
       .end { padding: 44px 0 14px; text-align: center; }
       .end__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.8vw, 40px); letter-spacing: -0.035em; }
       .end .cta { margin-top: 24px; }
@@ -170,8 +231,30 @@
 
         <div class="hero__media">
           <div class="phone phone--hero">
-            <div class="phone__screen">
-              <img src="shots/cities.jpg" width="720" height="1548" fetchpriority="high" alt="Карта России с городами в приложении Окрест — 16 городов, 21 000+ событий" />
+            <div class="phone__screen hmwrap">
+              <div id="heromap" class="heromap"></div>
+              <div class="hmchrome" aria-hidden="true">
+                <div class="hmbar">
+                  <span class="hmbar__menu">≡</span>
+                  <span class="hmbar__logo">
+                    <svg viewBox="0 0 100 100"><rect width="100" height="100" rx="24" fill="#ccff00" /><path d="M50 15 C32.9 15 19 28.9 19 46 C19 65 38 77 50 91 C62 77 81 65 81 46 C81 28.9 67.1 15 50 15 Z" fill="#0b0b0b" /><circle cx="50" cy="45" r="15.5" fill="#ccff00" /><circle cx="50" cy="45" r="5" fill="#0b0b0b" /></svg>
+                    <b>ОКРЕСТ</b>
+                  </span>
+                  <span class="hmbar__search">ВСЕ · ВСЕ ДАТЫ</span>
+                  <span class="hmbar__q">⌕</span>
+                </div>
+                <div class="hmticker">
+                  <div class="hmticker__track">
+                    <span class="hmticker__t">21 000 СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ</span>
+                    <span class="hmticker__t">21 000 СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ</span>
+                  </div>
+                </div>
+              </div>
+              <span class="hmcredit" aria-hidden="true">© OSM · CARTO</span>
+              <div class="hmbanner" aria-hidden="true">
+                <b>Выберите город</b>
+                <span><span class="js-count">21 000</span> событий в 16 городах России</span>
+              </div>
             </div>
           </div>
         </div>
@@ -223,7 +306,65 @@
     </div>
 
     <script>
-      // Live event count — sum the per-city counts from the public API. Falls back to the static markup.
+      // Minimum spanning tree over the city points (Prim) — the constellation that joins the cities.
+      function mst(cs) {
+        var n = cs.length; if (n < 2) return [];
+        var inT = [], best = [], from = [], i, k, u, v, a;
+        for (i = 0; i < n; i++) { inT[i] = false; best[i] = Infinity; from[i] = -1; }
+        function d2(p, q) { var dx = p.lat - q.lat, dy = p.lon - q.lon; return dx * dx + dy * dy; }
+        var edges = []; inT[0] = true;
+        for (k = 0; k < n; k++) { best[k] = d2(cs[0], cs[k]); from[k] = 0; }
+        for (a = 1; a < n; a++) {
+          u = -1;
+          for (i = 0; i < n; i++) if (!inT[i] && (u === -1 || best[i] < best[u])) u = i;
+          if (u === -1) break;
+          inT[u] = true;
+          edges.push([[cs[from[u]].lat, cs[from[u]].lon], [cs[u].lat, cs[u].lon]]);
+          for (v = 0; v < n; v++) { if (inT[v]) continue; var dd = d2(cs[u], cs[v]); if (dd < best[v]) { best[v] = dd; from[v] = u; } }
+        }
+        return edges;
+      }
+
+      function initHeroMap() {
+        var el = document.getElementById("heromap");
+        if (!el || !window.L) return null;
+        var map = L.map(el, {
+          zoomControl: false, attributionControl: false, scrollWheelZoom: false, doubleClickZoom: false,
+          touchZoom: false, boxZoom: false, keyboard: false, dragging: true, inertia: true,
+          minZoom: 5, maxZoom: 5, maxBounds: [[40, 16], [70, 104]], maxBoundsViscosity: 1.0,
+        });
+        map.setView([54, 49], 5);
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
+          subdomains: "abcd", minZoom: 5, maxZoom: 5, detectRetina: true, keepBuffer: 4,
+        }).addTo(map);
+        setTimeout(function () { map.invalidateSize(); }, 140);
+        setTimeout(function () { map.invalidateSize(); }, 600);
+        window.addEventListener("resize", function () { map.invalidateSize(); });
+        return map;
+      }
+
+      function renderCities(map, cities) {
+        if (!map) return;
+        var edges = mst(cities);
+        L.polyline(edges, { color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", interactive: false, lineCap: "round" }).addTo(map);
+        L.polyline(edges, { color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", interactive: false, lineCap: "round" }).addTo(map);
+        cities.forEach(function (c) {
+          var active = c.slug === "moscow";
+          var nn = c.count >= 1000 ? (Math.round(c.count / 100) / 10) + "k" : String(c.count);
+          var r = c.count >= 5000 ? 15 : c.count >= 1500 ? 12.5 : c.count >= 600 ? 10.5 : 9;
+          var g = c.count >= 5000 ? 72 : c.count >= 1500 ? 56 : c.count >= 600 ? 44 : 34;
+          var gd = ((c.count % 36) / 10).toFixed(1);
+          var safe = String(c.name).replace(/[<>&"]/g, "");
+          var html =
+            '<div class="hvcity' + (active ? " hvcity--active" : "") + '" style="--gd:' + gd + "s;--r:" + r + 'px">' +
+            '<span class="hvcity__glow" style="--g:' + g + 'px"></span>' +
+            '<span class="hvcity__pin"></span>' +
+            '<span class="hvcity__lab"><b>' + safe + "</b><span>" + nn + "</span></span></div>";
+          L.marker([c.lat, c.lon], { icon: L.divIcon({ className: "hvcity-wrap", html: html, iconSize: [0, 0], iconAnchor: [0, 0] }), interactive: false, keyboard: false }).addTo(map);
+        });
+      }
+
+      var heroMap = initHeroMap();
       fetch("/v1/cities")
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
@@ -232,7 +373,9 @@
           if (total > 1000) {
             var txt = (Math.floor(total / 100) * 100).toLocaleString("ru-RU");
             document.querySelectorAll(".js-count").forEach(function (el) { el.textContent = txt; });
+            document.querySelectorAll(".hmticker__t").forEach(function (el) { el.textContent = txt + " СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ"; });
           }
+          renderCities(heroMap, d.cities);
         })
         .catch(function () {});
     </script>
