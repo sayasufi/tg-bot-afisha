@@ -73,3 +73,24 @@ def discover(min_subscribers: int = 2000, dry_run: bool = False) -> list[dict]:
         upsert_targets(targets)
         persist_snapshots(rows)
     return rows
+
+
+def discover_telega(category_id: int = 52, max_pages: int = 60,
+                    with_prices: bool = True, dry_run: bool = False) -> list[dict]:
+    """Telega.in: каталог афиша-категории (тысячи каналов) + реальная цена размещения поста.
+    category_id=52 = «Культура и события» (Афиша/Концерты/Выставки/Музеи)."""
+    settings = get_settings()
+    if not dry_run and not settings.adstat_enabled:
+        log.info("adstat discover_telega: ADSTAT_ENABLED=false — пропуск")
+        return []
+    from apps.worker.worker.adstat.telega import TelegaClient
+
+    client = TelegaClient()
+    rows = client.discover(category_id, max_pages)
+    if with_prices and rows:
+        rows = client.enrich_prices(rows)
+    log.info("adstat discover_telega: %d каналов (cat=%d, цены=%s)", len(rows), category_id, with_prices)
+    if not dry_run:
+        upsert_targets([{"username": r["username"], "city": None} for r in rows])
+        persist_snapshots(rows)
+    return rows

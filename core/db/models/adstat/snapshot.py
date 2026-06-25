@@ -24,6 +24,7 @@ class AdSnapshot(Base):
     source: Mapped[str] = mapped_column(Text, nullable=False)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     subscribers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    post_price: Mapped[float | None] = mapped_column(Float, nullable=True)  # цена размещения, ₽ (Telega.in)
     er: Mapped[float | None] = mapped_column(Float, nullable=True)
     err: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_reach: Mapped[int | None] = mapped_column(Integer, nullable=True)

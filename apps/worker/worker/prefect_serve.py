@@ -70,6 +70,7 @@ _SCHEDULE = [
     # Рекламный ресёрч каналов (схема adstat). Discovery еженедельно (ищет новые афиша-каналы по 16
     # городам), лёгкий рефреш статистики — ежедневно (только Telemetr). No-op, пока ADSTAT_ENABLED=false.
     (flows.discover_adstat, 604800),
+    (flows.discover_telega_flow, 604800),
     (flows.scrape_adstat, 86400),
 ]
 

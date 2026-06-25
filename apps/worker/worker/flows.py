@@ -38,6 +38,18 @@ async def discover_adstat():
     return {"found": len(rows)}
 
 
+@flow(name="discover-telega", retries=1, retry_delay_seconds=300, timeout_seconds=5400, log_prints=True)
+async def discover_telega_flow():
+    """Weekly: каталог афиша-категории Telega.in (тысячи каналов) + реальные цены размещения → adstat."""
+    import asyncio
+
+    from apps.worker.worker.adstat.discover import discover_telega
+
+    rows = await asyncio.to_thread(discover_telega, 52, 60, True, False)
+    withp = sum(1 for r in rows if r.get("post_price"))
+    return {"found": len(rows), "with_price": withp}
+
+
 # --- fetch (sources) ---------------------------------------------------------
 
 @flow(name="fetch-kudago", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)

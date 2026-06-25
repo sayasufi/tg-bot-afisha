@@ -115,10 +115,13 @@ def persist_snapshots(rows: list[dict]) -> None:
             uname = (d.get("username") or "").lstrip("@").lower()
             if not uname:
                 continue
+            ad_price = d.get("ad_price")
+            if ad_price is None and d.get("post_price"):
+                ad_price = int(d["post_price"])
             ins = pg_insert(AdChannel).values(
                 username=uname, peer_id=d.get("peer_id"), title=d.get("title"),
                 language=d.get("language"), is_verified=d.get("is_verified"),
-                ad_price=d.get("ad_price"), last_scraped_at=now,
+                ad_price=ad_price, last_scraped_at=now,
             )
             # COALESCE(excluded, existing): новый источник без поля не затирает уже известное.
             stmt = ins.on_conflict_do_update(
@@ -138,6 +141,7 @@ def persist_snapshots(rows: list[dict]) -> None:
             db.add(AdSnapshot(
                 channel_id=channel_id, source=d["source"], captured_at=now,
                 subscribers=d.get("subscribers"), er=d.get("er"), err=d.get("err"),
+                post_price=d.get("post_price"),
                 avg_reach=d.get("avg_reach"), quality_score=d.get("quality_score"),
                 premium_subs=d.get("premium_subs"), month_growth=d.get("month_growth"),
                 mentions=d.get("mentions"), is_scam=d.get("is_scam"), is_boosting=d.get("is_boosting"),

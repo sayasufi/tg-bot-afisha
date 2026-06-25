@@ -23,10 +23,23 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     ap = argparse.ArgumentParser(description="adstat channel scraper")
     ap.add_argument("usernames", nargs="*", help="@username каналов (пусто → активные adstat.targets)")
-    ap.add_argument("--discover", action="store_true", help="автопоиск афиша-каналов → targets + снимки")
-    ap.add_argument("--min-subs", type=int, default=2000, help="порог подписчиков для discovery")
+    ap.add_argument("--discover", action="store_true", help="автопоиск афиша-каналов (Telemetr) → targets + снимки")
+    ap.add_argument("--telega", action="store_true", help="discovery через Telega.in (каталог афиши + цены)")
+    ap.add_argument("--min-subs", type=int, default=2000, help="порог подписчиков для Telemetr-discovery")
+    ap.add_argument("--max-pages", type=int, default=60, help="страниц каталога Telega.in")
+    ap.add_argument("--no-prices", action="store_true", help="Telega: без подкачки цен (быстрее)")
     ap.add_argument("--dry-run", action="store_true", help="не писать в БД, напечатать результаты")
     args = ap.parse_args()
+
+    if args.telega:
+        from apps.worker.worker.adstat.discover import discover_telega
+        rows = discover_telega(max_pages=args.max_pages, with_prices=not args.no_prices, dry_run=args.dry_run)
+        if args.dry_run:
+            print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
+        else:
+            withp = sum(1 for r in rows if r.get("post_price"))
+            print(f"adstat telega: {len(rows)} каналов ({withp} с ценой) → targets + снимки")
+        return
 
     if args.discover:
         from apps.worker.worker.adstat.discover import discover
