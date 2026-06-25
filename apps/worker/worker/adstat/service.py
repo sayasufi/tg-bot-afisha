@@ -21,15 +21,16 @@ from apps.worker.worker.adstat.tgstat import TGStatClient
 log = logging.getLogger(__name__)
 
 
-def _build_clients(settings) -> list:
+def _build_clients(settings, sources: list[str] | None = None) -> list:
+    """sources=None → все включённые источники; иначе фильтр (напр. ['telemetr'] для лёгкого daily)."""
     clients = []
-    if settings.adstat_telemetr_enabled:
+    if settings.adstat_telemetr_enabled and (sources is None or "telemetr" in sources):
         c = TelemetrClient(settings.adstat_cookies_path)
         if c.ready:
             clients.append(c)
         else:
             log.warning("adstat: Telemetr enabled but no session cookie at %s", settings.adstat_cookies_path)
-    if settings.adstat_tgstat_enabled:
+    if settings.adstat_tgstat_enabled and (sources is None or "tgstat" in sources):
         c = TGStatClient(settings.adstat_cookies_path, settings.adstat_flaresolverr_url)
         if c.ready:
             clients.append(c)
@@ -44,14 +45,16 @@ def _active_targets() -> list[str]:
     return [u for u in rows]
 
 
-def scrape(usernames: list[str] | None = None, dry_run: bool = False) -> list[dict]:
-    """Скрапит каналы (или активные targets) и пишет снимки. dry_run → не трогает БД, вернёт результаты."""
+def scrape(usernames: list[str] | None = None, dry_run: bool = False,
+           sources: list[str] | None = None) -> list[dict]:
+    """Скрапит каналы (или активные targets) и пишет снимки. dry_run → не трогает БД, вернёт результаты.
+    sources=['telemetr'] ограничивает источники (для лёгкого ежедневного флоу)."""
     settings = get_settings()
     if not dry_run and not settings.adstat_enabled:
         log.info("adstat: ADSTAT_ENABLED=false — пропуск")
         return []
 
-    clients = _build_clients(settings)
+    clients = _build_clients(settings, sources)
     if not clients:
         log.warning("adstat: нет готовых источников (куки?) — пропуск")
         return []

@@ -67,8 +67,9 @@ _SCHEDULE = [
     # Re-engagement: DM saved-event reminders as they come due. Cheap (a partial-index
     # scan + a few sends), so run it often enough that "~2h before" is accurate.
     (flows.send_reminders, 60),
-    # Daily: рекламный ресёрч — скрап статистики каналов-кандидатов (Telemetr/TGStat) в схему adstat.
-    # No-op, пока ADSTAT_ENABLED=false / нет куки-сессии, поэтому безопасно держать в расписании.
+    # Рекламный ресёрч каналов (схема adstat). Discovery еженедельно (ищет новые афиша-каналы по 16
+    # городам), лёгкий рефреш статистики — ежедневно (только Telemetr). No-op, пока ADSTAT_ENABLED=false.
+    (flows.discover_adstat, 604800),
     (flows.scrape_adstat, 86400),
 ]
 

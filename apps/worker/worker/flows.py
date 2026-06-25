@@ -16,15 +16,26 @@ _RETRY_DELAY = 30  # seconds
 
 @flow(name="scrape-adstat", retries=1, retry_delay_seconds=120, timeout_seconds=3600, log_prints=True)
 async def scrape_adstat():
-    """Daily: скрап статистики каналов-кандидатов (Telemetr/TGStat) в схему adstat.
-    No-op при ADSTAT_ENABLED=false или отсутствии куки-сессии."""
+    """Daily: лёгкий рефреш статистики активных targets — ТОЛЬКО Telemetr (быстро, без перегруза
+    тариф-квоты и FlareSolverr). TGStat — для ручных прогонов по шорт-листу. No-op при ADSTAT_ENABLED=false."""
     import asyncio
 
     from apps.worker.worker.adstat.service import scrape
 
-    rows = await asyncio.to_thread(scrape)
+    rows = await asyncio.to_thread(scrape, None, False, ["telemetr"])
     ok = sum(1 for r in rows if not r.get("error"))
     return {"rows": len(rows), "ok": ok}
+
+
+@flow(name="discover-adstat", retries=1, retry_delay_seconds=300, timeout_seconds=3600, log_prints=True)
+async def discover_adstat():
+    """Weekly: автопоиск новых афиша-каналов (Telemetr search по 16 городам) → targets + снимки."""
+    import asyncio
+
+    from apps.worker.worker.adstat.discover import discover
+
+    rows = await asyncio.to_thread(discover, 3000, False)
+    return {"found": len(rows)}
 
 
 # --- fetch (sources) ---------------------------------------------------------
