@@ -8,7 +8,7 @@ from alembic import op
 
 
 revision = "0037_normalize_moscow_city"
-down_revision = "0036_telegram_channel_subscribers"
+down_revision = "0036_channel_subscribers"
 branch_labels = None
 depends_on = None
 
