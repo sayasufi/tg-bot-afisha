@@ -1,0 +1,5 @@
+# okrestmap.ru — маркетинговый лендинг «Окрест». Открыт для индексации.
+User-agent: *
+Allow: /
+
+Sitemap: https://okrestmap.ru/sitemap.xml
