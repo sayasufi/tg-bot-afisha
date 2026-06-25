@@ -136,27 +136,32 @@
       .hvcity--active .hvcity__pin { background: var(--acid); box-shadow: 0 0 0 2px var(--ink), 0 0 0 4.5px #fff, 0 0 14px 2px rgba(204, 255, 0, 0.55); }
       .hvcity--active .hvcity__lab span { color: var(--cinnabar); }
 
-      /* decorative app chrome over the map — pointer-events:none so it never blocks the pan */
-      .hmchrome, .hmbanner, .hmcredit { position: absolute; z-index: 3; pointer-events: none; }
-      .hmchrome { top: 0; left: 0; right: 0; }
-      .hmbar { display: flex; align-items: center; gap: 6px; padding: 8px 9px; background: #fff; box-shadow: 0 1px 0 rgba(11, 11, 11, 0.08); }
-      .hmbar__menu { font-size: 13px; color: var(--ink); }
-      .hmbar__logo { display: flex; align-items: center; gap: 4px; }
-      .hmbar__logo svg { width: 15px; height: 15px; display: block; }
-      .hmbar__logo b { font-family: var(--display); font-weight: 800; font-size: 12px; letter-spacing: -0.03em; }
-      .hmbar__search { flex: 1; font-family: var(--mono); font-size: 8.5px; color: var(--ink-dim); padding: 5px 7px; box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; overflow: hidden; }
-      .hmbar__q { font-size: 11px; color: var(--ink); }
-      .hmticker { background: var(--ink); overflow: hidden; padding: 3px 0; }
-      .hmticker__track { display: inline-flex; width: max-content; animation: hmMarquee 20s linear infinite; }
-      .hmticker__t { font-family: var(--mono); font-size: 8px; letter-spacing: 0.05em; color: #fff; padding-right: 4px; white-space: nowrap; }
-      .hmticker__t::before { content: "·····"; color: var(--acid); letter-spacing: -1px; padding-right: 8px; }
-      @keyframes hmMarquee { to { transform: translateX(-50%); } }
+      /* decorative app chrome over the map (1:1 with the app's cmdpill + ticker) — pointer-events:none so the pan is never blocked */
+      .hmpill, .hmtkr, .hmbanner, .hmcredit { position: absolute; z-index: 4; pointer-events: none; }
+      .hmpill { top: 10px; left: 10px; right: 10px; height: 40px; display: flex; align-items: stretch; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line), 0 2px 4px rgba(11, 11, 11, 0.26), 0 7px 16px rgba(11, 11, 11, 0.3); }
+      .hmpill__menu { position: relative; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-right: 1px solid var(--line); }
+      .hmpill__navdot { position: absolute; top: 3px; left: 16px; min-width: 13px; height: 13px; padding: 0 2px; display: grid; place-items: center; background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink), 2px 2px 0 var(--cinnabar); font-family: var(--mono); font-size: 8px; font-weight: 600; }
+      .hmpill__burger { font-size: 12px; color: var(--ink); }
+      .hmpill__mark { font-family: var(--display); font-weight: 800; font-size: 16px; letter-spacing: -0.04em; text-transform: lowercase; color: var(--ink); }
+      .brand-o { position: relative; display: inline-block; color: var(--ink); }
+      .brand-o::before { content: ""; position: absolute; left: 50%; top: 47%; width: 0.78em; height: 0.78em; background: var(--acid); border-radius: 50%; transform: translate(-50%, -50%); z-index: -1; }
+      .hmpill__body { flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 11px; }
+      .hmpill__summary { flex: 1; min-width: 0; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .hmpill__search { width: 40px; flex: 0 0 auto; display: grid; place-items: center; border-left: 1px solid var(--line); color: var(--ink); font-size: 16px; }
+      .hmtkr { top: 58px; left: 12px; right: 12px; height: 19px; display: flex; align-items: center; background: var(--ink); box-shadow: 0 2px 4px rgba(11, 11, 11, 0.26), 0 7px 16px rgba(11, 11, 11, 0.3); overflow: hidden; }
+      .hmtkr__cue { position: relative; z-index: 1; flex: 0 0 auto; height: 100%; display: grid; place-items: center; padding: 0 7px 0 9px; background: var(--ink); }
+      .hmtkr__wave { display: flex; align-items: center; gap: 2px; height: 100%; }
+      .hmtkr__wave i { width: 2px; height: 2px; border-radius: 50%; background: var(--acid); animation: hmWave 1s ease-in-out infinite; animation-delay: calc(var(--i) * 0.09s); }
+      @keyframes hmWave { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
+      .hmtkr__track { display: flex; flex: 0 0 auto; width: max-content; height: 100%; align-items: center; animation: hmScroll 30s linear infinite; }
+      .hmtkr__track .hmticker__t { padding: 0 11px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: #fff; }
+      @keyframes hmScroll { to { transform: translateX(-50%); } }
       .hmbanner { bottom: 12px; left: 12px; right: 12px; height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink), 1.5px 1.5px 0 rgba(11, 11, 11, 0.16); }
       .hmbanner b { font-family: var(--grotesk); font-weight: 800; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
       .hmbanner span { font-family: var(--mono); font-size: 8.5px; color: var(--ink-dim); }
       .hmcredit { bottom: 60px; right: 8px; font-family: var(--mono); font-size: 7px; color: rgba(11, 11, 11, 0.4); }
       @media (prefers-reduced-motion: reduce) {
-        .hvcity__glow, .hvcity__pin, .heromap .leaflet-overlay-pane path, .hmticker__track { animation: none; }
+        .hvcity__glow, .hvcity__pin, .heromap .leaflet-overlay-pane path, .hmtkr__track, .hmtkr__wave i { animation: none; }
       }
 
       /* demos */
@@ -233,21 +238,20 @@
           <div class="phone phone--hero">
             <div class="phone__screen hmwrap">
               <div id="heromap" class="heromap"></div>
-              <div class="hmchrome" aria-hidden="true">
-                <div class="hmbar">
-                  <span class="hmbar__menu">≡</span>
-                  <span class="hmbar__logo">
-                    <svg viewBox="0 0 100 100"><rect width="100" height="100" rx="24" fill="#ccff00" /><path d="M50 15 C32.9 15 19 28.9 19 46 C19 65 38 77 50 91 C62 77 81 65 81 46 C81 28.9 67.1 15 50 15 Z" fill="#0b0b0b" /><circle cx="50" cy="45" r="15.5" fill="#ccff00" /><circle cx="50" cy="45" r="5" fill="#0b0b0b" /></svg>
-                    <b>ОКРЕСТ</b>
-                  </span>
-                  <span class="hmbar__search">ВСЕ · ВСЕ ДАТЫ</span>
-                  <span class="hmbar__q">⌕</span>
-                </div>
-                <div class="hmticker">
-                  <div class="hmticker__track">
-                    <span class="hmticker__t">21 000 СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ</span>
-                    <span class="hmticker__t">21 000 СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ</span>
-                  </div>
+              <div class="hmpill" aria-hidden="true">
+                <span class="hmpill__menu">
+                  <span class="hmpill__navdot">10</span>
+                  <span class="hmpill__burger">☰</span>
+                  <span class="hmpill__mark"><span class="brand-o">о</span>крест</span>
+                </span>
+                <span class="hmpill__body"><span class="hmpill__summary">ВСЕ · ВСЕ ДАТЫ</span></span>
+                <span class="hmpill__search">⌕</span>
+              </div>
+              <div class="hmtkr" aria-hidden="true">
+                <span class="hmtkr__cue"><span class="hmtkr__wave"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i></span></span>
+                <div class="hmtkr__track">
+                  <span class="hmticker__t">21 000 СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ</span>
+                  <span class="hmticker__t">21 000 СОБЫТИЙ ● 16 ГОРОДОВ ● ВСЯ РОССИЯ ● ОКРЕСТ</span>
                 </div>
               </div>
               <span class="hmcredit" aria-hidden="true">© OSM · CARTO</span>
@@ -331,11 +335,11 @@
         var map = L.map(el, {
           zoomControl: false, attributionControl: false, scrollWheelZoom: false, doubleClickZoom: false,
           touchZoom: false, boxZoom: false, keyboard: false, dragging: true, inertia: true,
-          minZoom: 5, maxZoom: 5, maxBounds: [[40, 16], [70, 104]], maxBoundsViscosity: 1.0,
+          minZoom: 4.5, maxZoom: 4.5, zoomSnap: 0, maxBounds: [[38, 12], [72, 112]], maxBoundsViscosity: 1.0,
         });
-        map.setView([54, 49], 5);
+        map.setView([55, 45], 4.5);
         L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
-          subdomains: "abcd", minZoom: 5, maxZoom: 5, detectRetina: true, keepBuffer: 4,
+          subdomains: "abcd", minZoom: 0, maxZoom: 8, detectRetina: true, keepBuffer: 4,
         }).addTo(map);
         setTimeout(function () { map.invalidateSize(); }, 140);
         setTimeout(function () { map.invalidateSize(); }, 600);
