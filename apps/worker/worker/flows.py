@@ -38,6 +38,18 @@ async def discover_adstat():
     return {"found": len(rows)}
 
 
+@flow(name="discover-telethon", retries=1, retry_delay_seconds=300, timeout_seconds=5400, log_prints=True)
+async def discover_telethon_flow():
+    """Weekly: расширить афиша-граф через рекомендации Telegram (Telethon, бесплатно) + метрики → adstat."""
+    import asyncio
+
+    from apps.worker.worker.adstat.telethon_src import discover_telethon
+
+    rows = await asyncio.to_thread(discover_telethon, None, 400, False)
+    ok = sum(1 for r in rows if not r.get("error"))
+    return {"found": len(rows), "ok": ok}
+
+
 @flow(name="discover-telega", retries=1, retry_delay_seconds=300, timeout_seconds=5400, log_prints=True)
 async def discover_telega_flow():
     """Weekly: каталог афиша-категории Telega.in (тысячи каналов) + реальные цены размещения → adstat."""

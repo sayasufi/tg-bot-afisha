@@ -71,6 +71,7 @@ _SCHEDULE = [
     # городам), лёгкий рефреш статистики — ежедневно (только Telemetr). No-op, пока ADSTAT_ENABLED=false.
     (flows.discover_adstat, 604800),
     (flows.discover_telega_flow, 604800),
+    (flows.discover_telethon_flow, 604800),
     (flows.scrape_adstat, 86400),
 ]
 
