@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # Нужен, чтобы TGStat работал на сервере (cf_clearance из браузера владельца привязан к его IP).
     # Пусто → TGStat ходит напрямую curl_cffi (только при валидном clearance, т.е. локально).
     adstat_flaresolverr_url: str = Field(default="", alias="ADSTAT_FLARESOLVERR_URL")
+    # Город-сид для Telethon-крауля рекомендаций: берём афиша-каналы этого города как сиды,
+    # рекомендации Telegram дают тематически/регионально близкое → в основном этот же город.
+    adstat_seed_city: str = Field(default="Москва", alias="ADSTAT_SEED_CITY")
 
     # MinIO (S3-compatible) object storage for cached event images.
     minio_endpoint: str = Field(default="http://minio:9000", alias="MINIO_ENDPOINT")
