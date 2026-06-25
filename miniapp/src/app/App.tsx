@@ -1116,12 +1116,9 @@ export function App() {
           <RecommendationsPanel
             userPos={userPos}
             favCategories={recInterests}
-            favIds={fav.ids}
-            venueIds={venueFollows.ids}
             refreshNonce={refreshNonce}
             city={currentCity?.slug ?? null}
             onSelect={openEvent}
-            onOpenVenue={onOpenVenue}
             onOpenCollection={onOpenCollection}
             onPickCategory={onPickCategory}
             onAllCategories={onAllCategories}
