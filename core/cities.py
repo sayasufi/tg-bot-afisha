@@ -96,9 +96,8 @@ for _s, _n, _tz, _off, _lat, _lon, _y, _k, _a in _MILLIONNIKI:
     )
 
 DEFAULT_CITY = CITIES["moscow"]
-# Resolvable by display name ("Москва") OR slug ("moscow"). The slug keys also catch
-# the Latin default hint settings.default_city="Moscow" (== the moscow slug), which
-# would otherwise miss the Cyrillic name and silently disable geo guards keyed on it.
+# Resolvable by display name ("Москва") OR slug ("moscow"). Keep the slug alias for
+# legacy rows/envs that still spell the default city as "Moscow".
 _BY_NAME = {}
 for _c in CITIES.values():
     _BY_NAME[_c.name.strip().lower()] = _c

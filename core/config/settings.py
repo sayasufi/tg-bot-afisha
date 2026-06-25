@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     # direct, relying on the tunnel routing).
     afisha_proxy: str = Field(default="", alias="AFISHA_PROXY")
 
-    default_city: str = Field(default="Moscow", alias="DEFAULT_CITY")
+    default_city: str = Field(default="Москва", alias="DEFAULT_CITY")
     default_country: str = Field(default="RU", alias="DEFAULT_COUNTRY")
 
     # MinIO (S3-compatible) object storage for cached event images.
