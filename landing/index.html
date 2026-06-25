@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Окрест — афиша твоего города на карте</title>
+    <title>Окрест — афиша на карте: куда сходить в 16 городах России</title>
     <meta name="description" content="21 000+ событий в 16 городах России — концерты, выставки, спектакли, стендап и кино на одной карте, прямо в Telegram. Обновляется каждый день." />
     <meta name="theme-color" content="#f4f4ef" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -30,7 +30,16 @@
         "@context": "https://schema.org",
         "@graph": [
           { "@type": "Organization", "name": "Окрест", "url": "https://okrestmap.ru/", "logo": "https://okrestmap.ru/og.png", "sameAs": ["https://t.me/okrestmap_bot"] },
-          { "@type": "WebSite", "name": "Окрест", "url": "https://okrestmap.ru/", "inLanguage": "ru", "description": "Афиша 16 городов России на одной карте — концерты, выставки, спектакли, стендап и кино, прямо в Telegram." }
+          { "@type": "WebSite", "name": "Окрест", "url": "https://okrestmap.ru/", "inLanguage": "ru", "description": "Афиша 16 городов России на одной карте — концерты, выставки, спектакли, стендап и кино, прямо в Telegram." },
+          { "@type": "SoftwareApplication", "name": "Окрест", "applicationCategory": "EntertainmentApplication", "operatingSystem": "Telegram", "url": "https://t.me/okrestmap_bot", "description": "Афиша событий на карте: концерты, выставки, спектакли, стендап и кино в 16 городах России.", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "RUB" } },
+          { "@type": "FAQPage", "mainEntity": [
+            { "@type": "Question", "name": "Что такое Окрест?", "acceptedAnswer": { "@type": "Answer", "text": "Окрест — это афиша событий на карте прямо в Telegram: концерты, выставки, спектакли, стендап и кино в 16 городах России на одной карте, без рекламы." } },
+            { "@type": "Question", "name": "В каких городах есть афиша?", "acceptedAnswer": { "@type": "Answer", "text": "Москва, Санкт-Петербург, Екатеринбург, Новосибирск, Казань, Нижний Новгород, Челябинск, Самара, Уфа, Ростов-на-Дону, Краснодар, Пермь, Воронеж, Волгоград, Красноярск и Омск — 16 городов, список пополняется." } },
+            { "@type": "Question", "name": "Сколько стоит?", "acceptedAnswer": { "@type": "Answer", "text": "Окрест бесплатный и без рекламы." } },
+            { "@type": "Question", "name": "Как пользоваться?", "acceptedAnswer": { "@type": "Answer", "text": "Открой бот @okrestmap_bot в Telegram — карта откроется прямо в приложении, ничего устанавливать не нужно." } },
+            { "@type": "Question", "name": "Какие события можно найти?", "acceptedAnswer": { "@type": "Answer", "text": "Концерты, выставки, спектакли, стендап, кино, фестивали и события для детей — больше 20 000 событий, обновляются каждый день." } },
+            { "@type": "Question", "name": "Можно получать напоминания?", "acceptedAnswer": { "@type": "Answer", "text": "Да — сохрани событие в избранное, и бот напомнит за 2 часа до начала." } }
+          ] }
         ]
       }
     </script>
@@ -214,6 +223,26 @@
       .foot a:hover { color: var(--cinnabar); }
       .foot__sm { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
 
+      /* Города */
+      .cities { padding: 44px 0 20px; }
+      .cities__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
+      .cities__s { margin-top: 10px; font-size: 16px; color: var(--ink-dim); max-width: 54ch; }
+      .cities__list { list-style: none; margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; max-width: 840px; }
+      .cities__list li { font-family: var(--mono); font-size: 13px; font-weight: 500; padding: 8px 14px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); transition: background 0.15s; }
+      .cities__list li:hover { background: var(--acid); }
+
+      /* FAQ */
+      .faq { padding: 44px 0 20px; }
+      .faq__h { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); letter-spacing: -0.035em; }
+      .faq__list { margin-top: 22px; max-width: 760px; }
+      .faq__item { border-bottom: 1px solid var(--line); }
+      .faq__item summary { cursor: pointer; list-style: none; padding: 18px 0; font-size: clamp(16px, 2.2vw, 18px); font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .faq__item summary::-webkit-details-marker { display: none; }
+      .faq__item summary::after { content: "+"; font-family: var(--mono); font-size: 22px; line-height: 1; color: var(--cinnabar); flex: none; transition: transform 0.2s; }
+      .faq__item[open] summary::after { transform: rotate(45deg); }
+      .faq__item p { margin: 0; padding: 0 0 18px; font-size: 15px; line-height: 1.52; color: #1c1c1a; max-width: 66ch; }
+      .faq__item a { color: var(--cinnabar); }
+
       @media (max-width: 860px) {
         .hero { grid-template-columns: 1fr; gap: 26px; text-align: center; padding-top: 18px; }
         .hero__sub { margin-left: auto; margin-right: auto; }
@@ -320,6 +349,41 @@
           <li><span class="ck">✓</span><span>Подборки недели</span></li>
           <li><span class="ck">✓</span><span>Площадки и подписки на них</span></li>
         </ul>
+      </section>
+
+      <section class="cities">
+        <h2 class="cities__h">Афиша в 16 городах России</h2>
+        <p class="cities__s">Концерты, выставки, спектакли, стендап и кино — на одной карте в каждом городе. Список пополняется.</p>
+        <ul class="cities__list">
+          <li>Москва</li>
+          <li>Санкт-Петербург</li>
+          <li>Екатеринбург</li>
+          <li>Новосибирск</li>
+          <li>Казань</li>
+          <li>Нижний Новгород</li>
+          <li>Челябинск</li>
+          <li>Самара</li>
+          <li>Уфа</li>
+          <li>Ростов-на-Дону</li>
+          <li>Краснодар</li>
+          <li>Пермь</li>
+          <li>Воронеж</li>
+          <li>Волгоград</li>
+          <li>Красноярск</li>
+          <li>Омск</li>
+        </ul>
+      </section>
+
+      <section class="faq">
+        <h2 class="faq__h">Частые вопросы</h2>
+        <div class="faq__list">
+          <details class="faq__item"><summary>Что такое Окрест?</summary><p>Окрест — это афиша событий на карте прямо в Telegram: концерты, выставки, спектакли, стендап и кино в 16 городах России на одной карте, без рекламы.</p></details>
+          <details class="faq__item"><summary>В каких городах есть афиша?</summary><p>Москва, Санкт-Петербург, Екатеринбург, Новосибирск, Казань, Нижний Новгород, Челябинск, Самара, Уфа, Ростов-на-Дону, Краснодар, Пермь, Воронеж, Волгоград, Красноярск и Омск — 16 городов, список пополняется.</p></details>
+          <details class="faq__item"><summary>Сколько стоит?</summary><p>Окрест бесплатный и без рекламы.</p></details>
+          <details class="faq__item"><summary>Как пользоваться?</summary><p>Открой бот <a href="https://t.me/okrestmap_bot">@okrestmap_bot</a> в Telegram — карта откроется прямо в приложении, ничего устанавливать не нужно.</p></details>
+          <details class="faq__item"><summary>Какие события можно найти?</summary><p>Концерты, выставки, спектакли, стендап, кино, фестивали и события для детей — больше 20 000 событий, обновляются каждый день.</p></details>
+          <details class="faq__item"><summary>Можно получать напоминания?</summary><p>Да — сохрани событие в избранное, и бот напомнит за 2 часа до начала.</p></details>
+        </div>
       </section>
 
       <section class="end">
