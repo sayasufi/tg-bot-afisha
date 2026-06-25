@@ -124,7 +124,7 @@ export function IconMap({ size = 18, className }: UiProps) {
   );
 }
 
-// Six-point asterisk — the «Подборка» (curated picks) nav item. A spark, not a star.
+// Six-point asterisk — the «Главная» discovery nav item. A spark, not a star.
 export function IconSparkle({ size = 18, className }: UiProps) {
   return (
     <svg {...strokeProps(size, className)}>

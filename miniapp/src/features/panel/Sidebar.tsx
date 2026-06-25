@@ -9,7 +9,7 @@ import type { View } from "./view";
 type NavIcon = (props: { size?: number; className?: string }) => JSX.Element;
 const NAV: { key: View; label: string; Icon: NavIcon }[] = [
   { key: "map", label: "Карта", Icon: IconMap },
-  { key: "recs", label: "Подборка", Icon: IconSparkle },
+  { key: "recs", label: "Главная", Icon: IconSparkle },
   { key: "favorites", label: "Избранное", Icon: IconHeart },
   { key: "venues", label: "Площадки", Icon: IconBuilding },
   { key: "friends", label: "Друзья", Icon: IconPeople },
