@@ -221,23 +221,39 @@ async def _recs(client, username: str) -> list[str]:
         return []
 
 
-def _afisha_seeds(limit: int = 60) -> list[str]:
-    """Сиды для крауля — афиша-каналы города-сида (settings.adstat_seed_city, по умолч. Москва)."""
+# Опорные сиды-хинты для гарантированного покрытия (Москва / Питер / общие по России).
+# Невалидные просто отвалятся на резолве (catch) — безвредно.
+_SEED_HINTS = [
+    # Москва
+    "mscculture", "mosafishka", "moscowes", "kyda_moscow", "i_moskva", "kudamoscow",
+    # Питер
+    "afishapitera", "kudagospb", "spb_gid", "kudaspb", "peterburg2", "fiesta_spb",
+    # Общие по России / мульти-город
+    "kudago", "afisha", "theatrehd", "kassirru", "gorbilet",
+]
+
+
+def _afisha_seeds(limit: int = 120) -> list[str]:
+    """Сиды = каналы с АФИША-провенансом (есть снимок Telemetr или Telethon) — все города и общие —
+    плюс опорные хинты (Москва/Питер/Россия). Резолвится только сидами → больше точек входа в граф."""
     from sqlalchemy import select
 
-    from core.db.models.adstat import AdTarget
+    from core.db.models.adstat import AdChannel, AdSnapshot
     from core.db.session import SessionLocal
 
-    city = get_settings().adstat_seed_city
+    seeds = list(dict.fromkeys(_SEED_HINTS))
     with SessionLocal() as db:
-        q = (select(AdTarget.username).where(AdTarget.city == city) if city
-             else select(AdTarget.username).where(AdTarget.city.isnot(None)))
-        rows = list(db.execute(q.limit(limit)).scalars().all())
-        if not rows and city:  # фолбэк — любой город, если по этому пусто
-            rows = list(db.execute(
-                select(AdTarget.username).where(AdTarget.city.isnot(None)).limit(limit)
-            ).scalars().all())
-    return rows
+        rows = db.execute(
+            select(AdChannel.username)
+            .join(AdSnapshot, AdSnapshot.channel_id == AdChannel.channel_id)
+            .where(AdSnapshot.source.in_(["telemetr", "telethon"]))
+            .distinct()
+            .limit(limit)
+        ).scalars().all()
+    for u in rows:
+        if u not in seeds:
+            seeds.append(u)
+    return seeds
 
 
 async def _crawl(seeds: list[str], max_channels: int, sink=None) -> int:

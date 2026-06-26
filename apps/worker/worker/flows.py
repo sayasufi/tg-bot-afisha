@@ -45,7 +45,7 @@ async def discover_telethon_flow():
 
     from apps.worker.worker.adstat.telethon_src import discover_telethon
 
-    n = await asyncio.to_thread(discover_telethon, None, 400, False)
+    n = await asyncio.to_thread(discover_telethon, None, 1000, False)
     return {"written": n}
 
 
