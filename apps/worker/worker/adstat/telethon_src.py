@@ -58,23 +58,114 @@ def _load_pool() -> list[dict]:
 
 
 async def _connect_clients() -> list:
-    """Построить и подключить авторизованных клиентов пула (или .env-фолбэк)."""
+    """Построить и подключить авторизованных клиентов пула. Возвращает пары (account|None, client)."""
     pool = _load_pool()
-    cands = [_make_client_from(a) for a in pool] if pool else ([_make_client()] if _make_client() else [])
-    clients = []
-    for c in cands:
+    if pool:
+        cands = [(a, _make_client_from(a)) for a in pool]
+    else:
+        # _load_pool пуст: либо все отдыхают (FloodWait), либо таблица без активных аккаунтов.
+        from sqlalchemy import func as sqlfunc
+        from sqlalchemy import select
+
+        from core.db.models.adstat import AdTgAccount
+        from core.db.session import SessionLocal
+
+        with SessionLocal() as db:
+            active_total = db.execute(
+                select(sqlfunc.count()).select_from(AdTgAccount).where(AdTgAccount.is_active.is_(True))
+            ).scalar() or 0
+        if active_total:  # аккаунты есть, но все отдыхают — .env (это один из них) не трогаем
+            log.info("telethon: все аккаунты пула отдыхают (FloodWait) — пропуск")
+            cands = []
+        else:  # пул пуст → фолбэк на .env-сессию
+            cands = [(None, _make_client())] if _make_client() else []
+    pairs = []
+    for acc, c in cands:
         if c is None:
             continue
         try:
             await c.connect()
             if await c.is_user_authorized():
-                clients.append(c)
+                pairs.append((acc, c))
             else:
-                log.warning("telethon pool: клиент не авторизован — пропуск")
+                log.warning("telethon pool: %s не авторизован — пропуск", (acc or {}).get("label", "env"))
                 await c.disconnect()
         except Exception as e:  # noqa: BLE001
             log.warning("telethon pool connect: %s", e)
-    return clients
+    return pairs
+
+
+def _mark_flood(account_id: int, seconds: int) -> None:
+    """Пометить аккаунт отдыхающим до окончания FloodWait — пул его пропустит."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import update
+
+    from core.db.models.adstat import AdTgAccount
+    from core.db.session import SessionLocal
+
+    until = datetime.now(timezone.utc) + timedelta(seconds=min(seconds + 60, 86400))
+    with SessionLocal() as db:
+        db.execute(update(AdTgAccount).where(AdTgAccount.account_id == account_id).values(flood_until=until))
+        db.commit()
+
+
+async def _metrics_ent(client, entity) -> dict | None:
+    """Метрики по ГОТОВОМУ entity (Channel с access_hash) — без ResolveUsername."""
+    from telethon.errors import FloodWaitError
+    from telethon.tl.functions.channels import GetFullChannelRequest
+
+    u = getattr(entity, "username", None)
+    if not u:
+        return None  # пропускаем каналы без публичного username
+    try:
+        full = await client(GetFullChannelRequest(entity))
+        subs = getattr(full.full_chat, "participants_count", None)
+    except FloodWaitError:
+        raise
+    except Exception:  # noqa: BLE001
+        return {"source": "telethon", "username": u, "error": "getfull"}
+    views, dates, fwd = [], [], []
+    try:
+        async for msg in client.iter_messages(entity, limit=20):
+            if getattr(msg, "views", None):
+                views.append(msg.views)
+            if getattr(msg, "forwards", None):
+                fwd.append(msg.forwards)
+            if msg.date:
+                dates.append(msg.date)
+    except FloodWaitError:
+        raise
+    except Exception:  # noqa: BLE001
+        pass
+    avg_reach = int(sum(views) / len(views)) if views else None
+    er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
+    freq = None
+    if len(dates) >= 2:
+        span = (dates[0] - dates[-1]).total_seconds() / 86400
+        if span > 0:
+            freq = round(len(dates) / span * 7, 1)
+    return {
+        "source": "telethon", "username": u, "peer_id": getattr(entity, "id", None),
+        "title": getattr(entity, "title", None), "subscribers": subs, "avg_reach": avg_reach, "er": er,
+        "raw": {"posts_per_week": freq, "samples": len(views),
+                "avg_forwards": int(sum(fwd) / len(fwd)) if fwd else None},
+    }
+
+
+async def _recs_ent(client, entity) -> list:
+    """Рекомендации по entity → список Channel-объектов (с access_hash, БЕЗ резолва)."""
+    from telethon.errors import FloodWaitError
+    from telethon.tl.functions.channels import GetChannelRecommendationsRequest
+
+    try:
+        res = await client(GetChannelRecommendationsRequest(channel=entity))
+        return list(getattr(res, "chats", []))
+    except FloodWaitError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.warning("telethon recs %s: %s", getattr(entity, "username", "?"), e)
+        return []
 
 
 async def _metrics(client, username: str) -> dict:
@@ -150,71 +241,91 @@ def _afisha_seeds(limit: int = 60) -> list[str]:
 
 
 async def _crawl(seeds: list[str], max_channels: int, sink=None) -> int:
-    """Параллельный BFS по рекомендациям через ПУЛ аккаунтов: каждый клиент — свой воркер на общей
-    очереди. Пока один спит на FloodWait — другие работают. Батч (20) пишем через sink инкрементально."""
-    clients = await _connect_clients()
-    if not clients:
+    """Параллельный BFS по рекомендациям через ПУЛ. ResolveUsername — ТОЛЬКО для сидов; найденные
+    каналы идут по access_hash (Channel-объекты из рекомендаций) → почти нет FloodWait.
+    FloodWait у аккаунта → помечаем flood_until и выводим его клиента, остальные продолжают."""
+    from telethon.errors import FloodWaitError
+
+    pairs = await _connect_clients()
+    if not pairs:
         log.warning("telethon: нет авторизованных клиентов — пропуск")
         return 0
-    log.info("telethon: клиентов в пуле — %d", len(clients))
+    log.info("telethon: клиентов в пуле — %d", len(pairs))
 
-    found: set[str] = set()
-    queue: list[str] = list(dict.fromkeys(s.lstrip("@") for s in seeds))
+    found_ids: set[int] = set()
+    queue: list = []  # Channel entities (с access_hash)
     batch: list[dict] = []
+    processed = 0
     done = 0
     lock = asyncio.Lock()
 
+    def _enqueue(ent) -> None:
+        i = getattr(ent, "id", None)
+        if i and i not in found_ids and getattr(ent, "username", None):
+            found_ids.add(i)
+            queue.append(ent)
+
+    # Сиды резолвим один раз (единственный ResolveUsername), распределяя по клиентам.
+    for idx, u in enumerate(dict.fromkeys(s.lstrip("@") for s in seeds)):
+        _, c = pairs[idx % len(pairs)]
+        try:
+            _enqueue(await c.get_entity(u))
+        except Exception as e:  # noqa: BLE001
+            log.warning("seed resolve %s: %s", u, e)
+        await asyncio.sleep(0.3)
+
     async def take():
         async with lock:
-            if len(found) >= max_channels:
+            if processed >= max_channels or not queue:
                 return None
-            while queue:
-                u = queue.pop(0)
-                if u not in found:
-                    found.add(u)
-                    return u
-            return None
+            return queue.pop(0)
 
     async def push(m, recs):
-        nonlocal done, batch
+        nonlocal processed, done, batch
         flush = None
         async with lock:
+            processed += 1
             if m and not m.get("error"):
                 batch.append(m)
             for r in recs:
-                if r not in found and r not in queue:
-                    queue.append(r)
+                _enqueue(r)
             if sink and len(batch) >= 20:
                 flush, batch = batch, []
         if flush:
             sink(flush)
             async with lock:
                 done += len(flush)
-                log.info("telethon bootstrap: записано %d, найдено %d, очередь %d", done, len(found), len(queue))
+                log.info("telethon: записано %d, найдено %d, очередь %d", done, len(found_ids), len(queue))
 
-    async def worker(client):
+    async def worker(account, client):
         idle = 0
         while True:
-            u = await take()
-            if u is None:
+            ent = await take()
+            if ent is None:
                 idle += 1
                 if idle >= 3:
                     return
                 await asyncio.sleep(1.0)
                 continue
             idle = 0
-            m = await _metrics(client, u)
-            recs = await _recs(client, u)
+            try:
+                m = await _metrics_ent(client, ent)
+                recs = await _recs_ent(client, ent)
+            except FloodWaitError as e:
+                log.warning("telethon FloodWait %ss — аккаунт %s отдыхает", e.seconds, (account or {}).get("label", "env"))
+                if account:
+                    _mark_flood(account["account_id"], e.seconds)
+                return  # клиент выбывает, остальные продолжают
             await push(m, recs)
             await asyncio.sleep(0.3)
 
     try:
-        await asyncio.gather(*[worker(c) for c in clients])
+        await asyncio.gather(*[worker(a, c) for a, c in pairs])
         if sink and batch:
             sink(batch); done += len(batch)
-        return done if sink else len(found)
+        return done if sink else processed
     finally:
-        for c in clients:
+        for _, c in pairs:
             try:
                 await c.disconnect()
             except Exception:  # noqa: BLE001
