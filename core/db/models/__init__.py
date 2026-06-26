@@ -1,6 +1,7 @@
 from core.db.models.adstat.channel import AdChannel
 from core.db.models.adstat.snapshot import AdSnapshot
 from core.db.models.adstat.target import AdTarget
+from core.db.models.adstat.tg_account import AdTgAccount
 from core.db.models.events.event import Event
 from core.db.models.events.event_candidate import EventCandidate
 from core.db.models.events.event_occurrence import EventOccurrence
@@ -23,6 +24,7 @@ __all__ = [
     "AdChannel",
     "AdSnapshot",
     "AdTarget",
+    "AdTgAccount",
     "City",
     "Event",
     "EventCandidate",

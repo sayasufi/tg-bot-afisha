@@ -20,6 +20,10 @@ cookies.txt
 # adstat scraper session cookies (Telemetr/TGStat) — server secret, never commit
 secrets/
 *cookies*.txt
+# TG account packages (Telethon sessions / tdata / api-json) — secrets, never commit
++*/
+tdata/
+*.session-journal
 
 # Playwright MCP browser scratch
 .playwright-mcp/

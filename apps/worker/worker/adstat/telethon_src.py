@@ -26,6 +26,57 @@ def _make_client():
     return TelegramClient(StringSession(s.telethon_session), s.telethon_api_id, s.telethon_api_hash)
 
 
+def _make_client_from(acc: dict):
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+
+    s = get_settings()
+    return TelegramClient(
+        StringSession(acc["session"]),
+        acc.get("api_id") or s.telethon_api_id,
+        acc.get("api_hash") or s.telethon_api_hash,
+    )
+
+
+def _load_pool() -> list[dict]:
+    """Активные аккаунты пула (flood_until в прошлом/пусто). Пусто → фолбэк на .env-сессию."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from core.db.models.adstat import AdTgAccount
+    from core.db.session import SessionLocal
+
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        accs = db.execute(select(AdTgAccount).where(AdTgAccount.is_active.is_(True))).scalars().all()
+        return [
+            {"account_id": a.account_id, "label": a.label, "api_id": a.api_id,
+             "api_hash": a.api_hash, "session": a.session}
+            for a in accs if (a.flood_until is None or a.flood_until <= now)
+        ]
+
+
+async def _connect_clients() -> list:
+    """Построить и подключить авторизованных клиентов пула (или .env-фолбэк)."""
+    pool = _load_pool()
+    cands = [_make_client_from(a) for a in pool] if pool else ([_make_client()] if _make_client() else [])
+    clients = []
+    for c in cands:
+        if c is None:
+            continue
+        try:
+            await c.connect()
+            if await c.is_user_authorized():
+                clients.append(c)
+            else:
+                log.warning("telethon pool: клиент не авторизован — пропуск")
+                await c.disconnect()
+        except Exception as e:  # noqa: BLE001
+            log.warning("telethon pool connect: %s", e)
+    return clients
+
+
 async def _metrics(client, username: str) -> dict:
     from telethon.tl.functions.channels import GetFullChannelRequest
 
@@ -99,41 +150,75 @@ def _afisha_seeds(limit: int = 60) -> list[str]:
 
 
 async def _crawl(seeds: list[str], max_channels: int, sink=None) -> int:
-    """Interleaved BFS по рекомендациям: на каждый канал снимаем метрики + тянем «похожих»,
-    батч (20) сбрасываем в БД через sink — инкрементально, устойчиво к обрыву/таймауту."""
-    client = _make_client()
-    if client is None:
-        log.warning("telethon: нет TELETHON_SESSION/api — пропуск")
+    """Параллельный BFS по рекомендациям через ПУЛ аккаунтов: каждый клиент — свой воркер на общей
+    очереди. Пока один спит на FloodWait — другие работают. Батч (20) пишем через sink инкрементально."""
+    clients = await _connect_clients()
+    if not clients:
+        log.warning("telethon: нет авторизованных клиентов — пропуск")
         return 0
-    await client.connect()
-    try:
-        if not await client.is_user_authorized():
-            log.warning("telethon: сессия не авторизована")
-            return 0
-        found: set[str] = set()
-        queue = list(dict.fromkeys(s.lstrip("@") for s in seeds))
-        batch: list[dict] = []
-        done = 0
-        while queue and len(found) < max_channels:
-            u = queue.pop(0)
-            if u in found:
-                continue
-            found.add(u)
-            m = await _metrics(client, u)
-            if not m.get("error"):
+    log.info("telethon: клиентов в пуле — %d", len(clients))
+
+    found: set[str] = set()
+    queue: list[str] = list(dict.fromkeys(s.lstrip("@") for s in seeds))
+    batch: list[dict] = []
+    done = 0
+    lock = asyncio.Lock()
+
+    async def take():
+        async with lock:
+            if len(found) >= max_channels:
+                return None
+            while queue:
+                u = queue.pop(0)
+                if u not in found:
+                    found.add(u)
+                    return u
+            return None
+
+    async def push(m, recs):
+        nonlocal done, batch
+        flush = None
+        async with lock:
+            if m and not m.get("error"):
                 batch.append(m)
-            for r in await _recs(client, u):
+            for r in recs:
                 if r not in found and r not in queue:
                     queue.append(r)
             if sink and len(batch) >= 20:
-                sink(batch); done += len(batch); batch = []
+                flush, batch = batch, []
+        if flush:
+            sink(flush)
+            async with lock:
+                done += len(flush)
                 log.info("telethon bootstrap: записано %d, найдено %d, очередь %d", done, len(found), len(queue))
-            await asyncio.sleep(0.25)
+
+    async def worker(client):
+        idle = 0
+        while True:
+            u = await take()
+            if u is None:
+                idle += 1
+                if idle >= 3:
+                    return
+                await asyncio.sleep(1.0)
+                continue
+            idle = 0
+            m = await _metrics(client, u)
+            recs = await _recs(client, u)
+            await push(m, recs)
+            await asyncio.sleep(0.3)
+
+    try:
+        await asyncio.gather(*[worker(c) for c in clients])
         if sink and batch:
             sink(batch); done += len(batch)
         return done if sink else len(found)
     finally:
-        await client.disconnect()
+        for c in clients:
+            try:
+                await c.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 async def _enrich(usernames: list[str]) -> list[dict]:
