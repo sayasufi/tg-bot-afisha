@@ -117,10 +117,11 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
       for (const layer of layers) {
         if (layer.type !== "symbol" || !layer.layout || layer.layout["text-field"] == null) continue;
         if (layer.id === "ofm-housenumbers" || layer["source-layer"] === "housenumber") continue;
-        // Drop the basemap's own settlement NAME labels (city/town/village/capital). At the far-zoom city
-        // picker our pins already carry the city name + count, so the tile's "Москва"/"Казань" doubles up
-        // right under them. Hide those; districts (suburb) and country/region labels stay for context.
-        if (layer["source-layer"] === "place" && /city|town|village|hamlet|capital/i.test(layer.id)) {
+        // Drop the basemap's own settlement + country/region NAME labels. At the far-zoom city picker our
+        // pins already carry the city name + count (so the tile's "Москва"/"Казань" doubles up under them),
+        // and the foreign country/region labels ("Финляндия"/"Турция"/oblasts) just clutter a Russia-only
+        // picker and collide with the city labels. Districts (suburb/neighbourhood) stay for street-zoom context.
+        if (layer["source-layer"] === "place" && /country|continent|state|province|region|city|town|village|hamlet|capital/i.test(layer.id)) {
           try {
             mlMap.setLayoutProperty(layer.id, "visibility", "none");
           } catch {

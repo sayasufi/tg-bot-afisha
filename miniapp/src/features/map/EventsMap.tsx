@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import L from "leaflet";
-import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { AttributionControl, MapContainer, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { City, EventItem, MapCluster } from "../../api/client";
@@ -79,6 +79,43 @@ const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the city cards take over (an
 type LabSide = "r" | "l" | "t" | "b";
 type LabBox = { x0: number; x1: number; y0: number; y1: number };
 
+// Prim's MST over the city points — joins every city into ONE network with the least total line length (no
+// cycles, minimal crossings): the thin acid "constellation" behind the pins at the far zoom. The dashes
+// drift (CSS dashFlow) for a quiet sense of movement across the country.
+function cityConstellation(cities: City[]): [number, number][][] {
+  const n = cities.length;
+  if (n < 2) return [];
+  const inTree = new Array(n).fill(false);
+  const best = new Array(n).fill(Infinity);
+  const from = new Array(n).fill(-1);
+  const d2 = (a: City, b: City) => (a.lat - b.lat) ** 2 + (a.lon - b.lon) ** 2;
+  const edges: [number, number][][] = [];
+  inTree[0] = true;
+  for (let k = 0; k < n; k++) {
+    best[k] = d2(cities[0], cities[k]);
+    from[k] = 0;
+  }
+  for (let added = 1; added < n; added++) {
+    let u = -1;
+    for (let i = 0; i < n; i++) if (!inTree[i] && (u === -1 || best[i] < best[u])) u = i;
+    if (u === -1) break;
+    inTree[u] = true;
+    edges.push([
+      [cities[from[u]].lat, cities[from[u]].lon],
+      [cities[u].lat, cities[u].lon],
+    ]);
+    for (let v = 0; v < n; v++) {
+      if (inTree[v]) continue;
+      const dd = d2(cities[u], cities[v]);
+      if (dd < best[v]) {
+        best[v] = dd;
+        from[v] = u;
+      }
+    }
+  }
+  return edges;
+}
+
 function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
@@ -88,8 +125,7 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
   // fits on one of four sides (right → left → below → above) WITHOUT overlapping an already-placed label or
   // any other city's dot. Priority is active-city-first, then by event count, so the cities that matter most
   // keep their labels and the crowded rest fall back to bare dots — it degrades cleanly as more cities are
-  // added (no piled-up text, no criss-cross lines). map.project gives pan-invariant CRS pixels, so the set
-  // recomputes on zoom only.
+  // added (no piled-up text). map.project gives pan-invariant CRS pixels, so the set recomputes on zoom only.
   const sides = useMemo<Map<string, LabSide>>(() => {
     const res = new Map<string, LabSide>();
     if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return res;
@@ -127,12 +163,26 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
     return res;
   }, [cities, currentSlug, zoom, map]);
 
+  // Thin acid "constellation" joining every city (MST). Geographic (not zoom-dependent); the dashes drift
+  // (CSS dashFlow) so the far-zoom map has a bit of quiet movement instead of being inert.
+  const constellation = useMemo(() => cityConstellation(cities), [cities]);
+
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
 
   // One marker per city: a labelled pin where the label found a free side, else a bare tappable dot (tapping
   // flies in, where there's room for its label).
   return (
     <>
+      {/* Thin dashed acid lines joining the cities (MST). A faint ink casing keeps them legible over
+          water/parks; both sit behind the pins and ignore taps. The drifting dashes add quiet movement. */}
+      <Polyline
+        positions={constellation}
+        pathOptions={{ color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", lineCap: "round", interactive: false }}
+      />
+      <Polyline
+        positions={constellation}
+        pathOptions={{ color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
+      />
       {cities.map((c) => {
         const side = sides.get(c.slug);
         const active = c.slug === currentSlug;
@@ -162,19 +212,19 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
   );
 }
 
-// When the far-zoom city picker first appears (you zoom out past the threshold), frame the whole set of
-// cities so Россия fills the screen instead of half-empty neighbouring countries. One flyToBounds per
+// When the far-zoom city picker first appears (you zoom out past the threshold), frame the user's REGION
+// (their city + neighbours) at a comfortable zoom — NOT the full Moscow→Krasnoyarsk span, which forced a
+// too-far, off-centre view full of foreign countries. Far-flung cities are a pan away. One flyTo per
 // activation — it doesn't fight later panning, and re-frames only if you leave and re-enter the picker.
-function CityOverview({ active, cities }: { active: boolean; cities: City[] }) {
+function CityOverview({ active, cities, center }: { active: boolean; cities: City[]; center: [number, number] | null }) {
   const map = useMap();
   const wasActive = useRef(false);
   useEffect(() => {
-    if (active && !wasActive.current && cities.length > 1) {
-      const bounds = L.latLngBounds(cities.map((c) => [c.lat, c.lon] as [number, number]));
-      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: CITY_PICK_MAX_ZOOM, duration: 0.7 });
+    if (active && !wasActive.current && cities.length > 1 && center) {
+      map.flyTo(center, Math.max(map.getMinZoom(), 4), { duration: 0.7 }); // ≈ the western cluster for a Moscow user
     }
     wasActive.current = active;
-  }, [active, cities, map]);
+  }, [active, cities, center, map]);
   return null;
 }
 
@@ -601,7 +651,7 @@ export function EventsMap({
 
   return (
     <div ref={wrapRef} className={`map-wrap${revealed ? " map-wrap--revealed" : ""}${selected ? " map-wrap--has-selected" : ""}${focusOut ? " map-wrap--focus-out" : ""}`}>
-      <MapContainer center={center ?? MOSCOW} zoom={11} minZoom={3} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
+      <MapContainer center={center ?? MOSCOW} zoom={11} minZoom={4} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />
@@ -623,7 +673,7 @@ export function EventsMap({
         <MapController selected={selected} locateNonce={locateNonce} userPos={userPos} />
         <CityRecenter center={center ?? null} />
         <CityMarkers cities={cities} currentSlug={currentCitySlug} onSelect={onSelectCity} />
-        <CityOverview active={constellation} cities={cities} />
+        <CityOverview active={constellation} cities={cities} center={center ?? null} />
         <ZoomCityPicker cities={cities} currentSlug={currentCitySlug} onSelect={onSelectCity} />
       </MapContainer>
       {constellation && cities.length > 1 && (
