@@ -103,17 +103,18 @@ function countCluster(count: number): L.DivIcon {
 // for the busier cities (capped 7.5–13px, a hint of "where it's happening", NOT a dominating bubble) — with
 // the name + event count beside it on a soft paper halo (no card box, no frame). The active city (where you
 // are) is an acid dot with a quiet glow; nothing reads as a billboard. Culled so labels never pile up.
-export function cityIcon(name: string, count: number, active = false): L.DivIcon {
+export function cityIcon(name: string, count: number, active = false, side: "r" | "l" | "t" | "b" = "r"): L.DivIcon {
   const safe = name.replace(/[<>&"]/g, "");
   const n = count >= 1000 ? `${Math.round(count / 100) / 10}k` : String(count);
   const r = count >= 5000 ? 15 : count >= 1500 ? 12.5 : count >= 600 ? 10.5 : 9; // bigger dots overall
   const g = count >= 5000 ? 72 : count >= 1500 ? 56 : count >= 600 ? 44 : 34; // soft activity glow, sized by events
   const gd = ((count % 36) / 10).toFixed(1); // varied pulse phase so the cities don't all breathe in sync
-  // --r + --gd on the parent so BOTH the pin (size + pulse) and the label (offset) read them.
+  // --r + --gd on the parent so BOTH the pin (size + pulse) and the label (offset) read them. The label sits
+  // on whichever side (r/l/t/b) the collision-free placement picked, so dense regions still read cleanly.
   return L.divIcon({
     className: "vcity-wrap",
     html:
-      `<div class="vcity${active ? " vcity--active" : ""}" style="--gd:${gd}s;--r:${r}px">` +
+      `<div class="vcity vcity--lab-${side}${active ? " vcity--active" : ""}" style="--gd:${gd}s;--r:${r}px">` +
       `<span class="vcity__glow" style="--g:${g}px"></span>` +
       `<span class="vcity__pin"></span>` +
       `<span class="vcity__lab"><b class="vcity__name">${safe}</b><span class="vcity__count">${n}</span></span>` +

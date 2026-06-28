@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import L from "leaflet";
-import { AttributionControl, MapContainer, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
+import { AttributionControl, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { City, EventItem, MapCluster } from "../../api/client";
@@ -76,107 +76,82 @@ function CityRecenter({ center }: { center: [number, number] | null }) {
 // hidden at this zoom (see `constellation`), so the cards stand in for it.
 const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the city cards take over (and event markers hide)
 
-// Prim's MST over the city points — joins every city into ONE network with the least total line length
-// (no cycles, minimal crossings): the thin acid "constellation" drawn behind the pins at the far zoom.
-function cityConstellation(cities: City[]): [number, number][][] {
-  const n = cities.length;
-  if (n < 2) return [];
-  const inTree = new Array(n).fill(false);
-  const best = new Array(n).fill(Infinity);
-  const from = new Array(n).fill(-1);
-  const d2 = (a: City, b: City) => (a.lat - b.lat) ** 2 + (a.lon - b.lon) ** 2;
-  const edges: [number, number][][] = [];
-  inTree[0] = true;
-  for (let k = 0; k < n; k++) {
-    best[k] = d2(cities[0], cities[k]);
-    from[k] = 0;
-  }
-  for (let added = 1; added < n; added++) {
-    let u = -1;
-    for (let i = 0; i < n; i++) if (!inTree[i] && (u === -1 || best[i] < best[u])) u = i;
-    if (u === -1) break;
-    inTree[u] = true;
-    edges.push([
-      [cities[from[u]].lat, cities[from[u]].lon],
-      [cities[u].lat, cities[u].lon],
-    ]);
-    for (let v = 0; v < n; v++) {
-      if (inTree[v]) continue;
-      const dd = d2(cities[u], cities[v]);
-      if (dd < best[v]) {
-        best[v] = dd;
-        from[v] = u;
-      }
-    }
-  }
-  return edges;
-}
+type LabSide = "r" | "l" | "t" | "b";
+type LabBox = { x0: number; x1: number; y0: number; y1: number };
 
 function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
 
-  // Cull labels so they never overlap. Each marker is a dot ON the city point with the name+count label to
-  // its RIGHT, so the box is asymmetric (extends right from the point, not centred). Overlap is zoom-only
-  // (panning shifts every point equally), so the kept set is stable while panning and recomputes only on
-  // zoom. The active city is forced first (always kept).
-  const cards = useMemo<City[]>(() => {
-    if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return [];
-    const ordered = [...cities].sort((a, b) => (a.slug === currentSlug ? -1 : b.slug === currentSlug ? 1 : 0));
-    const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
-    const kept: City[] = [];
+  // Collision-free label placement. Every city is a dot; a city EARNS a name+count label only if the label
+  // fits on one of four sides (right → left → below → above) WITHOUT overlapping an already-placed label or
+  // any other city's dot. Priority is active-city-first, then by event count, so the cities that matter most
+  // keep their labels and the crowded rest fall back to bare dots — it degrades cleanly as more cities are
+  // added (no piled-up text, no criss-cross lines). map.project gives pan-invariant CRS pixels, so the set
+  // recomputes on zoom only.
+  const sides = useMemo<Map<string, LabSide>>(() => {
+    const res = new Map<string, LabSide>();
+    if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return res;
+    const ordered = [...cities].sort((a, b) =>
+      a.slug === currentSlug ? -1 : b.slug === currentSlug ? 1 : b.count - a.count,
+    );
+    const pt = new Map(cities.map((c) => [c.slug, map.project([c.lat, c.lon], zoom)]));
+    const DOT = 9; // half-footprint of a city dot — a label must clear every OTHER city's dot
+    const dots: LabBox[] = cities.map((c) => {
+      const p = pt.get(c.slug)!;
+      return { x0: p.x - DOT, x1: p.x + DOT, y0: p.y - DOT, y1: p.y + DOT };
+    });
+    const placed: LabBox[] = [];
+    const hits = (b: LabBox, list: LabBox[]) => list.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
     for (const c of ordered) {
-      const pt = map.project([c.lat, c.lon], zoom);
-      const x0 = pt.x - 7; // the dot
-      const x1 = pt.x + 14 + c.name.length * 7.2; // gap + label (the name drives the width) + a touch of margin
-      const y0 = pt.y - 15;
-      const y1 = pt.y + 15;
-      if (placed.some((p) => x0 < p.x1 && x1 > p.x0 && y0 < p.y1 && y1 > p.y0)) continue;
-      placed.push({ x0, x1, y0, y1 });
-      kept.push(c);
+      const p = pt.get(c.slug)!;
+      const w = 12 + c.name.length * 7.2; // label width ≈ the name (the count sits under it, narrower)
+      const h = 30;
+      const g = 8; // gap from the dot to the label
+      const cand: [LabSide, LabBox][] = [
+        ["r", { x0: p.x + g, x1: p.x + g + w, y0: p.y - h / 2, y1: p.y + h / 2 }],
+        ["l", { x0: p.x - g - w, x1: p.x - g, y0: p.y - h / 2, y1: p.y + h / 2 }],
+        ["b", { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y + g, y1: p.y + g + h }],
+        ["t", { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - g - h, y1: p.y - g }],
+      ];
+      const others = dots.filter((_, i) => cities[i].slug !== c.slug); // the city's own dot may sit under its label
+      for (const [side, box] of cand) {
+        if (!hits(box, placed) && !hits(box, others)) {
+          placed.push(box);
+          res.set(c.slug, side);
+          break;
+        }
+      }
     }
-    return kept;
+    return res;
   }, [cities, currentSlug, zoom, map]);
 
-  // Thin acid constellation joining every city (MST — one network). Geographic, not zoom-dependent.
-  const constellation = useMemo(() => cityConstellation(cities), [cities]);
-
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
-  const shown = new Set(cards.map((c) => c.slug));
 
+  // One marker per city: a labelled pin where the label found a free side, else a bare tappable dot (tapping
+  // flies in, where there's room for its label).
   return (
     <>
-      {/* Thin dashed acid lines joining the cities into a constellation. A faint ink casing under the acid
-          keeps it legible over water/parks; both sit behind the pins and ignore taps. */}
-      <Polyline
-        positions={constellation}
-        pathOptions={{ color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", lineCap: "round", interactive: false }}
-      />
-      <Polyline
-        positions={constellation}
-        pathOptions={{ color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
-      />
-      {/* Cities whose card was culled (it overlaps a higher-priority one) → a small tappable dot, so a
-          hidden city is still visible and reachable. Tapping flies in, where its card has room to show. */}
-      {cities
-        .filter((c) => !shown.has(c.slug))
-        .map((c) => (
-          <Marker
-            key={`dot-${c.slug}`}
-            position={[c.lat, c.lon]}
-            icon={cityDotIcon()}
-            zIndexOffset={400}
-            eventHandlers={{ click: () => onSelect(c.slug) }}
-          />
-        ))}
-      {cards.map((c) => {
+      {cities.map((c) => {
+        const side = sides.get(c.slug);
         const active = c.slug === currentSlug;
+        if (!side) {
+          return (
+            <Marker
+              key={`dot-${c.slug}`}
+              position={[c.lat, c.lon]}
+              icon={cityDotIcon()}
+              zIndexOffset={400}
+              eventHandlers={{ click: () => onSelect(c.slug) }}
+            />
+          );
+        }
         return (
           <Marker
             key={c.slug}
             position={[c.lat, c.lon]}
-            icon={cityIcon(c.name, c.count, active)}
+            icon={cityIcon(c.name, c.count, active, side)}
             zIndexOffset={active ? 900 : 700}
             interactive={!active}
             eventHandlers={active ? undefined : { click: () => onSelect(c.slug) }}

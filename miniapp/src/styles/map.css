@@ -385,6 +385,30 @@ html[data-theme="dark"] .vpin--active::before {
   color: var(--ink-dim);
   text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 5px var(--bg);
 }
+/* Collision-free label sides: the picker places each city's label on whichever side is free (right by
+   default, else left / below / above), so a dense region (Москва–Казань–Воронеж–Волгоград) reads cleanly
+   instead of labels piling onto each other. The base .vcity__lab above is the right-side placement. */
+.vcity--lab-l .vcity__lab {
+  left: auto;
+  right: calc(var(--r, 12px) / 2 + 7px);
+  align-items: flex-end;
+  text-align: right;
+}
+.vcity--lab-b .vcity__lab {
+  left: 50%;
+  top: calc(var(--r, 12px) / 2 + 7px);
+  transform: translateX(-50%);
+  align-items: center;
+  text-align: center;
+}
+.vcity--lab-t .vcity__lab {
+  left: 50%;
+  top: auto;
+  bottom: calc(var(--r, 12px) / 2 + 7px);
+  transform: translateX(-50%);
+  align-items: center;
+  text-align: center;
+}
 /* The ACTIVE city (where you are now) — an acid dot with a quiet glow + a cinnabar count. A small, calm
    "you are here", not a dominating billboard. */
 .vcity--active {
