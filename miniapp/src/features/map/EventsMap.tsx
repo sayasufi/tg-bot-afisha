@@ -154,9 +154,13 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
     return res;
   }, [cities, currentSlug, zoom, map]);
 
-  // Thin acid "constellation" joining every city (MST). Geographic (not zoom-dependent); the dashes drift
+  // Thin acid "constellation" joining every city (k-NN). Geographic (not zoom-dependent); the dashes drift
   // (CSS dashFlow) so the far-zoom map has a bit of quiet movement instead of being inert.
   const constellation = useMemo(() => cityConstellation(cities), [cities]);
+  // Draw the lines through an SVG renderer with a LARGE padding, so the whole network is painted well beyond
+  // the viewport up front — Leaflet's default only paints paths within ~10% of the view, which is why they
+  // popped in with a lag while panning. With this they're already there as you move the map.
+  const lineRenderer = useMemo(() => L.svg({ padding: 5 }), []);
 
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
 
@@ -168,11 +172,11 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
           water/parks; both sit behind the pins and ignore taps. The drifting dashes add quiet movement. */}
       <Polyline
         positions={constellation}
-        pathOptions={{ color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", lineCap: "round", interactive: false }}
+        pathOptions={{ renderer: lineRenderer, color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", lineCap: "round", interactive: false }}
       />
       <Polyline
         positions={constellation}
-        pathOptions={{ color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
+        pathOptions={{ renderer: lineRenderer, color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
       />
       {cities.map((c) => {
         const side = sides.get(c.slug);

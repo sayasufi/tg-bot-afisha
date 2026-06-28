@@ -34,6 +34,7 @@ type MapPalette = {
   parksLabel: string;
   housenum: string;
   poi: string;
+  hillshade: string; // far-zoom relief shadow colour (mountains)
 };
 
 const PALETTE: Record<ThemeName, MapPalette> = {
@@ -54,6 +55,7 @@ const PALETTE: Record<ThemeName, MapPalette> = {
     parksLabel: "#6e6e66",
     housenum: "#a8a89e",
     poi: "#a8a89e",
+    hillshade: "#b0a890",
   },
   dark: {
     bg: "#14130e",
@@ -72,6 +74,7 @@ const PALETTE: Record<ThemeName, MapPalette> = {
     parksLabel: "#8a8576",
     housenum: "#55534a",
     poi: "#6a675c",
+    hillshade: "#060500",
   },
 };
 
@@ -187,6 +190,79 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
         },
         beforeId,
       );
+      // --- Far-zoom "atlas" texture: forests, mountain relief and major rivers so the country isn't a blank
+      // field at the city-picker zoom. All gated to FAR zoom (the street-level white-cube view stays clean),
+      // inserted LOW (under roads + labels). ---
+      const waterId =
+        layers.find((l: any) => l.id === "water")?.id ||
+        layers.find((l: any) => l["source-layer"] === "water" && l.type === "fill")?.id;
+      // Mountains — a subtle hillshade from a free terrarium DEM, UNDER water so flat seas aren't shaded.
+      // (Urals/Caucasus/Altai pick up quiet relief.) Best-effort: if the DEM tiles fail it just renders blank.
+      try {
+        if (!mlMap.getSource("dem")) {
+          mlMap.addSource("dem", {
+            type: "raster-dem",
+            tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+            encoding: "terrarium",
+            tileSize: 256,
+            maxzoom: 12,
+            attribution: "Terrain © Mapzen / AWS",
+          });
+        }
+      } catch {
+        /* DEM source unavailable — skip relief */
+      }
+      addLayer(
+        {
+          id: "ofm-hillshade",
+          type: "hillshade",
+          source: "dem",
+          maxzoom: 8,
+          paint: {
+            "hillshade-exaggeration": 0.4,
+            "hillshade-shadow-color": pal.hillshade,
+            "hillshade-highlight-color": pal.halo,
+            "hillshade-accent-color": pal.hillshade,
+          },
+        },
+        waterId,
+      );
+      // Forests — faint green from the LOW-zoom generalised landcover (globallandcover covers z0-8), so the
+      // taiga belt / empty north fills in green at the picker. Fades out as the detailed city greenery starts.
+      addLayer(
+        {
+          id: "ofm-forest-far",
+          type: "fill",
+          source: "openmaptiles",
+          "source-layer": "globallandcover",
+          filter: ["in", ["get", "class"], ["literal", ["forest", "tree"]]],
+          maxzoom: 9,
+          paint: {
+            "fill-color": pal.wood,
+            "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 7, 0.34, 9, 0],
+          },
+        },
+        beforeId,
+      );
+      // Major rivers — thin blue lines where the tiles carry them at far zoom (the biggest rivers are wide
+      // water polygons already). Harmless no-op where low-zoom waterways are absent.
+      addLayer(
+        {
+          id: "ofm-rivers-far",
+          type: "line",
+          source: "openmaptiles",
+          "source-layer": "waterway",
+          filter: ["==", ["get", "class"], "river"],
+          maxzoom: 11,
+          paint: {
+            "line-color": pal.waterway,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 7, 1.3],
+            "line-opacity": 0.7,
+          },
+        },
+        beforeId,
+      );
+
       // Major Moscow parks labelled in green. OSM/OMT doesn't tag big complexes like
       // ВДНХ or the Botanical Garden as named parks, so we use a curated GeoJSON
       // (names + Yandex-geocoded coords) instead of the spotty OMT `park` layer.
