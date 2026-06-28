@@ -203,6 +203,36 @@ function CityOverview({ active, cities }: { active: boolean; cities: City[] }) {
   return null;
 }
 
+// Manual zoom INTO a city: when the user pinches/scrolls past the city-pick threshold (the boundary between
+// the Россия overview and a city), switch the TRANSIENT viewing city to the one nearest the map centre — so
+// the events of the city you zoomed onto appear. Mirrors a tap on its card, but driven by the zoom gesture.
+function ZoomCityPicker({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
+  const map = useMap();
+  const prevZoom = useRef(map.getZoom());
+  useMapEvents({
+    zoomend: () => {
+      const z = map.getZoom();
+      const prev = prevZoom.current;
+      prevZoom.current = z;
+      // Only on a crossing UP out of the picker band into city-detail zoom (not while already zoomed in).
+      if (prev <= CITY_PICK_MAX_ZOOM && z > CITY_PICK_MAX_ZOOM && cities.length > 1) {
+        const c = map.getCenter();
+        let best: City | null = null;
+        let bestD = Infinity;
+        for (const city of cities) {
+          const d = (city.lat - c.lat) ** 2 + (city.lon - c.lng) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = city;
+          }
+        }
+        if (best && best.slug !== currentSlug) onSelect(best.slug);
+      }
+    },
+  });
+  return null;
+}
+
 const coordKey = (lat: number, lon: number) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 
 // Reports the map's bbox+zoom to the parent on every settle (moveend/zoomend)
@@ -603,7 +633,7 @@ export function EventsMap({
         <MapClickClear onClear={onClearFocus} />
         <MapControls onLocate={onLocate} locating={locating} />
         {!constellation && (useServerClusters ? <ServerClusters clusters={clusters} /> : cluster)}
-        {focused && focused.lat != null && focused.lon != null && focusedIco && (
+        {!constellation && focused && focused.lat != null && focused.lon != null && focusedIco && (
           <Marker
             position={[focused.lat, focused.lon]}
             icon={focusedIco}
@@ -611,7 +641,7 @@ export function EventsMap({
             eventHandlers={{ click: () => onSelect(focused) }}
           />
         )}
-        {selected && metro && (
+        {!constellation && selected && metro && (
           <Marker position={[metro.lat, metro.lon]} icon={metroIco} zIndexOffset={900} interactive={false} />
         )}
         {userPos && <Marker position={userPos} icon={userIco} pane="shadowPane" interactive={false} />}
@@ -619,6 +649,7 @@ export function EventsMap({
         <CityRecenter center={center ?? null} />
         <CityMarkers cities={cities} currentSlug={currentCitySlug} onSelect={onSelectCity} />
         <CityOverview active={constellation} cities={cities} />
+        <ZoomCityPicker cities={cities} currentSlug={currentCitySlug} onSelect={onSelectCity} />
       </MapContainer>
       {constellation && cities.length > 1 && (
         <div className="city-pick-banner">

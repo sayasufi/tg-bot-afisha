@@ -160,7 +160,7 @@ export function App() {
   // Current city (nearest by geolocation, or an explicit pick) drives the map `city`
   // scope param and the map centre — no hardcoded city on the client. The switcher shows
   // only when more than one city is active.
-  const { cities, current: currentCity, select: selectCity, seed: seedCity } = useCities(userPos);
+  const { cities, current: currentCity, settingsCity, select: selectCity, view: viewCity, seed: seedCity } = useCities(userPos);
   // Render every event time in the ACTIVE city's wall-clock (Novosibirsk +7 ≠ Moscow +3), not a
   // fixed Moscow offset. datetime.ts holds a module-level offset; flip it whenever the city changes.
   useEffect(() => {
@@ -169,6 +169,12 @@ export function App() {
   // If the user changes theme/city before the settings GET resolves, don't let the (older)
   // account value snap it back. Set when they act; checked when the load lands.
   const settingsTouched = useRef({ theme: false, city: false });
+  // Persisted city pick — ONLY from the profile. Marks the city touched (so a late settings GET can't
+  // revert it) then writes it (local + account). The map's picks are transient (viewCity) and never land here.
+  const pickCity = useCallback((slug: string) => {
+    settingsTouched.current.city = true;
+    selectCity(slug);
+  }, [selectCity]);
   // ONE round-trip on open: /bootstrap pulls settings + favourites + venue follows + friend count together
   // (was 4 separate authed POSTs racing the map fetch for the browser's ~6 connections, each re-validating
   // initData). Settings/favourites override this device's local cache when the account has a saved value.
@@ -826,6 +832,14 @@ export function App() {
     }, 230);
     return () => clearTimeout(t);
   }, [focusOut]);
+  // Zooming out to the city-picker band (zoom <= 6) drops the highlighted marker ENTIRELY — it would
+  // otherwise sit on a city dot, and the FocusBar would fight the «Выберите город» banner. Cleared, not hidden.
+  useEffect(() => {
+    if (zoom != null && zoom <= 6 && focusedRef.current) {
+      setFocused(null);
+      setFocusOut(false);
+    }
+  }, [zoom]);
 
   const handleLocate = useCallback(() => {
     dismissCoach();
@@ -977,10 +991,7 @@ export function App() {
           center={currentCity ? [currentCity.lat, currentCity.lon] : null}
           cities={cities}
           currentCitySlug={currentCity?.slug ?? null}
-          onSelectCity={(slug) => {
-            settingsTouched.current.city = true;
-            selectCity(slug);
-          }}
+          onSelectCity={viewCity}
           metro={nearMetro}
           onSelect={openEvent}
           onCluster={onCluster}
@@ -1162,9 +1173,9 @@ export function App() {
         {view === "profile" && (
           <ProfilePanel
             user={tgUser}
-            city={currentCity?.name ?? CITY}
+            city={settingsCity?.name ?? CITY}
             cities={cities}
-            onSelectCity={selectCity}
+            onSelectCity={pickCity}
             favIds={fav.ids}
             notifyReminders={notifyReminders}
             onToggleReminders={toggleReminders}
