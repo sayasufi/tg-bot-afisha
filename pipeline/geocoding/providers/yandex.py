@@ -10,6 +10,9 @@ class GeoResult:
     provider: str
     confidence: float
     normalized_address: str = ""
+    # Yandex GeocoderMetaData precision: exact | number | near | range | street | other ("" if the provider
+    # doesn't report it). "exact"/"number" = house-level — the only level trusted to override a source coord.
+    precision: str = ""
 
 
 class YandexGeocoder:
@@ -39,6 +42,7 @@ class YandexGeocoder:
             lon, lat = [float(x) for x in pos.split(" ")]
             meta = first.get("metaDataProperty", {}).get("GeocoderMetaData", {})
             kind = meta.get("kind", "")
+            precision = meta.get("precision", "")
             normalized_address = meta.get("text", "")
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             # Network error or an unexpected response shape — skip, never abort the
@@ -49,4 +53,4 @@ class YandexGeocoder:
         # unresolved venue on one pin (the "Red Square pile"); treat it as no match.
         if kind in {"locality", "area", "province", "country", "district"}:
             return None
-        return GeoResult(lat=lat, lon=lon, provider="yandex", confidence=0.9, normalized_address=normalized_address)
+        return GeoResult(lat=lat, lon=lon, provider="yandex", confidence=0.9, normalized_address=normalized_address, precision=precision)

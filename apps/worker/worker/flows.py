@@ -230,6 +230,17 @@ async def backfill_venues_osm():
     return await enrich._backfill_venues_osm_impl()
 
 
+@flow(name="correct-venue-coords", retries=1, retry_delay_seconds=120, timeout_seconds=1800, log_prints=True)
+async def correct_venue_coords():
+    """Fix venue coords that arrived verbatim from a source feed and landed off the real address (e.g. НЭТ
+    Волгоград sat ~140 m past Аллея Героев). Re-geocodes the address house-precisely (Yandex) and moves the
+    pin when the stored 'source' point disagrees materially. Self-healing: marks each venue reviewed so it
+    pays once, and picks up newly-ingested 'source' venues on the next run. Idempotent."""
+    from pipeline.maintenance.venue_coords import correct_venue_coordinates
+
+    return await correct_venue_coordinates(apply=True, limit=800)
+
+
 @flow(name="resolve-venue-hours", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1200, log_prints=True)
 def resolve_venue_hours():
     return enrich._resolve_venue_hours_impl()

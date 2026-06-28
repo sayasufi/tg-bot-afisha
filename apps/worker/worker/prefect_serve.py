@@ -60,6 +60,7 @@ _SCHEDULE = [
     (flows.expire_past_events, 3600),  # hourly — drop events whose day has passed
     (flows.resolve_afisha_dates, 21600),  # 6h — dates for the few afisha-only multi-show events
     (flows.backfill_venues_osm, 86400),
+    (flows.correct_venue_coords, 86400),  # daily — re-geocode 'source' venues, fix pins that landed off the address
     (flows.resolve_venue_hours, 600),
     (flows.cache_event_images, 120),
     # Lazily pull photos only for telegram EVENTS (the connector no longer downloads one per post).
