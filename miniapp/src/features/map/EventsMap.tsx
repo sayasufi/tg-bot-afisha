@@ -79,38 +79,29 @@ const CITY_PICK_MAX_ZOOM = 6; // at/below this zoom the city cards take over (an
 type LabSide = "r" | "l" | "t" | "b";
 type LabBox = { x0: number; x1: number; y0: number; y1: number };
 
-// Prim's MST over the city points — joins every city into ONE network with the least total line length (no
-// cycles, minimal crossings): the thin acid "constellation" behind the pins at the far zoom. The dashes
-// drift (CSS dashFlow) for a quiet sense of movement across the country.
-function cityConstellation(cities: City[]): [number, number][][] {
+// A spread network over the city points — each city linked to its K NEAREST neighbours (deduped). Denser
+// than a bare MST (which gives only N-1 edges and leaves the far-zoom map looking empty between a few dots),
+// so the country reads as a lively connected web; still thin + behind the pins, so it never competes with
+// the labels. The dashes drift (CSS dashFlow) for a quiet sense of movement.
+function cityConstellation(cities: City[], k = 3): [number, number][][] {
   const n = cities.length;
   if (n < 2) return [];
-  const inTree = new Array(n).fill(false);
-  const best = new Array(n).fill(Infinity);
-  const from = new Array(n).fill(-1);
   const d2 = (a: City, b: City) => (a.lat - b.lat) ** 2 + (a.lon - b.lon) ** 2;
+  const seen = new Set<string>();
   const edges: [number, number][][] = [];
-  inTree[0] = true;
-  for (let k = 0; k < n; k++) {
-    best[k] = d2(cities[0], cities[k]);
-    from[k] = 0;
-  }
-  for (let added = 1; added < n; added++) {
-    let u = -1;
-    for (let i = 0; i < n; i++) if (!inTree[i] && (u === -1 || best[i] < best[u])) u = i;
-    if (u === -1) break;
-    inTree[u] = true;
-    edges.push([
-      [cities[from[u]].lat, cities[from[u]].lon],
-      [cities[u].lat, cities[u].lon],
-    ]);
-    for (let v = 0; v < n; v++) {
-      if (inTree[v]) continue;
-      const dd = d2(cities[u], cities[v]);
-      if (dd < best[v]) {
-        best[v] = dd;
-        from[v] = u;
-      }
+  for (let i = 0; i < n; i++) {
+    const near = [...Array(n).keys()]
+      .filter((j) => j !== i)
+      .sort((a, b) => d2(cities[i], cities[a]) - d2(cities[i], cities[b]))
+      .slice(0, k);
+    for (const j of near) {
+      const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      edges.push([
+        [cities[i].lat, cities[i].lon],
+        [cities[j].lat, cities[j].lon],
+      ]);
     }
   }
   return edges;

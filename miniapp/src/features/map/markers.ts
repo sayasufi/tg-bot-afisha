@@ -107,7 +107,7 @@ export function cityIcon(name: string, count: number, active = false, side: "r" 
   const safe = name.replace(/[<>&"]/g, "");
   const n = count >= 1000 ? `${Math.round(count / 100) / 10}k` : String(count);
   const r = count >= 5000 ? 15 : count >= 1500 ? 12.5 : count >= 600 ? 10.5 : 9; // bigger dots overall
-  const g = count >= 5000 ? 72 : count >= 1500 ? 56 : count >= 600 ? 44 : 34; // soft activity glow, sized by events
+  const g = count >= 5000 ? 80 : count >= 1500 ? 70 : count >= 600 ? 60 : 52; // soft activity glow; range compressed up so small cities also warm the empty far-zoom map (no «Москва-вирус»)
   const gd = ((count % 36) / 10).toFixed(1); // varied pulse phase so the cities don't all breathe in sync
   // --r + --gd on the parent so BOTH the pin (size + pulse) and the label (offset) read them. The label sits
   // on whichever side (r/l/t/b) the collision-free placement picked, so dense regions still read cleanly.
