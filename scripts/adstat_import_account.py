@@ -15,7 +15,7 @@ import argparse
 from sqlalchemy import select
 
 from core.config.settings import get_settings
-from core.db.models.adstat import AdTgAccount
+from apps.adstat.models import AdTgAccount
 from core.db.session import SessionLocal
 
 

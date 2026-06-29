@@ -13,7 +13,7 @@ import re
 
 from curl_cffi import requests as creq
 
-from apps.worker.worker.adstat.cookies import load_netscape_cookies
+from apps.adstat.cookies import load_netscape_cookies
 
 
 def _tokens(html: str) -> list[str]:

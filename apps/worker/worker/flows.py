@@ -20,7 +20,7 @@ async def scrape_adstat():
     тариф-квоты и FlareSolverr). TGStat — для ручных прогонов по шорт-листу. No-op при ADSTAT_ENABLED=false."""
     import asyncio
 
-    from apps.worker.worker.adstat.service import scrape
+    from apps.adstat.service import scrape
 
     rows = await asyncio.to_thread(scrape, None, False, ["telemetr"])
     ok = sum(1 for r in rows if not r.get("error"))
@@ -32,7 +32,7 @@ async def discover_adstat():
     """Daily: автопоиск новых афиша-каналов (Telemetr search по 16 городам) → targets + снимки."""
     import asyncio
 
-    from apps.worker.worker.adstat.discover import discover
+    from apps.adstat.discover import discover
 
     rows = await asyncio.to_thread(discover, 3000, False)
     return {"found": len(rows)}
@@ -43,7 +43,7 @@ async def discover_telethon_flow():
     """Daily: расширить афиша-граф через рекомендации Telegram (Telethon, бесплатно) + метрики → adstat."""
     import asyncio
 
-    from apps.worker.worker.adstat.telethon_src import discover_telethon
+    from apps.adstat.telethon_src import discover_telethon
 
     n = await asyncio.to_thread(discover_telethon, None, 1000, False)
     return {"written": n}
@@ -54,7 +54,7 @@ async def discover_telega_flow():
     """Daily: каталог афиша-категории Telega.in (тысячи каналов) + реальные цены размещения → adstat."""
     import asyncio
 
-    from apps.worker.worker.adstat.discover import discover_telega
+    from apps.adstat.discover import discover_telega
 
     # 200 стр. каталога (из ~749) БЕЗ цен — быстро, ловит куда больше каналов (60 стр. оставляли каталог
     # почти нетронутым: 60→150 стр. дало +3114). Цены НЕ тянем на тысячи каналов ежедневно (это per-card
@@ -69,7 +69,7 @@ async def enrich_shortlist_prices_flow():
     Цены точечно по шорт-листу (не на тысячи каналов ежедневно — это per-card HTTP)."""
     import asyncio
 
-    from apps.worker.worker.adstat.discover import enrich_shortlist_prices
+    from apps.adstat.discover import enrich_shortlist_prices
 
     n = await asyncio.to_thread(enrich_shortlist_prices, 60, False)
     return {"priced": n}

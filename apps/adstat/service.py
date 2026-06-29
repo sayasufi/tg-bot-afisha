@@ -12,11 +12,11 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config.settings import get_settings
-from core.db.models.adstat import AdChannel, AdSnapshot, AdTarget
+from apps.adstat.models import AdChannel, AdSnapshot, AdTarget
 from core.db.session import SessionLocal
 
-from apps.worker.worker.adstat.telemetr import TelemetrClient
-from apps.worker.worker.adstat.tgstat import TGStatClient
+from apps.adstat.telemetr import TelemetrClient
+from apps.adstat.tgstat import TGStatClient
 
 log = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ import logging
 
 from core.config.settings import get_settings
 
-from apps.worker.worker.adstat.service import persist_snapshots, upsert_targets
+from apps.adstat.service import persist_snapshots, upsert_targets
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def _load_pool() -> list[dict]:
 
     from sqlalchemy import select
 
-    from core.db.models.adstat import AdTgAccount
+    from apps.adstat.models import AdTgAccount
     from core.db.session import SessionLocal
 
     now = datetime.now(timezone.utc)
@@ -67,7 +67,7 @@ async def _connect_clients() -> list:
         from sqlalchemy import func as sqlfunc
         from sqlalchemy import select
 
-        from core.db.models.adstat import AdTgAccount
+        from apps.adstat.models import AdTgAccount
         from core.db.session import SessionLocal
 
         with SessionLocal() as db:
@@ -101,7 +101,7 @@ def _mark_flood(account_id: int, seconds: int) -> None:
 
     from sqlalchemy import update
 
-    from core.db.models.adstat import AdTgAccount
+    from apps.adstat.models import AdTgAccount
     from core.db.session import SessionLocal
 
     until = datetime.now(timezone.utc) + timedelta(seconds=min(seconds + 60, 86400))
@@ -241,8 +241,8 @@ def _afisha_seeds(limit: int = 150) -> list[str]:
     расширяется. Резолвится только сидами (~150) → флуд-безопасно; найденные идут по access_hash."""
     from sqlalchemy import func, select
 
-    from apps.worker.worker.adstat.score import _relevance
-    from core.db.models.adstat import AdChannel, AdSnapshot
+    from apps.adstat.score import _relevance
+    from apps.adstat.models import AdChannel, AdSnapshot
     from core.db.session import SessionLocal
 
     seeds = list(dict.fromkeys(_SEED_HINTS))

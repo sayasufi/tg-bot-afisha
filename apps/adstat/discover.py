@@ -2,7 +2,7 @@
 
 Гоняет keyword×город запросы → объединяет → дедуп → пишет в adstat.targets и сразу снимок
 (search отдаёт подписчиков/ER/is_scam/sanctioned, так что discover = «найти + снять» за один проход).
-Запуск: python -m apps.worker.worker.adstat.run --discover   (или флоу discover-adstat).
+Запуск: python -m apps.adstat.run --discover   (или флоу discover-adstat).
 """
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ import time
 
 from core.config.settings import get_settings
 
-from apps.worker.worker.adstat.service import persist_snapshots, upsert_targets
-from apps.worker.worker.adstat.telemetr import TelemetrClient
+from apps.adstat.service import persist_snapshots, upsert_targets
+from apps.adstat.telemetr import TelemetrClient
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def discover(min_subscribers: int = 2000, dry_run: bool = False) -> list[dict]:
         log.warning("adstat discover: нет Telemetr-сессии (куки?)")
         return []
 
-    from apps.worker.worker.adstat.score import _relevance
+    from apps.adstat.score import _relevance
 
     found: dict[str, tuple[dict, str | None]] = {}
     queries = _queries()
@@ -104,13 +104,13 @@ def discover_telega(category_id: int = 52, max_pages: int = 60, with_prices: boo
     if not dry_run and not settings.adstat_enabled:
         log.info("adstat discover_telega: ADSTAT_ENABLED=false — пропуск")
         return []
-    from apps.worker.worker.adstat.telega import TelegaClient
+    from apps.adstat.telega import TelegaClient
 
     client = TelegaClient()
     rows = client.discover(category_id, max_pages)
     total = len(rows)
     if afisha_only:
-        from apps.worker.worker.adstat.score import _relevance
+        from apps.adstat.score import _relevance
         # _is_afisha режет федеральных новостников; _relevance добивает off-topic (мусор), оставляя афишу+город.
         rows = [r for r in rows if _is_afisha(r) and _relevance(r.get("title"), r.get("username"))[1] != "не тема"]
     if with_prices and rows:
@@ -134,8 +134,8 @@ def enrich_shortlist_prices(top_n: int = 50, dry_run: bool = False) -> int:
     if not dry_run and not settings.adstat_enabled:
         log.info("adstat enrich_shortlist_prices: ADSTAT_ENABLED=false — пропуск")
         return 0
-    from apps.worker.worker.adstat.score import rank
-    from apps.worker.worker.adstat.telega import TelegaClient
+    from apps.adstat.score import rank
+    from apps.adstat.telega import TelegaClient
 
     cands = [r for r in rank(limit=300) if r.get("relevance") == "афиша" and not r.get("cpm")][:top_n]
     if not cands:

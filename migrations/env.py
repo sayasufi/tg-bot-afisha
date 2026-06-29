@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from core.config.settings import get_settings
 from core.db.base import Base
 from core.db import models  # noqa: F401
+import apps.adstat.models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

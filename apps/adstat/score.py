@@ -17,7 +17,7 @@ import re
 
 from sqlalchemy import select
 
-from core.db.models.adstat import AdChannel, AdSnapshot
+from apps.adstat.models import AdChannel, AdSnapshot
 from core.db.session import SessionLocal
 
 _FIELDS = ["subscribers", "avg_reach", "er", "err", "cpm", "post_price", "rating",

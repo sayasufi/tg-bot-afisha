@@ -1,9 +1,9 @@
 """Standalone-раннер скрапера adstat.
 
 Примеры:
-  python -m apps.worker.worker.adstat.run --dry-run kudago mscculture   # скрап без записи в БД (печать JSON)
-  python -m apps.worker.worker.adstat.run kudago mscculture             # скрап + запись в adstat
-  python -m apps.worker.worker.adstat.run                               # все активные adstat.targets → БД
+  python -m apps.adstat.run --dry-run kudago mscculture   # скрап без записи в БД (печать JSON)
+  python -m apps.adstat.run kudago mscculture             # скрап + запись в adstat
+  python -m apps.adstat.run                               # все активные adstat.targets → БД
 
 Куки: ADSTAT_COOKIES_PATH (Netscape-экспорт залогиненной сессии). Запись в БД требует ADSTAT_ENABLED=true.
 """
@@ -14,7 +14,7 @@ import json
 import logging
 import sys
 
-from apps.worker.worker.adstat.service import scrape
+from apps.adstat.service import scrape
 
 
 def main() -> None:
@@ -37,7 +37,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.score:
-        from apps.worker.worker.adstat.score import rank
+        from apps.adstat.score import rank
         rows = rank(limit=40)
         print("%-22s %5s %-10s %8s %5s %8s  причина" % ("канал", "скор", "вердикт", "охват", "ER", "CPM"))
         for r in rows:
@@ -46,19 +46,19 @@ def main() -> None:
         return
 
     if args.enrich_prices:
-        from apps.worker.worker.adstat.discover import enrich_shortlist_prices
+        from apps.adstat.discover import enrich_shortlist_prices
         n = enrich_shortlist_prices(top_n=args.top_n, dry_run=args.dry_run)
         print(f"adstat enrich-prices: {n} афиша-каналов получили цену → score обновится")
         return
 
     if args.telethon:
-        from apps.worker.worker.adstat.telethon_src import discover_telethon
+        from apps.adstat.telethon_src import discover_telethon
         n = discover_telethon(max_channels=args.max_channels, dry_run=args.dry_run)
         print(f"adstat telethon: записано {n} каналов → targets + снимки")
         return
 
     if args.telega:
-        from apps.worker.worker.adstat.discover import discover_telega
+        from apps.adstat.discover import discover_telega
         rows = discover_telega(max_pages=args.max_pages, with_prices=not args.no_prices, dry_run=args.dry_run)
         if args.dry_run:
             print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
@@ -68,7 +68,7 @@ def main() -> None:
         return
 
     if args.discover:
-        from apps.worker.worker.adstat.discover import discover
+        from apps.adstat.discover import discover
         rows = discover(min_subscribers=args.min_subs, dry_run=args.dry_run)
         if args.dry_run:
             print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
