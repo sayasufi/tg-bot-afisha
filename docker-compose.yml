@@ -229,7 +229,7 @@ services:
       dockerfile: infra/docker/python.Dockerfile
     env_file: .env
     restart: unless-stopped
-    command: python -m apps.bot.bot.main
+    command: python -m apps.bot.main
     volumes:
       - .:/app
     depends_on:

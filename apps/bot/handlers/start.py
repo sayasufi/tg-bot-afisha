@@ -5,7 +5,7 @@ from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import Message
 
 from core.render.formatting import ce
-from apps.bot.bot.keyboards.main import webapp_keyboard
+from apps.bot.keyboards.main import webapp_keyboard
 from core.config.settings import get_settings
 from core.db.repositories.users import update_settings, upsert_user_async
 from core.db.session import AsyncSessionLocal

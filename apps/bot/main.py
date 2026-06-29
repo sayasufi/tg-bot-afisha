@@ -7,8 +7,8 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
-from apps.bot.bot.handlers import fallback, forwarded, start
-from apps.bot.bot.middlewares.throttle import ThrottleMiddleware
+from apps.bot.handlers import fallback, forwarded, start
+from apps.bot.middlewares.throttle import ThrottleMiddleware
 from core.config.settings import get_settings
 from core.logging.setup import setup_logging
 
