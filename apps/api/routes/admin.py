@@ -4,6 +4,7 @@
 Дальнейшие фазы (операции/настройки/модерация/рассылки) добавляются сюда же. Каждая защищённая ручка
 зависит от require_admin (404 если не сконфигурён/нет сессии — поверхность невидима).
 """
+import asyncio
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -266,16 +267,27 @@ async def admin_flows(actor: str = Depends(require_admin)) -> dict:
     """Список Prefect-деплойментов (~33 флоу) + расписание + статус последнего реального прогона."""
     try:
         depls = await _prefect_post("/deployments/filter", {"limit": 200})
-        runs = await _prefect_post("/flow_runs/filter", {"limit": 400, "sort": "START_TIME_DESC"})
     except Exception:
         return {"flows": [], "error": "prefect недоступен"}
-    last: dict = {}
-    for r in runs if isinstance(runs, list) else []:
-        did = r.get("deployment_id")
-        if did and did not in last and r.get("start_time"):  # последний РЕАЛЬНЫЙ прогон (не scheduled)
-            last[did] = r
+    if not isinstance(depls, list):
+        return {"flows": [], "error": "prefect недоступен"}
+    # Последний РЕАЛЬНЫЙ прогон по каждому деплойменту — конкурентно. (flow_runs limit max 200, а окно из
+    # 200 свежих прогонов не покрывает суточные флоу; per-deployment точно: 33 запроса ~0.5с.)
+    _ST = {"type": {"any_": ["COMPLETED", "FAILED", "RUNNING", "CRASHED", "CANCELLED"]}}
+    async with httpx.AsyncClient(timeout=12) as _c:
+        async def _last(did: str):
+            try:
+                rows = (await _c.post(f"{_PREFECT_API}/flow_runs/filter", json={
+                    "limit": 1, "sort": "START_TIME_DESC",
+                    "flow_runs": {"deployment_id": {"any_": [did]}, "state": _ST},
+                })).json()
+                return did, (rows[0] if isinstance(rows, list) and rows else None)
+            except Exception:
+                return did, None
+        _results = await asyncio.gather(*[_last(d["id"]) for d in depls])
+    last = {did: r for did, r in _results if r}
     flows = []
-    for d in depls if isinstance(depls, list) else []:
+    for d in depls:
         sched = d.get("schedules") or []
         interval = cron = None
         if sched:
