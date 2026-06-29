@@ -1,3 +1,5 @@
+import { useRef, useState } from "react";
+
 type Pt = { label: string; value: number };
 
 function niceMax(v: number): number {
@@ -34,6 +36,9 @@ function smoothPath(pts: [number, number][]): string {
 }
 
 export function LineChart({ data }: { data: Pt[] }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+
   if (!data || !data.length) return <div className="state">нет данных за период</div>;
 
   const W = 1100, H = 180, padL = 46, padR = 16, padT = 14, padB = 26;
@@ -50,29 +55,55 @@ export function LineChart({ data }: { data: Pt[] }) {
   const yTicks = Array.from({ length: ticks + 1 }, (_, i) => (max / ticks) * i);
   const xStep = data.length > 16 ? Math.ceil(data.length / 14) : 1;
 
+  const onMove = (e: { clientX: number }) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const relX = (e.clientX - rect.left) / rect.width; // 0..1 по всей ширине
+    const f = (relX - padL / W) / ((W - padL - padR) / W); // в координаты графика
+    const idx = Math.round(Math.min(1, Math.max(0, f)) * (data.length - 1));
+    setHover(idx);
+  };
+
+  const hv = hover != null ? data[hover] : null;
+  const hx = hover != null ? xAt(hover) : 0;
+  const hy = hv ? yAt(hv.value) : 0;
+  const tipBelow = hy < H * 0.34; // у верхнего края — показываем тултип снизу, чтобы не обрезался
+
   return (
-    <svg className="linechart" viewBox={`0 0 ${W} ${H}`}>
-      {yTicks.map((t, i) => {
-        const yy = yAt(t);
-        return (
-          <g key={i}>
-            <line x1={padL} y1={yy} x2={W - padR} y2={yy} className="lc-grid" />
-            <text x={padL - 8} y={yy + 4} className="lc-ylabel" textAnchor="end">{fmtCompact(t)}</text>
-          </g>
-        );
-      })}
-      {area && <path d={area} className="lc-area" />}
-      {line && <path d={line} className="lc-line" />}
-      {pts.map((p, i) => (
-        <circle key={i} cx={p[0]} cy={p[1]} r={i === pts.length - 1 ? 4 : 2.5} className={i === pts.length - 1 ? "lc-dot lc-dot--last" : "lc-dot"}>
-          <title>{`${data[i].label}: ${data[i].value}`}</title>
-        </circle>
-      ))}
-      {data.map((d, i) =>
-        i % xStep === 0 || i === data.length - 1 ? (
-          <text key={i} x={xAt(i)} y={H - 7} className="lc-xlabel" textAnchor="middle">{d.label}</text>
-        ) : null
+    <div className="lc-wrap" ref={wrapRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg className="linechart" viewBox={`0 0 ${W} ${H}`}>
+        {yTicks.map((t, i) => {
+          const yy = yAt(t);
+          return (
+            <g key={i}>
+              <line x1={padL} y1={yy} x2={W - padR} y2={yy} className="lc-grid" />
+              <text x={padL - 8} y={yy + 4} className="lc-ylabel" textAnchor="end">{fmtCompact(t)}</text>
+            </g>
+          );
+        })}
+        {area && <path d={area} className="lc-area" />}
+        {line && <path d={line} className="lc-line" />}
+        {hover != null && <line x1={hx} y1={padT} x2={hx} y2={padT + innerH} className="lc-crosshair" />}
+        {pts.map((p, i) => (
+          <circle key={i} cx={p[0]} cy={p[1]} r={i === pts.length - 1 ? 4 : 2.5} className={i === pts.length - 1 ? "lc-dot lc-dot--last" : "lc-dot"} />
+        ))}
+        {hv && <circle cx={hx} cy={hy} r={5.5} className="lc-dot lc-dot--active" />}
+        {data.map((d, i) =>
+          i % xStep === 0 || i === data.length - 1 ? (
+            <text key={i} x={xAt(i)} y={H - 7} className="lc-xlabel" textAnchor="middle">{d.label}</text>
+          ) : null
+        )}
+      </svg>
+      {hv && (
+        <div
+          className={"lc-tip" + (tipBelow ? " lc-tip--below" : "")}
+          style={{ left: `${(hx / W) * 100}%`, top: `${(hy / H) * 100}%` }}
+        >
+          <div className="lc-tip__val">{hv.value.toLocaleString("ru-RU")}</div>
+          <div className="lc-tip__label">{hv.label}</div>
+        </div>
       )}
-    </svg>
+    </div>
   );
 }

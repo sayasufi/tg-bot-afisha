@@ -1,5 +1,3 @@
-import { ReactNode } from "react";
-
 import { LineChart } from "../components/LineChart";
 import { useApi } from "../lib/useApi";
 
