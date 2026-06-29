@@ -44,6 +44,8 @@ _SCHEDULE = [
     (flows.dispatch_broadcasts, 300),
     # Реальные подписчики adstat-каналов из t.me (точнее каталога Telega) — батч раз в 6ч, ротация по 600.
     (flows.refresh_adstat_subs, 21600),
+    # Telethon-добор точных метрик для on-topic каналов без t.me-превью — раз в сутки, малый батч (флуд-лимиты).
+    (flows.enrich_adstat_telethon, 86400),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),

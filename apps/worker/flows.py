@@ -307,3 +307,15 @@ def refresh_adstat_subs():
     r = refresh_subscribers(limit=600)
     s = recompute_scores()
     return {**r, **s}
+
+
+@flow(name="enrich-adstat-telethon", retries=0, timeout_seconds=5400, log_prints=True)
+def enrich_adstat_telethon():
+    """Дообогатить точными метриками (telethon participants_count + охват) on-topic каналы без свежего
+    реального охвата — для каналов с закрытым t.me-превью это единственный точный источник. retries=0
+    (флуд-чувствительно). Малый батч + FloodWait-безопасный пул."""
+    from apps.adstat.score import recompute_scores
+    from apps.adstat.telethon_src import enrich_telethon
+    r = enrich_telethon(limit=150)
+    s = recompute_scores()
+    return {**r, **s}

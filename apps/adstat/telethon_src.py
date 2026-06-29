@@ -221,6 +221,99 @@ async def _recs(client, username: str) -> list[str]:
         return []
 
 
+async def _enrich_one(client, username: str) -> dict | None:
+    """Точные метрики по username с РЕЗОЛВОМ. FloodWait ПРОБРАСЫВАЕТСЯ (чтобы пометить аккаунт)."""
+    from telethon.errors import FloodWaitError
+    from telethon.tl.functions.channels import GetFullChannelRequest
+
+    u = username.lstrip("@")
+    try:
+        ent = await client.get_entity(u)
+        full = await client(GetFullChannelRequest(ent))
+        subs = getattr(full.full_chat, "participants_count", None)
+    except FloodWaitError:
+        raise
+    except Exception:  # noqa: BLE001 — канал недоступен/удалён/не публичный
+        return None
+    views: list[int] = []
+    try:
+        async for msg in client.iter_messages(ent, limit=20):
+            if getattr(msg, "views", None):
+                views.append(msg.views)
+    except FloodWaitError:
+        raise
+    except Exception:  # noqa: BLE001
+        pass
+    avg_reach = int(sum(views) / len(views)) if views else None
+    er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
+    return {"source": "telethon", "username": u, "title": getattr(ent, "title", None),
+            "subscribers": subs, "avg_reach": avg_reach, "er": er}
+
+
+async def _enrich_async(usernames: list[str]) -> int:
+    """Дообогатить список юзернеймов через ПУЛ. ResolveUsername флуд-прон → пейс + при FloodWait
+    помечаем аккаунт отдыхающим и выводим из ротации, остальные продолжают."""
+    from telethon.errors import FloodWaitError
+
+    pairs = await _connect_clients()
+    if not pairs:
+        log.warning("telethon enrich: нет авторизованных клиентов — пропуск")
+        return 0
+    clients = list(pairs)  # [(account|None, client)]
+    out: list[dict] = []
+    idx = 0
+    try:
+        for uname in usernames:
+            if not clients:
+                break
+            idx %= len(clients)
+            acc, client = clients[idx]
+            try:
+                m = await _enrich_one(client, uname)
+                if m:
+                    out.append(m)
+                idx += 1
+            except FloodWaitError as e:
+                if acc:
+                    _mark_flood(acc["account_id"], int(getattr(e, "seconds", 300)))
+                clients.pop(idx)  # вывести флудящий аккаунт из ротации
+                continue
+            await asyncio.sleep(1.2)  # пейс между ResolveUsername
+    finally:
+        for _, c in pairs:
+            try:
+                await c.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+    if out:
+        persist_snapshots(out)
+    return len(out)
+
+
+def enrich_telethon(limit: int = 150) -> dict:
+    """Дообогатить ТОЧНЫМИ метриками (telethon participants_count + охват) on-topic каналы без свежего
+    реального охвата (приоритет — высокий скор). Для каналов с закрытым t.me-превью это единственный
+    точный источник. Малыми батчами (флуд-лимиты), по расписанию."""
+    from sqlalchemy import text
+
+    from core.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        rows = db.execute(text(
+            "SELECT c.username FROM adstat.channels c "
+            "WHERE c.username <> '' AND c.relevance IN ('афиша', 'город/локалка') "
+            "AND NOT EXISTS (SELECT 1 FROM adstat.snapshots s WHERE s.channel_id = c.channel_id "
+            "  AND s.source IN ('telethon', 'tme') AND s.avg_reach IS NOT NULL "
+            "  AND s.captured_at > now() - interval '7 days') "
+            "ORDER BY c.score DESC NULLS LAST LIMIT :lim"
+        ), {"lim": limit}).all()
+    usernames = [r[0] for r in rows]
+    if not usernames:
+        return {"enriched": 0, "candidates": 0}
+    n = asyncio.run(_enrich_async(usernames))
+    return {"enriched": n, "candidates": len(usernames)}
+
+
 # Опорные сиды-хинты для гарантированного покрытия (Москва / Питер / общие по России).
 # Невалидные просто отвалятся на резолве (catch) — безвредно.
 _SEED_HINTS = [
