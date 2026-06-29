@@ -37,7 +37,8 @@ export function Events() {
   const [category, setCategory] = useState("");
   const [city, setCity] = useState("");
   const [date, setDate] = useState("");
-  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "date", dir: "asc" });
+  // дефолт — новые добавленные первыми (created desc; «дата» с 2014-го первой была бы бесполезна).
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "created", dir: "desc" });
   const [page, setPage] = useState(0);
 
   useEffect(() => {
