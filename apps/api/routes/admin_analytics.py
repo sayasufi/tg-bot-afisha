@@ -15,8 +15,9 @@ from core.infra.redis import get_redis
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
-# «calendar» (в календарь) убран — такой функции в продукте нет, сигнал всегда 0.
-_KINDS = ("click", "route", "share", "reminder")
+# Только реально логируемые logIntent (см. miniapp/src/features/sheet/EventSheet.tsx). «calendar» и
+# «reminder» — мёртвые кнопки (logIntent ими не вызывается; напоминание завязано на избранное), всегда 0.
+_KINDS = ("click", "route", "share")
 _WEEKS = 8
 _DAYS = 14
 

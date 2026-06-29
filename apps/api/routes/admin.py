@@ -27,7 +27,7 @@ from core.infra.redis import get_redis
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
-_KINDS = ("click", "route", "share", "reminder")  # «calendar» убран — такой функции в продукте нет
+_KINDS = ("click", "route", "share")  # только реально логируемые logIntent; calendar/reminder — мёртвые кнопки
 _WEEKS_BACK = 4
 _DAYS_BACK = 7
 

@@ -6,7 +6,6 @@ const ACTION_LABELS: Record<string, string> = {
   click: "открыли событие",
   route: "построили маршрут",
   share: "поделились «пойдём?»",
-  reminder: "поставили напоминание",
 };
 
 export function Dashboard() {

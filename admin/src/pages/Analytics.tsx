@@ -5,7 +5,6 @@ const ACTIONS: Record<string, { label: string; hint: string }> = {
   click: { label: "Открыли событие", hint: "сколько раз открывали карточку события" },
   route: { label: "Построили маршрут", hint: "сколько раз строили маршрут до площадки" },
   share: { label: "Поделились «пойдём?»", hint: "сколько раз отправляли событие другу через кнопку «пойдём?»" },
-  reminder: { label: "Поставили напоминание", hint: "сколько раз ставили напоминание на событие" },
 };
 
 function Chart({ title, hint, data }: { title: string; hint: string; data: { label: string; value: number }[] }) {
