@@ -40,6 +40,7 @@ async def log_intent(payload: IntentRequest) -> Response:
         try:
             now = datetime.now(timezone.utc)
             day = now.strftime("%Y-%m-%d")
+            hour = now.strftime("%Y-%m-%d-%H")  # часовой бакет для коротких интервалов аналитики
             y, w, _ = now.isocalendar()
             week = f"{y}-W{w:02d}"
             uid = None
@@ -51,6 +52,8 @@ async def log_intent(payload: IntentRequest) -> Response:
             pipe = client.pipeline()
             pipe.incr(f"intent:act:{kind}:{day}")  # aggregate counter stays fail-open
             pipe.expire(f"intent:act:{kind}:{day}", _ACT_TTL)
+            pipe.incr(f"intent:acth:{kind}:{hour}")  # часовой счётчик (короткий TTL — нужен только для today/yesterday)
+            pipe.expire(f"intent:acth:{kind}:{hour}", 8 * 24 * 3600)
             if uid is not None:
                 pipe.sadd(f"intent:wau:{week}", str(uid))
                 pipe.expire(f"intent:wau:{week}", _WAU_TTL)
