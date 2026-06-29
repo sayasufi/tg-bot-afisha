@@ -8,7 +8,7 @@ export const NAV: NavGroup[] = [
     title: "Обзор",
     items: [
       { label: "Сводка", to: "/" },
-      { label: "Аналитика", to: "/analytics", phase: 3 },
+      { label: "Аналитика", to: "/analytics" },
       { label: "Здоровье", to: "/health" },
     ],
   },

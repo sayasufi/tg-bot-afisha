@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.services.events_service import _redis_client
 from apps.api.routes.admin import router as admin_router
+from apps.api.routes.admin_analytics import router as admin_analytics_router
 from apps.api.routes.admin_broadcasts import router as admin_broadcasts_router
 from apps.api.routes.admin_channels import router as admin_channels_router
 from apps.api.routes.admin_events import router as admin_events_router
@@ -142,3 +143,4 @@ app.include_router(admin_channels_router)
 app.include_router(admin_sources_router)
 app.include_router(admin_broadcasts_router)
 app.include_router(admin_events_router)
+app.include_router(admin_analytics_router)
