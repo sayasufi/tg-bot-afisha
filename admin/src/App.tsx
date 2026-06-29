@@ -6,6 +6,7 @@ import { ALL_ITEMS } from "./lib/nav";
 import { Broadcasts } from "./pages/Broadcasts";
 import { Channels } from "./pages/Channels";
 import { Dashboard } from "./pages/Dashboard";
+import { Events } from "./pages/Events";
 import { Flows } from "./pages/Flows";
 import { Health } from "./pages/Health";
 import { Sources } from "./pages/Sources";
@@ -26,6 +27,7 @@ function Gate() {
         <Route path="channels" element={<Channels />} />
         <Route path="sources" element={<Sources />} />
         <Route path="broadcasts" element={<Broadcasts />} />
+        <Route path="events" element={<Events />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}
