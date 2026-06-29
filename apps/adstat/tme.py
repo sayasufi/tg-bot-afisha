@@ -37,14 +37,16 @@ def refresh_subscribers(limit: int = 400) -> dict:
     db = SessionLocal()
     n_ok = n_none = 0
     try:
+        # Порядок — по РЕЙТИНГУ (как в шортлисте админки): сначала каналы, которые реально смотрят.
+        # Telega-число занижено у части каналов, поэтому сортировать по нему нельзя (важные уйдут в конец).
         rows = db.execute(text(
             "SELECT c.channel_id, c.username FROM adstat.channels c "
-            "LEFT JOIN LATERAL (SELECT subscribers FROM adstat.snapshots s "
-            "  WHERE s.channel_id = c.channel_id ORDER BY captured_at DESC LIMIT 1) last ON true "
+            "LEFT JOIN LATERAL (SELECT rating FROM adstat.snapshots s "
+            "  WHERE s.channel_id = c.channel_id AND s.source <> 'tme' ORDER BY captured_at DESC LIMIT 1) m ON true "
             "WHERE c.username <> '' "
             "AND NOT EXISTS (SELECT 1 FROM adstat.snapshots t WHERE t.channel_id = c.channel_id "
             "                AND t.source = 'tme' AND t.captured_at > now() - interval '20 hours') "
-            "ORDER BY COALESCE(last.subscribers, 0) DESC LIMIT :lim"
+            "ORDER BY COALESCE(m.rating, 0) DESC LIMIT :lim"
         ), {"lim": limit}).all()
         for cid, uname in rows:
             subs = fetch_subscribers(uname)
