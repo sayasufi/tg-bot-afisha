@@ -29,7 +29,7 @@ async def scrape_adstat():
 
 @flow(name="discover-adstat", retries=1, retry_delay_seconds=300, timeout_seconds=3600, log_prints=True)
 async def discover_adstat():
-    """Weekly: автопоиск новых афиша-каналов (Telemetr search по 16 городам) → targets + снимки."""
+    """Daily: автопоиск новых афиша-каналов (Telemetr search по 16 городам) → targets + снимки."""
     import asyncio
 
     from apps.worker.worker.adstat.discover import discover
@@ -40,7 +40,7 @@ async def discover_adstat():
 
 @flow(name="discover-telethon", retries=1, retry_delay_seconds=300, timeout_seconds=5400, log_prints=True)
 async def discover_telethon_flow():
-    """Weekly: расширить афиша-граф через рекомендации Telegram (Telethon, бесплатно) + метрики → adstat."""
+    """Daily: расширить афиша-граф через рекомендации Telegram (Telethon, бесплатно) + метрики → adstat."""
     import asyncio
 
     from apps.worker.worker.adstat.telethon_src import discover_telethon
@@ -51,7 +51,7 @@ async def discover_telethon_flow():
 
 @flow(name="discover-telega", retries=1, retry_delay_seconds=300, timeout_seconds=5400, log_prints=True)
 async def discover_telega_flow():
-    """Weekly: каталог афиша-категории Telega.in (тысячи каналов) + реальные цены размещения → adstat."""
+    """Daily: каталог афиша-категории Telega.in (тысячи каналов) + реальные цены размещения → adstat."""
     import asyncio
 
     from apps.worker.worker.adstat.discover import discover_telega
