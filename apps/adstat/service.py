@@ -8,7 +8,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config.settings import get_settings
@@ -45,9 +45,7 @@ def _active_targets(limit: int | None = None, stale_first: bool = False) -> list
     with SessionLocal() as db:
         stmt = select(AdTarget.username).where(AdTarget.is_active.is_(True))
         if stale_first:
-            stmt = stmt.outerjoin(AdChannel, AdChannel.username == AdTarget.username).order_by(
-                AdChannel.last_scraped_at.asc().nulls_first(), AdTarget.target_id
-            )
+            stmt = stmt.order_by(AdTarget.last_scraped_at.asc().nulls_first(), AdTarget.target_id)
         if limit:
             stmt = stmt.limit(limit)
         rows = db.execute(stmt).scalars().all()
@@ -92,6 +90,12 @@ def scrape(usernames: list[str] | None = None, dry_run: bool = False,
 
     if not dry_run:
         persist_snapshots(ok)
+        # Отметить ВСЕ опрошенные таргеты (вкл. not_found) как недавно-опрошенные → ротация не клинит на junk.
+        norm = list({u.lstrip("@").lower() for u in names})
+        if norm:
+            with SessionLocal() as db:
+                db.execute(update(AdTarget).where(AdTarget.username.in_(norm)).values(last_scraped_at=datetime.now(timezone.utc)))
+                db.commit()
     log.info("adstat: %d каналов, %d снимков ok, %d ошибок", len(names), len(ok), len(errs))
     return results
 
