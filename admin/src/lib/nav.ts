@@ -31,7 +31,7 @@ export const NAV: NavGroup[] = [
   {
     title: "Операции",
     items: [
-      { label: "Флоу", to: "/ops/flows", phase: 2 },
+      { label: "Флоу", to: "/ops/flows" },
       { label: "Maintenance", to: "/ops/data", phase: 2 },
       { label: "Опасные", to: "/ops/danger", phase: 2 },
       { label: "Система", to: "/ops/system", phase: 4 },

@@ -4,6 +4,7 @@ import { Shell } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { ALL_ITEMS } from "./lib/nav";
 import { Dashboard } from "./pages/Dashboard";
+import { Flows } from "./pages/Flows";
 import { Health } from "./pages/Health";
 import { Login } from "./pages/Login";
 import { Placeholder } from "./pages/Placeholder";
@@ -18,6 +19,7 @@ function Gate() {
       <Route element={<Shell />}>
         <Route index element={<Dashboard />} />
         <Route path="health" element={<Health />} />
+        <Route path="ops/flows" element={<Flows />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}

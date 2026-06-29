@@ -4,6 +4,8 @@
 Дальнейшие фазы (операции/настройки/модерация/рассылки) добавляются сюда же. Каждая защищённая ручка
 зависит от require_admin (404 если не сконфигурён/нет сессии — поверхность невидима).
 """
+import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -243,3 +245,94 @@ async def admin_health(actor: str = Depends(require_admin), db: AsyncSession = D
         "stuck_runs": stuck,
         "ingest": await _ingest_health(db),
     }
+
+
+# ---- operations: Prefect flows ---------------------------------------------
+
+# Prefect server REST (compose network). Триггеры идут ТОЛЬКО через наш authed-бэкенд (UI Prefect без auth).
+_PREFECT_API = os.environ.get("PREFECT_API_URL", "http://prefect-server:4200/api").rstrip("/")
+_UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
+
+
+async def _prefect_post(path: str, body: dict) -> list | dict:
+    async with httpx.AsyncClient(timeout=12) as c:
+        r = await c.post(f"{_PREFECT_API}{path}", json=body)
+        r.raise_for_status()
+        return r.json()
+
+
+@router.get("/flows")
+async def admin_flows(actor: str = Depends(require_admin)) -> dict:
+    """Список Prefect-деплойментов (~33 флоу) + расписание + статус последнего реального прогона."""
+    try:
+        depls = await _prefect_post("/deployments/filter", {"limit": 200})
+        runs = await _prefect_post("/flow_runs/filter", {"limit": 400, "sort": "START_TIME_DESC"})
+    except Exception:
+        return {"flows": [], "error": "prefect недоступен"}
+    last: dict = {}
+    for r in runs if isinstance(runs, list) else []:
+        did = r.get("deployment_id")
+        if did and did not in last and r.get("start_time"):  # последний РЕАЛЬНЫЙ прогон (не scheduled)
+            last[did] = r
+    flows = []
+    for d in depls if isinstance(depls, list) else []:
+        sched = d.get("schedules") or []
+        interval = cron = None
+        if sched:
+            s = sched[0].get("schedule") or {}
+            interval = s.get("interval")
+            cron = s.get("cron")
+        lr = last.get(d["id"]) or {}
+        flows.append({
+            "id": d["id"],
+            "name": d["name"],
+            "paused": bool(d.get("paused")),
+            "interval": interval,
+            "cron": cron,
+            "last_state": lr.get("state_type"),
+            "last_start": lr.get("start_time"),
+            "last_runtime": lr.get("total_run_time"),
+        })
+    flows.sort(key=lambda x: x["name"])
+    return {"flows": flows}
+
+
+@router.post("/ops/run")
+async def admin_ops_run(
+    request: Request, payload: dict = Body(...), actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db)
+) -> dict:
+    """Запустить флоу сейчас: создаёт flow run у деплоймента (Prefect-раннер подхватит за секунды)."""
+    did = str(payload.get("deployment_id", ""))
+    if not _UUID_RE.match(did):
+        raise HTTPException(status_code=400, detail="bad deployment id")
+    name = payload.get("name") or did
+    try:
+        run = await _prefect_post(f"/deployments/{did}/create_flow_run", {})
+    except Exception:
+        await write_audit(db, request, actor, "flow.run", target=name, result="error")
+        raise HTTPException(status_code=502, detail="не удалось запустить флоу")
+    await write_audit(db, request, actor, "flow.run", target=name, result=str(run.get("id")))
+    return {"flow_run_id": run.get("id"), "state": run.get("state_type")}
+
+
+@router.get("/ops/runs")
+async def admin_ops_runs(actor: str = Depends(require_admin)) -> dict:
+    """Лента последних прогонов (любой флоу) — для истории на странице Операций."""
+    try:
+        runs = await _prefect_post("/flow_runs/filter", {"limit": 40, "sort": "START_TIME_DESC"})
+        depls = await _prefect_post("/deployments/filter", {"limit": 200})
+    except Exception:
+        return {"runs": []}
+    dn = {d["id"]: d["name"] for d in (depls if isinstance(depls, list) else [])}
+    out = []
+    for r in runs if isinstance(runs, list) else []:
+        if not r.get("start_time"):
+            continue
+        out.append({
+            "id": r.get("id"),
+            "flow": dn.get(r.get("deployment_id")) or r.get("name"),
+            "state": r.get("state_type"),
+            "start": r.get("start_time"),
+            "runtime": r.get("total_run_time"),
+        })
+    return {"runs": out[:30]}
