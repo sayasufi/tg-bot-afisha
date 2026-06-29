@@ -157,10 +157,6 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
   // Thin acid "constellation" joining every city (k-NN). Geographic (not zoom-dependent); the dashes drift
   // (CSS dashFlow) so the far-zoom map has a bit of quiet movement instead of being inert.
   const constellation = useMemo(() => cityConstellation(cities), [cities]);
-  // Draw the lines through an SVG renderer with a LARGE padding, so the whole network is painted well beyond
-  // the viewport up front — Leaflet's default only paints paths within ~10% of the view, which is why they
-  // popped in with a lag while panning. With this they're already there as you move the map.
-  const lineRenderer = useMemo(() => L.svg({ padding: 5 }), []);
 
   if (cities.length < 2 || zoom > CITY_PICK_MAX_ZOOM) return null;
 
@@ -172,11 +168,11 @@ function CityMarkers({ cities, currentSlug, onSelect }: { cities: City[]; curren
           water/parks; both sit behind the pins and ignore taps. The drifting dashes add quiet movement. */}
       <Polyline
         positions={constellation}
-        pathOptions={{ renderer: lineRenderer, color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", lineCap: "round", interactive: false }}
+        pathOptions={{ color: "#0b0b0b", weight: 3.4, opacity: 0.16, dashArray: "2 6", lineCap: "round", interactive: false }}
       />
       <Polyline
         positions={constellation}
-        pathOptions={{ renderer: lineRenderer, color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
+        pathOptions={{ color: "#ccff00", weight: 1.9, opacity: 0.95, dashArray: "2 6", lineCap: "round", interactive: false }}
       />
       {cities.map((c) => {
         const side = sides.get(c.slug);
@@ -643,10 +639,15 @@ export function EventsMap({
   // user marker doesn't get a fresh divIcon — and replay its pulse — on every
   // unrelated re-render.
   const userIco = useMemo(() => userIcon(heading), [heading]);
+  // Map-level SVG renderer with a LARGE padding so vector paths (the city constellation) are painted well
+  // beyond the viewport and stay drawn while panning — the default ~10% padding made the lines lag / vanish
+  // mid-drag and only reappear on release. This renderer is lifecycle-managed by Leaflet, so it transforms
+  // with the map during a drag (a per-Polyline custom renderer did NOT, which made them disappear).
+  const mapRenderer = useMemo(() => L.svg({ padding: 6 }), []);
 
   return (
     <div ref={wrapRef} className={`map-wrap${revealed ? " map-wrap--revealed" : ""}${selected ? " map-wrap--has-selected" : ""}${focusOut ? " map-wrap--focus-out" : ""}`}>
-      <MapContainer center={center ?? MOSCOW} zoom={11} minZoom={4} maxZoom={19} zoomControl={false} attributionControl={false} style={{ height: "100%", width: "100%" }}>
+      <MapContainer center={center ?? MOSCOW} zoom={11} minZoom={4} maxZoom={19} zoomControl={false} attributionControl={false} renderer={mapRenderer} style={{ height: "100%", width: "100%" }}>
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />
