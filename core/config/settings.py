@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     # known prod hosts + localhost dev (see apps/api/app/main.py).
     cors_origins: str = Field(default="", alias="CORS_ORIGINS")
 
+    # Admin panel (admin.okrestmap.ru) — owner-only. Comma-separated Telegram user IDs allowed in.
+    # Empty → the whole /v1/admin surface is invisible (404), so it can never be left open by accident.
+    admin_telegram_ids: str = Field(default="", alias="ADMIN_TELEGRAM_IDS")
+    # HMAC secret for signing admin session tokens (separate from the bot token, separate blast radius).
+    # Empty → admin disabled. Owner logs in via the Telegram Login Widget; we sign a short session.
+    admin_session_secret: str = Field(default="", alias="ADMIN_SESSION_SECRET")
+    admin_session_ttl_hours: int = Field(default=12, alias="ADMIN_SESSION_TTL_HOURS")
+
     telethon_api_id: int | None = Field(default=None, alias="TELETHON_API_ID")
     telethon_api_hash: str = Field(default="", alias="TELETHON_API_HASH")
     telethon_session: str = Field(default="", alias="TELETHON_SESSION")  # StringSession; empty → web-preview
@@ -112,6 +120,14 @@ class Settings(BaseSettings):
             print("WARNING: MINIO_ROOT_PASSWORD is the insecure dev default in production", file=sys.stderr)
         if "afisha:afisha@" in self.database_url:
             print("WARNING: DATABASE_URL uses the default afisha:afisha credentials in production", file=sys.stderr)
+        # Admin is optional (disabled = invisible), but a half-configured admin is a footgun: ids without a
+        # signing secret can't issue sessions, a secret without ids lets nobody in. Shout, don't crash.
+        if bool(self.admin_telegram_ids.strip()) != bool(self.admin_session_secret.strip()):
+            print(
+                "WARNING: admin panel half-configured — set BOTH ADMIN_TELEGRAM_IDS and ADMIN_SESSION_SECRET "
+                "(or neither, to keep /v1/admin invisible)",
+                file=sys.stderr,
+            )
         return self
 
 

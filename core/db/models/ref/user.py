@@ -53,5 +53,8 @@ class User(Base):
     # open. WARMS a brand-new account's feed from the inviter's taste (referral cold-start cure) +
     # attribution. Plain BigInteger (no FK), like event_going.inviter_id. NULL = organic.
     invited_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Per-account version mixed into the admin-session HMAC (admin.okrestmap.ru). Bump = revoke all of the
+    # owner's admin sessions instantly ("log out everywhere"), same trick as friend_link_ver. 0 = none issued.
+    admin_session_ver: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

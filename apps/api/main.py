@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.services.events_service import _redis_client
+from apps.api.routes.admin import router as admin_router
 from apps.api.routes.events import router as events_router
 from apps.api.routes.health import router as health_router
 from apps.api.routes.intent import router as intent_router
@@ -132,3 +133,4 @@ app.include_router(share_router)
 app.include_router(recommend_router)
 app.include_router(intent_router)
 app.include_router(stats_router)
+app.include_router(admin_router)

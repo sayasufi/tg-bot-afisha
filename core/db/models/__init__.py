@@ -5,6 +5,8 @@ from core.db.models.events.event_source import EventSource
 from core.db.models.events.raw_event import RawEvent
 from core.db.models.events.source_run import SourceRun
 from core.db.models.events.venue import Venue
+from core.db.models.ref.admin_audit import AdminAudit
+from core.db.models.ref.app_settings import AppSetting
 from core.db.models.ref.city import City
 from core.db.models.ref.event_reminder import EventReminder
 from core.db.models.ref.map_place import MapPlace
@@ -21,6 +23,8 @@ __all__ = [
     "AdSnapshot",
     "AdTarget",
     "AdTgAccount",
+    "AdminAudit",
+    "AppSetting",
     "City",
     "Event",
     "EventCandidate",
