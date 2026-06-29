@@ -40,7 +40,7 @@ export const NAV: NavGroup[] = [
   {
     title: "Аудитория",
     items: [
-      { label: "Пользователи", to: "/users", phase: 4 },
+      { label: "Пользователи", to: "/users" },
       { label: "Рассылки", to: "/broadcasts" },
       { label: "Реклама", to: "/adstat", phase: 4 },
     ],

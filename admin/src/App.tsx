@@ -13,6 +13,7 @@ import { Flows } from "./pages/Flows";
 import { Health } from "./pages/Health";
 import { Settings } from "./pages/Settings";
 import { Sources } from "./pages/Sources";
+import { Users } from "./pages/Users";
 import { Venues } from "./pages/Venues";
 import { Login } from "./pages/Login";
 import { Placeholder } from "./pages/Placeholder";
@@ -36,6 +37,7 @@ function Gate() {
         <Route path="venues" element={<Venues />} />
         <Route path="dedup" element={<Dedup />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="users" element={<Users />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}

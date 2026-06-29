@@ -10,6 +10,7 @@ from apps.api.routes.admin_dedup import router as admin_dedup_router
 from apps.api.routes.admin_events import router as admin_events_router
 from apps.api.routes.admin_settings import router as admin_settings_router
 from apps.api.routes.admin_sources import router as admin_sources_router
+from apps.api.routes.admin_users import router as admin_users_router
 from apps.api.routes.admin_venues import router as admin_venues_router
 from apps.api.routes.events import router as events_router
 from apps.api.routes.health import router as health_router
@@ -150,3 +151,4 @@ app.include_router(admin_analytics_router)
 app.include_router(admin_venues_router)
 app.include_router(admin_dedup_router)
 app.include_router(admin_settings_router)
+app.include_router(admin_users_router)
