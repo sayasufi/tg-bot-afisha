@@ -40,6 +40,10 @@ _JOIN = (
     "   SELECT post_price FROM adstat.snapshots s WHERE s.channel_id = c.channel_id "
     "   AND s.source <> 'tme' AND s.post_price IS NOT NULL ORDER BY s.captured_at DESC LIMIT 1"
     " ) snap ON true "
+    " LEFT JOIN LATERAL ("
+    "   SELECT avg_reactions FROM adstat.snapshots s WHERE s.channel_id = c.channel_id "
+    "   AND s.avg_reactions IS NOT NULL ORDER BY s.captured_at DESC LIMIT 1"
+    " ) react ON true "
 )
 
 
@@ -90,7 +94,8 @@ async def list_channels(
         "SELECT c.username, c.title, c.city, c.ad_price, c.last_scraped_at, "
         "  sub.subscribers, rch.avg_reach, "
         "  round(rch.avg_reach::numeric / NULLIF(sub.subscribers, 0) * 100, 1) AS er, "
-        f"  snap.post_price, round({_CPM_EXPR}::numeric, 1) AS cpm, c.score, c.verdict, c.quality, c.relevance "
+        f"  snap.post_price, round({_CPM_EXPR}::numeric, 1) AS cpm, c.score, c.verdict, c.quality, c.relevance, "
+        "  react.avg_reactions "
         "FROM adstat.channels c " + _JOIN +
         f"WHERE {where} ORDER BY {sort_col} {direction} NULLS LAST, c.channel_id LIMIT :limit OFFSET :offset"
     ), params)).all()
@@ -100,6 +105,6 @@ async def list_channels(
         "subscribers": r[5], "avg_reach": r[6], "er": float(r[7]) if r[7] is not None else None,
         "post_price": float(r[8]) if r[8] is not None else None,
         "cpm": float(r[9]) if r[9] is not None else None,
-        "score": r[10], "verdict": r[11], "quality": r[12], "relevance": r[13],
+        "score": r[10], "verdict": r[11], "quality": r[12], "relevance": r[13], "avg_reactions": r[14],
     } for r in rows]
     return {"items": items, "total": int(total or 0), "page": int(page), "page_size": _PAGE_SIZE}

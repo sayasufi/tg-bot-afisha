@@ -125,13 +125,16 @@ async def _metrics_ent(client, entity) -> dict | None:
         raise
     except Exception:  # noqa: BLE001
         return {"source": "telethon", "username": u, "error": "getfull"}
-    views, dates, fwd = [], [], []
+    views, dates, fwd, reacts = [], [], [], []
     try:
         async for msg in client.iter_messages(entity, limit=20):
             if getattr(msg, "views", None):
                 views.append(msg.views)
             if getattr(msg, "forwards", None):
                 fwd.append(msg.forwards)
+            rr = getattr(msg, "reactions", None)
+            if rr and getattr(rr, "results", None):
+                reacts.append(sum(int(getattr(rc, "count", 0) or 0) for rc in rr.results))
             if msg.date:
                 dates.append(msg.date)
     except FloodWaitError:
@@ -139,6 +142,7 @@ async def _metrics_ent(client, entity) -> dict | None:
     except Exception:  # noqa: BLE001
         pass
     avg_reach = int(sum(views) / len(views)) if views else None
+    avg_reactions = int(sum(reacts) / len(reacts)) if reacts else None
     er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
     freq = None
     if len(dates) >= 2:
@@ -147,7 +151,8 @@ async def _metrics_ent(client, entity) -> dict | None:
             freq = round(len(dates) / span * 7, 1)
     return {
         "source": "telethon", "username": u, "peer_id": getattr(entity, "id", None),
-        "title": getattr(entity, "title", None), "subscribers": subs, "avg_reach": avg_reach, "er": er,
+        "title": getattr(entity, "title", None), "subscribers": subs, "avg_reach": avg_reach,
+        "avg_reactions": avg_reactions, "er": er,
         "raw": {"posts_per_week": freq, "samples": len(views),
                 "avg_forwards": int(sum(fwd) / len(fwd)) if fwd else None},
     }
@@ -179,19 +184,23 @@ async def _metrics(client, username: str) -> dict:
     except Exception as e:  # noqa: BLE001
         return {"source": "telethon", "username": u, "error": str(e)[:140]}
 
-    views, dates, fwd = [], [], []
+    views, dates, fwd, reacts = [], [], [], []
     try:
         async for msg in client.iter_messages(ent, limit=20):
             if getattr(msg, "views", None):
                 views.append(msg.views)
             if getattr(msg, "forwards", None):
                 fwd.append(msg.forwards)
+            rr = getattr(msg, "reactions", None)
+            if rr and getattr(rr, "results", None):
+                reacts.append(sum(int(getattr(rc, "count", 0) or 0) for rc in rr.results))
             if msg.date:
                 dates.append(msg.date)
     except Exception:  # noqa: BLE001
         pass
 
     avg_reach = int(sum(views) / len(views)) if views else None
+    avg_reactions = int(sum(reacts) / len(reacts)) if reacts else None
     er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
     freq = None
     if len(dates) >= 2:
@@ -203,7 +212,7 @@ async def _metrics(client, username: str) -> dict:
         "username": (getattr(ent, "username", None) or u),
         "peer_id": getattr(ent, "id", None),
         "title": getattr(ent, "title", None),
-        "subscribers": subs, "avg_reach": avg_reach, "er": er,
+        "subscribers": subs, "avg_reach": avg_reach, "avg_reactions": avg_reactions, "er": er,
         "raw": {"posts_per_week": freq, "samples": len(views),
                 "avg_forwards": int(sum(fwd) / len(fwd)) if fwd else None},
     }
@@ -236,18 +245,23 @@ async def _enrich_one(client, username: str) -> dict | None:
     except Exception:  # noqa: BLE001 — канал недоступен/удалён/не публичный
         return None
     views: list[int] = []
+    reacts: list[int] = []
     try:
         async for msg in client.iter_messages(ent, limit=20):
             if getattr(msg, "views", None):
                 views.append(msg.views)
+            rr = getattr(msg, "reactions", None)
+            if rr and getattr(rr, "results", None):
+                reacts.append(sum(int(getattr(rc, "count", 0) or 0) for rc in rr.results))
     except FloodWaitError:
         raise
     except Exception:  # noqa: BLE001
         pass
     avg_reach = int(sum(views) / len(views)) if views else None
+    avg_reactions = int(sum(reacts) / len(reacts)) if reacts else None
     er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
-    return {"source": "telethon", "username": u, "title": getattr(ent, "title", None),
-            "subscribers": subs, "avg_reach": avg_reach, "er": er}
+    return {"source": "telethon", "username": u, "title": getattr(ent, "title", None), "subscribers": subs,
+            "avg_reach": avg_reach, "avg_reactions": avg_reactions, "er": er}
 
 
 async def _enrich_async(usernames: list[str]) -> int:
@@ -290,10 +304,10 @@ async def _enrich_async(usernames: list[str]) -> int:
     return len(out)
 
 
-def enrich_telethon(limit: int = 150) -> dict:
-    """Дообогатить ТОЧНЫМИ метриками (telethon participants_count + охват) on-topic каналы без свежего
-    реального охвата (приоритет — высокий скор). Для каналов с закрытым t.me-превью это единственный
-    точный источник. Малыми батчами (флуд-лимиты), по расписанию."""
+def enrich_shortlist(limit: int = 150) -> dict:
+    """Дообогатить ТОЧНЫМИ метриками (telethon participants_count + охват + реакции) on-topic каналы без
+    свежего реального охвата (приоритет — высокий скор). Для каналов с закрытым t.me-превью это
+    единственный точный источник. Малыми батчами (флуд-лимиты), по расписанию. Пул FloodWait-безопасен."""
     from sqlalchemy import text
 
     from core.db.session import SessionLocal

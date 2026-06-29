@@ -8,7 +8,7 @@ import { useApi } from "../lib/useApi";
 type Ch = {
   username: string; title: string | null; city: string | null; ad_price: number | null;
   last_scraped_at: string | null; subscribers: number | null; avg_reach: number | null;
-  er: number | null; post_price: number | null; cpm: number | null;
+  er: number | null; post_price: number | null; cpm: number | null; avg_reactions: number | null;
   score: number | null; verdict: string | null; quality: number | null; relevance: string | null;
 };
 
@@ -122,6 +122,7 @@ export function Adstat() {
                   <th>тема</th>
                   <SortTh label="подписч." k="subs" sort={sort} onSort={onSort} className="num" />
                   <SortTh label="охват" k="reach" sort={sort} onSort={onSort} className="num" />
+                  <th className="num">реакц.</th>
                   <th className="num">ER</th>
                   <SortTh label="цена пост" k="price" sort={sort} onSort={onSort} className="num" />
                   <SortTh label="CPM" k="cpm" sort={sort} onSort={onSort} className="num" />
@@ -141,6 +142,7 @@ export function Adstat() {
                     <td className="muted">{c.relevance ?? "—"}</td>
                     <td className="num">{num(c.subscribers)}</td>
                     <td className="num muted">{num(c.avg_reach)}</td>
+                    <td className="num muted">{num(c.avg_reactions)}</td>
                     <td className="num muted">{c.er != null ? `${c.er.toFixed(1)}%` : "—"}</td>
                     <td className="num muted">{c.post_price != null ? `${num(Math.round(c.post_price))}₽` : "—"}</td>
                     <td className="num muted">{c.cpm != null ? `${c.cpm}₽` : "—"}</td>

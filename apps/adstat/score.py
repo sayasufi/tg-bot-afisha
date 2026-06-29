@@ -20,7 +20,7 @@ from sqlalchemy import select
 from apps.adstat.models import AdChannel, AdSnapshot
 from core.db.session import SessionLocal
 
-_FIELDS = ["subscribers", "avg_reach", "er", "err", "cpm", "post_price", "rating",
+_FIELDS = ["subscribers", "avg_reach", "avg_reactions", "er", "err", "cpm", "post_price", "rating",
            "is_scam", "is_boosting", "sanctioned", "quality_score", "mentions"]
 
 # Кусочно-линейные кривые бонусов (непрерывные → нет «ничьих» внутри банды).
@@ -152,6 +152,13 @@ def score_channel(m: dict) -> tuple[int, str, str]:
     if mentions and mentions > 0:
         s += 6
         why.append("есть упоминания")
+    # Реакции — сильный сигнал ЖИВОЙ аудитории (боты не реагируют). Бонус за долю реакций от охвата.
+    reactions = m.get("avg_reactions")
+    if reactions and reach:
+        rrate = reactions / reach
+        if rrate >= 0.005:  # ≥0.5% реакций от просмотров
+            s += min(8.0, rrate * 400)
+            why.append(f"реакции {rrate * 100:.1f}%")
 
     s = int(max(0, min(100, round(s))))
     verdict = "брать" if s >= 70 else ("осторожно" if s >= 50 else "мимо")

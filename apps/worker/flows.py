@@ -315,7 +315,7 @@ def enrich_adstat_telethon():
     реального охвата — для каналов с закрытым t.me-превью это единственный точный источник. retries=0
     (флуд-чувствительно). Малый батч + FloodWait-безопасный пул."""
     from apps.adstat.score import recompute_scores
-    from apps.adstat.telethon_src import enrich_telethon
-    r = enrich_telethon(limit=150)
+    from apps.adstat.telethon_src import enrich_shortlist
+    r = enrich_shortlist(limit=150)
     s = recompute_scores()
     return {**r, **s}

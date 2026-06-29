@@ -30,6 +30,7 @@ class AdSnapshot(Base):
     er: Mapped[float | None] = mapped_column(Float, nullable=True)
     err: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_reach: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_reactions: Mapped[int | None] = mapped_column(Integer, nullable=True)  # ср. реакций/пост — сигнал живости
     quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     premium_subs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     month_growth: Mapped[int | None] = mapped_column(Integer, nullable=True)
