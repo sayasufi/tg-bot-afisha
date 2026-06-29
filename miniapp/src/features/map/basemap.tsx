@@ -266,9 +266,10 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
         beforeId,
       );
 
-      // Outline RUSSIA itself — draw its national border BOLDER than the basemap's faint admin hairlines, so
-      // the country reads as the "stage" at the far-zoom picker. Matches admin_level-2 boundary segments that
-      // sit next to Russia (adm0 code/name variants, to be robust to the tile's encoding). Far/mid zoom only.
+      // Crisp COUNTRY outlines at far zoom — draw admin_level-2 borders BOLDER than the basemap's faint
+      // hairlines, so the map reads as defined countries (Russia, the big central shape, dominates the
+      // picker) instead of a blank field. The tile's adm0_l/adm0_r are empty in this build, so a strict
+      // Russia-only filter matched nothing; land borders only (maritime excluded). Far/mid zoom only.
       addLayer(
         {
           id: "ru-border",
@@ -278,18 +279,15 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
           filter: [
             "all",
             ["==", ["to-number", ["get", "admin_level"]], 2],
-            [
-              "any",
-              ["in", ["get", "adm0_l"], ["literal", ["RU", "RUS", "Russia", "Россия"]]],
-              ["in", ["get", "adm0_r"], ["literal", ["RU", "RUS", "Russia", "Россия"]]],
-            ],
+            ["!=", ["get", "maritime"], 1],
+            ["!=", ["get", "maritime"], "1"],
           ],
           maxzoom: 9,
           layout: { "line-join": "round", "line-cap": "round" },
           paint: {
             "line-color": pal.border,
-            "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.5, 6, 2.4, 9, 3],
-            "line-opacity": 0.92,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.1, 6, 1.9, 9, 2.6],
+            "line-opacity": 0.82,
           },
         },
         beforeId,
