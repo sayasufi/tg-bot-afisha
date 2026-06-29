@@ -233,23 +233,29 @@ _SEED_HINTS = [
 ]
 
 
-def _afisha_seeds(limit: int = 120) -> list[str]:
-    """Сиды = каналы с АФИША-провенансом (есть снимок Telemetr или Telethon) — все города и общие —
-    плюс опорные хинты (Москва/Питер/Россия). Резолвится только сидами → больше точек входа в граф."""
-    from sqlalchemy import select
+def _afisha_seeds(limit: int = 150) -> list[str]:
+    """Сиды = опорные хинты (Москва/Питер/Россия) + СЛУЧАЙНАЯ подвыборка из ВСЕХ найденных каналов
+    (telemetr / telethon / **telega** — включая ~5400 telega-каналов). Рандом КАЖДЫЙ прогон → каждый день
+    другой район графа рекомендаций, поэтому крауль расширяется за плато (раньше брал один и тот же ~120-набор
+    БЕЗ рандома → один и тот же neighborhood → упор в 445). Резолвится только сидами (~150) → флуд-безопасно;
+    найденные идут по access_hash."""
+    from sqlalchemy import func, select
 
     from core.db.models.adstat import AdChannel, AdSnapshot
     from core.db.session import SessionLocal
 
     seeds = list(dict.fromkeys(_SEED_HINTS))
     with SessionLocal() as db:
-        rows = db.execute(
+        # DISTINCT в подзапросе, СНАРУЖИ ORDER BY random() (Postgres запрещает ORDER BY random() вместе с DISTINCT).
+        sub = (
             select(AdChannel.username)
             .join(AdSnapshot, AdSnapshot.channel_id == AdChannel.channel_id)
-            .where(AdSnapshot.source.in_(["telemetr", "telethon"]))
+            .where(AdChannel.username.is_not(None))
+            .where(AdSnapshot.source.in_(["telemetr", "telethon", "telega"]))
             .distinct()
-            .limit(limit)
-        ).scalars().all()
+            .subquery()
+        )
+        rows = db.execute(select(sub.c.username).order_by(func.random()).limit(limit)).scalars().all()
     for u in rows:
         if u not in seeds:
             seeds.append(u)
