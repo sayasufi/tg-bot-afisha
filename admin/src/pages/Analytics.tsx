@@ -89,7 +89,10 @@ export function Analytics() {
             </div>
           )}
 
-          <Chart title="Активные пользователи по неделям" hint="сколько разных людей заходили и что-то делали (по ISO-неделям интервала)" data={data.wau} />
+          {/* WAU — недельная метрика; для коротких интервалов (одна неделя) график бессмысленен → прячем. */}
+          {data.wau?.length > 1 && (
+            <Chart title="Активные пользователи по неделям" hint="сколько разных людей заходили и что-то делали (по ISO-неделям интервала)" data={data.wau} />
+          )}
 
           {actionKinds.map((k) => (
             <Chart key={k} title={`${ACTIONS[k]?.label ?? k} — ${win}`} hint={`${ACTIONS[k]?.hint ?? ""} за интервал`} data={data.actions[k]} />
