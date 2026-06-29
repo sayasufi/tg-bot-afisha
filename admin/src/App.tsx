@@ -7,6 +7,7 @@ import { Analytics } from "./pages/Analytics";
 import { Broadcasts } from "./pages/Broadcasts";
 import { Channels } from "./pages/Channels";
 import { Dashboard } from "./pages/Dashboard";
+import { Dedup } from "./pages/Dedup";
 import { Events } from "./pages/Events";
 import { Flows } from "./pages/Flows";
 import { Health } from "./pages/Health";
@@ -32,6 +33,7 @@ function Gate() {
         <Route path="events" element={<Events />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="venues" element={<Venues />} />
+        <Route path="dedup" element={<Dedup />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}

@@ -17,7 +17,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "События", to: "/events" },
       { label: "Площадки", to: "/venues" },
-      { label: "Дубликаты", to: "/dedup", phase: 3 },
+      { label: "Дубликаты", to: "/dedup" },
     ],
   },
   {
