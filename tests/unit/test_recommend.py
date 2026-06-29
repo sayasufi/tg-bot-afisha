@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from apps.api.app.services.recommend import RecommendationService, _haversine_km
+from apps.api.services.recommend import RecommendationService, _haversine_km
 
 _MSK = timezone(timedelta(hours=3))
 NOW = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)

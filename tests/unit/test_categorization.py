@@ -1,4 +1,4 @@
-from core.categorization import map_source_category
+from core.domain.categorization import map_source_category
 
 
 def test_yandex_art_type_is_exhibition():

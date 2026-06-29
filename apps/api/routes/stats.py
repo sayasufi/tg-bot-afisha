@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 
-from core.redis import get_redis
+from core.infra.redis import get_redis
 
 router = APIRouter(prefix="/v1", tags=["stats"])
 

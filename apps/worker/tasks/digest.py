@@ -27,8 +27,8 @@ from core.db.repositories.digest import (
     weekend_window,
 )
 from core.db.session import WorkerAsyncSessionLocal
-from core.http_safety import is_public_http_url
-from core.redis import get_redis
+from core.infra.http_safety import is_public_http_url
+from core.infra.redis import get_redis
 
 log = logging.getLogger(__name__)
 _BOT_USERNAME = "okrestmap_bot"

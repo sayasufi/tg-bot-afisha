@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from core.config.settings import get_settings
-from core.redis import get_redis
+from core.infra.redis import get_redis
 
 # Higher concurrency at night (MSK 22:00–06:00), when user traffic is low, so batch LLM work (Telegram
 # extraction) drains faster without crowding out user-facing calls. Moscow is a fixed UTC+3 (no DST).

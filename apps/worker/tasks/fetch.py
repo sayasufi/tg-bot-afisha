@@ -9,7 +9,7 @@ from connectors.web.afisha_ru_connector import AfishaRuConnector
 from connectors.web.kudago_connector import KudaGoConnector
 from connectors.web.timepad_connector import TimepadConnector
 from connectors.web.yandex_afisha_connector import YandexAfishaConnector
-from core.cities import DEFAULT_CITY, active_cities
+from core.domain.cities import DEFAULT_CITY, active_cities
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
     bulk_upsert_raw_events,

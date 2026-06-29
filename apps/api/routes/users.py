@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.services.geo import reverse_city
 from apps.api.services.telegram_auth import validate_init_data
 from core.render.formatting import ce
-from core.cities import city_by_name
+from core.domain.cities import city_by_name
 from core.config.settings import get_settings as get_app_settings
-from core.invite import sign_friend, verify as invite_verify, verify_friend
+from core.services.invite import sign_friend, verify as invite_verify, verify_friend
 from core.db.repositories.reminders import (
     arm_reminder_if_unsent,
     cancel_reminder,
@@ -55,7 +55,7 @@ from core.db.repositories.users import (
     warm_interests_from,
 )
 from core.db.session import SessionLocal, get_async_db
-from core.redis import get_redis
+from core.infra.redis import get_redis
 
 # Remind this long before the soonest session starts.
 _REMINDER_LEAD = timedelta(hours=2)

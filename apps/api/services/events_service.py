@@ -12,10 +12,10 @@ from geoalchemy2 import Geography, Geometry
 from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.codes import event_code, parse_event_code
+from core.domain.codes import event_code, parse_event_code
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, UserFavorite, Venue
-from core.redis import get_redis
+from core.infra.redis import get_redis
 from core.search.meili import MeiliClient
 
 import logging
@@ -157,7 +157,7 @@ def _translit_variant(qn: str) -> str | None:
 
 def _region_sql(city) -> str:
     """Raw-SQL region predicate (venues.geom within a city's radius) for the search CTE."""
-    from core.cities import region_predicate_sql
+    from core.domain.cities import region_predicate_sql
 
     return region_predicate_sql(city)
 
@@ -267,12 +267,12 @@ class EventQueryService:
 
     # Only events within a city's region render — a guard against bad/foreign coordinates
     # (transposed lat/lon land in the Caspian; a touring date lands in Almaty). The region
-    # is the city's own centre ± region_radius_km from core.cities. With `city` given the
+    # is the city's own centre ± region_radius_km from core.domain.cities. With `city` given the
     # map is SCOPED to that one city (multi-city: a Moscow user never sees SPb pins); with
     # no city it ORs over all active cities (back-compat / "everything" fallback).
     @staticmethod
     def _region_clause(city=None):
-        from core.cities import region_predicate_sql
+        from core.domain.cities import region_predicate_sql
 
         return text(region_predicate_sql(city))
 

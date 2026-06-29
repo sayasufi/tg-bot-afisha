@@ -4,7 +4,7 @@ These guard the anti-spoof property: only a (event_id, inviter_id) pair our own 
 verifies, so a forged inviter can't be replayed to DM-spam a user or probe their taste via warm-start.
 A regression that weakened the HMAC (or compared the wrong fields) would reopen both abuse vectors.
 """
-import core.invite as invite
+import core.services.invite as invite
 
 TOKEN = "123456:INVITE-TEST-TOKEN"
 

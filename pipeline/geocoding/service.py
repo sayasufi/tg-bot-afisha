@@ -1,7 +1,7 @@
 import hashlib
 import re
 
-from core.cities import city_by_name
+from core.domain.cities import city_by_name
 from core.config.settings import get_settings
 from pipeline.geocoding.providers.nominatim import NominatimGeocoder
 from pipeline.geocoding.providers.yandex import GeoResult, YandexGeocoder
@@ -11,7 +11,7 @@ from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 def _is_city_centroid(result: "GeoResult", city: str | None) -> bool:
     """A provider falls back to the CITY CENTRE when it can't resolve a query; accepting
     it pins every unresolved venue on one spot. So a result within ~30 m of the city's
-    own centre (from core.cities — city-agnostic, not just Moscow) is treated as no match."""
+    own centre (from core.domain.cities — city-agnostic, not just Moscow) is treated as no match."""
     cc = city_by_name(city)
     if not cc:
         return False

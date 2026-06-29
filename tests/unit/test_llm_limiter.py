@@ -2,7 +2,7 @@
 misbehaves. These exercise the degraded paths deterministically (no Redis needed)."""
 import asyncio
 
-import core.llm_limiter as lim
+import core.services.llm_limiter as lim
 
 
 def _run_workers(n: int, hold: float = 0.01) -> int:

@@ -1,4 +1,4 @@
-from apps.worker.worker.tasks.enrich import _coords_sane, _source_coords
+from apps.worker.tasks.enrich import _coords_sane, _source_coords
 
 
 def test_normal_moscow_coords_pass_through():

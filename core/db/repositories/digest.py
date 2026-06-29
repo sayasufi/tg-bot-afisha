@@ -9,8 +9,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import and_, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.cities import city_by_slug, region_predicate_sql
-from core.codes import event_code
+from core.domain.cities import city_by_slug, region_predicate_sql
+from core.domain.codes import event_code
 from core.db.models import Event, EventOccurrence, UserFavorite, UserFriend, UserMute, Venue
 from core.db.models.ref.user import User
 from core.db.models.ref.user_venue_follow import UserVenueFollow

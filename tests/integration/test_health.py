@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 pytest.importorskip("geoalchemy2")
 
-from apps.api.app.main import app
+from apps.api.main import app
 
 
 def test_health() -> None:

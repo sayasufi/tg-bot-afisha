@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # downtime and — crucially — stops a muted user's parked reminders from BURST-firing when they unmute.
 _FIRE_GRACE_HOURS = 6
 
-from core.codes import event_code
+from core.domain.codes import event_code
 from core.db.models import Event, EventOccurrence, Venue
 from core.db.models.ref.event_reminder import EventReminder
 from core.db.models.ref.user import User

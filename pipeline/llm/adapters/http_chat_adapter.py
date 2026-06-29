@@ -2,13 +2,13 @@ import json
 
 import httpx
 
-from core.llm_limiter import llm_slot
+from core.services.llm_limiter import llm_slot
 from pipeline.llm.adapters.base import CATEGORIES, CategoryResult, LLMAdapter
 from pipeline.llm.json_utils import parse_llm_json
 
 # Classification prompt. Category is decided by the visitor's main ACTIVITY.
 # This is the FALLBACK path: structured sources are mapped deterministically
-# upstream (core.categorization), so the LLM mostly sees untyped events and
+# upstream (core.domain.categorization), so the LLM mostly sees untyped events and
 # free-text Telegram posts — hence the explicit definitions, decision order and
 # worked examples that target the failure modes we actually saw (master-class →
 # wrongly "lecture", interactive/kids spaces → wrongly "lecture/exhibition").
@@ -78,7 +78,7 @@ class HTTPChatAdapter(LLMAdapter):
         self.timeout_seconds = timeout_seconds
 
     async def _chat(self, payload: dict) -> dict:
-        """POST to the LLM endpoint while holding ONE service-wide concurrency slot (see core.llm_limiter)."""
+        """POST to the LLM endpoint while holding ONE service-wide concurrency slot (see core.services.llm_limiter)."""
         async with llm_slot():
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.post(f"{self.base_url}/api/chat", json=payload)

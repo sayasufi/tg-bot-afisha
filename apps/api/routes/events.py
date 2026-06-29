@@ -21,7 +21,7 @@ from apps.api.services.events_service import (
     map_cache_key,
     map_cache_set,
 )
-from core.cities import active_cities, city_by_name
+from core.domain.cities import active_cities, city_by_name
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["events"])
@@ -149,8 +149,8 @@ async def _city_event_counts(db: AsyncSession) -> dict[str, int]:
     if cached and now - float(_CITY_COUNTS["at"]) < _CITY_COUNTS_TTL:
         return cached
     cities = active_cities()
-    # Coords come from the trusted core.cities registry (not user input), so interpolating the VALUES
-    # list is not an injection vector — same rationale as core.cities.region_predicate_sql.
+    # Coords come from the trusted core.domain.cities registry (not user input), so interpolating the VALUES
+    # list is not an injection vector — same rationale as core.domain.cities.region_predicate_sql.
     values = ", ".join(
         f"('{c.slug}', {c.center[0]}, {c.center[1]}, {c.region_radius_km * 1000.0})" for c in cities
     )
@@ -180,7 +180,7 @@ async def _city_event_counts(db: AsyncSession) -> dict[str, int]:
 @router.get("/cities")
 async def get_cities(db: AsyncSession = Depends(get_async_db)):
     """Active cities the app serves — for the frontend's city picker / auto-detect and per-city map
-    centring. From the core.cities registry (the multi-city source of truth). `count` = active events
+    centring. From the core.domain.cities registry (the multi-city source of truth). `count` = active events
     in the city's region; the far-zoom constellation picker shows it on each city chip."""
     counts = await _city_event_counts(db)
     return {

@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # Service-wide cap on concurrent in-flight LLM requests (a shared Redis budget across api + worker).
     llm_max_concurrency: int = Field(default=20, alias="LLM_MAX_CONCURRENCY")
     # Higher night cap (MSK 22:00–06:00): user traffic is low, so the batch pipeline gets more LLM
-    # headroom to drain backfills faster. core.llm_limiter switches between the two by Moscow hour.
+    # headroom to drain backfills faster. core.services.llm_limiter switches between the two by Moscow hour.
     llm_night_max_concurrency: int = Field(default=40, alias="LLM_NIGHT_MAX_CONCURRENCY")
 
     yandex_geocoder_key: str = Field(default="", alias="YANDEX_GEOCODER_KEY")

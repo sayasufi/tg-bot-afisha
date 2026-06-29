@@ -1,4 +1,4 @@
-from core.cities import DEFAULT_CITY, active_cities, city_by_slug, city_for_source_config
+from core.domain.cities import DEFAULT_CITY, active_cities, city_by_slug, city_for_source_config
 
 
 def test_default_and_active() -> None:

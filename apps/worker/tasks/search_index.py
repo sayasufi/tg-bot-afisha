@@ -9,7 +9,7 @@ import logging
 
 from sqlalchemy import text
 
-from core.codes import event_code
+from core.domain.codes import event_code
 from core.config.settings import get_settings
 from core.db.session import WorkerAsyncSessionLocal
 from core.search.meili import MeiliClient

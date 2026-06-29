@@ -25,9 +25,9 @@ from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.events_service import _venue_open_now
-from core.codes import event_code
+from core.domain.codes import event_code
 from core.db.models import Event, EventOccurrence, Venue
-from core.redis import get_redis
+from core.infra.redis import get_redis
 
 _MSK = timezone(timedelta(hours=3))
 _POOL_CAP = 1200  # soonest-upcoming events scored into the base pool (was 6000 → 2000 → 1200). The rails
@@ -282,7 +282,7 @@ class RecommendationService:
         return 1.0 if category in _DAYTIME else 0.5  # daytime
 
     async def _load_pool(self, now: datetime, city=None) -> list[dict]:
-        from core.cities import region_predicate_sql
+        from core.domain.cities import region_predicate_sql
 
         floor = now.replace(hour=0, minute=0, second=0, microsecond=0)
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")

@@ -7,8 +7,8 @@ import time
 
 from sqlalchemy import func, text
 
-from core.categorization import map_source_category
-from core.cities import DEFAULT_CITY, city_by_name, city_for_source_config
+from core.domain.categorization import map_source_category
+from core.domain.cities import DEFAULT_CITY, city_by_name, city_for_source_config
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
     find_cached_venue,

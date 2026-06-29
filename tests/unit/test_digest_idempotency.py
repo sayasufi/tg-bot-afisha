@@ -6,7 +6,7 @@ everyone. These pin the boundary to Monday 00:00 UTC so every day of a week maps
 """
 from datetime import datetime, timezone
 
-from apps.worker.worker.tasks.digest import _week_start_utc
+from apps.worker.tasks.digest import _week_start_utc
 
 
 def _ws(y, m, d, h=12):

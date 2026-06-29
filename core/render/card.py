@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from core.http_safety import is_public_http_url
+from core.infra.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, get_object, object_exists, public_url, put_image
 
 logger = logging.getLogger(__name__)

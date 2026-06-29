@@ -17,7 +17,7 @@ import asyncio
 
 from sqlalchemy import select
 
-from core.categorization import map_source_category
+from core.domain.categorization import map_source_category
 from core.db.models import Event, EventOccurrence, EventSource, RawEvent
 from core.db.session import SessionLocal
 from pipeline.llm.service import LLMService

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.recommend import RecommendationService
 from apps.api.services.telegram_auth import validate_init_data
-from core.cities import city_by_name
+from core.domain.cities import city_by_name
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1", tags=["recommend"])

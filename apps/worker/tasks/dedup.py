@@ -12,7 +12,7 @@ from pipeline.llm.service import LLMService
 _log = logging.getLogger(__name__)
 
 # Batch fan-out for in-flight LLM classify calls. The REAL service-wide cap is the shared limiter in
-# core.llm_limiter (settings.llm_max_concurrency); this just sizes the gather so it can fill that
+# core.services.llm_limiter (settings.llm_max_concurrency); this just sizes the gather so it can fill that
 # budget without spawning idle pollers beyond it.
 _CLASSIFY_CONCURRENCY = get_settings().llm_max_concurrency
 
@@ -119,7 +119,7 @@ def _merge_events_impl() -> dict:
 
 
 _LLM_DEDUP_CAP = 200  # pairs judged per run (cached, so this is mostly a first-run bound)
-_LLM_DEDUP_CONCURRENCY = get_settings().llm_max_concurrency  # capped service-wide by core.llm_limiter
+_LLM_DEDUP_CONCURRENCY = get_settings().llm_max_concurrency  # capped service-wide by core.services.llm_limiter
 _LLM_DEDUP_MIN_CONFIDENCE = 0.7
 
 

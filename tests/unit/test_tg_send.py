@@ -5,7 +5,7 @@ The Bot API answers 200-with-JSON even on a flood-wait, so the sweeps must disti
 403/400 (STAMP once — the user blocked us / chat is gone). classify() encodes exactly that; a
 regression that reclassifies 429 as 'permanent' would silently drop reminders.
 """
-from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
+from apps.worker.tasks.tg_send import PACE, classify, retry_after
 
 
 def test_ok():

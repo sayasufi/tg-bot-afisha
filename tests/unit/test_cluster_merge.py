@@ -1,6 +1,6 @@
 import math
 
-from apps.api.app.services.events_service import EventQueryService
+from apps.api.services.events_service import EventQueryService
 
 merge = EventQueryService._merge_clusters
 

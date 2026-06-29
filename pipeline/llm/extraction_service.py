@@ -11,7 +11,7 @@ import httpx
 _MSK = timezone(timedelta(hours=3))
 
 from core.config.settings import get_settings
-from core.llm_limiter import llm_slot
+from core.services.llm_limiter import llm_slot
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.llm.json_utils import parse_llm_json
 

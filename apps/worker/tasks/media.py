@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 
 from core.db.models import Event, EventSource, RawEvent, Source
 from core.db.session import SessionLocal, WorkerAsyncSessionLocal
-from core.http_safety import is_public_http_url
+from core.infra.http_safety import is_public_http_url
 from core.media.storage import ensure_bucket, object_exists, public_url, put_image
 
 logger = logging.getLogger(__name__)

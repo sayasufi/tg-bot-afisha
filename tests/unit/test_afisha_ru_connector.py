@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from connectors.web.afisha_ru_connector import _LOOKAHEAD_DAYS, AfishaRuConnector
-from core.categorization import map_source_category
+from core.domain.categorization import map_source_category
 
 TODAY = date(2026, 6, 16)
 # A date guaranteed past the listing horizon, derived from the real constant so the test stays valid

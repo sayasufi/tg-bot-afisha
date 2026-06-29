@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 import pytest
 from fastapi import HTTPException
 
-import apps.api.app.services.telegram_auth as ta
+import apps.api.services.telegram_auth as ta
 
 TOKEN = "999999:TEST-BOT-TOKEN"
 
