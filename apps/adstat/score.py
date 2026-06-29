@@ -138,10 +138,14 @@ def recompute_scores() -> dict:
 
     n = 0
     with SessionLocal() as db:
+        _rank = "(CASE source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END)"
         best = dict(db.execute(text(
             "SELECT DISTINCT ON (channel_id) channel_id, subscribers FROM adstat.snapshots "
-            "WHERE subscribers IS NOT NULL ORDER BY channel_id, "
-            "(CASE source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END) DESC, captured_at DESC"
+            f"WHERE subscribers IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
+        )).all())
+        best_reach = dict(db.execute(text(
+            "SELECT DISTINCT ON (channel_id) channel_id, avg_reach FROM adstat.snapshots "
+            f"WHERE avg_reach IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
         )).all())
         channels = db.execute(select(AdChannel)).scalars().all()
         for ch in channels:
@@ -152,9 +156,11 @@ def recompute_scores() -> dict:
                 .order_by(AdSnapshot.captured_at.desc()).limit(10)
             ).scalars().all()
             m = _merge([{f: getattr(s, f, None) for f in _FIELDS} for s in snaps])
-            bs = best.get(ch.channel_id)
-            if bs:
-                m["subscribers"] = bs  # надёжный счётчик вместо устаревшего telega
+            if best.get(ch.channel_id):
+                m["subscribers"] = best[ch.channel_id]   # надёжные подписчики (t.me/telethon)
+            if best_reach.get(ch.channel_id):
+                m["avg_reach"] = best_reach[ch.channel_id]  # реальный охват (просмотры постов с t.me/s)
+            m["cpm"] = None  # пересчитать CPM из реальных цена/охват, а не брать каталожный
             quality, _qv, _why = score_channel(m)
             rel, rel_label = _relevance(ch.title, ch.username)
             final = int(round(quality * rel))

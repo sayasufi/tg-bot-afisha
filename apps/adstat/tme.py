@@ -15,7 +15,22 @@ from core.db.session import SessionLocal
 
 _H = {"Accept-Language": "en-US,en;q=0.9"}
 _PACE = 0.4
-_RE = re.compile(r"([\d][\d\s]{0,13})\s*(?:subscriber|member|подписчик)", re.I)
+_RE_SUBS = re.compile(r"([\d][\d\s]{0,13})\s*(?:subscriber|member|подписчик)", re.I)
+_RE_VIEWS = re.compile(r"message_views[^>]*>([^<]+)<")
+
+
+def _num(s: str) -> int | None:
+    """«1.2K» → 1200, «256» → 256."""
+    s = s.strip().replace(" ", "").replace(" ", "").replace(" ", "")
+    mult = 1
+    if s[-1:] in ("K", "k", "к"):
+        mult, s = 1000, s[:-1]
+    elif s[-1:] in ("M", "m", "м"):
+        mult, s = 1_000_000, s[:-1]
+    try:
+        return int(float(s) * mult)
+    except Exception:
+        return None
 
 
 def fetch_subscribers(username: str) -> int | None:
@@ -24,11 +39,22 @@ def fetch_subscribers(username: str) -> int | None:
         html = creq.get(f"https://t.me/{username}", impersonate="chrome", timeout=20, headers=_H).text
     except Exception:
         return None
-    m = _RE.search(html)
+    m = _RE_SUBS.search(html)
     if not m:
         return None
     digits = re.sub(r"\D", "", m.group(1))
     return int(digits) if digits else None
+
+
+def fetch_reach(username: str) -> int | None:
+    """Реальный средний охват = среднее просмотров последних постов из t.me/s/<username>. Точнее
+    каталожного avg_reach (тот часто завышен/устарел). None если постов/просмотров нет."""
+    try:
+        html = creq.get(f"https://t.me/s/{username}", impersonate="chrome", timeout=20, headers=_H).text
+    except Exception:
+        return None
+    nums = [n for n in (_num(v) for v in _RE_VIEWS.findall(html)) if n]
+    return sum(nums) // len(nums) if nums else None
 
 
 def refresh_subscribers(limit: int = 400) -> dict:
@@ -50,11 +76,15 @@ def refresh_subscribers(limit: int = 400) -> dict:
         ), {"lim": limit}).all()
         for cid, uname in rows:
             subs = fetch_subscribers(uname)
-            if subs and subs > 0:
+            time.sleep(_PACE)
+            reach = fetch_reach(uname)
+            subs = subs if (subs and subs > 0) else None
+            reach = reach if (reach and reach > 0) else None
+            if subs or reach:
                 db.execute(text(
-                    "INSERT INTO adstat.snapshots (channel_id, source, captured_at, subscribers) "
-                    "VALUES (:c, 'tme', now(), :s)"
-                ), {"c": cid, "s": subs})
+                    "INSERT INTO adstat.snapshots (channel_id, source, captured_at, subscribers, avg_reach) "
+                    "VALUES (:c, 'tme', now(), :s, :r)"
+                ), {"c": cid, "s": subs, "r": reach})
                 db.commit()
                 n_ok += 1
             else:

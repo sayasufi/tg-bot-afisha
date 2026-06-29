@@ -14,27 +14,31 @@ from core.db.session import get_async_db
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 _PAGE_SIZE = 100
 
+_CPM_EXPR = "(snap.post_price / NULLIF(rch.avg_reach, 0) * 1000)"
 _SORT = {
-    "score": "c.score",       # НАШ скор (качество×релевантность на надёжных подписчиках)
+    "score": "c.score",       # НАШ скор (качество×релевантность на надёжных подписчиках/охвате)
     "subs": "sub.subscribers",
-    "reach": "snap.avg_reach",
-    "cpm": "snap.cpm",
+    "reach": "rch.avg_reach",
+    "cpm": _CPM_EXPR,
     "price": "snap.post_price",
     "scraped": "c.last_scraped_at",
 }
 
-# Подписчики — из НАДЁЖНОГО источника (живое t.me / telethon participants_count / telemetr-каталог),
-# а не из устаревшего data-count Telega.in. Остальные метрики — из последнего НЕ-tme снапшота
-# (tme содержит только подписчиков).
+# Подписчики И охват — из НАДЁЖНОГО источника (живое t.me / telethon / telemetr), а не устаревшего
+# каталога Telega.in. ER и CPM СЧИТАЕМ из них (охват/подписчики, цена/охват), цену берём из не-tme.
+_RANK = "(CASE s.source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END)"
 _JOIN = (
     " LEFT JOIN LATERAL ("
     "   SELECT subscribers FROM adstat.snapshots s WHERE s.channel_id = c.channel_id AND s.subscribers IS NOT NULL "
-    "   ORDER BY (CASE s.source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END) DESC, "
-    "            s.captured_at DESC LIMIT 1"
+    f"   ORDER BY {_RANK} DESC, s.captured_at DESC LIMIT 1"
     " ) sub ON true "
     " LEFT JOIN LATERAL ("
-    "   SELECT avg_reach, er, post_price, cpm, rating FROM adstat.snapshots s "
-    "   WHERE s.channel_id = c.channel_id AND s.source <> 'tme' ORDER BY s.captured_at DESC LIMIT 1"
+    "   SELECT avg_reach FROM adstat.snapshots s WHERE s.channel_id = c.channel_id AND s.avg_reach IS NOT NULL "
+    f"   ORDER BY {_RANK} DESC, s.captured_at DESC LIMIT 1"
+    " ) rch ON true "
+    " LEFT JOIN LATERAL ("
+    "   SELECT post_price FROM adstat.snapshots s WHERE s.channel_id = c.channel_id "
+    "   AND s.source <> 'tme' AND s.post_price IS NOT NULL ORDER BY s.captured_at DESC LIMIT 1"
     " ) snap ON true "
 )
 
@@ -72,7 +76,9 @@ async def list_channels(
     direction = "DESC" if (dir or "desc").lower() == "desc" else "ASC"
     rows = (await db.execute(text(
         "SELECT c.username, c.title, c.city, c.ad_price, c.last_scraped_at, "
-        "  sub.subscribers, snap.avg_reach, snap.er, snap.post_price, snap.cpm, c.score, c.verdict, c.quality "
+        "  sub.subscribers, rch.avg_reach, "
+        "  round(rch.avg_reach::numeric / NULLIF(sub.subscribers, 0) * 100, 1) AS er, "
+        f"  snap.post_price, round({_CPM_EXPR}::numeric, 1) AS cpm, c.score, c.verdict, c.quality "
         "FROM adstat.channels c " + _JOIN +
         f"WHERE {where} ORDER BY {sort_col} {direction} NULLS LAST, c.channel_id LIMIT :limit OFFSET :offset"
     ), params)).all()
@@ -81,7 +87,7 @@ async def list_channels(
         "last_scraped_at": r[4].isoformat() if r[4] else None,
         "subscribers": r[5], "avg_reach": r[6], "er": float(r[7]) if r[7] is not None else None,
         "post_price": float(r[8]) if r[8] is not None else None,
-        "cpm": round(float(r[9]), 1) if r[9] is not None else None,
+        "cpm": float(r[9]) if r[9] is not None else None,
         "score": r[10], "verdict": r[11], "quality": r[12],
     } for r in rows]
     return {"items": items, "total": int(total or 0), "page": int(page), "page_size": _PAGE_SIZE}
