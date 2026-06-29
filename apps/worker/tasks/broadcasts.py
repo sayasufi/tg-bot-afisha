@@ -18,7 +18,13 @@ from sqlalchemy import text
 from apps.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.session import WorkerAsyncSessionLocal
+from core.domain.cities import active_cities
 from core.infra.http_safety import is_public_http_url
+
+# Офсеты городов для at_local (отправка «в HH:00 по местному времени»). null-city → +3 (МСК).
+_CITY_OFFSET_VALUES = ", ".join(f"('{c.slug}', {c.utc_offset_hours})" for c in active_cities())
+_MIN_OFFSET = min([3] + [c.utc_offset_hours for c in active_cities()])  # самый ПОЗДНИЙ firing → финализация
+_MAX_OFFSET = max([3] + [c.utc_offset_hours for c in active_cities()])  # самый РАННИЙ firing → начало рассылки
 
 
 def audience_filter(audience: dict | None) -> tuple[str, dict]:
@@ -55,6 +61,21 @@ async def _resolve_audience(db, audience: dict | None, only_user_id: int | None)
         return [only_user_id]
     where, params = audience_filter(audience)
     return list((await db.execute(text(f"SELECT u.telegram_user_id FROM ref.users u WHERE {where}"), params)).scalars().all())
+
+
+async def _resolve_local_due(db, audience: dict | None, local_date, local_hour: int) -> list[int]:
+    """Подаудитория at_local, у кого ЛОКАЛЬНОЕ время уже достигло цели: now()+offset(city) ≥ (date+hour).
+    Без итерации по городам — офсет берём джойном VALUES; null-city → +3. Ledger обеспечивает «once-only»."""
+    where, params = audience_filter(audience)
+    params.update({"ld": local_date, "lh": int(local_hour)})
+    sql = (
+        "SELECT u.telegram_user_id FROM ref.users u "
+        f"LEFT JOIN (VALUES {_CITY_OFFSET_VALUES}) AS o(slug, off) ON o.slug = u.city_slug "
+        f"WHERE {where} AND (now() + make_interval(hours => COALESCE(o.off, 3))) >= "
+        "(CAST(:ld AS timestamp) + make_interval(hours => :lh)) "
+        "ORDER BY u.telegram_user_id LIMIT 5000"
+    )
+    return list((await db.execute(text(sql), params)).scalars().all())
 
 
 def _markup(label: str | None, url: str | None):
@@ -115,7 +136,8 @@ async def send_campaign_impl(campaign_id: str, only_user_id: int | None = None) 
     base = f"https://api.telegram.org/bot{token}"
     async with WorkerAsyncSessionLocal() as db:
         c = (await db.execute(text(
-            "SELECT body, image_url, button_label, button_url, audience, status, test_sent_at, confirmed_at "
+            "SELECT body, image_url, button_label, button_url, audience, status, test_sent_at, confirmed_at, "
+            "       schedule_kind, local_date, local_hour "
             "FROM ref.broadcast_campaigns WHERE id = CAST(:id AS uuid)"
         ), {"id": campaign_id})).mappings().first()
         if c is None:
@@ -131,9 +153,12 @@ async def send_campaign_impl(campaign_id: str, only_user_id: int | None = None) 
             ), {"id": campaign_id})
             await db.commit()
         audience = c["audience"] if isinstance(c["audience"], dict) else json.loads(c["audience"] or "{}")
-        user_ids = await _resolve_audience(db, audience, only_user_id)
         if only_user_id is not None:
-            user_ids = [u for u in user_ids if u == only_user_id][:1]  # HARD test guard
+            user_ids = [u for u in (await _resolve_audience(db, audience, only_user_id)) if u == only_user_id][:1]  # HARD test guard
+        elif c["schedule_kind"] == "at_local":
+            user_ids = await _resolve_local_due(db, audience, c["local_date"], c["local_hour"])  # только дозревшие
+        else:
+            user_ids = await _resolve_audience(db, audience, None)
         photo = await _fetch_image(c["image_url"])
         markup = _markup(c["button_label"], c["button_url"])
         sent = failed = 0
@@ -160,10 +185,19 @@ async def send_campaign_impl(campaign_id: str, only_user_id: int | None = None) 
                 failed += res != "ok"
                 await asyncio.sleep(PACE)
         if only_user_id is None:
+            new_status = "sent"
+            if c["schedule_kind"] == "at_local":
+                # at_local финализируем 'sent' только когда прошёл САМЫЙ ПОЗДНИЙ таргет (мин. офсет) + буфер —
+                # до этого ещё не все города дозрели, оставляем 'sending' (диспетчер дошлёт остальным).
+                done = (await db.execute(text(
+                    "SELECT now() >= (CAST(:ld AS timestamp) + make_interval(hours => :lh) "
+                    "                 - make_interval(hours => :mo) + interval '10 minutes')"
+                ), {"ld": c["local_date"], "lh": c["local_hour"], "mo": _MIN_OFFSET})).scalar()
+                new_status = "sent" if done else "sending"
             await db.execute(text(
-                "UPDATE ref.broadcast_campaigns SET status='sent', sent_count=sent_count+:s, "
+                "UPDATE ref.broadcast_campaigns SET status=:st, sent_count=sent_count+:s, "
                 "failed_count=failed_count+:f, updated_at=now() WHERE id=CAST(:id AS uuid)"
-            ), {"s": sent, "f": failed, "id": campaign_id})
+            ), {"st": new_status, "s": sent, "f": failed, "id": campaign_id})
             await db.commit()
     return {"sent": sent, "failed": failed, "skipped": 0}
 
@@ -177,10 +211,13 @@ async def _dispatch_due_impl() -> dict:
         ))
         await db.commit()
         due = list((await db.execute(text(
-            "SELECT id::text FROM ref.broadcast_campaigns WHERE status IN ('scheduled','sending') "
-            "AND (schedule_kind='now' OR (schedule_kind='at_utc' AND scheduled_at <= now())) "
-            "ORDER BY created_at LIMIT 5"
-        ))).scalars().all())
+            "SELECT id::text FROM ref.broadcast_campaigns WHERE status IN ('scheduled','sending') AND ("
+            "  schedule_kind='now' "
+            "  OR (schedule_kind='at_utc' AND scheduled_at <= now()) "
+            "  OR (schedule_kind='at_local' AND now() >= (CAST(local_date AS timestamp) "
+            "        + make_interval(hours => local_hour) - make_interval(hours => :maxoff))) "
+            ") ORDER BY created_at LIMIT 10"
+        ), {"maxoff": _MAX_OFFSET})).scalars().all())
     ran = []
     for cid in due:
         try:

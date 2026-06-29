@@ -23,12 +23,12 @@ type Form = {
   button_label: string; button_url: string;
   aud_kind: string; cities: string[]; since_days: number;
   test_sent: boolean; status: string;
-  sched: "now" | "at_utc"; scheduled_at: string;
+  sched: "now" | "at_utc" | "at_local"; scheduled_at: string; local_date: string; local_hour: number;
 };
 const EMPTY: Form = {
   id: null, title: "", body: "", image_url: "", button_label: "", button_url: "",
   aud_kind: "opted_in", cities: [], since_days: 7, test_sent: false, status: "draft",
-  sched: "now", scheduled_at: "",
+  sched: "now", scheduled_at: "", local_date: "", local_hour: 19,
 };
 
 export function Broadcasts() {
@@ -68,7 +68,9 @@ export function Broadcasts() {
       button_label: c.button_label || "", button_url: c.button_url || "",
       aud_kind: c.audience?.kind || "opted_in", cities: c.audience?.cities || [], since_days: c.audience?.since_days || 7,
       test_sent: !!c.test_sent_at, status: c.status,
-      sched: c.schedule_kind === "at_utc" ? "at_utc" : "now", scheduled_at: c.scheduled_at ? c.scheduled_at.slice(0, 16) : "",
+      sched: c.schedule_kind === "at_utc" ? "at_utc" : c.schedule_kind === "at_local" ? "at_local" : "now",
+      scheduled_at: c.scheduled_at ? c.scheduled_at.slice(0, 16) : "",
+      local_date: c.local_date || "", local_hour: c.local_hour ?? 19,
     });
     setOpen(true); setConfirm(false); setMsg(null);
   };
@@ -112,10 +114,13 @@ export function Broadcasts() {
       if (f.sched === "now") {
         const r = await apiPost(`/broadcast/campaigns/${id}/send-now`, { confirm: true, expected_count: dry.count });
         setMsg(`✓ ${r.note || "запущено"}`);
-      } else {
+      } else if (f.sched === "at_utc") {
         const at = new Date(f.scheduled_at).toISOString();
         const r = await apiPost(`/broadcast/campaigns/${id}/schedule`, { kind: "at_utc", scheduled_at: at, confirm: true, expected_count: dry.count });
         setMsg(`✓ запланировано на ${new Date(r.scheduled_at).toLocaleString("ru-RU")}`);
+      } else {
+        await apiPost(`/broadcast/campaigns/${id}/schedule`, { kind: "at_local", local_date: f.local_date, local_hour: f.local_hour, confirm: true, expected_count: dry.count });
+        setMsg(`✓ запланировано на ${f.local_date}, ${String(f.local_hour).padStart(2, "0")}:00 по местному времени каждого города`);
       }
       setOpen(false); campaigns.reload();
     } catch (e: any) { setMsg(`не отправлено: ${e.message}`); }
@@ -137,7 +142,8 @@ export function Broadcasts() {
     finally { setLegacyBusy(null); }
   };
 
-  const canSend = f.test_sent && confirm && (f.sched === "now" || !!f.scheduled_at) && !!f.title.trim() && !!f.body.trim();
+  const schedOk = f.sched === "now" || (f.sched === "at_utc" && !!f.scheduled_at) || (f.sched === "at_local" && !!f.local_date);
+  const canSend = f.test_sent && confirm && schedOk && !!f.title.trim() && !!f.body.trim();
   const items: any[] = campaigns.data?.items ?? [];
   const r = recips.data;
 
@@ -205,12 +211,23 @@ export function Broadcasts() {
                 <select value={f.sched} onChange={(e) => update({ sched: e.target.value as any })}>
                   <option value="now">сейчас (по клику)</option>
                   <option value="at_utc">в дату/время</option>
+                  <option value="at_local">по местному времени города</option>
                 </select>
               </div>
               {f.sched === "at_utc" && (
                 <label className="fld">дата и время (ваш часовой пояс)
                   <input type="datetime-local" value={f.scheduled_at} onChange={(e) => update({ scheduled_at: e.target.value })} />
                 </label>
+              )}
+              {f.sched === "at_local" && (
+                <div className="compose__row">
+                  <label className="fld" style={{ flex: 2 }}>дата (для каждого города — его день)
+                    <input type="date" value={f.local_date} onChange={(e) => update({ local_date: e.target.value })} />
+                  </label>
+                  <label className="fld" style={{ flex: 1 }}>час (0–23)
+                    <input type="number" min={0} max={23} value={f.local_hour} onChange={(e) => update({ local_hour: Math.max(0, Math.min(23, parseInt(e.target.value, 10) || 0)) })} />
+                  </label>
+                </div>
               )}
             </div>
           </div>
@@ -248,7 +265,11 @@ export function Broadcasts() {
               <tr key={c.id}>
                 <td>{c.title}<div className="code muted">{(c.audience?.kind) || "—"}</div></td>
                 <td><Badge kind={STATUS_KIND[c.status] ?? "off"}>{STATUS_LABEL[c.status] ?? c.status}</Badge></td>
-                <td className="muted">{c.schedule_kind === "at_utc" && c.scheduled_at ? new Date(c.scheduled_at).toLocaleString("ru-RU") : c.status === "sent" ? "—" : "по клику"}</td>
+                <td className="muted">{
+                  c.schedule_kind === "at_utc" && c.scheduled_at ? new Date(c.scheduled_at).toLocaleString("ru-RU")
+                  : c.schedule_kind === "at_local" && c.local_date ? `${c.local_date} ${String(c.local_hour ?? 0).padStart(2, "0")}:00 местн.`
+                  : c.status === "sent" ? "—" : "по клику"
+                }</td>
                 <td className="num">{c.sent_count}</td>
                 <td className="num muted">{c.failed_count}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

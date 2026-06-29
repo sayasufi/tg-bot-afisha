@@ -9,7 +9,7 @@ NB: импорт worker-impl (apps.worker) из apps.api — СОЗНАТЕЛЬ�
 «себе» удобнее синхронно (мгновенный ответ + счётчик отправленного), чем триггерить Prefect-флоу.
 """
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy import text
@@ -124,7 +124,8 @@ async def broadcast_test(
 # ---- кастомные кампании --------------------------------------------------------------------------
 
 _CAMP_COLS = ("id::text, title, body, image_url, button_label, button_url, audience, schedule_kind, "
-              "scheduled_at, status, sent_count, failed_count, skipped_count, test_sent_at, confirmed_at, created_at")
+              "scheduled_at, local_hour, local_date, status, sent_count, failed_count, skipped_count, "
+              "test_sent_at, confirmed_at, created_at")
 
 
 def _camp_dict(m) -> dict:
@@ -133,6 +134,7 @@ def _camp_dict(m) -> dict:
         "button_label": m["button_label"], "button_url": m["button_url"],
         "audience": m["audience"] if isinstance(m["audience"], dict) else {},
         "schedule_kind": m["schedule_kind"], "scheduled_at": m["scheduled_at"].isoformat() if m["scheduled_at"] else None,
+        "local_hour": m["local_hour"], "local_date": m["local_date"].isoformat() if m["local_date"] else None,
         "status": m["status"], "sent_count": m["sent_count"], "failed_count": m["failed_count"],
         "skipped_count": m["skipped_count"], "test_sent_at": m["test_sent_at"].isoformat() if m["test_sent_at"] else None,
         "confirmed_at": m["confirmed_at"].isoformat() if m["confirmed_at"] else None,
@@ -250,26 +252,45 @@ async def schedule_campaign(
 ) -> dict:
     _cid(campaign_id)
     kind = (payload.get("kind") or "").strip()
+    if kind == "at_utc":
+        try:
+            when = datetime.fromisoformat((payload.get("scheduled_at") or "").replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=422, detail="scheduled_at: ISO-дата/время")
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        await _gate(db, campaign_id, payload)
+        res = await db.execute(text(
+            "UPDATE ref.broadcast_campaigns SET status='scheduled', schedule_kind='at_utc', scheduled_at=:at, "
+            "confirmed_at=now(), updated_at=now() WHERE id=CAST(:id AS uuid) AND status='draft' RETURNING id"
+        ), {"at": when, "id": campaign_id})
+        if not res.rowcount:
+            raise HTTPException(status_code=409, detail="кампания уже запущена или завершена")
+        await db.commit()
+        await write_audit(db, request, actor, "broadcast.schedule", target=campaign_id, params={"at": when.isoformat()}, result="ok")
+        return {"ok": True, "status": "scheduled", "scheduled_at": when.isoformat()}
+
     if kind == "at_local":
-        raise HTTPException(status_code=400, detail="по местному времени городов — скоро (готовится отдельно)")
-    if kind != "at_utc":
-        raise HTTPException(status_code=422, detail="kind: at_utc")
-    try:
-        when = datetime.fromisoformat((payload.get("scheduled_at") or "").replace("Z", "+00:00"))
-    except Exception:
-        raise HTTPException(status_code=422, detail="scheduled_at: ISO-дата/время")
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    await _gate(db, campaign_id, payload)
-    res = await db.execute(text(
-        "UPDATE ref.broadcast_campaigns SET status='scheduled', schedule_kind='at_utc', scheduled_at=:at, "
-        "confirmed_at=now(), updated_at=now() WHERE id=CAST(:id AS uuid) AND status='draft' RETURNING id"
-    ), {"at": when, "id": campaign_id})
-    if not res.rowcount:
-        raise HTTPException(status_code=409, detail="кампания уже запущена или завершена")
-    await db.commit()
-    await write_audit(db, request, actor, "broadcast.schedule", target=campaign_id, params={"at": when.isoformat()}, result="ok")
-    return {"ok": True, "status": "scheduled", "scheduled_at": when.isoformat()}
+        lh = payload.get("local_hour")
+        if not isinstance(lh, int) or not (0 <= lh <= 23):
+            raise HTTPException(status_code=422, detail="local_hour: целое 0..23")
+        try:
+            ld = date.fromisoformat((payload.get("local_date") or "").strip())
+        except Exception:
+            raise HTTPException(status_code=422, detail="local_date: YYYY-MM-DD")
+        await _gate(db, campaign_id, payload)
+        res = await db.execute(text(
+            "UPDATE ref.broadcast_campaigns SET status='scheduled', schedule_kind='at_local', local_hour=:lh, "
+            "local_date=:ld, confirmed_at=now(), updated_at=now() WHERE id=CAST(:id AS uuid) AND status='draft' RETURNING id"
+        ), {"lh": lh, "ld": ld, "id": campaign_id})
+        if not res.rowcount:
+            raise HTTPException(status_code=409, detail="кампания уже запущена или завершена")
+        await db.commit()
+        await write_audit(db, request, actor, "broadcast.schedule_local", target=campaign_id,
+                          params={"local_date": ld.isoformat(), "local_hour": lh}, result="ok")
+        return {"ok": True, "status": "scheduled", "local_date": ld.isoformat(), "local_hour": lh}
+
+    raise HTTPException(status_code=422, detail="kind: at_utc | at_local")
 
 
 @router.post("/broadcast/campaigns/{campaign_id}/cancel")
