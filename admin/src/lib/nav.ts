@@ -32,9 +32,9 @@ export const NAV: NavGroup[] = [
     title: "Операции",
     items: [
       { label: "Процессы", to: "/ops/flows" },
-      { label: "Обработка данных", to: "/ops/data", phase: 2 },
-      { label: "Опасная зона", to: "/ops/danger", phase: 2 },
-      { label: "Бэкапы и сервис", to: "/ops/system", phase: 4 },
+      { label: "Обработка данных", to: "/ops/data" },
+      { label: "Опасная зона", to: "/ops/danger" },
+      { label: "Бэкапы и сервис", to: "/ops/system" },
     ],
   },
   {
@@ -42,7 +42,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Пользователи", to: "/users" },
       { label: "Рассылки", to: "/broadcasts" },
-      { label: "Реклама", to: "/adstat", phase: 4 },
+      { label: "Реклама", to: "/adstat" },
     ],
   },
   {

@@ -3,18 +3,22 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { ALL_ITEMS } from "./lib/nav";
+import { Adstat } from "./pages/Adstat";
 import { Analytics } from "./pages/Analytics";
 import { Audit } from "./pages/Audit";
 import { Broadcasts } from "./pages/Broadcasts";
 import { Channels } from "./pages/Channels";
 import { Cities } from "./pages/Cities";
+import { Danger } from "./pages/Danger";
 import { Dashboard } from "./pages/Dashboard";
+import { DataOps } from "./pages/DataOps";
 import { Dedup } from "./pages/Dedup";
 import { Events } from "./pages/Events";
 import { Flows } from "./pages/Flows";
 import { Health } from "./pages/Health";
 import { Settings } from "./pages/Settings";
 import { Sources } from "./pages/Sources";
+import { System } from "./pages/System";
 import { Users } from "./pages/Users";
 import { Venues } from "./pages/Venues";
 import { Login } from "./pages/Login";
@@ -42,6 +46,10 @@ function Gate() {
         <Route path="users" element={<Users />} />
         <Route path="cities" element={<Cities />} />
         <Route path="audit" element={<Audit />} />
+        <Route path="adstat" element={<Adstat />} />
+        <Route path="ops/data" element={<DataOps />} />
+        <Route path="ops/danger" element={<Danger />} />
+        <Route path="ops/system" element={<System />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}
