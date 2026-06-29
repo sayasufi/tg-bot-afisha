@@ -124,3 +124,32 @@ def discover_telega(category_id: int = 52, max_pages: int = 60, with_prices: boo
         upsert_targets([{"username": r["username"], "city": None} for r in rows])
         persist_snapshots(rows)
     return rows
+
+
+def enrich_shortlist_prices(top_n: int = 50, dry_run: bool = False) -> int:
+    """Добрать РЕАЛЬНУЮ цену поста (telega card) по топ-АФИША каналам, у которых ещё нет CPM → CPM завершается
+    → score переводит их в «брать». Цены не тянем на тысячи ежедневно (дорого), а добиваем точечно по шорт-листу.
+    Кто не на бирже telega — цена None (пропуск)."""
+    settings = get_settings()
+    if not dry_run and not settings.adstat_enabled:
+        log.info("adstat enrich_shortlist_prices: ADSTAT_ENABLED=false — пропуск")
+        return 0
+    from apps.worker.worker.adstat.score import rank
+    from apps.worker.worker.adstat.telega import TelegaClient
+
+    cands = [r for r in rank(limit=300) if r.get("relevance") == "афиша" and not r.get("cpm")][:top_n]
+    if not cands:
+        log.info("adstat enrich_shortlist_prices: нет афиша-кандидатов без цены")
+        return 0
+    client = TelegaClient()
+    cand_rows = [{"source": "telega", "username": r["username"], "avg_reach": r.get("reach"),
+                  "subscribers": r.get("subscribers")} for r in cands]
+    priced = client.enrich_prices(cand_rows)  # параллельно тянет post_price с card-страниц
+    rows = [r for r in priced if r.get("post_price")]
+    for r in rows:  # CPM = цена / охват × 1000
+        if r.get("avg_reach"):
+            r["cpm"] = round(r["post_price"] / r["avg_reach"] * 1000, 1)
+    log.info("adstat enrich_shortlist_prices: %d/%d афиша-каналов получили цену", len(rows), len(cands))
+    if not dry_run and rows:
+        persist_snapshots(rows)
+    return len(rows)

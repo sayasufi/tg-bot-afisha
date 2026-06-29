@@ -27,6 +27,8 @@ def main() -> None:
     ap.add_argument("--telega", action="store_true", help="discovery через Telega.in (каталог афиши + цены)")
     ap.add_argument("--telethon", action="store_true", help="discovery через рекомендации Telegram (Telethon, бесплатно)")
     ap.add_argument("--score", action="store_true", help="ранжировать каналы: брать/осторожно/мимо")
+    ap.add_argument("--enrich-prices", action="store_true", help="добрать цены telega по топ-афише без CPM")
+    ap.add_argument("--top-n", type=int, default=50, help="сколько топ-афиша каналов добивать ценой")
     ap.add_argument("--min-subs", type=int, default=2000, help="порог подписчиков для Telemetr-discovery")
     ap.add_argument("--max-pages", type=int, default=60, help="страниц каталога Telega.in")
     ap.add_argument("--max-channels", type=int, default=400, help="лимит каналов для Telethon-крауля")
@@ -41,6 +43,12 @@ def main() -> None:
         for r in rows:
             print("%-22s %5s %-10s %8s %5s %8s  %s" % (
                 r["username"], r["score"], r["verdict"], r.get("reach"), r.get("er"), r.get("cpm"), r["reason"]))
+        return
+
+    if args.enrich_prices:
+        from apps.worker.worker.adstat.discover import enrich_shortlist_prices
+        n = enrich_shortlist_prices(top_n=args.top_n, dry_run=args.dry_run)
+        print(f"adstat enrich-prices: {n} афиша-каналов получили цену → score обновится")
         return
 
     if args.telethon:
