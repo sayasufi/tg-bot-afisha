@@ -119,8 +119,11 @@ async def add_venue_channel(
     )).first()
     if existing:
         cid = existing[0]
+        # COALESCE: повторное добавление/реактивация НЕ затирает существующую venue-привязку, если её
+        # не передали (для явной смены/очистки привязки есть отдельный /bind).
         await db.execute(text(
-            "UPDATE ref.telegram_channels SET city_id = :c, venue_name = :vn, venue_address = :va, "
+            "UPDATE ref.telegram_channels SET city_id = :c, "
+            "venue_name = COALESCE(:vn, venue_name), venue_address = COALESCE(:va, venue_address), "
             "is_active = true WHERE channel_id = :id"
         ), {"c": city_id, "vn": venue_name, "va": venue_address, "id": cid})
     else:
