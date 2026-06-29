@@ -63,6 +63,18 @@ async def discover_telega_flow():
     return {"found": len(rows)}
 
 
+@flow(name="enrich-shortlist-prices", retries=1, retry_delay_seconds=120, timeout_seconds=1800, log_prints=True)
+async def enrich_shortlist_prices_flow():
+    """Daily: добрать реальные цены telega по топ-АФИША каналам без CPM → CPM завершается → проходят в «брать».
+    Цены точечно по шорт-листу (не на тысячи каналов ежедневно — это per-card HTTP)."""
+    import asyncio
+
+    from apps.worker.worker.adstat.discover import enrich_shortlist_prices
+
+    n = await asyncio.to_thread(enrich_shortlist_prices, 60, False)
+    return {"priced": n}
+
+
 # --- fetch (sources) ---------------------------------------------------------
 
 @flow(name="fetch-kudago", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=1800, log_prints=True)

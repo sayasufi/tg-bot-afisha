@@ -75,6 +75,7 @@ _SCHEDULE = [
     (flows.discover_adstat, 86400),
     (flows.discover_telega_flow, 86400),
     (flows.discover_telethon_flow, 86400),
+    (flows.enrich_shortlist_prices_flow, 86400),  # добор цен telega по топ-афише → CPM → «брать»
     (flows.scrape_adstat, 86400),
 ]
 
