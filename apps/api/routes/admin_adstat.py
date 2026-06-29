@@ -15,7 +15,7 @@ router = APIRouter(prefix="/v1/admin", tags=["admin"])
 _PAGE_SIZE = 100
 
 _SORT = {
-    "rating": "snap.rating",
+    "score": "c.score",       # НАШ скор (качество×релевантность на надёжных подписчиках)
     "subs": "sub.subscribers",
     "reach": "snap.avg_reach",
     "cpm": "snap.cpm",
@@ -68,11 +68,11 @@ async def list_channels(
     count_join = _JOIN if need_join else ""
     total = (await db.execute(text(f"SELECT count(*) FROM adstat.channels c {count_join} WHERE {where}"), params)).scalar()
 
-    sort_col = _SORT.get(sort or "", "snap.rating")
+    sort_col = _SORT.get(sort or "", "c.score")
     direction = "DESC" if (dir or "desc").lower() == "desc" else "ASC"
     rows = (await db.execute(text(
         "SELECT c.username, c.title, c.city, c.ad_price, c.last_scraped_at, "
-        "  sub.subscribers, snap.avg_reach, snap.er, snap.post_price, snap.cpm, snap.rating "
+        "  sub.subscribers, snap.avg_reach, snap.er, snap.post_price, snap.cpm, c.score, c.verdict, c.quality "
         "FROM adstat.channels c " + _JOIN +
         f"WHERE {where} ORDER BY {sort_col} {direction} NULLS LAST, c.channel_id LIMIT :limit OFFSET :offset"
     ), params)).all()
@@ -82,6 +82,6 @@ async def list_channels(
         "subscribers": r[5], "avg_reach": r[6], "er": float(r[7]) if r[7] is not None else None,
         "post_price": float(r[8]) if r[8] is not None else None,
         "cpm": round(float(r[9]), 1) if r[9] is not None else None,
-        "rating": round(float(r[10]), 2) if r[10] is not None else None,
+        "score": r[10], "verdict": r[11], "quality": r[12],
     } for r in rows]
     return {"items": items, "total": int(total or 0), "page": int(page), "page_size": _PAGE_SIZE}

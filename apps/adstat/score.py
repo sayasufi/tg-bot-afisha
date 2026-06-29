@@ -130,6 +130,44 @@ def score_channel(m: dict) -> tuple[int, str, str]:
 _VALID_USERNAME = re.compile(r"^[A-Za-z0-9_]{4,32}$")
 
 
+def recompute_scores() -> dict:
+    """Пересчитать НАШ скор (качество×релевантность) на НАДЁЖНЫХ подписчиках (t.me/telethon приоритетнее
+    устаревшего каталога Telega) и записать на канал (adstat.channels.score/quality/verdict/relevance).
+    Качество зависит от ERR=охват/подписчики → с корректными подписчиками скор становится правдивым."""
+    from sqlalchemy import text
+
+    n = 0
+    with SessionLocal() as db:
+        best = dict(db.execute(text(
+            "SELECT DISTINCT ON (channel_id) channel_id, subscribers FROM adstat.snapshots "
+            "WHERE subscribers IS NOT NULL ORDER BY channel_id, "
+            "(CASE source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END) DESC, captured_at DESC"
+        )).all())
+        channels = db.execute(select(AdChannel)).scalars().all()
+        for ch in channels:
+            if not ch.username or not _VALID_USERNAME.match(ch.username):
+                continue
+            snaps = db.execute(
+                select(AdSnapshot).where(AdSnapshot.channel_id == ch.channel_id)
+                .order_by(AdSnapshot.captured_at.desc()).limit(10)
+            ).scalars().all()
+            m = _merge([{f: getattr(s, f, None) for f in _FIELDS} for s in snaps])
+            bs = best.get(ch.channel_id)
+            if bs:
+                m["subscribers"] = bs  # надёжный счётчик вместо устаревшего telega
+            quality, _qv, _why = score_channel(m)
+            rel, rel_label = _relevance(ch.title, ch.username)
+            final = int(round(quality * rel))
+            verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
+            db.execute(text(
+                "UPDATE adstat.channels SET score=:s, quality=:q, verdict=:v, relevance=:r, score_at=now() "
+                "WHERE channel_id=:cid"
+            ), {"s": final, "q": quality, "v": verdict, "r": rel_label, "cid": ch.channel_id})
+            n += 1
+        db.commit()
+    return {"scored": n}
+
+
 def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
     out: list[dict] = []
     with SessionLocal() as db:

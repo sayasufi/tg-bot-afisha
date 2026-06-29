@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { SortTh } from "../components/sortable";
+import { Badge } from "../components/ui";
 import { apiPost } from "../lib/api";
 import { useApi } from "../lib/useApi";
 
 type Ch = {
   username: string; title: string | null; city: string | null; ad_price: number | null;
   last_scraped_at: string | null; subscribers: number | null; avg_reach: number | null;
-  er: number | null; post_price: number | null; cpm: number | null; rating: number | null;
+  er: number | null; post_price: number | null; cpm: number | null;
+  score: number | null; verdict: string | null; quality: number | null;
 };
+
+const VERDICT_KIND: Record<string, "ok" | "warn" | "down" | "off"> = { "брать": "ok", "осторожно": "warn", "мимо": "off" };
 
 const num = (n: number | null) => (n == null ? "—" : n.toLocaleString("ru-RU"));
 
@@ -18,7 +22,7 @@ export function Adstat() {
   const [qd, setQd] = useState("");
   const [city, setCity] = useState("");
   const [minSubs, setMinSubs] = useState("");
-  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "rating", dir: "desc" });
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "score", dir: "desc" });
   const [page, setPage] = useState(0);
 
   useEffect(() => { const t = setTimeout(() => { setQd(q); setPage(0); }, 350); return () => clearTimeout(t); }, [q]);
@@ -99,7 +103,8 @@ export function Adstat() {
                   <th className="num">ER</th>
                   <SortTh label="цена пост" k="price" sort={sort} onSort={onSort} className="num" />
                   <SortTh label="CPM" k="cpm" sort={sort} onSort={onSort} className="num" />
-                  <SortTh label="рейтинг" k="rating" sort={sort} onSort={onSort} className="num" />
+                  <SortTh label="скор" k="score" sort={sort} onSort={onSort} className="num" />
+                  <th>вердикт</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,7 +120,8 @@ export function Adstat() {
                     <td className="num muted">{c.er != null ? `${c.er.toFixed(1)}%` : "—"}</td>
                     <td className="num muted">{c.post_price != null ? `${num(Math.round(c.post_price))}₽` : "—"}</td>
                     <td className="num muted">{c.cpm != null ? `${c.cpm}₽` : "—"}</td>
-                    <td className="num">{c.rating ?? "—"}</td>
+                    <td className="num">{c.score ?? "—"}</td>
+                    <td>{c.verdict ? <Badge kind={VERDICT_KIND[c.verdict] ?? "off"}>{c.verdict}</Badge> : "—"}</td>
                   </tr>
                 ))}
               </tbody>

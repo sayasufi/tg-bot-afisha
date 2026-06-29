@@ -298,8 +298,12 @@ async def dispatch_broadcasts():
     return await broadcasts._dispatch_due_impl()
 
 
-@flow(name="refresh-adstat-subs", retries=1, retry_delay_seconds=120, timeout_seconds=3600, log_prints=True)
+@flow(name="refresh-adstat-subs", retries=1, retry_delay_seconds=120, timeout_seconds=5400, log_prints=True)
 def refresh_adstat_subs():
-    """Обновить реальные подписчики adstat-каналов из живого превью t.me (точнее каталога Telega.in)."""
+    """Обновить реальные подписчики adstat-каналов из t.me (точнее каталога Telega) + пересчитать НАШ скор
+    (качество×релевантность) на актуальных подписчиках."""
+    from apps.adstat.score import recompute_scores
     from apps.adstat.tme import refresh_subscribers
-    return refresh_subscribers(limit=600)
+    r = refresh_subscribers(limit=600)
+    s = recompute_scores()
+    return {**r, **s}
