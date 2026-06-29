@@ -1,7 +1,8 @@
 export type NavItem = { label: string; to: string; phase?: number };
 export type NavGroup = { title: string; items: NavItem[] };
 
-// phase задан → раздел ещё не построен (показываем «Фn» и страницу-заглушку). Без phase → живой раздел.
+// phase задан → раздел ещё не построен (метка «Фn» + страница-заглушка). Без phase → живой раздел.
+// Секции сворачиваемые (аккордеон) — открыта та, что содержит активный маршрут.
 export const NAV: NavGroup[] = [
   {
     title: "Обзор",
@@ -37,15 +38,12 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Люди",
+    title: "Аудитория",
     items: [
       { label: "Пользователи", to: "/users", phase: 4 },
       { label: "Рассылки", to: "/broadcasts", phase: 2 },
+      { label: "Посев", to: "/adstat", phase: 4 },
     ],
-  },
-  {
-    title: "Реклама",
-    items: [{ label: "Посев", to: "/adstat", phase: 4 }],
   },
   {
     title: "Система",

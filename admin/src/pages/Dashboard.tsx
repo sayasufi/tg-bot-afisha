@@ -30,7 +30,7 @@ export function Dashboard() {
         <>
           <div className="section__title">каталог</div>
           <div className="statgrid">
-            <StatCard num={fmtNum(data.catalog.active)} label="активных событий" sub={`всего ${fmtNum(data.catalog.total)}`} />
+            <StatCard num={fmtNum(data.catalog.active)} label="активных событий" sub={`всего ${fmtNum(data.catalog.total)}`} accent />
             <StatCard num={fmtPct(data.catalog.image_share)} label="с фото" sub={`${fmtNum(data.catalog.with_image)} шт`} />
             <StatCard num={fmtPct(data.catalog.future_share)} label="будущих" sub={`${fmtNum(data.catalog.future)} шт`} />
             <StatCard num={fmtNum(data.catalog.new_24h)} label="новых за 24ч" />
@@ -40,7 +40,7 @@ export function Dashboard() {
 
           <div className="section__title">пользователи</div>
           <div className="statgrid">
-            <StatCard num={fmtNum(data.users.total)} label="всего" />
+            <StatCard num={fmtNum(data.users.total)} label="всего" accent />
             <StatCard num={fmtNum(data.users.active_7d)} label="активных за 7д" />
             <StatCard num={fmtNum(data.users.new_7d)} label="новых за 7д" />
             <StatCard num={fmtNum(data.users.digest_optin)} label="подписаны на дайджест" />
@@ -49,6 +49,7 @@ export function Dashboard() {
           <div className="section__title">north-star · недельная активность</div>
           <div className="statgrid">
             <StatCard
+              accent
               num={fmtNum(data.north_star.wau?.[0]?.users)}
               label={`WAU · ${data.north_star.wau?.[0]?.week ?? ""}`}
               sub={

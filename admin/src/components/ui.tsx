@@ -18,14 +18,16 @@ export function StatCard({
   label,
   sub,
   tone,
+  accent,
 }: {
   num: ReactNode;
   label: string;
   sub?: ReactNode;
   tone?: "warn";
+  accent?: boolean;
 }) {
   return (
-    <div className="statcard">
+    <div className={"statcard" + (accent ? " statcard--accent" : "")}>
       <div className={"statcard__num" + (tone === "warn" ? " statcard__num--warn" : "")}>{num}</div>
       <div className="statcard__label">{label}</div>
       {sub != null && <div className="statcard__sub">{sub}</div>}
