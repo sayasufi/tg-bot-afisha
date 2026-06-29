@@ -4,7 +4,7 @@ from aiogram import Router
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import Message
 
-from apps.bot.bot.formatting import ce
+from core.render.formatting import ce
 from apps.bot.bot.keyboards.main import webapp_keyboard
 from core.config.settings import get_settings
 from core.db.repositories.users import update_settings, upsert_user_async

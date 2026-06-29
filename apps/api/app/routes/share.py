@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.services.card import ensure_card
+from core.render.card import ensure_card
 from apps.api.app.services.telegram_auth import validate_init_data
 from core.codes import event_code
 from core.config.settings import get_settings

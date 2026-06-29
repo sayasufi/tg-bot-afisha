@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 
 import httpx
 
-from apps.api.app.services.card import build_reminder_card
-from apps.bot.bot.formatting import reminder_caption, reminder_caption_card, when_phrase
+from core.render.card import build_reminder_card
+from core.render.formatting import reminder_caption, reminder_caption_card, when_phrase
 from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.reminders import due_reminders, mark_sent, reap_stale_reminders

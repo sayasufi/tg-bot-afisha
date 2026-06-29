@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.services.geo import reverse_city
 from apps.api.app.services.telegram_auth import validate_init_data
-from apps.bot.bot.formatting import ce
+from core.render.formatting import ce
 from core.cities import city_by_name
 from core.config.settings import get_settings as get_app_settings
 from core.invite import sign_friend, verify as invite_verify, verify_friend

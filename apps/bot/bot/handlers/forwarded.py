@@ -1,7 +1,7 @@
 ﻿from aiogram import Router
 from aiogram.types import Message
 
-from apps.bot.bot.formatting import ce
+from core.render.formatting import ce
 from core.db.repositories.users import save_forward_message
 from core.db.session import AsyncSessionLocal
 
