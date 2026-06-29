@@ -60,3 +60,6 @@ class User(Base):
     admin_session_ver: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Источник привлечения (first-touch): что после `src_` в deep-link (обычно username рекл. канала).
+    acq_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    acq_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

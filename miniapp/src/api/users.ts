@@ -56,11 +56,14 @@ export type BootstrapData = {
 export async function bootstrap(add: string[] = []): Promise<BootstrapData | null> {
   const init = initData();
   if (!init) return null;
+  // Аттрибуция: рекламный deep-link ?startapp=src_<channel> → first-touch источник (бэк ставит один раз).
+  const sp = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.start_param as string | undefined;
+  const source = typeof sp === "string" && sp.startsWith("src_") ? sp : undefined;
   try {
     const r = await fetch(`${API_BASE}/v1/users/bootstrap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: init, add }),
+      body: JSON.stringify({ init_data: init, add, ...(source ? { source } : {}) }),
     });
     if (!r.ok) return null;
     const j = (await r.json()) as Partial<BootstrapData>;

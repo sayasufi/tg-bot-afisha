@@ -13,6 +13,7 @@ from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 _PAGE_SIZE = 100
+_BOT_USERNAME = "okrestmap_bot"  # для рекламных deep-link t.me/<bot>?startapp=src_<channel>
 
 _CPM_EXPR = "(snap.post_price / NULLIF(rch.avg_reach, 0) * 1000)"
 _SORT = {
@@ -21,6 +22,7 @@ _SORT = {
     "reach": "rch.avg_reach",
     "cpm": _CPM_EXPR,
     "price": "snap.post_price",
+    "acquired": "acquired",   # сколько юзеров привёл канал (аттрибуция по acq_source)
     "scraped": "c.last_scraped_at",
 }
 
@@ -95,7 +97,8 @@ async def list_channels(
         "  sub.subscribers, rch.avg_reach, "
         "  round(rch.avg_reach::numeric / NULLIF(sub.subscribers, 0) * 100, 1) AS er, "
         f"  snap.post_price, round({_CPM_EXPR}::numeric, 1) AS cpm, c.score, c.verdict, c.quality, c.relevance, "
-        "  react.avg_reactions "
+        "  react.avg_reactions, "
+        "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = c.username) AS acquired "
         "FROM adstat.channels c " + _JOIN +
         f"WHERE {where} ORDER BY {sort_col} {direction} NULLS LAST, c.channel_id LIMIT :limit OFFSET :offset"
     ), params)).all()
@@ -106,5 +109,6 @@ async def list_channels(
         "post_price": float(r[8]) if r[8] is not None else None,
         "cpm": float(r[9]) if r[9] is not None else None,
         "score": r[10], "verdict": r[11], "quality": r[12], "relevance": r[13], "avg_reactions": r[14],
+        "acquired": int(r[15] or 0),
     } for r in rows]
-    return {"items": items, "total": int(total or 0), "page": int(page), "page_size": _PAGE_SIZE}
+    return {"items": items, "total": int(total or 0), "page": int(page), "page_size": _PAGE_SIZE, "bot_username": _BOT_USERNAME}

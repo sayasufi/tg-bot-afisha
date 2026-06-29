@@ -1,4 +1,5 @@
 import json
+import re
 
 from aiogram import Router
 from aiogram.filters import Command, CommandObject, CommandStart
@@ -55,6 +56,23 @@ async def _save_user(message: Message):
         return u
 
 
+_SRC_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+async def _save_acq_source(user_id: int, raw: str) -> None:
+    """First-touch источник привлечения из /start src_<x>. Ставим один раз (не перезаписываем)."""
+    from sqlalchemy import text
+
+    s = raw.strip()
+    if not (s and _SRC_RE.match(s)):
+        return
+    async with AsyncSessionLocal() as db:
+        await db.execute(text(
+            "UPDATE ref.users SET acq_source=:s, acq_at=now() WHERE telegram_user_id=:uid AND acq_source IS NULL"
+        ), {"s": s, "uid": user_id})
+        await db.commit()
+
+
 async def _handle_report(message: Message, event_id: str) -> None:
     """A user tapped «сообщить о неточности» on an event (deep link ?start=report_<id>).
     Record the flag — event + who — so the team can check the data, and acknowledge so the
@@ -81,6 +99,8 @@ async def _handle_report(message: Message, event_id: str) -> None:
 async def start_handler(message: Message, command: CommandObject) -> None:
     await _save_user(message)
     arg = (command.args or "").strip()
+    if arg.startswith("src_") and message.from_user:  # рекламный deep-link → first-touch источник
+        await _save_acq_source(message.from_user.id, arg[len("src_"):])
     if arg.startswith("report_"):  # «сообщить о неточности» from an event sheet
         await _handle_report(message, arg[len("report_"):])
         return

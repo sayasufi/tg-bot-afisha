@@ -1,10 +1,24 @@
+import re
 from datetime import datetime, timedelta, timezone
 from html import escape
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+_SRC_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _acq_source(raw: str | None) -> str | None:
+    """Источник из deep-link start_param. «src_<x>» → «<x>» (обычно username канала); санитизация."""
+    if not raw:
+        return None
+    s = raw.strip()
+    if s.startswith("src_"):
+        s = s[4:]
+    return s if s and _SRC_RE.match(s) else None
 
 from apps.api.services.geo import reverse_city
 from apps.api.services.telegram_auth import validate_init_data
@@ -77,6 +91,7 @@ class FavoritesSyncRequest(BaseModel):
 class BootstrapRequest(BaseModel):
     init_data: str
     add: list[str] = []  # this device's local favourites to merge in on first run (same gate as favorites/sync)
+    source: str | None = None  # deep-link start_param «src_<channel>» — first-touch acquisition source
 
 
 class FavoriteToggleRequest(BaseModel):
@@ -229,6 +244,12 @@ async def bootstrap(payload: BootstrapRequest, db: AsyncSession = Depends(get_as
     if payload.add and not u.favorites_merged:
         await add_favorites(db, uid, payload.add)
         u.favorites_merged = True
+    # Аттрибуция first-touch: фиксируем источник один раз (не перезаписываем).
+    src = _acq_source(payload.source)
+    if src:
+        await db.execute(text(
+            "UPDATE ref.users SET acq_source=:s, acq_at=now() WHERE telegram_user_id=:uid AND acq_source IS NULL"
+        ), {"s": src, "uid": uid})
     await db.commit()  # the upsert (records the open) + the optional merge — a pure read otherwise
     return {
         "settings": await get_settings(db, uid),

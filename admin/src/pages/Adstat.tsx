@@ -10,6 +10,7 @@ type Ch = {
   last_scraped_at: string | null; subscribers: number | null; avg_reach: number | null;
   er: number | null; post_price: number | null; cpm: number | null; avg_reactions: number | null;
   score: number | null; verdict: string | null; quality: number | null; relevance: string | null;
+  acquired: number;
 };
 
 const VERDICT_KIND: Record<string, "ok" | "warn" | "down" | "off"> = { "брать": "ok", "осторожно": "warn", "мимо": "off" };
@@ -56,6 +57,9 @@ export function Adstat() {
     finally { setTimeout(() => setRefreshing(false), 2000); }
   };
   const items: Ch[] = data?.items ?? [];
+  const botUser = data?.bot_username || "okrestmap_bot";
+  const adLink = (u: string) => `https://t.me/${botUser}?startapp=src_${u}`;
+  const copyLink = (u: string) => { try { navigator.clipboard?.writeText(adLink(u)); } catch { /* noop */ } };
   const resetTo = (setter: (v: string) => void) => (v: string) => { setter(v); setPage(0); };
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / (data?.page_size ?? 100)));
@@ -128,7 +132,8 @@ export function Adstat() {
                   <SortTh label="CPM" k="cpm" sort={sort} onSort={onSort} className="num" />
                   <SortTh label="скор" k="score" sort={sort} onSort={onSort} className="num" />
                   <th>вердикт</th>
-                  <th>купить</th>
+                  <SortTh label="привёл" k="acquired" sort={sort} onSort={onSort} className="num" />
+                  <th>купить · рекл.</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,7 +153,11 @@ export function Adstat() {
                     <td className="num muted">{c.cpm != null ? `${c.cpm}₽` : "—"}</td>
                     <td className="num">{c.score ?? "—"}</td>
                     <td>{c.verdict ? <Badge kind={VERDICT_KIND[c.verdict] ?? "off"}>{c.verdict}</Badge> : "—"}</td>
-                    <td><a href={`https://telega.in/channels/${c.username}/card`} target="_blank" rel="noreferrer">Telega →</a></td>
+                    <td className="num" style={c.acquired ? { color: "var(--acid)", fontWeight: 600 } : undefined}>{c.acquired || "—"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <a href={`https://telega.in/channels/${c.username}/card`} target="_blank" rel="noreferrer">Telega →</a>
+                      <button className="iconbtn" style={{ marginLeft: 6 }} onClick={() => copyLink(c.username)} title={`скопировать рекл. ссылку: ${adLink(c.username)}`}>📋</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
