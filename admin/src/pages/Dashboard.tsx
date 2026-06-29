@@ -3,11 +3,10 @@ import { Spark, StatCard, fmtNum, fmtPct } from "../components/ui";
 import { useApi } from "../lib/useApi";
 
 const ACTION_LABELS: Record<string, string> = {
-  click: "открытий",
-  route: "маршрутов",
-  share: "шеров",
-  reminder: "напоминаний",
-  calendar: "в календарь",
+  click: "открыли событие",
+  route: "построили маршрут",
+  share: "поделились «пойдём?»",
+  reminder: "поставили напоминание",
 };
 
 export function Dashboard() {
@@ -17,7 +16,7 @@ export function Dashboard() {
     <div>
       <div className="page__head topbar">
         <div>
-          <h1 className="page__title">дашборд</h1>
+          <h1 className="page__title">сводка</h1>
           {data && <div className="page__sub page__meta">обновлено {new Date(data.as_of).toLocaleString("ru-RU")}</div>}
         </div>
         <button className="btn btn--ghost" onClick={reload}>обновить</button>
@@ -46,12 +45,12 @@ export function Dashboard() {
             <StatCard num={fmtNum(data.users.digest_optin)} label="подписаны на дайджест" />
           </div>
 
-          <div className="section__title">north-star · недельная активность</div>
+          <div className="section__title">активность за неделю</div>
           <div className="statgrid">
             <StatCard
               accent
               num={fmtNum(data.north_star.wau?.[0]?.users)}
-              label={`WAU · ${data.north_star.wau?.[0]?.week ?? ""}`}
+              label="активных за неделю"
               sub={
                 data.north_star.wau?.length ? (
                   <Spark values={[...data.north_star.wau].reverse().map((w: any) => w.users)} />
@@ -63,7 +62,7 @@ export function Dashboard() {
             ))}
           </div>
 
-          <div className="section__title">ингест по источникам</div>
+          <div className="section__title">сбор событий по источникам</div>
           <IngestTable rows={data.ingest} />
         </>
       )}
