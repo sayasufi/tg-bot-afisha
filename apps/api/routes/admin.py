@@ -93,10 +93,12 @@ async def admin_overview(actor: str = Depends(require_admin), db: AsyncSession =
             "FROM events.events"
         ))).first()
         venues = (await db.execute(text("SELECT count(*) FROM events.venues"))).scalar()
+        # EXISTS, не DISTINCT-джойн: пробы по индексу ix_occurrences_event на ~21к активных событий —
+        # секунды → миллисекунды (джойн материализовал сотни тысяч occurrences).
         future = (await db.execute(text(
-            "SELECT count(DISTINCT o.event_id) FROM events.event_occurrences o "
-            "JOIN events.events e ON e.event_id = o.event_id "
-            "WHERE e.status='active' AND o.date_start > now()"
+            "SELECT count(*) FROM events.events e WHERE e.status='active' "
+            "AND EXISTS (SELECT 1 FROM events.event_occurrences o "
+            "WHERE o.event_id = e.event_id AND o.date_start > now())"
         ))).scalar()
         out["catalog"] = {
             "active": int(r[0] or 0),
