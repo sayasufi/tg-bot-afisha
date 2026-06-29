@@ -25,7 +25,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Источники", to: "/sources" },
       { label: "TG-каналы", to: "/channels" },
-      { label: "Города", to: "/cities", phase: 4 },
+      { label: "Города", to: "/cities" },
     ],
   },
   {
@@ -49,7 +49,7 @@ export const NAV: NavGroup[] = [
     title: "Система",
     items: [
       { label: "Настройки", to: "/settings" },
-      { label: "Журнал действий", to: "/audit", phase: 4 },
+      { label: "Журнал действий", to: "/audit" },
     ],
   },
 ];

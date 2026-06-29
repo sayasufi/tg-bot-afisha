@@ -4,8 +4,10 @@ import { Shell } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { ALL_ITEMS } from "./lib/nav";
 import { Analytics } from "./pages/Analytics";
+import { Audit } from "./pages/Audit";
 import { Broadcasts } from "./pages/Broadcasts";
 import { Channels } from "./pages/Channels";
+import { Cities } from "./pages/Cities";
 import { Dashboard } from "./pages/Dashboard";
 import { Dedup } from "./pages/Dedup";
 import { Events } from "./pages/Events";
@@ -38,6 +40,8 @@ function Gate() {
         <Route path="dedup" element={<Dedup />} />
         <Route path="settings" element={<Settings />} />
         <Route path="users" element={<Users />} />
+        <Route path="cities" element={<Cities />} />
+        <Route path="audit" element={<Audit />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}
