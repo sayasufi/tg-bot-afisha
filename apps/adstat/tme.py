@@ -70,8 +70,9 @@ def refresh_subscribers(limit: int = 400) -> dict:
             "LEFT JOIN LATERAL (SELECT rating FROM adstat.snapshots s "
             "  WHERE s.channel_id = c.channel_id AND s.source <> 'tme' ORDER BY captured_at DESC LIMIT 1) m ON true "
             "WHERE c.username <> '' "
+            # перепрогоняем, пока у свежего tme-снапшота нет ОХВАТА (ранние писали только подписчиков)
             "AND NOT EXISTS (SELECT 1 FROM adstat.snapshots t WHERE t.channel_id = c.channel_id "
-            "                AND t.source = 'tme' AND t.captured_at > now() - interval '20 hours') "
+            "                AND t.source = 'tme' AND t.avg_reach IS NOT NULL AND t.captured_at > now() - interval '20 hours') "
             "ORDER BY COALESCE(m.rating, 0) DESC LIMIT :lim"
         ), {"lim": limit}).all()
         for cid, uname in rows:
