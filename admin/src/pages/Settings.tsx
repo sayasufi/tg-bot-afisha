@@ -79,6 +79,7 @@ export function Settings() {
                           ) : (
                             <input
                               type="number"
+                              key={`${s.key}-${String(s.value)}`}
                               defaultValue={s.value}
                               disabled={!!busy[s.key]}
                               style={{ width: 90 }}

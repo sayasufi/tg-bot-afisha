@@ -58,7 +58,7 @@ async def list_venues(
     db: AsyncSession = Depends(get_async_db),
 ) -> dict:
     """Список площадок. missing: coords (geom IS NULL) | hours (нет или пустые {}). Сортировка серверная."""
-    offset = max(0, int(page)) * _PAGE_SIZE
+    offset = min(max(0, int(page)), 100000) * _PAGE_SIZE
     params: dict = {"q": q, "like": f"%{q}%" if q else None, "limit": _PAGE_SIZE, "offset": offset}
     # CAST(:q AS text) IS NULL — иначе asyncpg не выводит тип bind-параметра при NULL (AmbiguousParameter).
     conds = ["(CAST(:q AS text) IS NULL OR v.name ILIKE :like OR v.address ILIKE :like)"]

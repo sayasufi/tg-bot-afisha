@@ -62,7 +62,7 @@ async def list_events(
     db: AsyncSession = Depends(get_async_db),
 ) -> dict:
     """Поиск/фильтр событий. date: upcoming|week|past. Сортировка серверная (по всему набору). Пагинация 100."""
-    offset = max(0, int(page)) * _PAGE_SIZE
+    offset = min(max(0, int(page)), 100000) * _PAGE_SIZE
     params: dict = {
         "q": q, "like": f"%{q}%" if q else None,
         "status": status, "category": category, "limit": _PAGE_SIZE, "offset": offset,

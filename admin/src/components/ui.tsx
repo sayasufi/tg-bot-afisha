@@ -46,6 +46,7 @@ export function Dot({ kind }: { kind: Kind }) {
 }
 
 export function Spark({ values }: { values: number[] }) {
+  if (!values?.length) return <span className="muted">—</span>;
   const max = Math.max(1, ...values);
   return (
     <div className="spark">

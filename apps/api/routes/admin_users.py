@@ -46,7 +46,7 @@ async def list_users(
     actor: str = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
 ) -> dict:
-    offset = max(0, int(page)) * _PAGE_SIZE
+    offset = min(max(0, int(page)), 100000) * _PAGE_SIZE
     params: dict = {"q": q, "like": f"%{q}%" if q else None, "limit": _PAGE_SIZE, "offset": offset}
     conds = ["(CAST(:q AS text) IS NULL OR u.username ILIKE :like OR u.first_name ILIKE :like)"]
     if city:
@@ -62,7 +62,7 @@ async def list_users(
     total = (await db.execute(text(f"SELECT count(*) FROM ref.users u WHERE {where}"), params)).scalar()
 
     sort_col = _SORT.get(sort or "", "u.last_active_at")
-    direction = "DESC" if (dir or "desc").lower() == "desc" else "ASC"
+    direction = "DESC" if (dir or "").lower() == "desc" else "ASC"
     rows = (await db.execute(text(
         "SELECT u.telegram_user_id, u.username, u.first_name, u.city_slug, u.onboarded, "
         "  u.notify_digest, u.notify_reminders, COALESCE(array_length(u.interests, 1), 0) AS n_interests, "

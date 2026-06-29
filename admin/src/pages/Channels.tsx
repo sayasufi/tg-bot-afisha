@@ -75,8 +75,13 @@ export function Channels() {
     const vn = window.prompt("Площадка (пусто = общий канал):", c.venue_name ?? "");
     if (vn === null) return;
     const va = window.prompt("Адрес площадки:", c.venue_address ?? "") ?? "";
-    await apiPost(`/venue-channels/${c.channel_id}/bind`, { venue_name: vn, venue_address: va });
-    reload();
+    setBusy((b) => ({ ...b, [c.channel_id]: true }));
+    try {
+      await apiPost(`/venue-channels/${c.channel_id}/bind`, { venue_name: vn, venue_address: va });
+      reload();
+    } finally {
+      setBusy((b) => ({ ...b, [c.channel_id]: false }));
+    }
   };
 
   const [newU, setNewU] = useState("");
@@ -88,6 +93,7 @@ export function Channels() {
     try {
       await apiPost("/venue-channels", { username: newU.trim(), city_id: Number(newCity) });
       setNewU("");
+      setNewCity("");
       reload();
     } finally {
       setAdding(false);

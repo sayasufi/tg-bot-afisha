@@ -45,7 +45,7 @@ async def list_channels(
     sort: str | None = None, dir: str | None = None, page: int = 0,
     actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db),
 ) -> dict:
-    offset = max(0, int(page)) * _PAGE_SIZE
+    offset = min(max(0, int(page)), 100000) * _PAGE_SIZE
     params: dict = {"q": q, "like": f"%{q}%" if q else None, "limit": _PAGE_SIZE, "offset": offset}
     conds = ["(CAST(:q AS text) IS NULL OR c.username ILIKE :like OR c.title ILIKE :like)"]
     if city:

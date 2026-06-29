@@ -25,7 +25,7 @@ async def list_audit(
     action: str | None = None, page: int = 0,
     actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db),
 ) -> dict:
-    offset = max(0, int(page)) * _PAGE_SIZE
+    offset = min(max(0, int(page)), 100000) * _PAGE_SIZE
     params = {"action": action, "limit": _PAGE_SIZE, "offset": offset}
     where = "(CAST(:action AS text) IS NULL OR action = :action)"
     total = (await db.execute(text(f"SELECT count(*) FROM ref.admin_audit WHERE {where}"), params)).scalar()

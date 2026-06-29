@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Shell } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
-import { ALL_ITEMS } from "./lib/nav";
 import { Adstat } from "./pages/Adstat";
 import { Analytics } from "./pages/Analytics";
 import { Audit } from "./pages/Audit";
@@ -22,7 +21,6 @@ import { System } from "./pages/System";
 import { Users } from "./pages/Users";
 import { Venues } from "./pages/Venues";
 import { Login } from "./pages/Login";
-import { Placeholder } from "./pages/Placeholder";
 
 function Gate() {
   const { user, ready } = useAuth();
@@ -50,9 +48,6 @@ function Gate() {
         <Route path="ops/data" element={<DataOps />} />
         <Route path="ops/danger" element={<Danger />} />
         <Route path="ops/system" element={<System />} />
-        {ALL_ITEMS.filter((i) => i.phase).map((i) => (
-          <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
-        ))}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

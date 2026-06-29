@@ -60,7 +60,7 @@ export function DataOps() {
                 </td>
               </tr>
             ))}
-            {!list.length && <tr><td colSpan={3} className="muted">загрузка процессов…</td></tr>}
+            {!list.length && <tr><td colSpan={3} className="muted">{flows.loading ? "загрузка процессов…" : "нет процессов"}</td></tr>}
           </tbody>
         </table>
       </div>

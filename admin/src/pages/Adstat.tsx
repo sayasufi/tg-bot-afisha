@@ -21,7 +21,7 @@ export function Adstat() {
   const [page, setPage] = useState(0);
 
   useEffect(() => { const t = setTimeout(() => { setQd(q); setPage(0); }, 350); return () => clearTimeout(t); }, [q]);
-  const onSort = (k: string) => { setSort((s) => (s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: "desc" })); setPage(0); };
+  const onSort = (k: string) => { setSort((s) => (s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: "asc" })); setPage(0); };
 
   const path = useMemo(() => {
     const p = new URLSearchParams();
