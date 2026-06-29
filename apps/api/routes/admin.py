@@ -166,29 +166,35 @@ async def _north_star() -> dict:
 
 
 async def _ingest_health(db: AsyncSession) -> list:
-    """По каждому источнику — последний прогон (статус, когда, лаг в часах)."""
+    """Здоровье ингеста, СГРУППИРОВАННОЕ по семейству источника (376 per-city источников → ~5 семейств:
+    afisha_ru/kudago/telegram_public/timepad/yandex_afisha). Семейство = префикс имени до первого ':'/'-'.
+    Для каждого: сколько источников/активных, сколько с успешным последним прогоном, свежесть (мин. лаг)."""
     try:
         rows = (await db.execute(text(
-            "SELECT s.name, s.kind, s.is_active, r.status, r.started_at, r.finished_at, "
-            "  EXTRACT(EPOCH FROM (now() - COALESCE(r.finished_at, r.started_at))) / 3600.0 AS lag_h "
+            "SELECT split_part(split_part(s.name, ':', 1), '-', 1) AS family, "
+            "  count(*) AS sources, count(*) FILTER (WHERE s.is_active) AS active, "
+            "  count(*) FILTER (WHERE r.status='success') AS ok, "
+            "  count(*) FILTER (WHERE r.status IS NOT NULL AND r.status NOT IN ('success','running')) AS failed, "
+            "  max(r.finished_at) AS latest_finish, "
+            "  min(EXTRACT(EPOCH FROM (now() - COALESCE(r.finished_at, r.started_at))) / 3600.0) AS min_lag_h "
             "FROM ref.sources s "
             "LEFT JOIN LATERAL ("
             "  SELECT status, started_at, finished_at FROM events.source_runs sr "
             "  WHERE sr.source_id = s.source_id ORDER BY sr.started_at DESC LIMIT 1"
-            ") r ON true ORDER BY s.name"
+            ") r ON true GROUP BY family ORDER BY family"
         ))).all()
     except Exception:
         return []
     out = []
-    for name, kind, is_active, status, started, finished, lag_h in rows:
+    for family, sources, active, ok, failed, latest, min_lag in rows:
         out.append({
-            "name": name,
-            "kind": kind,
-            "is_active": bool(is_active),
-            "last_status": status,
-            "last_started": started.isoformat() if started else None,
-            "last_finished": finished.isoformat() if finished else None,
-            "lag_hours": round(float(lag_h), 1) if lag_h is not None else None,
+            "family": family,
+            "sources": int(sources),
+            "active": int(active),
+            "ok": int(ok),
+            "failed": int(failed),
+            "latest_finish": latest.isoformat() if latest else None,
+            "lag_hours": round(float(min_lag), 1) if min_lag is not None else None,
         })
     return out
 
