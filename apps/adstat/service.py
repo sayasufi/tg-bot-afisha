@@ -39,16 +39,26 @@ def _build_clients(settings, sources: list[str] | None = None) -> list:
     return clients
 
 
-def _active_targets() -> list[str]:
+def _active_targets(limit: int | None = None, stale_first: bool = False) -> list[str]:
+    """Активные таргеты. stale_first → сортировка по AdChannel.last_scraped_at (NULL=никогда → первыми):
+    дневной флоу берёт срез самых несвежих, охват ротируется по дням (вместо «все ~6000 за раз» → таймаут)."""
     with SessionLocal() as db:
-        rows = db.execute(select(AdTarget.username).where(AdTarget.is_active.is_(True))).scalars().all()
+        stmt = select(AdTarget.username).where(AdTarget.is_active.is_(True))
+        if stale_first:
+            stmt = stmt.outerjoin(AdChannel, AdChannel.username == AdTarget.username).order_by(
+                AdChannel.last_scraped_at.asc().nulls_first(), AdTarget.target_id
+            )
+        if limit:
+            stmt = stmt.limit(limit)
+        rows = db.execute(stmt).scalars().all()
     return [u for u in rows]
 
 
 def scrape(usernames: list[str] | None = None, dry_run: bool = False,
-           sources: list[str] | None = None) -> list[dict]:
+           sources: list[str] | None = None, limit: int | None = None) -> list[dict]:
     """Скрапит каналы (или активные targets) и пишет снимки. dry_run → не трогает БД, вернёт результаты.
-    sources=['telemetr'] ограничивает источники (для лёгкого ежедневного флоу)."""
+    sources=['telemetr'] ограничивает источники (для лёгкого ежедневного флоу).
+    limit → не более N таргетов за прогон, самые несвежие первыми (ротация охвата; защита от таймаута)."""
     settings = get_settings()
     if not dry_run and not settings.adstat_enabled:
         log.info("adstat: ADSTAT_ENABLED=false — пропуск")
@@ -59,7 +69,7 @@ def scrape(usernames: list[str] | None = None, dry_run: bool = False,
         log.warning("adstat: нет готовых источников (куки?) — пропуск")
         return []
 
-    names = usernames if usernames else _active_targets()
+    names = usernames if usernames else _active_targets(limit=limit, stale_first=bool(limit))
     if not names:
         log.info("adstat: список каналов пуст (нет targets)")
         return []

@@ -14,15 +14,16 @@ _RETRY_DELAY = 30  # seconds
 
 # --- adstat (рекламный ресёрч каналов) ---------------------------------------
 
-@flow(name="scrape-adstat", retries=1, retry_delay_seconds=120, timeout_seconds=3600, log_prints=True)
+@flow(name="scrape-adstat", retries=1, retry_delay_seconds=120, timeout_seconds=5400, log_prints=True)
 async def scrape_adstat():
-    """Daily: лёгкий рефреш статистики активных targets — ТОЛЬКО Telemetr (быстро, без перегруза
-    тариф-квоты и FlareSolverr). TGStat — для ручных прогонов по шорт-листу. No-op при ADSTAT_ENABLED=false."""
+    """Daily: лёгкий рефреш статистики — ТОЛЬКО Telemetr, и НЕ все ~6000 таргетов за раз (это упиралось
+    в таймаут 60м), а срез из 800 самых несвежих (по last_scraped_at) — полный охват ротируется за ~8 дней.
+    No-op при ADSTAT_ENABLED=false."""
     import asyncio
 
     from apps.adstat.service import scrape
 
-    rows = await asyncio.to_thread(scrape, None, False, ["telemetr"])
+    rows = await asyncio.to_thread(scrape, None, False, ["telemetr"], 800)
     ok = sum(1 for r in rows if not r.get("error"))
     return {"rows": len(rows), "ok": ok}
 
