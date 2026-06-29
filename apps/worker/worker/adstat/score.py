@@ -1,16 +1,15 @@
-"""Скоринг каналов «брать / осторожно / мимо» по pro-маркерам закупки рекламы (посев).
+"""Скоринг каналов «брать / осторожно / мимо» для закупки рекламы (посев) афиша-приложения.
 
-Модель основана на консенсусе индустрии (eLama / Bidfox / TGStat / Telemetr — см. ресёрч):
-  ГЛАВНОЕ — охват от подписчиков (ERR = охват/подписчики): живость аудитории.
-    норма 15–45%; <10% → мёртвая/купленная аудитория («мимо»); >60% → флаг накрутки просмотров.
-  ЦЕНА — CPM (₽ за 1000 просмотров): медиана натив-посева ~150–180₽. Норма ~до 350₽; дорого >600–1000₽.
-    Слишком дёшево (<80₽) — ТОЖЕ подозрительно (плохая аудитория), не «чем дешевле тем лучше».
-  АВТОРИТЕТ — упоминания/цитируемость другими каналами → бонус.
-  ФРОД — is_scam / накрутка (boosting) / санкции → сразу «мимо».
-
-Мёрджит свежие метрики канала из ВСЕХ источников (telethon: охват; telega: цена; telemetr: фрод/упоминания).
-CPM считаем сами из цены и охвата, если не сохранён. Реакционный ER в данных неоднозначен по источникам
-(ERR vs реакции), поэтому охват/подписчики считаем САМИ и на ambiguous-поле не опираемся.
+ДВА слоя:
+  1. КАЧЕСТВО рекламы (метрики, по консенсусу индустрии — eLama/Bidfox/TGStat/Telemetr):
+     - охват/подписчики (ERR) — ядро живости: норма 15–45%; <10% → мёртвая/купленная («мимо»);
+       >60% → флаг накрутки просмотров. Кривая непрерывная (пик ~30%), чтобы ранжировать тонко.
+     - CPM (₽/1000 просмотров): медиана натив-посева ~150–180₽; дорого >600₽; слишком дёшево (<80₽)
+       тоже подозрительно (плохая аудитория). Тоже непрерывно.
+     - упоминания/цитируемость → бонус; фрод (scam/накрутка/санкции) → 0.
+  2. РЕЛЕВАНТНОСТЬ теме (Окрест = афиша/события): по ключам в названии/юзернейме.
+     афиша/культура ×1.0, город/локалка-новости ×0.8, мусор (ногти/дача/эзотерика/политика…) ×0.1.
+  ИТОГ = качество × релевантность → так «топ каналов вообще» превращается в «топ ДЛЯ афиша-приложения».
 """
 from __future__ import annotations
 
@@ -21,6 +20,31 @@ from core.db.session import SessionLocal
 
 _FIELDS = ["subscribers", "avg_reach", "er", "err", "cpm", "post_price", "rating",
            "is_scam", "is_boosting", "sanctioned", "quality_score", "mentions"]
+
+# Кусочно-линейные кривые бонусов (непрерывные → нет «ничьих» внутри банды).
+_REACH_PTS = [(10, 4), (15, 16), (30, 28), (45, 16), (60, -2), (100, -12)]  # охват% подписчиков → бонус
+_CPM_PTS = [(50, 2), (80, 8), (150, 20), (300, 18), (500, 6), (800, -10), (1500, -22)]  # CPM₽ → бонус
+
+# Релевантность теме афиши. Проверяется по lower(title+username); порядок: мусор → афиша → город → нейтрально.
+_OFF_TOPIC = (
+    "маникюр", "manik", "ногт", "nogt", "ресниц", "брови", "дача", "dacha", "огород", "ogorod", "грядк",
+    "рассад", "рецепт", "recept", "кулинар", "kulinar", "похуд", "pohud", "фитнес", "fitnes", "диет",
+    "экстрасенс", "ekstrasens", "extrasens", "гороскоп", "goroskop", "таро", "магия", "эзотер", "ezoter",
+    "заработок", "zarabotok", "крипт", "kript", "crypto", "инвест", "invest", "форекс", "forex", "ставк",
+    "casino", "казино", "букмекер", "политик", "politik", "putin", "навальн", "шаблон", "shablon", "мотивац",
+    "цитат", "психолог", "psiholog", "знакомств", "znakomstv", "18+", "adult", "porn", "порн", "нумеролог",
+    "поздравл", "pozdrav", "открытк", "otkrytk", "саморазвит", "мемы", "memes",
+)
+_AFISHA = (
+    "афиш", "afish", "кудасход", "кудапо", "kuda", "событи", "concert", "концерт", "театр", "teatr",
+    "выставк", "vystavk", "кино", "kino", "фестивал", "festival", "спектакл", "билет", "bilet", "анонс",
+    "anons", "гастрол", "стендап", "standup", "вечеринк", "тусовк", "tusovk", "досуг", "развлечен",
+    "культур", "kultur", "экскурс", "ekskurs", "лекци", "мероприят", "выходны", "weekend", "афиша", "art",
+)
+_CITY = (
+    "новост", "novost", "news", "чп", "chp", "происшеств", "инцидент", "incident", "типичн", "tipich",
+    "подслушан", "podslushan", "городск", "gorod", "online", "област", "oblast", "регион", "region", "life",
+)
 
 
 def _merge(snaps: list[dict]) -> dict:
@@ -34,64 +58,63 @@ def _merge(snaps: list[dict]) -> dict:
     return m
 
 
+def _lerp(pts: list[tuple[float, float]], x: float) -> float:
+    if x <= pts[0][0]:
+        return pts[0][1]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return pts[-1][1]
+
+
+def _relevance(title: str | None, username: str | None) -> tuple[float, str]:
+    """Релевантность теме афиши по ключам. Мусор режем (×0.1), афишу поднимаем (×1.0), город — середина."""
+    t = f"{title or ''} {username or ''}".lower()
+    if any(k in t for k in _OFF_TOPIC):
+        return 0.10, "не тема"
+    if any(k in t for k in _AFISHA):
+        return 1.0, "афиша"
+    if any(k in t for k in _CITY):
+        return 0.8, "город/локалка"
+    return 0.55, "тема?"
+
+
 def score_channel(m: dict) -> tuple[int, str, str]:
+    """КАЧЕСТВО канала (0–100) по метрикам, без релевантности (её применяет rank). Непрерывное."""
     subs = m.get("subscribers")
     reach = m.get("avg_reach")
     cpm = m.get("cpm")
     price = m.get("post_price")
     mentions = m.get("mentions")
     fraud = m.get("is_scam") or m.get("is_boosting") or m.get("sanctioned")
-
-    # CPM (₽ за 1000 просмотров) — считаем сами, если источник не дал.
     if cpm is None and price and reach:
         cpm = price / reach * 1000.0
 
-    # --- ЖЁСТКИЕ ОТСЕВЫ (анти-фрод) ---
     if fraud:
         return 0, "мимо", "фрод-флаг (scam / накрутка / санкции)"
-    rr = (reach / subs) if (subs and reach) else None  # ERR = охват/подписчики (главный признак живости)
+    rr = (reach / subs) if (subs and reach) else None  # ERR = охват/подписчики
     if rr is not None and rr < 0.10:
         return 8, "мимо", f"охват {rr * 100:.0f}% подписчиков (<10%) — мёртвая/купленная аудитория"
 
     s = 40.0
     why: list[str] = []
-
-    # --- Охват от подписчиков (ERR): ядро оценки. Норма 15–45%; >60% — флаг накрутки просмотров. ---
     if rr is not None:
         p = rr * 100
-        if 15 <= p <= 45:
-            s += 28; why.append(f"охват {p:.0f}% — живая аудитория")
-        elif 10 <= p < 15:
-            s += 13; why.append(f"охват {p:.0f}% — ниже нормы")
-        elif 45 < p <= 60:
-            s += 12; why.append(f"охват {p:.0f}% — высоковат")
-        else:  # > 60%
-            s -= 6; why.append(f"охват {p:.0f}% — проверить на накрутку просмотров")
+        s += _lerp(_REACH_PTS, p)
+        why.append(f"охват {p:.0f}%" + (" — проверить накрутку" if p > 60 else ""))
     else:
-        why.append("охват/подписчики неизвестны")
-
-    # --- CPM: норма натив-посева ~150–350₽; дорого >600₽; слишком дёшево (<80₽) — подозрительно. ---
+        why.append("охват неизвестен")
     if cpm:
-        if cpm < 80:
-            s += 4; why.append(f"CPM {cpm:.0f}₽ — подозрительно дёшево")
-        elif cpm <= 350:
-            s += 20; why.append(f"CPM {cpm:.0f}₽ — выгодно")
-        elif cpm <= 600:
-            s += 8; why.append(f"CPM {cpm:.0f}₽ — норма")
-        elif cpm <= 1000:
-            s -= 10; why.append(f"CPM {cpm:.0f}₽ — дороговато")
-        else:
-            s -= 22; why.append(f"CPM {cpm:.0f}₽ — дорого")
+        s += _lerp(_CPM_PTS, cpm)
+        why.append(f"CPM {cpm:.0f}₽" + (" — дёшево, проверить" if cpm < 80 else ("" if cpm <= 600 else " — дорого")))
     else:
         why.append("цена не собрана")
-
-    # --- Цитируемость: упоминания канала другими = органический авторитет/доверие. ---
     if mentions and mentions > 0:
-        s += 6; why.append("есть упоминания в др. каналах")
+        s += 6
+        why.append("есть упоминания")
 
     s = int(max(0, min(100, round(s))))
     verdict = "брать" if s >= 70 else ("осторожно" if s >= 50 else "мимо")
-    # Слабый охват (<15%) не пускаем в «брать» даже при дешёвой цене — качество аудитории под вопросом.
     if rr is not None and rr < 0.15 and verdict == "брать":
         verdict = "осторожно"
     return s, verdict, ", ".join(why) or "мало данных"
@@ -109,10 +132,14 @@ def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
             m = _merge([{f: getattr(s, f, None) for f in _FIELDS} for s in snaps])
             if not m.get("avg_reach") or m["avg_reach"] < min_reach:
                 continue
-            sc, verdict, why = score_channel(m)
+            quality, _qv, why = score_channel(m)
+            rel, rel_label = _relevance(ch.title, ch.username)
+            final = int(round(quality * rel))  # ИТОГ = качество × релевантность
+            verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
             out.append({
-                "username": ch.username, "title": ch.title, "score": sc, "verdict": verdict,
-                "reason": why, "subscribers": m.get("subscribers"), "reach": m.get("avg_reach"),
+                "username": ch.username, "title": ch.title, "score": final, "quality": quality,
+                "relevance": rel_label, "verdict": verdict, "reason": f"{why} · {rel_label}",
+                "subscribers": m.get("subscribers"), "reach": m.get("avg_reach"),
                 "er": m.get("er") or m.get("err"), "cpm": m.get("cpm"), "price": m.get("post_price"),
             })
     out.sort(key=lambda x: -x["score"])
