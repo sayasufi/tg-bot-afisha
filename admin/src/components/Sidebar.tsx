@@ -13,14 +13,14 @@ const ICONS: Record<string, ReactNode> = {
       <rect x="9" y="9" width="5" height="5" />
     </>
   ),
-  Данные: (
+  Каталог: (
     <>
       <rect x="2" y="3" width="12" height="2.5" />
       <rect x="2" y="7" width="12" height="2.5" />
       <rect x="2" y="11" width="12" height="2.5" />
     </>
   ),
-  Ингест: (
+  "Сбор данных": (
     <>
       <path d="M8 2 v7" />
       <path d="M5 6 l3 3 3-3" />

@@ -7,21 +7,21 @@ export const NAV: NavGroup[] = [
   {
     title: "Обзор",
     items: [
-      { label: "Дашборд", to: "/" },
+      { label: "Сводка", to: "/" },
       { label: "Аналитика", to: "/analytics", phase: 3 },
       { label: "Здоровье", to: "/health" },
     ],
   },
   {
-    title: "Данные",
+    title: "Каталог",
     items: [
       { label: "События", to: "/events", phase: 3 },
       { label: "Площадки", to: "/venues", phase: 3 },
-      { label: "Дедуп", to: "/dedup", phase: 3 },
+      { label: "Дубликаты", to: "/dedup", phase: 3 },
     ],
   },
   {
-    title: "Ингест",
+    title: "Сбор данных",
     items: [
       { label: "Источники", to: "/sources" },
       { label: "TG-каналы", to: "/channels" },
@@ -31,10 +31,10 @@ export const NAV: NavGroup[] = [
   {
     title: "Операции",
     items: [
-      { label: "Флоу", to: "/ops/flows" },
-      { label: "Maintenance", to: "/ops/data", phase: 2 },
-      { label: "Опасные", to: "/ops/danger", phase: 2 },
-      { label: "Система", to: "/ops/system", phase: 4 },
+      { label: "Процессы", to: "/ops/flows" },
+      { label: "Обработка данных", to: "/ops/data", phase: 2 },
+      { label: "Опасная зона", to: "/ops/danger", phase: 2 },
+      { label: "Бэкапы и сервис", to: "/ops/system", phase: 4 },
     ],
   },
   {
@@ -42,14 +42,14 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Пользователи", to: "/users", phase: 4 },
       { label: "Рассылки", to: "/broadcasts", phase: 2 },
-      { label: "Посев", to: "/adstat", phase: 4 },
+      { label: "Реклама", to: "/adstat", phase: 4 },
     ],
   },
   {
     title: "Система",
     items: [
       { label: "Настройки", to: "/settings", phase: 3 },
-      { label: "Аудит", to: "/audit", phase: 4 },
+      { label: "Журнал действий", to: "/audit", phase: 4 },
     ],
   },
 ];
