@@ -31,11 +31,12 @@ async def list_sources(
         "kind": kind,
         "active": active,
     }
-    # Касты типов на IS NULL-параметрах: иначе psycopg не выводит тип untyped-NULL → AmbiguousParameter.
+    # CAST на IS NULL-параметрах: даёт psycopg тип untyped-NULL (иначе AmbiguousParameter). НЕ через `::`
+    # — оно конфликтует с :param-синтаксисом SQLAlchemy (`::text` → ложный бинд `:text`).
     where = (
-        "(:q::text IS NULL OR s.name ILIKE :like) "
-        "AND (:kind::text IS NULL OR s.kind = :kind) "
-        "AND (:active::boolean IS NULL OR s.is_active = :active)"
+        "(CAST(:q AS text) IS NULL OR s.name ILIKE :like) "
+        "AND (CAST(:kind AS text) IS NULL OR s.kind = :kind) "
+        "AND (CAST(:active AS boolean) IS NULL OR s.is_active = :active)"
     )
 
     total = (await db.execute(
