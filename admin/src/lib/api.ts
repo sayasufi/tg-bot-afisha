@@ -41,4 +41,5 @@ async function req(method: string, path: string, body?: unknown): Promise<any> {
 
 export const apiGet = (path: string) => req("GET", path);
 export const apiPost = (path: string, body?: unknown) => req("POST", path, body);
+export const apiPatch = (path: string, body?: unknown) => req("PATCH", path, body);
 export const apiDelete = (path: string) => req("DELETE", path);

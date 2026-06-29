@@ -6,7 +6,7 @@ run history/observability UI. The logic lives in ``tasks/*`` and is unchanged.
 """
 from prefect import flow
 
-from apps.worker.tasks import dedup, digest, enrich, fetch, media, normalize, reminders, search_index
+from apps.worker.tasks import broadcasts, dedup, digest, enrich, fetch, media, normalize, reminders, search_index
 
 _RETRIES = 2
 _RETRY_DELAY = 30  # seconds
@@ -289,3 +289,10 @@ async def send_digest():
     checked against this ISO-week's start), so retries=1 is safe — a retry only re-sends to
     users a transient failure left unstamped, never a duplicate."""
     return await digest._send_digest_impl()
+
+
+@flow(name="dispatch-broadcasts", retries=0, timeout_seconds=1800, log_prints=True)
+async def dispatch_broadcasts():
+    """Подхватить ДОЗРЕВШИЕ кастомные рассылки (now / at_utc) и отправить paced-сендером. retries=0 —
+    механизм возобновления = поюзерный ledger (ON CONFLICT), а не повтор флоу (иначе риск дабл-сенда)."""
+    return await broadcasts._dispatch_due_impl()

@@ -40,6 +40,8 @@ _SCHEDULE = [
     # Keep the Meilisearch typeahead index fresh (no-op until MEILI_SEARCH_ENABLED). Cheap full
     # reindex at this scale; the atomic swap means search never sees an empty index.
     (flows.reindex_search, 120),
+    # Кастомные рассылки: каждые 5 мин подхватываем дозревшие кампании (now/at_utc). Ledger = идемпотентность.
+    (flows.dispatch_broadcasts, 300),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),

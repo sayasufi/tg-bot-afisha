@@ -83,6 +83,7 @@ def _settings_dict(user: User) -> dict:
         "interests": list(user.interests or []),
         "notify_reminders": user.notify_reminders,
         "notify_digest": user.notify_digest,
+        "notify_broadcasts": user.notify_broadcasts,
         "friends_private": user.friends_private,
     }
 
@@ -105,6 +106,7 @@ async def update_settings(
     interests: list[str] | None = None,
     notify_reminders: bool | None = None,
     notify_digest: bool | None = None,
+    notify_broadcasts: bool | None = None,
     friends_private: bool | None = None,
 ) -> dict:
     """Set the provided settings (None = leave unchanged; "" clears city). No commit."""
@@ -134,6 +136,8 @@ async def update_settings(
         user.notify_reminders = bool(notify_reminders)
     if notify_digest is not None:
         user.notify_digest = bool(notify_digest)
+    if notify_broadcasts is not None:
+        user.notify_broadcasts = bool(notify_broadcasts)
     if friends_private is not None:
         user.friends_private = bool(friends_private)
     db.add(user)
