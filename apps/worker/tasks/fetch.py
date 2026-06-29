@@ -11,6 +11,7 @@ from connectors.web.kudago_connector import KudaGoConnector
 from connectors.web.timepad_connector import TimepadConnector
 from connectors.web.yandex_afisha_connector import YandexAfishaConnector
 from core.domain.cities import DEFAULT_CITY, active_cities
+from core.config.effective import get_effective
 from core.config.settings import get_settings
 from core.db.repositories.ingestion import (
     bulk_upsert_raw_events,
@@ -284,7 +285,7 @@ def _afisha_config(city=DEFAULT_CITY) -> dict:
 
 
 async def _fetch_afisha_impl() -> dict:
-    if not get_settings().afisha_enabled:
+    if not await get_effective("afisha_enabled", get_settings().afisha_enabled):
         return {"fetched": 0, "skipped": "afisha disabled"}
     return await _per_city(_afisha_one, "afisha_ru")
 
@@ -313,7 +314,7 @@ async def _afisha_one(db, city) -> dict:
 
 
 async def _fetch_afisha_full_scan_impl() -> dict:
-    if not get_settings().afisha_enabled:
+    if not await get_effective("afisha_enabled", get_settings().afisha_enabled):
         return {"fetched": 0, "skipped": "afisha disabled"}
     return await _per_city(_afisha_full_scan_one, "afisha_ru")
 

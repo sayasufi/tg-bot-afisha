@@ -21,6 +21,7 @@ from apps.api.services.admin_auth import (
     validate_credentials,
     write_audit,
 )
+from core.config.effective import get_effective
 from core.config.settings import get_settings
 from core.db.session import get_async_db
 from core.infra.redis import get_redis
@@ -223,7 +224,7 @@ async def admin_health(actor: str = Depends(require_admin), db: AsyncSession = D
         except Exception:
             pass
 
-    if s.meili_search_enabled:
+    if await get_effective("meili_search_enabled", s.meili_search_enabled, db=db):
         deps["meili"] = "down"
         try:
             async with httpx.AsyncClient(timeout=2.0) as h:

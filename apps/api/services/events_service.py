@@ -13,6 +13,7 @@ from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.domain.codes import event_code, parse_event_code
+from core.config.effective import get_effective
 from core.config.settings import get_settings
 from core.db.models import Event, EventOccurrence, UserFavorite, Venue
 from core.infra.redis import get_redis
@@ -1049,7 +1050,7 @@ class EventQueryService:
         # Meilisearch typeahead — typo-tolerant + diacritics-folded ("omanko" finds "Ömankö").
         # Falls through to the Postgres trigram search below if disabled or unavailable, so search
         # never hard-fails on a Meili hiccup.
-        if get_settings().meili_search_enabled:
+        if await get_effective("meili_search_enabled", get_settings().meili_search_enabled, db=self.db):
             try:
                 return await self._search_meili(qn, city, limit)
             except Exception:

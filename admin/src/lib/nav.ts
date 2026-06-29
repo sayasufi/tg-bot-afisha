@@ -48,7 +48,7 @@ export const NAV: NavGroup[] = [
   {
     title: "Система",
     items: [
-      { label: "Настройки", to: "/settings", phase: 3 },
+      { label: "Настройки", to: "/settings" },
       { label: "Журнал действий", to: "/audit", phase: 4 },
     ],
   },

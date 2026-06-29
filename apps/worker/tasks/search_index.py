@@ -10,6 +10,7 @@ import logging
 from sqlalchemy import text
 
 from core.domain.codes import event_code
+from core.config.effective import get_effective
 from core.config.settings import get_settings
 from core.db.session import WorkerAsyncSessionLocal
 from core.search.meili import MeiliClient
@@ -59,9 +60,9 @@ def _doc(r) -> dict:
 
 
 async def _reindex_search_impl() -> dict:
-    if not get_settings().meili_search_enabled:
-        return {"skipped": "disabled"}
     async with WorkerAsyncSessionLocal() as db:
+        if not await get_effective("meili_search_enabled", get_settings().meili_search_enabled, db=db):
+            return {"skipped": "disabled"}
         rows = (await db.execute(_SQL)).mappings().all()
     docs = [_doc(r) for r in rows]
     n = await MeiliClient().reindex(docs)
