@@ -35,10 +35,11 @@ async def list_venue_channels(
         "city_id": city_id,
         "dead": dead,
     }
+    # Касты типов на IS NULL-параметрах: иначе psycopg не выводит тип untyped-NULL → AmbiguousParameter.
     where = (
-        " WHERE (:q IS NULL OR tc.username ILIKE :like OR tc.venue_name ILIKE :like) "
-        " AND (:city_id IS NULL OR tc.city_id = :city_id) "
-        " AND (NOT :dead OR tc.is_active = false) "
+        " WHERE (:q::text IS NULL OR tc.username ILIKE :like OR tc.venue_name ILIKE :like) "
+        " AND (:city_id::int IS NULL OR tc.city_id = :city_id) "
+        " AND (NOT :dead::boolean OR tc.is_active = false) "
     )
     total = (await db.execute(
         text("SELECT count(*) FROM ref.telegram_channels tc" + where), params

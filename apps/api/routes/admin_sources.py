@@ -31,10 +31,11 @@ async def list_sources(
         "kind": kind,
         "active": active,
     }
+    # Касты типов на IS NULL-параметрах: иначе psycopg не выводит тип untyped-NULL → AmbiguousParameter.
     where = (
-        "(:q IS NULL OR s.name ILIKE :like) "
-        "AND (:kind IS NULL OR s.kind = :kind) "
-        "AND (:active IS NULL OR s.is_active = :active)"
+        "(:q::text IS NULL OR s.name ILIKE :like) "
+        "AND (:kind::text IS NULL OR s.kind = :kind) "
+        "AND (:active::boolean IS NULL OR s.is_active = :active)"
     )
 
     total = (await db.execute(
