@@ -45,6 +45,10 @@ _AFISHA = (
     "выставк", "vystavk", "кинотеатр", "кинопоказ", "киноклуб", "фестивал", "festival", "спектакл", "билет", "bilet", "анонс",
     "anons", "гастрол", "стендап", "standup", "вечеринк", "тусовк", "tusovk", "досуг", "развлечен",
     "культур", "kultur", "экскурс", "ekskurs", "лекци", "мероприят", "выходны", "weekend",
+    # B3-добор: культурно-событийные ниши, проваливавшиеся в «тема?»
+    "праздник", "ярмарк", "квиз", "квест", "опенэйр", "open air", "перформанс", "иммерс", "мюзикл",
+    "опер", "балет", "джаз", "рейв", "караоке", "квартирник", "артхаус", "артспейс", "креативн",
+    "куда пойти", "куда сходить", "путешеств", "туризм", "набережн",
 )
 _CITY = (
     "новост", "novost", "news", "чп", "chp", "происшеств", "инцидент", "incident", "типичн", "tipich",
@@ -80,8 +84,39 @@ def _relevance(title: str | None, username: str | None) -> tuple[float, str]:
     if any(k in t for k in _AFISHA):
         return 1.0, "афиша"
     if any(k in t for k in _CITY):
-        return 0.6, "город/локалка"  # вторичная цель (локальная аудитория) — НЕ выше афиши: max ×0.6 → «осторожно»
-    return 0.5, "тема?"
+        return 0.75, "город/локалка"  # локальная аудитория — годная вторичная цель (B3: 0.6→0.75)
+    return 0.65, "тема?"  # прошёл discovery-гейт (не мусор) → не наказываем как мусор (B3: 0.5→0.65)
+
+
+# Алиас → каноническое имя города (как в discover._CITIES / core.domain.cities.name). Полные стемы —
+# чтобы Краснодар↔Красноярск не путались (общий префикс не матчим). Несколько разных городов в тексте → None.
+_CITY_ALIASES: dict[str, str] = {
+    "москв": "Москва", "moskv": "Москва", "moscow": "Москва", "мск": "Москва",
+    "петербург": "Санкт-Петербург", "питер": "Санкт-Петербург", "спб": "Санкт-Петербург", "spb": "Санкт-Петербург", "piter": "Санкт-Петербург",
+    "екатеринбург": "Екатеринбург", "ekaterinburg": "Екатеринбург", "екб": "Екатеринбург", "ekb": "Екатеринбург",
+    "новосиб": "Новосибирск", "novosib": "Новосибирск",
+    "казан": "Казань", "kazan": "Казань",
+    "нижнийновгород": "Нижний Новгород", "нижний": "Нижний Новгород", "нижегород": "Нижний Новгород", "ннов": "Нижний Новгород", "nnov": "Нижний Новгород",
+    "челябинск": "Челябинск", "chelyab": "Челябинск",
+    "самар": "Самара", "samara": "Самара",
+    "уфа": "Уфа", "ufa": "Уфа",
+    "ростовнадону": "Ростов-на-Дону", "ростов": "Ростов-на-Дону", "rostov": "Ростов-на-Дону",
+    "краснодар": "Краснодар", "krasnodar": "Краснодар", "кубан": "Краснодар",
+    "пермь": "Пермь", "perm": "Пермь",
+    "воронеж": "Воронеж", "voronezh": "Воронеж",
+    "волгоград": "Волгоград", "volgograd": "Волгоград",
+    "красноярск": "Красноярск", "krasnoyarsk": "Красноярск", "крск": "Красноярск",
+    "омск": "Омск", "omsk": "Омск",
+}
+
+
+def infer_city(title: str | None, username: str | None, hint: str | None = None) -> str | None:
+    """Город канала (каноническое имя) из подсказки discovery / названия+username. Несколько разных → None."""
+    if hint:
+        return hint
+    t = f"{title or ''} {username or ''}".lower()
+    matched = {name for alias, name in _CITY_ALIASES.items() if alias in t}
+    return next(iter(matched)) if len(matched) == 1 else None
 
 
 def score_channel(m: dict) -> tuple[int, str, str]:
@@ -147,6 +182,8 @@ def recompute_scores() -> dict:
             "SELECT DISTINCT ON (channel_id) channel_id, avg_reach FROM adstat.snapshots "
             f"WHERE avg_reach IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
         )).all())
+        # Подсказка города из discovery (явный запрос «афиша <город>») — высшая уверенность.
+        target_city = dict(db.execute(text("SELECT username, city FROM adstat.targets WHERE city IS NOT NULL AND city <> ''")).all())
         channels = db.execute(select(AdChannel)).scalars().all()
         for ch in channels:
             if not ch.username or not _VALID_USERNAME.match(ch.username):
@@ -165,10 +202,11 @@ def recompute_scores() -> dict:
             rel, rel_label = _relevance(ch.title, ch.username)
             final = int(round(quality * rel))
             verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
+            city = infer_city(ch.title, ch.username, target_city.get(ch.username))
             db.execute(text(
-                "UPDATE adstat.channels SET score=:s, quality=:q, verdict=:v, relevance=:r, score_at=now() "
+                "UPDATE adstat.channels SET score=:s, quality=:q, verdict=:v, relevance=:r, city=:city, score_at=now() "
                 "WHERE channel_id=:cid"
-            ), {"s": final, "q": quality, "v": verdict, "r": rel_label, "cid": ch.channel_id})
+            ), {"s": final, "q": quality, "v": verdict, "r": rel_label, "city": city, "cid": ch.channel_id})
             n += 1
         db.commit()
     return {"scored": n}

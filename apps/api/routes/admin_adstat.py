@@ -48,12 +48,16 @@ async def adstat_facets(actor: str = Depends(require_admin), db: AsyncSession = 
     cities = (await db.execute(text(
         "SELECT DISTINCT city FROM adstat.channels WHERE city IS NOT NULL AND city <> '' ORDER BY city"
     ))).scalars().all()
-    return {"cities": list(cities)}
+    relevances = (await db.execute(text(
+        "SELECT DISTINCT relevance FROM adstat.channels WHERE relevance IS NOT NULL ORDER BY relevance"
+    ))).scalars().all()
+    return {"cities": list(cities), "verdicts": ["брать", "осторожно", "мимо"], "relevances": list(relevances)}
 
 
 @router.get("/adstat")
 async def list_channels(
     q: str | None = None, city: str | None = None, min_subs: int | None = None,
+    verdict: str | None = None, relevance: str | None = None, has_price: str | None = None,
     sort: str | None = None, dir: str | None = None, page: int = 0,
     actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db),
 ) -> dict:
@@ -63,6 +67,14 @@ async def list_channels(
     if city:
         conds.append("c.city = :city")
         params["city"] = city
+    if verdict:
+        conds.append("c.verdict = :verdict")
+        params["verdict"] = verdict
+    if relevance:
+        conds.append("c.relevance = :relevance")
+        params["relevance"] = relevance
+    if has_price == "1":
+        conds.append("c.ad_price > 0")
     need_join = False
     if isinstance(min_subs, int) and min_subs > 0:
         conds.append("sub.subscribers >= :min_subs")
@@ -78,7 +90,7 @@ async def list_channels(
         "SELECT c.username, c.title, c.city, c.ad_price, c.last_scraped_at, "
         "  sub.subscribers, rch.avg_reach, "
         "  round(rch.avg_reach::numeric / NULLIF(sub.subscribers, 0) * 100, 1) AS er, "
-        f"  snap.post_price, round({_CPM_EXPR}::numeric, 1) AS cpm, c.score, c.verdict, c.quality "
+        f"  snap.post_price, round({_CPM_EXPR}::numeric, 1) AS cpm, c.score, c.verdict, c.quality, c.relevance "
         "FROM adstat.channels c " + _JOIN +
         f"WHERE {where} ORDER BY {sort_col} {direction} NULLS LAST, c.channel_id LIMIT :limit OFFSET :offset"
     ), params)).all()
@@ -88,6 +100,6 @@ async def list_channels(
         "subscribers": r[5], "avg_reach": r[6], "er": float(r[7]) if r[7] is not None else None,
         "post_price": float(r[8]) if r[8] is not None else None,
         "cpm": float(r[9]) if r[9] is not None else None,
-        "score": r[10], "verdict": r[11], "quality": r[12],
+        "score": r[10], "verdict": r[11], "quality": r[12], "relevance": r[13],
     } for r in rows]
     return {"items": items, "total": int(total or 0), "page": int(page), "page_size": _PAGE_SIZE}

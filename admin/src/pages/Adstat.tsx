@@ -9,7 +9,7 @@ type Ch = {
   username: string; title: string | null; city: string | null; ad_price: number | null;
   last_scraped_at: string | null; subscribers: number | null; avg_reach: number | null;
   er: number | null; post_price: number | null; cpm: number | null;
-  score: number | null; verdict: string | null; quality: number | null;
+  score: number | null; verdict: string | null; quality: number | null; relevance: string | null;
 };
 
 const VERDICT_KIND: Record<string, "ok" | "warn" | "down" | "off"> = { "брать": "ok", "осторожно": "warn", "мимо": "off" };
@@ -17,11 +17,14 @@ const VERDICT_KIND: Record<string, "ok" | "warn" | "down" | "off"> = { "брат
 const num = (n: number | null) => (n == null ? "—" : n.toLocaleString("ru-RU"));
 
 export function Adstat() {
-  const facets = useApi<{ cities: string[] }>("/adstat/facets");
+  const facets = useApi<{ cities: string[]; verdicts: string[]; relevances: string[] }>("/adstat/facets");
   const [q, setQ] = useState("");
   const [qd, setQd] = useState("");
   const [city, setCity] = useState("");
   const [minSubs, setMinSubs] = useState("");
+  const [verdict, setVerdict] = useState("");
+  const [relevance, setRelevance] = useState("");
+  const [hasPrice, setHasPrice] = useState("");
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "score", dir: "desc" });
   const [page, setPage] = useState(0);
 
@@ -33,10 +36,13 @@ export function Adstat() {
     if (qd.trim()) p.set("q", qd.trim());
     if (city) p.set("city", city);
     if (minSubs) p.set("min_subs", minSubs);
+    if (verdict) p.set("verdict", verdict);
+    if (relevance) p.set("relevance", relevance);
+    if (hasPrice) p.set("has_price", hasPrice);
     p.set("sort", sort.key); p.set("dir", sort.dir);
     if (page) p.set("page", String(page));
     return `/adstat?${p.toString()}`;
-  }, [qd, city, minSubs, sort, page]);
+  }, [qd, city, minSubs, verdict, relevance, hasPrice, sort, page]);
 
   const { data, error, loading, reload } = useApi<any>(path);
   const flows = useApi<any>("/flows");
@@ -62,9 +68,12 @@ export function Adstat() {
           <div className="page__sub">{data ? `${total.toLocaleString("ru-RU")} каналов по фильтру · подписчики из t.me/telethon` : "ресёрч рекламных TG-каналов"}</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={() => { setVerdict(""); setRelevance("афиша"); setHasPrice("1"); setSort({ key: "score", dir: "desc" }); setPage(0); }} title="на закупку: афиша-каналы с ценой, по нашему скору">
+            топ к покупке
+          </button>
           {refreshDeploy && (
-            <button className="btn btn--ghost" disabled={refreshing} onClick={refreshSubs} title="фоновый прогон: подтянуть живые числа подписчиков с t.me">
-              {refreshing ? "запущено…" : "обновить подписчиков"}
+            <button className="btn btn--ghost" disabled={refreshing} onClick={refreshSubs} title="фоновый прогон: подтянуть живые подписчики+охват с t.me">
+              {refreshing ? "запущено…" : "обновить метрики"}
             </button>
           )}
           <button className="btn btn--ghost" onClick={reload}>обновить</button>
@@ -76,6 +85,18 @@ export function Adstat() {
         <select value={city} onChange={(e) => resetTo(setCity)(e.target.value)}>
           <option value="">все города</option>
           {(facets.data?.cities ?? []).map((cc) => <option key={cc} value={cc}>{cc}</option>)}
+        </select>
+        <select value={verdict} onChange={(e) => resetTo(setVerdict)(e.target.value)}>
+          <option value="">любой вердикт</option>
+          {(facets.data?.verdicts ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <select value={relevance} onChange={(e) => resetTo(setRelevance)(e.target.value)}>
+          <option value="">любая тема</option>
+          {(facets.data?.relevances ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <select value={hasPrice} onChange={(e) => resetTo(setHasPrice)(e.target.value)}>
+          <option value="">цена: любая</option>
+          <option value="1">только с ценой</option>
         </select>
         <select value={minSubs} onChange={(e) => resetTo(setMinSubs)(e.target.value)}>
           <option value="">любой размер</option>
@@ -98,6 +119,7 @@ export function Adstat() {
                 <tr>
                   <th>канал</th>
                   <th>город</th>
+                  <th>тема</th>
                   <SortTh label="подписч." k="subs" sort={sort} onSort={onSort} className="num" />
                   <SortTh label="охват" k="reach" sort={sort} onSort={onSort} className="num" />
                   <th className="num">ER</th>
@@ -105,6 +127,7 @@ export function Adstat() {
                   <SortTh label="CPM" k="cpm" sort={sort} onSort={onSort} className="num" />
                   <SortTh label="скор" k="score" sort={sort} onSort={onSort} className="num" />
                   <th>вердикт</th>
+                  <th>купить</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,6 +138,7 @@ export function Adstat() {
                       {c.title && <div className="code muted" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>}
                     </td>
                     <td className="muted">{c.city ?? "—"}</td>
+                    <td className="muted">{c.relevance ?? "—"}</td>
                     <td className="num">{num(c.subscribers)}</td>
                     <td className="num muted">{num(c.avg_reach)}</td>
                     <td className="num muted">{c.er != null ? `${c.er.toFixed(1)}%` : "—"}</td>
@@ -122,6 +146,7 @@ export function Adstat() {
                     <td className="num muted">{c.cpm != null ? `${c.cpm}₽` : "—"}</td>
                     <td className="num">{c.score ?? "—"}</td>
                     <td>{c.verdict ? <Badge kind={VERDICT_KIND[c.verdict] ?? "off"}>{c.verdict}</Badge> : "—"}</td>
+                    <td><a href={`https://telega.in/channels/${c.username}/card`} target="_blank" rel="noreferrer">Telega →</a></td>
                   </tr>
                 ))}
               </tbody>
