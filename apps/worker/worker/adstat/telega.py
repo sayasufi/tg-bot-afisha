@@ -49,8 +49,8 @@ class TelegaClient:
             if not mu:
                 continue
             u = mu.group(1)
-            if u in out:
-                continue
+            if u in out or len(u) > 32 or len(u) < 4:
+                continue  # валидный TG-username 5–32; длинные «хеши» = скрытый username на бирже, не @-таргетируемо
 
             def g(attr: str):
                 m = re.search(attr + r'="([\d.]+)"', chunk)

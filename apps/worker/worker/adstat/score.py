@@ -80,8 +80,8 @@ def _relevance(title: str | None, username: str | None) -> tuple[float, str]:
     if any(k in t for k in _AFISHA):
         return 1.0, "афиша"
     if any(k in t for k in _CITY):
-        return 0.8, "город/локалка"
-    return 0.55, "тема?"
+        return 0.6, "город/локалка"  # вторичная цель (локальная аудитория) — НЕ выше афиши: max ×0.6 → «осторожно»
+    return 0.5, "тема?"
 
 
 def score_channel(m: dict) -> tuple[int, str, str]:
