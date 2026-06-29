@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 
 import httpx
+from sqlalchemy import text
 
 from connectors.telegram.telethon_connector import TelethonConnector
 from connectors.telegram.web_preview_connector import PreviewUnavailable, TelegramWebPreviewConnector
@@ -28,14 +29,25 @@ def _src(base: str, city) -> str:
     return base if city.slug == DEFAULT_CITY.slug else f"{base}-{city.slug}"
 
 
-async def _per_city(one) -> dict:
+async def _source_active(db, name: str) -> bool:
+    """True если источник активен ИЛИ ещё не создан (первый фетч). Гейт тогла из админки
+    (ref.sources.is_active=false → пропускаем источник до запроса/записи). Источник без строки = активен."""
+    row = (await db.execute(text("SELECT is_active FROM ref.sources WHERE name = :n"), {"n": name})).first()
+    return row is None or bool(row[0])
+
+
+async def _per_city(one, source_base: str | None = None) -> dict:
     """Run a single-city fetch ``one(db, city)`` for every ACTIVE city, sharing one DB session.
     A city's failure is recorded under its slug and skipped — it never aborts the others (so a
     SPb outage can't stall Moscow, and vice versa). While SPb is active=False this loops Moscow
-    only, i.e. behaves exactly as the old single-city flow until the second city is switched on."""
+    only, i.e. behaves exactly as the old single-city flow until the second city is switched on.
+    source_base задан → выключенные из админки источники (ref.sources.is_active=false) пропускаются."""
     out: dict = {}
     async with WorkerAsyncSessionLocal() as db:
         for city in active_cities():
+            if source_base and not await _source_active(db, _src(source_base, city)):
+                out[city.slug] = {"skipped": "disabled"}
+                continue
             try:
                 out[city.slug] = await one(db, city)
             except Exception as exc:  # the inner flow already recorded the failed source_run
@@ -56,7 +68,7 @@ async def _fetch_kudago_page(connector: KudaGoConnector, cursor: str | None) -> 
 
 
 async def _fetch_kudago_impl() -> dict:
-    return await _per_city(_kudago_one)
+    return await _per_city(_kudago_one, "kudago")
 
 
 async def _kudago_one(db, city) -> dict:
@@ -91,7 +103,7 @@ async def _fetch_timepad_impl() -> dict:
     categories, collapses recurrences and drops junk, returning ~distinct events. A full scan each
     run (the curated set is small) — no cursor. A no-op when TIMEPAD_TOKEN is unset (connector
     returns []), so it's safe off. Timepad filters by the Russian city NAME (city.name)."""
-    return await _per_city(_timepad_one)
+    return await _per_city(_timepad_one, "timepad")
 
 
 async def _timepad_one(db, city) -> dict:
@@ -115,7 +127,7 @@ async def _timepad_one(db, city) -> dict:
 
 
 async def _fetch_kudago_full_scan_impl() -> dict:
-    return await _per_city(_kudago_full_scan_one)
+    return await _per_city(_kudago_full_scan_one, "kudago")
 
 
 async def _kudago_full_scan_one(db, city) -> dict:
@@ -189,7 +201,7 @@ def _yandex_config(city=DEFAULT_CITY) -> dict:
 
 
 async def _fetch_yandex_impl() -> dict:
-    return await _per_city(_yandex_one)
+    return await _per_city(_yandex_one, "yandex_afisha")
 
 
 async def _yandex_one(db, city) -> dict:
@@ -234,7 +246,7 @@ async def _yandex_one(db, city) -> dict:
 
 
 async def _fetch_yandex_full_scan_impl() -> dict:
-    return await _per_city(_yandex_full_scan_one)
+    return await _per_city(_yandex_full_scan_one, "yandex_afisha")
 
 
 async def _yandex_full_scan_one(db, city) -> dict:
@@ -274,7 +286,7 @@ def _afisha_config(city=DEFAULT_CITY) -> dict:
 async def _fetch_afisha_impl() -> dict:
     if not get_settings().afisha_enabled:
         return {"fetched": 0, "skipped": "afisha disabled"}
-    return await _per_city(_afisha_one)
+    return await _per_city(_afisha_one, "afisha_ru")
 
 
 async def _afisha_one(db, city) -> dict:
@@ -303,7 +315,7 @@ async def _afisha_one(db, city) -> dict:
 async def _fetch_afisha_full_scan_impl() -> dict:
     if not get_settings().afisha_enabled:
         return {"fetched": 0, "skipped": "afisha disabled"}
-    return await _per_city(_afisha_full_scan_one)
+    return await _per_city(_afisha_full_scan_one, "afisha_ru")
 
 
 async def _afisha_full_scan_one(db, city) -> dict:
@@ -362,6 +374,8 @@ async def _fetch_telegram_impl() -> dict:
                 db, f"telegram_public:{channel}", "telegram", f"https://t.me/{channel}",
                 {"cursor": None, "channel": channel, "city_id": channel_row.city_id},
             )
+            if not source.is_active:  # тогл источника из админки (ref.sources.is_active) — пропустить канал
+                continue
             run = await create_source_run(db, source.source_id)
             items.append((channel_row, channel, source, run, source.config_json.get("cursor")))
 

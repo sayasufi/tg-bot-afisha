@@ -23,8 +23,8 @@ export const NAV: NavGroup[] = [
   {
     title: "Ингест",
     items: [
-      { label: "Источники", to: "/sources", phase: 2 },
-      { label: "TG-каналы", to: "/channels", phase: 2 },
+      { label: "Источники", to: "/sources" },
+      { label: "TG-каналы", to: "/channels" },
       { label: "Города", to: "/cities", phase: 4 },
     ],
   },

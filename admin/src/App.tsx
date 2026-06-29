@@ -3,9 +3,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { ALL_ITEMS } from "./lib/nav";
+import { Channels } from "./pages/Channels";
 import { Dashboard } from "./pages/Dashboard";
 import { Flows } from "./pages/Flows";
 import { Health } from "./pages/Health";
+import { Sources } from "./pages/Sources";
 import { Login } from "./pages/Login";
 import { Placeholder } from "./pages/Placeholder";
 
@@ -20,6 +22,8 @@ function Gate() {
         <Route index element={<Dashboard />} />
         <Route path="health" element={<Health />} />
         <Route path="ops/flows" element={<Flows />} />
+        <Route path="channels" element={<Channels />} />
+        <Route path="sources" element={<Sources />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}
