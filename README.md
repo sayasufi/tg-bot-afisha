@@ -5,19 +5,33 @@ MVP Telegram bot + Telegram Mini App for discovering nearby events from multiple
 ## Stack
 
 - Backend: FastAPI + SQLAlchemy + Alembic
-- Worker: Celery + Redis
+- Worker: Prefect 3 + Redis
 - DB: PostgreSQL + PostGIS
 - Bot: aiogram 3
-- Mini App: React + Vite + Leaflet
+- Mini App: React + Vite + Leaflet / MapLibre
 
 ## Architecture
 
-- `apps/api`: public REST API for bot and miniapp
-- `apps/worker`: ingestion and enrichment pipelines (`fetch -> normalize -> enrich -> dedup`)
-- `apps/bot`: Telegram bot, city selection, search, Mini App launch
-- `connectors`: source plugins (KudaGo API + Telegram)
-- `pipeline`: normalizer, deduper, geocoding, LLM classification
-- `core`: shared settings/db/models/repositories/logging
+Layered monorepo. The dependency rule points **one way and down** —
+`apps → pipeline / connectors → core`. `core` never imports upward, and the
+four services under `apps/` never import each other; anything two services
+share lives in `core` (e.g. card/caption rendering in `core/render`).
+
+**`apps/` — isolated services** (each its own container, no cross-service imports):
+- `apps/api`: public REST API for bot + miniapp (FastAPI, `uvicorn apps.api.main:app`)
+- `apps/bot`: Telegram bot — city selection, search, Mini App launch (aiogram 3)
+- `apps/worker`: ingestion/enrichment orchestration (Prefect flows in `flows.py`, logic in `tasks/`); pipeline is `fetch → normalize → enrich → dedup`
+- `apps/adstat`: ad-channel research domain (models + service in one place; gated by `ADSTAT_ENABLED`)
+
+**`connectors/` — source plugins** (`web/`: KudaGo, Yandex Afisha, Afisha.ru, Timepad; `telegram/`)
+
+**`pipeline/` — stateless processing** (`normalizer`, `geocoding`, `llm`, `maintenance`)
+
+**`core/` — foundation** (imports nothing from the layers above):
+- `config` settings · `db` models+repositories · `contracts` cross-layer dataclasses
+- `domain` (cities, categorization, public codes) · `infra` (redis, SSRF-safe http)
+- `services` (invite tokens, LLM concurrency limiter) · `matching` (dedup algorithms)
+- `render` (poster cards + bot captions) · `media` · `search` · `logging`
 
 ## Quick start
 
