@@ -256,6 +256,25 @@ services:
       api:
         condition: service_healthy
 
+  # Owner-only admin panel (admin.okrestmap.ru). Separate lightweight SPA, bound to LOOPBACK only
+  # (reachable solely via the host nginx, unlike the public miniapp on :5173).
+  admin:
+    build:
+      context: ./admin
+      dockerfile: ../infra/docker/admin.Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE: ""  # same-origin — nginx on admin.okrestmap.ru proxies /v1 → api
+    command: sh -c "npm run build && npm run preview -- --host 0.0.0.0 --port 5174 --strictPort"
+    ports:
+      - "127.0.0.1:5174:5174"
+    volumes:
+      - ./admin:/admin
+      - /admin/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   pg_data:
   minio_data:
