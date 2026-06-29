@@ -1,8 +1,10 @@
 """Telega.in — биржа Telegram-рекламы. Публичный каталог (без логина, без Cloudflare).
 
-Масштаб: /catalog?categories[]=<id>&page=N — десятки каналов/стр., пагинация на сотни страниц.
-Категория 52 = «Культура и события» (Афиша/Концерты/Выставки/Музеи). Из карточки каталога снимаем
-подписчиков/охват/ERR; РЕАЛЬНУЮ цену размещения — со страницы канала /channels/<username>/card.
+Фильтр категории РАБОТАЕТ ТОЛЬКО через путь-слаг `/catalog/<url_name>?page=N` — query-param
+`?categories[]=<id>` telega.in ИГНОРИРУЕТ и молча отдаёт ДЕФОЛТНЫЙ неотфильтрованный каталог
+(шопинг/регион-новости). Слаг афиши = `culture_and_events` (id 52, «Культура и события»; таксономия
+плоская, ~44 темы, более узкой афиша-категории НЕТ). Из карточки каталога снимаем подписчиков/охват/ERR;
+РЕАЛЬНУЮ цену размещения — со страницы канала /channels/<username>/card.
 """
 from __future__ import annotations
 
@@ -16,7 +18,12 @@ log = logging.getLogger(__name__)
 
 _H = {"Accept-Language": "ru-RU,ru;q=0.9"}
 _RUB = "₽"
-CATEGORY_AFISHA = 52  # culture_and_events
+CATEGORY_AFISHA = 52  # culture_and_events (id для совместимости вызовов; в URL идёт слаг — см. _SLUG)
+# id → url_name слаг. Фильтр работает только путём, поэтому маппим id в слаг. culture_and_events — афиша.
+_SLUG = {
+    52: "culture_and_events", 43: "art_and_design", 25: "music", 27: "movies",
+    15: "recreation_and_entertainment",
+}
 
 
 def _f(s: str | None):
@@ -34,7 +41,8 @@ class TelegaClient:
         return creq.get(url, impersonate="chrome", timeout=30, headers=_H).text
 
     def catalog_page(self, category_id: int, page: int) -> list[dict]:
-        t = self._get(f"https://telega.in/catalog?categories[]={category_id}&page={page}")
+        slug = _SLUG.get(category_id, category_id)  # фильтр категории работает ТОЛЬКО через путь-слаг
+        t = self._get(f"https://telega.in/catalog/{slug}?page={page}")
         out: dict[str, dict] = {}
         for chunk in t.split('class="about-avatar')[1:]:
             mu = re.search(r"/channels/([A-Za-z0-9_]+)/card", chunk)

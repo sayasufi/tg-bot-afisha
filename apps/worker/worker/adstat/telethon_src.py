@@ -234,31 +234,43 @@ _SEED_HINTS = [
 
 
 def _afisha_seeds(limit: int = 150) -> list[str]:
-    """Сиды = опорные хинты (Москва/Питер/Россия) + СЛУЧАЙНАЯ подвыборка из ВСЕХ найденных каналов
-    (telemetr / telethon / **telega** — включая ~5400 telega-каналов). Рандом КАЖДЫЙ прогон → каждый день
-    другой район графа рекомендаций, поэтому крауль расширяется за плато (раньше брал один и тот же ~120-набор
-    БЕЗ рандома → один и тот же neighborhood → упор в 445). Резолвится только сидами (~150) → флуд-безопасно;
-    найденные идут по access_hash."""
+    """Сиды = опорные хинты (Москва/Питер/Россия) + подвыборка из найденных каналов, ОТФИЛЬТРОВАННАЯ по теме
+    через score._relevance: берём АФИША-каналы в первую очередь, затем город/локалку, мусор (ногти/дача/…)
+    отбрасываем. Так граф рекомендаций остаётся в афиша-кластере (раньше случайный срез из всех источников
+    уводил в город-новости/случайщину). Случайный срез КАЖДЫЙ прогон → разные афиша-сиды → афиша-кластер
+    расширяется. Резолвится только сидами (~150) → флуд-безопасно; найденные идут по access_hash."""
     from sqlalchemy import func, select
 
+    from apps.worker.worker.adstat.score import _relevance
     from core.db.models.adstat import AdChannel, AdSnapshot
     from core.db.session import SessionLocal
 
     seeds = list(dict.fromkeys(_SEED_HINTS))
     with SessionLocal() as db:
-        # DISTINCT в подзапросе, СНАРУЖИ ORDER BY random() (Postgres запрещает ORDER BY random() вместе с DISTINCT).
+        # DISTINCT в подзапросе, СНАРУЖИ ORDER BY random() (Postgres запрещает ORDER BY random() с DISTINCT).
         sub = (
-            select(AdChannel.username)
+            select(AdChannel.username, AdChannel.title)
             .join(AdSnapshot, AdSnapshot.channel_id == AdChannel.channel_id)
             .where(AdChannel.username.is_not(None))
             .where(AdSnapshot.source.in_(["telemetr", "telethon", "telega"]))
             .distinct()
             .subquery()
         )
-        rows = db.execute(select(sub.c.username).order_by(func.random()).limit(limit)).scalars().all()
-    for u in rows:
+        # Большой случайный срез → классифицируем по теме → афиша вперёд, потом город; мусор мимо.
+        rows = db.execute(select(sub.c.username, sub.c.title).order_by(func.random()).limit(limit * 6)).all()
+    afisha: list[str] = []
+    city: list[str] = []
+    for u, t in rows:
+        _, label = _relevance(t, u)
+        if label == "афиша":
+            afisha.append(u)
+        elif label == "город/локалка":
+            city.append(u)
+    for u in afisha + city:  # афиша приоритетнее города
         if u not in seeds:
             seeds.append(u)
+        if len(seeds) >= limit:
+            break
     return seeds
 
 

@@ -19,11 +19,11 @@ log = logging.getLogger(__name__)
 
 # Базовые тематические термины (без города — ловят федеральные/крупные афиши).
 _BASE_TERMS = [
-    "афиша", "куда сходить", "куда пойти", "события города",
-    "концерты афиша", "выставки", "мероприятия", "что посмотреть",
+    "афиша", "куда сходить", "куда пойти", "события города", "концерты афиша",
+    "выставки", "мероприятия", "что посмотреть", "театр", "фестивали", "развлечения",
 ]
-# Термины, которые комбинируем с каждым городом.
-_CITY_TERMS = ["афиша", "куда сходить", "события"]
+# Термины, которые комбинируем с каждым городом (афиша-специфичные → меньше город-новостного шума).
+_CITY_TERMS = ["афиша", "куда сходить", "события", "концерты", "театр", "выставки"]
 # Город в запросе → каноничное имя для adstat.targets.city.
 _CITIES = {
     "москва": "Москва", "спб": "Санкт-Петербург", "питер": "Санкт-Петербург",
@@ -53,12 +53,16 @@ def discover(min_subscribers: int = 2000, dry_run: bool = False) -> list[dict]:
         log.warning("adstat discover: нет Telemetr-сессии (куки?)")
         return []
 
+    from apps.worker.worker.adstat.score import _relevance
+
     found: dict[str, tuple[dict, str | None]] = {}
     queries = _queries()
     for query, city in queries:
         for it in client.search(query):
             un = (it.get("username") or "").lower()
             if not un or (it.get("subscribers") or 0) < min_subscribers:
+                continue
+            if _relevance(it.get("title"), un)[1] == "не тема":  # отсев off-topic (keyword-коллизии: маникюр/крипто/эзо)
                 continue
             if un not in found:
                 found[un] = (it, city)
@@ -106,7 +110,9 @@ def discover_telega(category_id: int = 52, max_pages: int = 60, with_prices: boo
     rows = client.discover(category_id, max_pages)
     total = len(rows)
     if afisha_only:
-        rows = [r for r in rows if _is_afisha(r)]
+        from apps.worker.worker.adstat.score import _relevance
+        # _is_afisha режет федеральных новостников; _relevance добивает off-topic (мусор), оставляя афишу+город.
+        rows = [r for r in rows if _is_afisha(r) and _relevance(r.get("title"), r.get("username"))[1] != "не тема"]
     if with_prices and rows:
         rows = client.enrich_prices(rows)
     for r in rows:  # CPM = цена / охват × 1000
