@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { SortTh, useSort } from "../components/sortable";
+import { SortTh } from "../components/sortable";
 import { Badge } from "../components/ui";
 import { apiPost } from "../lib/api";
 import { useApi } from "../lib/useApi";
@@ -14,31 +14,30 @@ type Ev = {
   has_image: boolean;
   next_date: string | null;
   city: string | null;
-  created_at: string | null;
 };
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "2-digit" });
 }
 
-const SORT_GET = (e: Ev, k: string): any => {
-  switch (k) {
-    case "category": return e.category;
-    case "status": return e.status;
-    case "city": return e.city;
-    case "date": return e.next_date;
-    default: return e.title.toLowerCase();
-  }
-};
+const DATE_OPTS = [
+  { v: "", label: "любые даты" },
+  { v: "upcoming", label: "предстоящие" },
+  { v: "week", label: "на этой неделе" },
+  { v: "past", label: "прошедшие" },
+];
 
 export function Events() {
-  const facets = useApi<{ categories: string[]; statuses: string[] }>("/events/facets");
+  const facets = useApi<{ categories: string[]; statuses: string[]; cities: string[] }>("/events/facets");
 
   const [q, setQ] = useState("");
   const [qd, setQd] = useState("");
   const [status, setStatus] = useState("");
   const [category, setCategory] = useState("");
+  const [city, setCity] = useState("");
+  const [date, setDate] = useState("");
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "date", dir: "asc" });
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -49,21 +48,28 @@ export function Events() {
     return () => clearTimeout(t);
   }, [q]);
 
+  // Серверная сортировка: ключ/направление едут в запрос → ORDER BY по ВСЕМУ набору, не по странице.
+  const onSort = (k: string) => {
+    setSort((s) => (s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: "asc" }));
+    setPage(0);
+  };
+
   const path = useMemo(() => {
     const p = new URLSearchParams();
     if (qd.trim()) p.set("q", qd.trim());
     if (status) p.set("status", status);
     if (category) p.set("category", category);
+    if (city) p.set("city", city);
+    if (date) p.set("date", date);
+    p.set("sort", sort.key);
+    p.set("dir", sort.dir);
     if (page) p.set("page", String(page));
-    const s = p.toString();
-    return s ? `/events?${s}` : "/events";
-  }, [qd, status, category, page]);
+    return `/events?${p.toString()}`;
+  }, [qd, status, category, city, date, sort, page]);
 
   const { data, error, loading, reload } = useApi<any>(path);
   const items: Ev[] = data?.items ?? [];
-  const { sorted, sort, onSort } = useSort(items, SORT_GET, { key: "date", dir: "asc" });
   const [busy, setBusy] = useState<Record<string, boolean>>({});
-
   const setBusyFor = (id: string, v: boolean) => setBusy((b) => ({ ...b, [id]: v }));
 
   const toggleStatus = async (e: Ev) => {
@@ -92,8 +98,7 @@ export function Events() {
   const total = data?.total ?? 0;
   const pageSize = data?.page_size ?? 100;
   const pages = Math.max(1, Math.ceil(total / pageSize));
-
-  const onFilter = (setter: (v: string) => void) => (v: string) => {
+  const resetTo = (setter: (v: string) => void) => (v: string) => {
     setter(v);
     setPage(0);
   };
@@ -110,16 +115,27 @@ export function Events() {
 
       <div className="filterbar">
         <input placeholder="поиск по названию…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select value={status} onChange={(e) => onFilter(setStatus)(e.target.value)}>
+        <select value={status} onChange={(e) => resetTo(setStatus)(e.target.value)}>
           <option value="">любой статус</option>
           {(facets.data?.statuses ?? []).map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        <select value={category} onChange={(e) => onFilter(setCategory)(e.target.value)}>
+        <select value={category} onChange={(e) => resetTo(setCategory)(e.target.value)}>
           <option value="">все категории</option>
           {(facets.data?.categories ?? []).map((cc) => (
             <option key={cc} value={cc}>{cc}</option>
+          ))}
+        </select>
+        <select value={city} onChange={(e) => resetTo(setCity)(e.target.value)}>
+          <option value="">все города</option>
+          {(facets.data?.cities ?? []).map((cc) => (
+            <option key={cc} value={cc}>{cc}</option>
+          ))}
+        </select>
+        <select value={date} onChange={(e) => resetTo(setDate)(e.target.value)}>
+          {DATE_OPTS.map((d) => (
+            <option key={d.v} value={d.v}>{d.label}</option>
           ))}
         </select>
         <span className="filter-count">{loading ? "…" : `показано ${items.length}`}</span>
@@ -145,7 +161,7 @@ export function Events() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((e) => (
+                {items.map((e) => (
                   <tr key={e.event_id} style={e.status !== "active" ? { opacity: 0.55 } : undefined}>
                     <td className="code muted">{e.code ?? "—"}</td>
                     <td>{e.title}</td>
@@ -154,19 +170,12 @@ export function Events() {
                     <td className="muted">{fmtDate(e.next_date)}</td>
                     <td className="muted">{e.has_image ? "✓" : "—"}</td>
                     <td>
-                      <button
-                        className="iconbtn"
-                        disabled={!!busy[e.event_id]}
-                        onClick={() => toggleStatus(e)}
-                        title={e.status === "active" ? "скрыть" : "вернуть"}
-                      >
+                      <button className="iconbtn" disabled={!!busy[e.event_id]} onClick={() => toggleStatus(e)} title={e.status === "active" ? "скрыть" : "вернуть"}>
                         {e.status === "active" ? <Badge kind="ok">active</Badge> : <Badge kind="off">{e.status}</Badge>}
                       </button>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <button className="iconbtn" disabled={!!busy[e.event_id]} onClick={() => reclassify(e)}>
-                        категория
-                      </button>
+                      <button className="iconbtn" disabled={!!busy[e.event_id]} onClick={() => reclassify(e)}>категория</button>
                     </td>
                   </tr>
                 ))}
