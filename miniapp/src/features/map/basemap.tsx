@@ -35,6 +35,7 @@ type MapPalette = {
   housenum: string;
   poi: string;
   hillshade: string; // far-zoom relief shadow colour (mountains)
+  border: string; // emphasised Russia national border at far zoom
 };
 
 const PALETTE: Record<ThemeName, MapPalette> = {
@@ -56,6 +57,7 @@ const PALETTE: Record<ThemeName, MapPalette> = {
     housenum: "#a8a89e",
     poi: "#a8a89e",
     hillshade: "#b0a890",
+    border: "#4f4a40",
   },
   dark: {
     bg: "#14130e",
@@ -75,6 +77,7 @@ const PALETTE: Record<ThemeName, MapPalette> = {
     housenum: "#55534a",
     poi: "#6a675c",
     hillshade: "#060500",
+    border: "#c8c2b2",
   },
 };
 
@@ -258,6 +261,35 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
             "line-color": pal.waterway,
             "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.9, 6, 1.7, 9, 2.4],
             "line-opacity": 0.9,
+          },
+        },
+        beforeId,
+      );
+
+      // Outline RUSSIA itself — draw its national border BOLDER than the basemap's faint admin hairlines, so
+      // the country reads as the "stage" at the far-zoom picker. Matches admin_level-2 boundary segments that
+      // sit next to Russia (adm0 code/name variants, to be robust to the tile's encoding). Far/mid zoom only.
+      addLayer(
+        {
+          id: "ru-border",
+          type: "line",
+          source: "openmaptiles",
+          "source-layer": "boundary",
+          filter: [
+            "all",
+            ["==", ["to-number", ["get", "admin_level"]], 2],
+            [
+              "any",
+              ["in", ["get", "adm0_l"], ["literal", ["RU", "RUS", "Russia", "Россия"]]],
+              ["in", ["get", "adm0_r"], ["literal", ["RU", "RUS", "Russia", "Россия"]]],
+            ],
+          ],
+          maxzoom: 9,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-color": pal.border,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.5, 6, 2.4, 9, 3],
+            "line-opacity": 0.92,
           },
         },
         beforeId,
