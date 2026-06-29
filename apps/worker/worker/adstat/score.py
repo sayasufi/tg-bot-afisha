@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 
 from core.db.models.adstat import AdChannel, AdSnapshot
@@ -39,7 +41,7 @@ _AFISHA = (
     "афиш", "afish", "кудасход", "кудапо", "kuda", "событи", "concert", "концерт", "театр", "teatr",
     "выставк", "vystavk", "кино", "kino", "фестивал", "festival", "спектакл", "билет", "bilet", "анонс",
     "anons", "гастрол", "стендап", "standup", "вечеринк", "тусовк", "tusovk", "досуг", "развлечен",
-    "культур", "kultur", "экскурс", "ekskurs", "лекци", "мероприят", "выходны", "weekend", "афиша", "art",
+    "культур", "kultur", "экскурс", "ekskurs", "лекци", "мероприят", "выходны", "weekend",
 )
 _CITY = (
     "новост", "novost", "news", "чп", "chp", "происшеств", "инцидент", "incident", "типичн", "tipich",
@@ -120,11 +122,18 @@ def score_channel(m: dict) -> tuple[int, str, str]:
     return s, verdict, ", ".join(why) or "мало данных"
 
 
+# Валидный публичный TG-username (5–32, буквы/цифры/подчёркивание). Мусорные/закодированные значения
+# (напр. 43-символьные строки у приватных каналов) рекламой не закупишь → в шорт-лист не берём.
+_VALID_USERNAME = re.compile(r"^[A-Za-z0-9_]{4,32}$")
+
+
 def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
     out: list[dict] = []
     with SessionLocal() as db:
         channels = db.execute(select(AdChannel)).scalars().all()
         for ch in channels:
+            if not ch.username or not _VALID_USERNAME.match(ch.username):
+                continue
             snaps = db.execute(
                 select(AdSnapshot).where(AdSnapshot.channel_id == ch.channel_id)
                 .order_by(AdSnapshot.captured_at.desc()).limit(10)
