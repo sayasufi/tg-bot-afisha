@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.services.geo import reverse_city
-from apps.api.app.services.telegram_auth import validate_init_data
+from apps.api.services.geo import reverse_city
+from apps.api.services.telegram_auth import validate_init_data
 from core.render.formatting import ce
 from core.cities import city_by_name
 from core.config.settings import get_settings as get_app_settings
@@ -332,7 +332,7 @@ async def get_friends_activity(payload: FriendsActivityRequest, db: AsyncSession
     acts = await friend_activity(db, uid, limit=24)
     if not acts:
         return {"activity": []}
-    from apps.api.app.services.events_service import EventQueryService
+    from apps.api.services.events_service import EventQueryService
 
     hydrated = await EventQueryService(db).list_by_ids([a["event_id"] for a in acts])
     by_id = {str(it["event_id"]): it for it in hydrated.get("items", [])}

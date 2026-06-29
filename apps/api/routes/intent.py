@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
-from apps.api.app.services.telegram_auth import validate_init_data
+from apps.api.services.telegram_auth import validate_init_data
 from core.redis import get_redis
 
 router = APIRouter(prefix="/v1", tags=["intent"])

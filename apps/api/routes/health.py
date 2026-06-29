@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.schemas.events import HealthResponse
+from apps.api.schemas.events import HealthResponse
 from core.config.settings import get_settings
 from core.db.session import get_async_db
 

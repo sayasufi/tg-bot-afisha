@@ -1,17 +1,17 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.api.app.services.events_service import _redis_client
-from apps.api.app.routes.events import router as events_router
-from apps.api.app.routes.health import router as health_router
-from apps.api.app.routes.intent import router as intent_router
-from apps.api.app.routes.media import router as media_router
-from apps.api.app.routes.places import router as places_router
-from apps.api.app.routes.recommend import router as recommend_router
-from apps.api.app.routes.share import router as share_router
-from apps.api.app.routes.stats import router as stats_router
-from apps.api.app.routes.telegram import router as telegram_router
-from apps.api.app.routes.users import router as users_router
+from apps.api.services.events_service import _redis_client
+from apps.api.routes.events import router as events_router
+from apps.api.routes.health import router as health_router
+from apps.api.routes.intent import router as intent_router
+from apps.api.routes.media import router as media_router
+from apps.api.routes.places import router as places_router
+from apps.api.routes.recommend import router as recommend_router
+from apps.api.routes.share import router as share_router
+from apps.api.routes.stats import router as stats_router
+from apps.api.routes.telegram import router as telegram_router
+from apps.api.routes.users import router as users_router
 from core.config.settings import get_settings
 from core.logging.setup import setup_logging
 

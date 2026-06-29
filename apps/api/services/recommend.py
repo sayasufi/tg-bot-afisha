@@ -24,7 +24,7 @@ from geoalchemy2 import Geometry
 from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.services.events_service import _venue_open_now
+from apps.api.services.events_service import _venue_open_now
 from core.codes import event_code
 from core.db.models import Event, EventOccurrence, Venue
 from core.redis import get_redis

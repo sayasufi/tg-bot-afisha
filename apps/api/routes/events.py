@@ -11,11 +11,11 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.schemas.events import (
+from apps.api.schemas.events import (
     CategoryResponse,
     EventDetailResponse,
 )
-from apps.api.app.services.events_service import (
+from apps.api.services.events_service import (
     EventQueryService,
     map_cache_get,
     map_cache_key,

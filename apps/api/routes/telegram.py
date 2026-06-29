@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from apps.api.app.services.telegram_auth import validate_init_data
+from apps.api.services.telegram_auth import validate_init_data
 
 router = APIRouter(prefix="/v1/telegram", tags=["telegram"])
 

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.render.card import ensure_card
-from apps.api.app.services.telegram_auth import validate_init_data
+from apps.api.services.telegram_auth import validate_init_data
 from core.codes import event_code
 from core.config.settings import get_settings
 from core.invite import sign as invite_sign
