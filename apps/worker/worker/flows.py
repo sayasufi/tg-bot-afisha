@@ -56,9 +56,11 @@ async def discover_telega_flow():
 
     from apps.worker.worker.adstat.discover import discover_telega
 
-    rows = await asyncio.to_thread(discover_telega, 52, 60, True, False)
-    withp = sum(1 for r in rows if r.get("post_price"))
-    return {"found": len(rows), "with_price": withp}
+    # 200 стр. каталога (из ~749) БЕЗ цен — быстро, ловит куда больше каналов (60 стр. оставляли каталог
+    # почти нетронутым: 60→150 стр. дало +3114). Цены НЕ тянем на тысячи каналов ежедневно (это per-card
+    # HTTP) — их добираем точечно для шорт-листа топ-каналов на этапе скоринга.
+    rows = await asyncio.to_thread(discover_telega, 52, 200, False, False)
+    return {"found": len(rows)}
 
 
 # --- fetch (sources) ---------------------------------------------------------
