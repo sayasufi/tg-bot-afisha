@@ -24,8 +24,9 @@ _PAGE_SIZE = 100
 async def event_facets(actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
     """Списки для фильтров: распознанные категории и статусы (реальные значения из БД)."""
     cats = (await db.execute(text("SELECT DISTINCT category FROM events.events WHERE category <> '' ORDER BY category"))).scalars().all()
-    stats = (await db.execute(text("SELECT DISTINCT status FROM events.events ORDER BY status"))).scalars().all()
-    return {"categories": list(cats), "statuses": list(stats)}
+    stats = set((await db.execute(text("SELECT DISTINCT status FROM events.events"))).scalars().all())
+    stats |= {"active", "hidden"}  # всегда даём модерационные статусы в фильтр (даже если скрытых сейчас нет)
+    return {"categories": list(cats), "statuses": sorted(stats)}
 
 
 @router.get("/events")
