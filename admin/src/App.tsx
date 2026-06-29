@@ -11,6 +11,7 @@ import { Events } from "./pages/Events";
 import { Flows } from "./pages/Flows";
 import { Health } from "./pages/Health";
 import { Sources } from "./pages/Sources";
+import { Venues } from "./pages/Venues";
 import { Login } from "./pages/Login";
 import { Placeholder } from "./pages/Placeholder";
 
@@ -30,6 +31,7 @@ function Gate() {
         <Route path="broadcasts" element={<Broadcasts />} />
         <Route path="events" element={<Events />} />
         <Route path="analytics" element={<Analytics />} />
+        <Route path="venues" element={<Venues />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}

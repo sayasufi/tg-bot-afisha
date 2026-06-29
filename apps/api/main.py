@@ -8,6 +8,7 @@ from apps.api.routes.admin_broadcasts import router as admin_broadcasts_router
 from apps.api.routes.admin_channels import router as admin_channels_router
 from apps.api.routes.admin_events import router as admin_events_router
 from apps.api.routes.admin_sources import router as admin_sources_router
+from apps.api.routes.admin_venues import router as admin_venues_router
 from apps.api.routes.events import router as events_router
 from apps.api.routes.health import router as health_router
 from apps.api.routes.intent import router as intent_router
@@ -144,3 +145,4 @@ app.include_router(admin_sources_router)
 app.include_router(admin_broadcasts_router)
 app.include_router(admin_events_router)
 app.include_router(admin_analytics_router)
+app.include_router(admin_venues_router)

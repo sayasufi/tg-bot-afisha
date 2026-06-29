@@ -16,7 +16,7 @@ export const NAV: NavGroup[] = [
     title: "Каталог",
     items: [
       { label: "События", to: "/events" },
-      { label: "Площадки", to: "/venues", phase: 3 },
+      { label: "Площадки", to: "/venues" },
       { label: "Дубликаты", to: "/dedup", phase: 3 },
     ],
   },
