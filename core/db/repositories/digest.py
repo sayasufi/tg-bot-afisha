@@ -70,18 +70,22 @@ _COLS = (
 )
 
 
-async def opted_in_users(db: AsyncSession, since: datetime) -> list[dict]:
+async def opted_in_users(db: AsyncSession, since: datetime, only_user_id: int | None = None) -> list[dict]:
     """Accounts that opted into the weekly digest (strictly opt-in; default off) AND haven't
     already been sent this week's digest — idempotency guard against redeploy/manual re-run/
-    missed-run catchup: only users with no stamp, or a stamp older than this week's start."""
-    rows = (
-        await db.execute(
-            select(User.telegram_user_id, User.city_slug, User.interests).where(
-                User.notify_digest.is_(True),
-                (User.last_digest_sent_at.is_(None)) | (User.last_digest_sent_at < since),
-            )
+    missed-run catchup: only users with no stamp, or a stamp older than this week's start.
+
+    only_user_id задан (ТЕСТ из админки) → возвращаем СТРОГО этого пользователя, минуя opt-in/last-sent
+    фильтры (чтобы превью всегда уходило). Адресат гардится повторно в _send_digest_impl."""
+    base = select(User.telegram_user_id, User.city_slug, User.interests)
+    if only_user_id is not None:
+        stmt = base.where(User.telegram_user_id == only_user_id)
+    else:
+        stmt = base.where(
+            User.notify_digest.is_(True),
+            (User.last_digest_sent_at.is_(None)) | (User.last_digest_sent_at < since),
         )
-    ).all()
+    rows = (await db.execute(stmt)).all()
     return [
         {"user_id": r[0], "city_slug": r[1], "interests": list(r[2] or [])}
         for r in rows

@@ -166,6 +166,42 @@ async def due_reminders(db: AsyncSession, now: datetime, limit: int = 200) -> li
     ]
 
 
+async def sample_upcoming_event(db: AsyncSession, now: datetime) -> dict | None:
+    """Один образец ближайшего активного события — для ТЕСТ-напоминания (превью из админки). Не привязан
+    к юзеру и не трогает реальные напоминания. Берём самое популярное событие с ближайшей будущей сессией."""
+    row = (
+        await db.execute(
+            select(
+                Event.event_id, Event.canonical_title, Event.category, Event.display_no,
+                Event.cached_image_url, Event.primary_image_url,
+                EventOccurrence.date_start, EventOccurrence.date_end,
+                EventOccurrence.price_min, EventOccurrence.price_max,
+                Venue.name, Venue.city,
+            )
+            .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
+            .outerjoin(Venue, Venue.venue_id == EventOccurrence.venue_id)
+            .where(Event.status == "active", EventOccurrence.date_start > now)
+            .order_by(Event.popularity_score.desc(), EventOccurrence.date_start.asc())
+            .limit(1)
+        )
+    ).first()
+    if not row:
+        return None
+    return {
+        "event_id": str(row[0]),
+        "title": row[1],
+        "category": row[2],
+        "code": event_code(row[3], row[11]),
+        "image": row[4] or row[5] or None,
+        "image_primary": row[5] or row[4] or None,
+        "date_start": row[6].isoformat() if row[6] else None,
+        "date_end": row[7].isoformat() if row[7] else None,
+        "price_min": float(row[8]) if row[8] is not None else None,
+        "price_max": float(row[9]) if row[9] is not None else None,
+        "venue": row[10],
+    }
+
+
 async def reap_stale_reminders(db: AsyncSession, now: datetime) -> int:
     """Stamp (as sent) every undelivered reminder whose fire time passed more than the grace window
     ago — the user was muted, or the sweep was down. Without this they linger as sent_at=NULL and

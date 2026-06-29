@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { ALL_ITEMS } from "./lib/nav";
+import { Broadcasts } from "./pages/Broadcasts";
 import { Channels } from "./pages/Channels";
 import { Dashboard } from "./pages/Dashboard";
 import { Flows } from "./pages/Flows";
@@ -24,6 +25,7 @@ function Gate() {
         <Route path="ops/flows" element={<Flows />} />
         <Route path="channels" element={<Channels />} />
         <Route path="sources" element={<Sources />} />
+        <Route path="broadcasts" element={<Broadcasts />} />
         {ALL_ITEMS.filter((i) => i.phase).map((i) => (
           <Route key={i.to} path={i.to.replace(/^\//, "")} element={<Placeholder />} />
         ))}

@@ -15,7 +15,7 @@ from core.render.card import build_reminder_card
 from core.render.formatting import reminder_caption, reminder_caption_card, when_phrase
 from apps.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
-from core.db.repositories.reminders import due_reminders, mark_sent, reap_stale_reminders
+from core.db.repositories.reminders import due_reminders, mark_sent, reap_stale_reminders, sample_upcoming_event
 from core.db.session import WorkerAsyncSessionLocal
 
 log = logging.getLogger(__name__)
@@ -107,3 +107,28 @@ async def _send_reminders_impl() -> int:
     if sent:
         log.info("sent %s reminders", sent)
     return sent
+
+
+async def send_test_reminder(only_user_id: int) -> int:
+    """ТЕСТ из админки: отправить ОДНОМУ пользователю карточку-напоминание для образца ближайшего события
+    (превью). НЕ трогает реальные напоминания (sent_at не ставит). Адресат — строго only_user_id (хард-гард)."""
+    token = get_settings().telegram_bot_token
+    if not token or not only_user_id:
+        return 0
+    base = f"https://api.telegram.org/bot{token}"
+    now = datetime.now(timezone.utc)
+    async with WorkerAsyncSessionLocal() as db:
+        item = await sample_upcoming_event(db, now)
+    if not item:
+        return 0
+    item["user_id"] = int(only_user_id)  # ХАРД-таргет: единственный адресат превью
+    item["when"] = when_phrase(item.get("date_start"), item.get("date_end"), now)
+    try:
+        card_bytes = await asyncio.to_thread(build_reminder_card, item)
+    except Exception:
+        card_bytes = None
+    caption = reminder_caption_card(item, now) if card_bytes else reminder_caption(item, now)
+    markup = {"inline_keyboard": [[{"text": "смотреть →", "url": _open_url(item["event_id"])}]]}
+    async with httpx.AsyncClient(timeout=20) as client:
+        result = await _send_reminder(client, base, item, caption, card_bytes, reminder_caption(item, now), markup)
+    return 1 if result == "ok" else 0

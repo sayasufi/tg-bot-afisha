@@ -98,7 +98,7 @@ async def _send_digest_one(client, base, user_id, poster, caption_html, text_htm
     return "retry"
 
 
-async def _send_digest_impl() -> int:
+async def _send_digest_impl(only_user_id: int | None = None) -> int:
     token = get_settings().telegram_bot_token
     if not token:
         return 0
@@ -107,7 +107,10 @@ async def _send_digest_impl() -> int:
     since = _week_start_utc(now)
     sent = 0
     async with WorkerAsyncSessionLocal() as db:
-        users = await opted_in_users(db, since)
+        users = await opted_in_users(db, since, only_user_id=only_user_id)
+        if only_user_id is not None:
+            # SAFETY: тест шлёт СТРОГО одному. Жёсткий гард — даже баг в запросе не разошлёт всем.
+            users = [u for u in users if u["user_id"] == only_user_id][:1]
         if not users:
             return 0
         sat, sun, _, _ = weekend_window(now)
@@ -179,8 +182,9 @@ async def _send_digest_impl() -> int:
                     continue  # 429 / transient → leave unstamped; the next run retries it
                 # Delivered OR permanently undeliverable → stamp NOW and commit, so a flow retry or a
                 # mid-sweep crash can't re-send this week's roundup to anyone already done.
-                await mark_digest_sent(db, [u["user_id"]])
-                await db.commit()
+                if only_user_id is None:  # тест НЕ штампует — реальный недельный дайджест юзера не трогаем
+                    await mark_digest_sent(db, [u["user_id"]])
+                    await db.commit()
                 if result == "ok":
                     sent += 1
                 await asyncio.sleep(PACE)  # stay under Telegram's flood threshold
