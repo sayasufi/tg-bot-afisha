@@ -16,17 +16,25 @@ _PAGE_SIZE = 100
 
 _SORT = {
     "rating": "snap.rating",
-    "subs": "snap.subscribers",
+    "subs": "sub.subscribers",
     "reach": "snap.avg_reach",
     "cpm": "snap.cpm",
     "price": "snap.post_price",
     "scraped": "c.last_scraped_at",
 }
 
+# Подписчики — из НАДЁЖНОГО источника (живое t.me / telethon participants_count / telemetr-каталог),
+# а не из устаревшего data-count Telega.in. Остальные метрики — из последнего НЕ-tme снапшота
+# (tme содержит только подписчиков).
 _JOIN = (
     " LEFT JOIN LATERAL ("
-    "   SELECT subscribers, avg_reach, er, post_price, cpm, rating, captured_at "
-    "   FROM adstat.snapshots s WHERE s.channel_id = c.channel_id ORDER BY captured_at DESC LIMIT 1"
+    "   SELECT subscribers FROM adstat.snapshots s WHERE s.channel_id = c.channel_id AND s.subscribers IS NOT NULL "
+    "   ORDER BY (CASE s.source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END) DESC, "
+    "            s.captured_at DESC LIMIT 1"
+    " ) sub ON true "
+    " LEFT JOIN LATERAL ("
+    "   SELECT avg_reach, er, post_price, cpm, rating FROM adstat.snapshots s "
+    "   WHERE s.channel_id = c.channel_id AND s.source <> 'tme' ORDER BY s.captured_at DESC LIMIT 1"
     " ) snap ON true "
 )
 
@@ -53,7 +61,7 @@ async def list_channels(
         params["city"] = city
     need_join = False
     if isinstance(min_subs, int) and min_subs > 0:
-        conds.append("snap.subscribers >= :min_subs")
+        conds.append("sub.subscribers >= :min_subs")
         params["min_subs"] = min_subs
         need_join = True
     where = " AND ".join(conds)
@@ -64,7 +72,7 @@ async def list_channels(
     direction = "DESC" if (dir or "desc").lower() == "desc" else "ASC"
     rows = (await db.execute(text(
         "SELECT c.username, c.title, c.city, c.ad_price, c.last_scraped_at, "
-        "  snap.subscribers, snap.avg_reach, snap.er, snap.post_price, snap.cpm, snap.rating "
+        "  sub.subscribers, snap.avg_reach, snap.er, snap.post_price, snap.cpm, snap.rating "
         "FROM adstat.channels c " + _JOIN +
         f"WHERE {where} ORDER BY {sort_col} {direction} NULLS LAST, c.channel_id LIMIT :limit OFFSET :offset"
     ), params)).all()

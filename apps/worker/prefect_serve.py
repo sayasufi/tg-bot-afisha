@@ -42,6 +42,8 @@ _SCHEDULE = [
     (flows.reindex_search, 120),
     # Кастомные рассылки: каждые 5 мин подхватываем дозревшие кампании (now/at_utc). Ledger = идемпотентность.
     (flows.dispatch_broadcasts, 300),
+    # Реальные подписчики adstat-каналов из t.me (точнее каталога Telega) — батч раз в 6ч, ротация по 600.
+    (flows.refresh_adstat_subs, 21600),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),

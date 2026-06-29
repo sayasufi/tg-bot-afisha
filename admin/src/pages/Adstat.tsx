@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { SortTh } from "../components/sortable";
+import { apiPost } from "../lib/api";
 import { useApi } from "../lib/useApi";
 
 type Ch = {
@@ -34,6 +35,16 @@ export function Adstat() {
   }, [qd, city, minSubs, sort, page]);
 
   const { data, error, loading, reload } = useApi<any>(path);
+  const flows = useApi<any>("/flows");
+  const refreshDeploy = (flows.data?.flows ?? []).find((f: any) => f.name === "refresh-adstat-subs");
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshSubs = async () => {
+    if (!refreshDeploy) return;
+    if (!window.confirm("Обновить реальные подписчики с t.me (фоновый прогон по ~600 каналам)?")) return;
+    setRefreshing(true);
+    try { await apiPost("/ops/run", { deployment_id: refreshDeploy.id, name: refreshDeploy.name }); }
+    finally { setTimeout(() => setRefreshing(false), 2000); }
+  };
   const items: Ch[] = data?.items ?? [];
   const resetTo = (setter: (v: string) => void) => (v: string) => { setter(v); setPage(0); };
   const total = data?.total ?? 0;
@@ -44,9 +55,16 @@ export function Adstat() {
       <div className="page__head topbar">
         <div>
           <h1 className="page__title">реклама · каналы</h1>
-          <div className="page__sub">{data ? `${total.toLocaleString("ru-RU")} каналов по фильтру` : "ресёрч рекламных TG-каналов"}</div>
+          <div className="page__sub">{data ? `${total.toLocaleString("ru-RU")} каналов по фильтру · подписчики из t.me/telethon` : "ресёрч рекламных TG-каналов"}</div>
         </div>
-        <button className="btn btn--ghost" onClick={reload}>обновить</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {refreshDeploy && (
+            <button className="btn btn--ghost" disabled={refreshing} onClick={refreshSubs} title="фоновый прогон: подтянуть живые числа подписчиков с t.me">
+              {refreshing ? "запущено…" : "обновить подписчиков"}
+            </button>
+          )}
+          <button className="btn btn--ghost" onClick={reload}>обновить</button>
+        </div>
       </div>
 
       <div className="filterbar">

@@ -296,3 +296,10 @@ async def dispatch_broadcasts():
     """Подхватить ДОЗРЕВШИЕ кастомные рассылки (now / at_utc) и отправить paced-сендером. retries=0 —
     механизм возобновления = поюзерный ledger (ON CONFLICT), а не повтор флоу (иначе риск дабл-сенда)."""
     return await broadcasts._dispatch_due_impl()
+
+
+@flow(name="refresh-adstat-subs", retries=1, retry_delay_seconds=120, timeout_seconds=3600, log_prints=True)
+def refresh_adstat_subs():
+    """Обновить реальные подписчики adstat-каналов из живого превью t.me (точнее каталога Telega.in)."""
+    from apps.adstat.tme import refresh_subscribers
+    return refresh_subscribers(limit=600)
