@@ -7,16 +7,15 @@
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Body, Request
+from fastapi import APIRouter, Body, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
 
 from apps.api.services.admin_auth import (
-    bump_session_ver,
     issue_session,
     require_admin,
-    validate_login_widget,
+    validate_credentials,
     write_audit,
 )
 from core.config.settings import get_settings
@@ -39,8 +38,8 @@ def _isoweek(dt: datetime) -> str:
 
 @router.post("/session")
 async def admin_login(request: Request, payload: dict = Body(...), db: AsyncSession = Depends(get_async_db)) -> dict:
-    """Логин: данные Telegram Login Widget → проверка подписи + allowlist → подписанная сессия (Bearer)."""
-    # Строгий лимит на логин (отдельно от общего 600/мин) — гасит перебор.
+    """Логин: {username, password} → constant-time проверка → подписанная сессия (Bearer)."""
+    # Строгий лимит на логин (отдельно от общего 600/мин) — гасит перебор пароля.
     client = get_redis(decode=True)
     if client is not None:
         fwd = request.headers.get("x-forwarded-for", "")
@@ -50,42 +49,29 @@ async def admin_login(request: Request, payload: dict = Body(...), db: AsyncSess
             if n == 1:
                 await client.expire(f"rl:admin:login:{ip}", 60)
             if n > 10:
-                from fastapi import HTTPException
-
                 raise HTTPException(status_code=429, detail="too many attempts")
+        except HTTPException:
+            raise
         except Exception:
             pass
 
-    uid = validate_login_widget(payload)  # 404 при любой осечке
-    row = (await db.execute(
-        text("SELECT admin_session_ver, username, first_name FROM ref.users WHERE telegram_user_id = :uid"),
-        {"uid": uid},
-    )).first()
-    ver = int(row[0]) if row else 0
-    token, exp = issue_session(uid, ver)
-    await write_audit(db, request, uid, "auth.login", result="ok")
+    username = validate_credentials(payload.get("username", ""), payload.get("password", ""))
+    token, exp = issue_session(username)
+    await write_audit(db, request, username, "auth.login", result="ok")
     return {
         "token": token,
         "expires": datetime.fromtimestamp(exp, tz=timezone.utc).isoformat(),
-        "user": {
-            "uid": uid,
-            "username": (row[1] if row else None),
-            "first_name": (row[2] if row else None) or str(uid),
-        },
+        "user": {"username": username},
     }
 
 
 @router.get("/me")
-async def admin_me(request: Request, actor: int = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
-    row = (await db.execute(
-        text("SELECT username, first_name FROM ref.users WHERE telegram_user_id = :uid"), {"uid": actor}
-    )).first()
-    return {"uid": actor, "username": (row[0] if row else None), "first_name": (row[1] if row else None) or str(actor)}
+async def admin_me(actor: str = Depends(require_admin)) -> dict:
+    return {"username": actor}
 
 
 @router.post("/logout")
-async def admin_logout(request: Request, actor: int = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
-    await bump_session_ver(db, actor)
+async def admin_logout(request: Request, actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
     await write_audit(db, request, actor, "auth.logout", result="ok")
     return {"ok": True}
 
@@ -93,7 +79,7 @@ async def admin_logout(request: Request, actor: int = Depends(require_admin), db
 # ---- overview (дашборд) -----------------------------------------------------
 
 @router.get("/overview")
-async def admin_overview(actor: int = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
+async def admin_overview(actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
     out: dict = {"as_of": datetime.now(timezone.utc).isoformat(), "catalog": {}, "users": {}, "north_star": {}, "ingest": []}
 
     try:
@@ -208,7 +194,7 @@ async def _ingest_health(db: AsyncSession) -> list:
 # ---- health (инфра) ---------------------------------------------------------
 
 @router.get("/health")
-async def admin_health(actor: int = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
+async def admin_health(actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
     s = get_settings()
     deps: dict = {"postgres": "down", "redis": "down"}
 

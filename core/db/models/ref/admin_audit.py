@@ -15,7 +15,8 @@ class AdminAudit(Base):
     __table_args__ = {"schema": "ref"}
 
     audit_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    actor_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    actor: Mapped[str | None] = mapped_column(Text, nullable=True)  # admin username (логин/пароль-вход)
+    actor_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # legacy (Telegram-вход)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     target: Mapped[str | None] = mapped_column(Text, nullable=True)
     params: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

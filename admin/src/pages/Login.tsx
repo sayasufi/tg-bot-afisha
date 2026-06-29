@@ -1,44 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { FormEvent, useState } from "react";
 
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 export function Login() {
-  const { loginWithWidget } = useAuth();
+  const { login } = useAuth();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    (window as any).onTelegramAuth = async (u: any) => {
-      setErr(null);
-      try {
-        await loginWithWidget(u);
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 404) {
-          setErr("доступ запрещён — аккаунт не в списке владельцев или подпись недействительна");
-        } else if (e instanceof ApiError && e.status === 429) {
-          setErr("слишком много попыток, подождите минуту");
-        } else {
-          setErr("не удалось войти");
-        }
-      }
-    };
-
-    const bot = (import.meta as any).env?.VITE_TG_BOT || "okrestmap_bot";
-    const s = document.createElement("script");
-    s.async = true;
-    s.src = "https://telegram.org/js/telegram-widget.js?22";
-    s.setAttribute("data-telegram-login", bot);
-    s.setAttribute("data-size", "large");
-    s.setAttribute("data-userpic", "false");
-    s.setAttribute("data-onauth", "onTelegramAuth(user)");
-    s.setAttribute("data-request-access", "write");
-    ref.current?.appendChild(s);
-
-    return () => {
-      (window as any).onTelegramAuth = undefined;
-    };
-  }, []);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      await login(username, password);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) setErr("неверный логин или пароль");
+      else if (e instanceof ApiError && e.status === 429) setErr("слишком много попыток, подождите минуту");
+      else if (e instanceof ApiError && e.status === 404) setErr("админка не настроена на сервере");
+      else setErr("не удалось войти");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="login">
@@ -47,16 +33,33 @@ export function Login() {
           <span className="o">о</span>крест
         </div>
         <div className="login__kicker">панель управления</div>
-        <p className="login__hint">
-          Вход только для владельца.
-          <br />
-          Авторизуйтесь через Telegram.
-        </p>
-        <div className="login__widget" ref={ref} />
-        {err && <div className="login__err">{err}</div>}
-        <div className="login__note">
-          Кнопка не появилась? Домен admin.okrestmap.ru должен быть привязан к боту: BotFather → /setdomain.
-        </div>
+
+        <form className="login__form" onSubmit={submit}>
+          <div>
+            <label className="login__label">логин</label>
+            <input
+              className="login__input"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoFocus
+              autoComplete="username"
+            />
+          </div>
+          <div>
+            <label className="login__label">пароль</label>
+            <input
+              className="login__input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+          {err && <div className="login__err">{err}</div>}
+          <button className="btn login__submit" type="submit" disabled={busy}>
+            {busy ? "вход…" : "войти"}
+          </button>
+        </form>
       </div>
     </div>
   );

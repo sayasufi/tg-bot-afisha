@@ -2,12 +2,12 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 
 import { apiGet, apiPost, getToken, setToken } from "./api";
 
-export type AdminUser = { uid: number; username: string | null; first_name: string };
+export type AdminUser = { username: string };
 
 type AuthState = {
   user: AdminUser | null;
   ready: boolean;
-  loginWithWidget: (data: any) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -27,14 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         setUser(await apiGet("/me"));
       } catch {
-        setToken(null); // протухла/отозвана → на логин
+        setToken(null); // протухла → на логин
       }
       setReady(true);
     })();
   }, []);
 
-  const loginWithWidget = async (data: any) => {
-    const r = await apiPost("/session", data);
+  const login = async (username: string, password: string) => {
+    const r = await apiPost("/session", { username, password });
     setToken(r.token);
     setUser(r.user);
   };
@@ -49,5 +49,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, ready, loginWithWidget, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, ready, login, logout }}>{children}</Ctx.Provider>;
 }

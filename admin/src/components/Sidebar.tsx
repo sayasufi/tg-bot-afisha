@@ -41,8 +41,8 @@ export function Sidebar({ healthWarn }: { healthWarn?: boolean }) {
 
       <div className="sidebar__foot">
         <div className="sidebar__user">
-          <b>{user?.first_name ?? "владелец"}</b>
-          <span>{user?.username ? "@" + user.username : user?.uid}</span>
+          <b>{user?.username ?? "admin"}</b>
+          <span>владелец</span>
         </div>
         <button className="iconbtn" onClick={logout}>
           выход
