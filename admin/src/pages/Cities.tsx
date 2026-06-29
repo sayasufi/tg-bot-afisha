@@ -58,8 +58,10 @@ export function Cities() {
                   <td className="num">{c.events.toLocaleString("ru-RU")}</td>
                   <td className="num muted">{c.venues.toLocaleString("ru-RU")}</td>
                   <td className="num muted">{c.users}</td>
-                  <td style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {c.sources.map((s) => <Badge key={s} kind="ok">{s}</Badge>)}
+                  <td>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {c.sources.map((s) => <Badge key={s} kind="ok">{s}</Badge>)}
+                    </div>
                   </td>
                   <td className="muted">{c.has_telegram ? "✓" : "—"}</td>
                 </tr>
