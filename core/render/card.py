@@ -19,7 +19,7 @@ ACID = (204, 255, 0)
 INK_DIM = (110, 110, 102)
 CINNABAR = (230, 51, 18)
 
-FONT_PATH = str(Path(__file__).resolve().parents[4] / "assets" / "fonts" / "Unbounded.ttf")
+FONT_PATH = str(Path(__file__).resolve().parents[2] / "assets" / "fonts" / "Unbounded.ttf")
 
 CAT_LABEL = {
     "concert": "Концерт",
@@ -65,7 +65,7 @@ def _font(size: int, weight: int = 400) -> ImageFont.FreeTypeFont:
 # editorial grotesk with full CYRILLIC, unlike the app's Latin-only Familjen) + Martian Mono (codes/
 # data). Bundled so the reminder card reads like the app's EventListRow instead of everything-in-
 # Unbounded (which looked toy-like in a DM).
-_FONTS_DIR = Path(__file__).resolve().parents[4] / "assets" / "fonts"
+_FONTS_DIR = Path(__file__).resolve().parents[2] / "assets" / "fonts"
 GROTESK_PATH = str(_FONTS_DIR / "GolosText.ttf")
 MONO_PATH = str(_FONTS_DIR / "MartianMono.ttf")
 
