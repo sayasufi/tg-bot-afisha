@@ -1,6 +1,6 @@
 """A trailing edition year ("Ömankö Day" vs "Ömankö Day 2026") must not block a merge,
 but two DIFFERENT years ("Лето 2025" vs "Лето 2026") must stay separate."""
-from pipeline.dedup.title_match import same_event
+from core.matching.title_match import same_event
 
 
 def test_year_suffix_in_one_title_still_merges():

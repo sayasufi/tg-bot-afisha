@@ -175,7 +175,7 @@ async def _dedup_fuzzy_llm_impl(apply: bool = True, cap: int = _FUZZY_LLM_CAP) -
     number (age ranges «(6-10)» vs «(11-15)», parts) so distinct sessions never collapse. Verdicts are
     Redis-cached (incl. negatives), so steady-state runs are near-free."""
     from pipeline.maintenance.events import find_pairs, _cluster_to_canon, _commit_event_merges
-    from pipeline.dedup.title_match import _numbers
+    from core.matching.title_match import _numbers
     from core.db.session import SessionLocal
 
     db = SessionLocal()

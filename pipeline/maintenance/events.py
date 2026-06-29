@@ -18,7 +18,7 @@ from collections import defaultdict
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey, translit_tokens
+from core.matching.title_match import same_event, same_slot_title, title_nkey, translit_tokens
 
 # date_start is timestamptz; one conversion to Moscow gives the true MSK calendar
 # day. The old double-hop ("…'UTC' at time zone 'Europe/Moscow'") shifted a

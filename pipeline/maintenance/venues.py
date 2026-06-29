@@ -26,8 +26,8 @@ import sys
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.title_match import same_event
-from pipeline.dedup.venue_match import contrasts, is_subset, name_match_score
+from core.matching.title_match import same_event
+from core.matching.venue_match import contrasts, is_subset, name_match_score
 
 # Every venue pair within this radius is a *candidate*; name + co-host decide.
 _RADIUS_M = 150

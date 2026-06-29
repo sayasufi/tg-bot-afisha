@@ -1,6 +1,6 @@
 import pytest
 
-from pipeline.dedup.scorer import (
+from core.matching.scorer import (
     AUTO_MERGE_THRESHOLD,
     REVIEW_THRESHOLD,
     classify_match,

@@ -27,7 +27,7 @@ from collections import Counter, defaultdict
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.venue_match import contrasts, name_match_score
+from core.matching.venue_match import contrasts, name_match_score
 
 THRESH_M = 200  # venues this close are treated as one physical place
 

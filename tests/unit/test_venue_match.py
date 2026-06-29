@@ -3,7 +3,7 @@ merge/resplit passes. Cases are real production venues.
 """
 import pytest
 
-from pipeline.dedup.venue_match import contrasts, is_subset, name_match_score
+from core.matching.venue_match import contrasts, is_subset, name_match_score
 
 try:
     import rapidfuzz  # noqa: F401

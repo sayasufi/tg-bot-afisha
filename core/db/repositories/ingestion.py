@@ -17,10 +17,10 @@ from core.db.models import (
     TelegramChannel,
     Venue,
 )
-from pipeline.dedup.scorer import MatchDecision
-from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey, translit_tokens
-from pipeline.dedup.venue_match import name_match_score
-from pipeline.normalizer.extractors import NormalizedCandidate
+from core.matching.scorer import MatchDecision
+from core.matching.title_match import same_event, same_slot_title, title_nkey, translit_tokens
+from core.matching.venue_match import name_match_score
+from core.contracts import NormalizedCandidate
 
 # Sources list events up to ~a year ahead; a short window dropped every session of
 # a far-future event, after which the dedup used to fall back to "now" and the

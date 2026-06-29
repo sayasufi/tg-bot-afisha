@@ -1,6 +1,6 @@
 """Genitive name forms ("Сергей"→"Сергея") must still read as the same word, so a bare-name event
 merges with its qualified twin across sources."""
-from pipeline.dedup.title_match import same_event, same_slot_title
+from core.matching.title_match import same_event, same_slot_title
 
 
 def test_genitive_last_letter_swap_merges():

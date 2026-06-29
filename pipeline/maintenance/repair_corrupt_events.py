@@ -29,7 +29,7 @@ from collections import defaultdict
 from sqlalchemy import text
 
 from core.db.session import SessionLocal
-from pipeline.dedup.title_match import same_event
+from core.matching.title_match import same_event
 
 _TOL = 90  # seconds — occurrence start may round vs the raw session start
 

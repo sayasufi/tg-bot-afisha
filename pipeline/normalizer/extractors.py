@@ -1,26 +1,9 @@
 ﻿import re
-from dataclasses import dataclass
 from datetime import datetime
 
 import dateparser
 
-
-@dataclass
-class NormalizedCandidate:
-    title: str
-    description: str
-    date_start: datetime | None
-    date_end: datetime | None
-    venue: str
-    address: str
-    price_min: float | None
-    price_max: float | None
-    currency: str
-    age_limit: str
-    tags: list[str]
-    images: list[str]
-    source_url: str
-    parse_confidence: float
+from core.contracts import NormalizedCandidate  # контракт вынесен в core; re-export для обратной совместимости
 
 
 AGE_REGEX = re.compile(r"(\d{1,2})\+")

@@ -13,7 +13,7 @@ from core.codes import event_code
 from core.config.settings import get_settings
 from core.db.session import WorkerAsyncSessionLocal
 from core.search.meili import MeiliClient
-from pipeline.dedup.title_match import translit_tokens
+from core.matching.title_match import translit_tokens
 
 logger = logging.getLogger(__name__)
 

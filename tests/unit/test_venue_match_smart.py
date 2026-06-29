@@ -1,5 +1,5 @@
 """Smarter venue dedup: transliteration + cross-field (a venue's name living in the other's address)."""
-from pipeline.dedup.venue_match import name_match_score
+from core.matching.venue_match import name_match_score
 
 
 def test_alias_in_address_merges():

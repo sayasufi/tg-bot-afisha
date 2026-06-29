@@ -7,7 +7,7 @@ unattended) and "fuzzy" (+ distinctive subsets, review only).
 """
 import pytest
 
-from pipeline.dedup.title_match import same_event, same_slot_title, title_nkey, translit_key
+from core.matching.title_match import same_event, same_slot_title, title_nkey, translit_key
 
 try:
     import rapidfuzz  # noqa: F401

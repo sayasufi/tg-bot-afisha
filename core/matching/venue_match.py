@@ -12,7 +12,7 @@ radius are compared); this module is the name half of the decision.
 """
 import re
 
-from pipeline.dedup.title_match import translit_tokens
+from core.matching.title_match import translit_tokens
 
 try:
     from rapidfuzz import fuzz
