@@ -457,18 +457,19 @@ a { color: inherit; text-decoration: none; }
 
 .pager { display: flex; gap: 14px; align-items: center; justify-content: center; margin-top: 16px; }
 
-/* ---------- Bar chart (Аналитика) ---------- */
-.barchart {
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-  height: 200px;
+/* ---------- Line chart (Аналитика) ---------- */
+.linechart {
+  width: 100%;
+  height: auto;
+  display: block;
   border: 1px solid var(--line);
-  padding: 14px 12px 6px;
-  margin-bottom: 8px;
+  background: var(--plinth);
+  margin-bottom: 6px;
 }
-.barchart__col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-.barchart__track { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
-.barchart__bar { width: 72%; max-width: 30px; background: var(--ink-dim); transition: height 0.3s var(--ease-cut); }
-.barchart__bar--last { background: var(--acid); box-shadow: 0 0 0 1px var(--ink); }
-.barchart__label { font-family: var(--mono); font-size: 9px; color: var(--ink-faint); white-space: nowrap; }
+.lc-grid { stroke: var(--line); stroke-width: 1; }
+.lc-ylabel,
+.lc-xlabel { fill: var(--ink-faint); font-family: var(--mono); font-size: 11px; }
+.lc-area { fill: var(--acid); opacity: 0.09; }
+.lc-line { fill: none; stroke: var(--acid); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.lc-dot { fill: var(--acid); }
+.lc-dot--last { stroke: var(--ink); stroke-width: 1; }

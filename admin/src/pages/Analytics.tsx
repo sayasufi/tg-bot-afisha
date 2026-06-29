@@ -1,21 +1,16 @@
-import { useState } from "react";
-
-import { BarChart } from "../components/BarChart";
+import { LineChart } from "../components/LineChart";
 import { useApi } from "../lib/useApi";
 
 const ACTION_LABELS: Record<string, string> = {
-  click: "открытия",
-  route: "маршруты",
-  share: "шеры",
+  click: "открытия карточек",
+  route: "маршруты к месту",
+  share: "шеры «пойдём»",
   reminder: "напоминания",
-  calendar: "в календарь",
 };
 
 export function Analytics() {
   const { data, error, loading, reload } = useApi<any>("/stats/timeseries", 60000);
-  const [kind, setKind] = useState("click");
-
-  const kinds = data?.actions ? Object.keys(data.actions) : [];
+  const actionKinds = data?.actions ? Object.keys(data.actions) : [];
 
   return (
     <div>
@@ -33,27 +28,20 @@ export function Analytics() {
       {data && (
         <>
           <div className="section__title">WAU · недельная аудитория (8 недель, № ISO-недели)</div>
-          <BarChart data={data.wau} />
+          <LineChart data={data.wau} />
 
-          <div className="section__title topbar" style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <span>действия за 14 дней</span>
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value)}
-              style={{ height: 28, background: "var(--vitrine)", border: "1px solid var(--line)", color: "var(--ink)", fontFamily: "var(--mono)", fontSize: 11, padding: "0 8px" }}
-            >
-              {kinds.map((k) => (
-                <option key={k} value={k}>{ACTION_LABELS[k] ?? k}</option>
-              ))}
-            </select>
-          </div>
-          <BarChart data={data.actions?.[kind] ?? []} />
+          {actionKinds.map((k) => (
+            <div key={k}>
+              <div className="section__title">действия за 14 дней · {ACTION_LABELS[k] ?? k}</div>
+              <LineChart data={data.actions[k]} />
+            </div>
+          ))}
 
-          <div className="section__title">новые события по дням (объём ингеста, 14 дней)</div>
-          <BarChart data={data.new_events} />
+          <div className="section__title">новые события по дням · объём ингеста (14 дней)</div>
+          <LineChart data={data.new_events} />
 
           <div className="section__title">новые пользователи по дням (14 дней)</div>
-          <BarChart data={data.new_users} />
+          <LineChart data={data.new_users} />
         </>
       )}
     </div>

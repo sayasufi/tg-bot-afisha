@@ -15,7 +15,8 @@ from core.infra.redis import get_redis
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
-_KINDS = ("click", "route", "share", "reminder", "calendar")
+# «calendar» (в календарь) убран — такой функции в продукте нет, сигнал всегда 0.
+_KINDS = ("click", "route", "share", "reminder")
 _WEEKS = 8
 _DAYS = 14
 
