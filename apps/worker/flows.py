@@ -6,7 +6,7 @@ run history/observability UI. The logic lives in ``tasks/*`` and is unchanged.
 """
 from prefect import flow
 
-from apps.worker.worker.tasks import dedup, digest, enrich, fetch, media, normalize, reminders, search_index
+from apps.worker.tasks import dedup, digest, enrich, fetch, media, normalize, reminders, search_index
 
 _RETRIES = 2
 _RETRY_DELAY = 30  # seconds

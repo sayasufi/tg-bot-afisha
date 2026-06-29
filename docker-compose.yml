@@ -206,7 +206,7 @@ services:
     env_file: .env
     restart: unless-stopped
     # Schedules + runs every flow in one process (was: celery worker + beat).
-    command: python -m apps.worker.worker.prefect_serve
+    command: python -m apps.worker.prefect_serve
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
     extra_hosts:

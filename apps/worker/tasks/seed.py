@@ -186,7 +186,7 @@ def _seed_parks(db, city_id: int) -> int:
 def seed_map_places(city: str = "Москва"):
     """Populate ref.map_places (metro + parks) from Wikidata. Idempotent (upsert).
     Manual/on-demand:
-    `python -c "from apps.worker.worker.tasks.seed import seed_map_places; seed_map_places()"`."""
+    `python -c "from apps.worker.tasks.seed import seed_map_places; seed_map_places()"`."""
     db = SessionLocal()
     try:
         city_row = get_or_create_city(db, city)

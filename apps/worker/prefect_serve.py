@@ -9,7 +9,7 @@ Prefect UI.
 """
 from prefect import serve
 
-from apps.worker.worker import flows
+from apps.worker import flows
 
 # (flow, interval_seconds) — mirrors the former Celery beat schedule.
 _SCHEDULE = [

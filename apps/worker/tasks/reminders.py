@@ -13,7 +13,7 @@ import httpx
 
 from core.render.card import build_reminder_card
 from core.render.formatting import reminder_caption, reminder_caption_card, when_phrase
-from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
+from apps.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.reminders import due_reminders, mark_sent, reap_stale_reminders
 from core.db.session import WorkerAsyncSessionLocal

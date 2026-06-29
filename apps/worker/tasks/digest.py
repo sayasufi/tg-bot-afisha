@@ -15,7 +15,7 @@ import httpx
 
 from core.render.card import render_digest_poster
 from core.render.formatting import digest_caption, digest_message, weekend_day_label, weekend_label, when_phrase
-from apps.worker.worker.tasks.tg_send import PACE, classify, retry_after
+from apps.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.digest import (
     friends_saved,
