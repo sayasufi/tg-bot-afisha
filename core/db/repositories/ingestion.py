@@ -1,7 +1,7 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, case, func, or_, select, text
+from sqlalchemy import and_, case, exists, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -102,7 +102,19 @@ async def get_source_by_name(db: AsyncSession, name: str) -> Source | None:
 
 
 async def get_active_telegram_channels(db: AsyncSession) -> list[TelegramChannel]:
-    stmt = select(TelegramChannel).where(TelegramChannel.is_active.is_(True)).order_by(TelegramChannel.channel_id.asc())
+    # NEVER-FETCHED channels first (no telegram_public source row yet), then by id. Otherwise a freshly
+    # seeded batch sits at the TAIL of channel_id order, and the slow one-time first-fetch backfill
+    # (≤8 pages/channel) under concurrency_limit=1 can starve it: a run drains the low ids, runs long, and
+    # the next run restarts from the head — the tail (e.g. the 296 multi-city channels) never gets fetched.
+    # Putting un-sourced channels first guarantees new venues get their backfill promptly. Source name
+    # mirrors ensure_source: "telegram_public:<username, @/space-trimmed, lowercased>".
+    handle = func.lower(func.btrim(TelegramChannel.username, "@ "))
+    fetched = exists().where(Source.name == func.concat("telegram_public:", handle))
+    stmt = (
+        select(TelegramChannel)
+        .where(TelegramChannel.is_active.is_(True))
+        .order_by(fetched.asc(), TelegramChannel.channel_id.asc())  # un-sourced (new) → first
+    )
     return list((await db.execute(stmt)).scalars().all())
 
 
