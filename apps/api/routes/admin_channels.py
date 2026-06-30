@@ -21,13 +21,15 @@ def _norm_username(raw: str) -> str:
 
 @router.get("/venue-channels")
 async def list_venue_channels(actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
-    """Все каналы площадок + имя города. Фильтры/сортировка — на клиенте."""
+    """Все каналы площадок + имя города. Фильтры/сортировка — на клиенте, поэтому отдаём ВЕСЬ список.
+    LIMIT — лишь предохранитель от рантэвея (новые каналы с NULL-подписчиками = в хвосте NULLS LAST, так
+    что прежний LIMIT 500 обрезал их, как только всего стало >500: шапка-счётчик и пер-город фильтр врали)."""
     rows = (await db.execute(text(
         "SELECT tc.channel_id, tc.username, tc.city_id, c.name AS city, tc.is_active, "
         "       tc.venue_name, tc.venue_address, tc.subscribers, tc.updated_at "
         "FROM ref.telegram_channels tc "
         "LEFT JOIN ref.cities c ON c.city_id = tc.city_id "
-        "ORDER BY tc.subscribers DESC NULLS LAST LIMIT 500"
+        "ORDER BY tc.subscribers DESC NULLS LAST LIMIT 5000"
     ))).all()
     items = [
         {
