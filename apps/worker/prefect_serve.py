@@ -76,6 +76,8 @@ _SCHEDULE = [
     # Re-engagement: DM saved-event reminders as they come due. Cheap (a partial-index
     # scan + a few sends), so run it often enough that "~2h before" is accurate.
     (flows.send_reminders, 60),
+    # D1-нудж: первый возвратный DM тем, кто открыл апп ~сутки назад и ничего не сохранил (молчание до пятницы).
+    (flows.welcome_nudge, 1800),
     # Рекламный ресёрч каналов (схема adstat). Discovery ЕЖЕДНЕВНО (ловит новые афиша-каналы по мере
     # появления: Telemetr-поиск по 16 городам, Telega-каталог, Telethon-граф рекомендаций) + лёгкий рефреш
     # статистики ежедневно (Telemetr). concurrency_limit=1 → не пересекаются, идут по очереди. No-op, пока

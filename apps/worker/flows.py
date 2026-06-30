@@ -282,6 +282,14 @@ async def send_reminders():
     return await reminders._send_reminders_impl()
 
 
+@flow(name="welcome-nudge", retries=1, retry_delay_seconds=30, timeout_seconds=300, log_prints=True)
+async def welcome_nudge():
+    """D1-нудж: один персональный DM «события рядом» юзеру, открывшему апп ~сутки назад и ничего не
+    сохранившему. Закрывает молчание до пятничного дайджеста. Идемпотентно (welcome_nudge_at)."""
+    from apps.worker.tasks import welcome
+    return await welcome._send_welcome_nudges_impl()
+
+
 @flow(name="send-digest", retries=1, retry_delay_seconds=30, timeout_seconds=300, log_prints=True)
 async def send_digest():
     """Weekly opt-in roundup DM: new at followed venues + the best of the coming weekend.
