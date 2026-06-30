@@ -37,6 +37,10 @@ _SCHEDULE = [
     # Every 30 min: mark source_runs orphaned by a deploy/crash (stuck in 'running') as 'interrupted',
     # so the run log doesn't accumulate phantom in-flight rows. The 2h threshold is well above any run.
     (flows.sweep_stale_runs, 1800),
+    # Self-heal the runner: release orphaned deployment concurrency slots (a crashed/killed run that never
+    # freed its slot wedges that deployment forever → the cause of daily/12h flows silently dying for days)
+    # + collapse the overdue SCHEDULED pile-up. Every 30 min.
+    (flows.sweep_orphan_concurrency_slots, 1800),
     # Keep the Meilisearch typeahead index fresh (no-op until MEILI_SEARCH_ENABLED). Cheap full
     # reindex at this scale; the atomic swap means search never sees an empty index.
     (flows.reindex_search, 120),

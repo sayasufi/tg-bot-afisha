@@ -128,6 +128,46 @@ async def prune_telegram_channels():
     return {**dark, **zero_yield}
 
 
+@flow(name="sweep-orphan-concurrency", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
+def sweep_orphan_concurrency_slots():
+    """Self-heal the Prefect runner. A flow run that crashed / was killed (deploy, OOM, restart) without
+    cleanly releasing its deployment concurrency slot leaves concurrency_limit_v2.active_slots STUCK at the
+    limit → that deployment is wedged forever (the runner aborts every submission as 'non-pending SCHEDULED').
+    This is why daily/12h flows silently stopped running for days. Every 30 min: release any slot 'occupied'
+    with no actual PENDING/RUNNING run, and collapse the overdue SCHEDULED pile-up (keep only the latest
+    pending run per deployment) so a backlog never drowns the runner. Operates on the prefect-postgres store."""
+    import os
+
+    from sqlalchemy import create_engine, text
+
+    url = (os.environ.get("PREFECT_API_DATABASE_CONNECTION_URL") or "").replace("+asyncpg", "+psycopg")
+    if not url:
+        pw = os.environ.get("PREFECT_DB_PASSWORD")  # the runner reaches the API, not the DB — build from .env
+        if pw:
+            url = f"postgresql+psycopg://prefect:{pw}@prefect-postgres:5432/prefect"
+    if not url:
+        return {"skipped": "no prefect db url"}
+    eng = create_engine(url, pool_pre_ping=True)
+    try:
+        with eng.begin() as c:
+            released = c.execute(text(
+                "UPDATE concurrency_limit_v2 clv SET active_slots = 0 "
+                "WHERE clv.active_slots > 0 AND clv.name LIKE 'deployment:%' "
+                "  AND NOT EXISTS (SELECT 1 FROM flow_run fr WHERE fr.state_type IN ('RUNNING', 'PENDING') "
+                "                  AND ('deployment:' || fr.deployment_id::text) = clv.name)"
+            )).rowcount
+            collapsed = c.execute(text(
+                "DELETE FROM flow_run fr WHERE fr.state_type = 'SCHEDULED' AND fr.deployment_id IS NOT NULL "
+                "  AND EXISTS (SELECT 1 FROM flow_run fr2 WHERE fr2.deployment_id = fr.deployment_id "
+                "              AND fr2.state_type = 'SCHEDULED' AND fr2.expected_start_time > fr.expected_start_time)"
+            )).rowcount
+    finally:
+        eng.dispose()
+    if released or collapsed:
+        print(f"sweep-orphan-concurrency: released {released} stuck slots, collapsed {collapsed} stale scheduled runs")
+    return {"released_slots": released, "collapsed_scheduled": collapsed}
+
+
 @flow(name="sweep-stale-runs", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
 async def sweep_stale_runs():
     """Mark source_runs stuck in 'running' (a fetch orphaned by a deploy/crash between create_source_run
