@@ -30,7 +30,9 @@ LLM_REL = {
 
 _PROMPT = (
     "Ты классифицируешь Telegram-КАНАЛ для приложения-афиши (события и досуг города: концерты, театр, "
-    "выставки, фестивали, куда сходить, экскурсии). По НАЗВАНИЮ и @username определи категорию канала.\n"
+    "выставки, фестивали, куда сходить, экскурсии). Тебе дают название, @username, ОПИСАНИЕ и тексты "
+    "ПОСЛЕДНИХ ПОСТОВ. Опирайся прежде всего на ПОСТЫ — они показывают, что канал реально публикует "
+    "(имя бывает обманчивым). Определи категорию канала.\n"
     "Категории:\n"
     '- "афиша" — про события/культуру/досуг/мероприятия (афиша, концерты, театр, выставки, фестивали, '
     "куда сходить, экскурсии, стендап, вечеринки).\n"
@@ -54,20 +56,23 @@ _PROMPT = (
 )
 
 
-def _payload(title: str | None, username: str) -> dict:
+def _payload(title: str | None, username: str, ctx: str = "") -> dict:
+    user = f"Название: {title or '—'}\nUsername: @{username}"
+    if ctx:
+        user += f"\n{ctx}"
     return {
         "messages": [
             {"role": "system", "content": _PROMPT},
-            {"role": "user", "content": f"Название: {title or '—'}\nUsername: @{username}"},
+            {"role": "user", "content": user[:1800]},
         ],
         "stream": False, "temperature": 0.0, "max_tokens": 80,
     }
 
 
-async def _classify_one(client: httpx.AsyncClient, base_url: str, cid, title, username):
+async def _classify_one(client: httpx.AsyncClient, base_url: str, cid, title, username, ctx=""):
     try:
         async with llm_slot():  # один из общесервисных слотов LLM-конкурентности
-            r = await client.post(f"{base_url}/api/chat", json=_payload(title, username))
+            r = await client.post(f"{base_url}/api/chat", json=_payload(title, username, ctx))
             r.raise_for_status()
             data = r.json()
         parsed = parse_llm_json(data.get("response") or "{}")
@@ -84,9 +89,9 @@ async def _classify_one(client: httpx.AsyncClient, base_url: str, cid, title, us
         return cid, None
 
 
-async def _run(triples, base_url, timeout):
+async def _run(quads, base_url, timeout):
     async with httpx.AsyncClient(timeout=timeout) as client:
-        res = await asyncio.gather(*[_classify_one(client, base_url, c, t, u) for c, t, u in triples])
+        res = await asyncio.gather(*[_classify_one(client, base_url, c, t, u, ctx) for c, t, u, ctx in quads])
     return {c: v for c, v in res if v is not None}
 
 
@@ -97,15 +102,22 @@ def classify_channels_llm(limit: int = 400, restale_days: int = 45) -> dict:
     with SessionLocal() as db:
         rows = db.execute(text(
             "SELECT c.channel_id, c.title, c.username FROM adstat.channels c "
-            "WHERE c.username <> '' AND (c.llm_at IS NULL OR c.llm_at < now() - (:d * interval '1 day')) "
+            "WHERE c.username <> '' AND NOT c.llm_locked "  # ручную категорию оператора не трогаем
+            "AND (c.llm_at IS NULL OR c.llm_at < now() - (:d * interval '1 day')) "
             "AND (c.relevance IS DISTINCT FROM 'не тема' OR c.ad_price > 0 OR EXISTS "
             "     (SELECT 1 FROM adstat.snapshots s WHERE s.channel_id = c.channel_id AND s.subscribers >= 3000)) "
             "ORDER BY (c.ad_price IS NOT NULL) DESC, c.score DESC NULLS LAST LIMIT :n"
         ), {"d": restale_days, "n": limit}).all()
     if not rows:
         return {"classified": 0, "scanned": 0}
-    triples = [(r[0], r[1], r[2]) for r in rows]
-    out = asyncio.run(_run(triples, settings.llm_api_base_url, settings.llm_timeout_seconds))
+    # Контекст (описание + последние посты) тянем параллельно (curl_cffi синхронный) — раскрывает суть канала.
+    from concurrent.futures import ThreadPoolExecutor
+
+    from apps.adstat.tme import fetch_channel_context
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        ctxs = list(ex.map(lambda r: fetch_channel_context(r[2]), rows))
+    quads = [(r[0], r[1], r[2], ctx) for r, ctx in zip(rows, ctxs)]
+    out = asyncio.run(_run(quads, settings.llm_api_base_url, settings.llm_timeout_seconds))
     now = datetime.now(timezone.utc)
     n = 0
     with SessionLocal() as db:

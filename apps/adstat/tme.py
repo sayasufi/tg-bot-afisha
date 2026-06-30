@@ -51,6 +51,35 @@ def _num(s: str) -> int | None:
         return None
 
 
+_RE_DESC = re.compile(r'tgme_channel_info_description[^>]*>(.*?)</div>', re.DOTALL)
+_RE_PAGE_DESC = re.compile(r'tgme_page_description[^>]*>(.*?)</div>', re.DOTALL)
+_RE_POST = re.compile(r'tgme_widget_message_text[^>]*>(.*?)</div>', re.DOTALL)
+_RE_TAG = re.compile(r"<[^>]+>")
+
+
+def _clean_text(s: str) -> str:
+    return re.sub(r"\s+", " ", _RE_TAG.sub(" ", s)).strip()
+
+
+def fetch_channel_context(username: str) -> str:
+    """Описание канала + тексты последних постов (t.me/s) — контекст для LLM-классификации: раскрывает, ЧТО
+    канал реально публикует (имя бывает неоднозначным, напр. «Радар Москва»). '' при ошибке/закрытом превью."""
+    try:
+        html = creq.get(f"https://t.me/s/{username}", impersonate="chrome", timeout=15, headers=_H).text
+    except Exception:
+        return ""
+    parts = []
+    m = _RE_DESC.search(html) or _RE_PAGE_DESC.search(html)
+    if m:
+        d = _clean_text(m.group(1))[:300]
+        if d:
+            parts.append("Описание: " + d)
+    posts = [p for p in (_clean_text(x)[:200] for x in _RE_POST.findall(html)) if p][-6:]  # последние 6 непустых
+    if posts:
+        parts.append("Последние посты:\n- " + "\n- ".join(posts))
+    return "\n".join(parts)[:1400]
+
+
 def fetch_subscribers(username: str) -> int | None:
     """Живое число подписчиков из t.me/<username>, или None если превью без счётчика/ошибка."""
     try:

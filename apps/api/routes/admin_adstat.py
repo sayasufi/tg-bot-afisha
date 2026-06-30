@@ -4,14 +4,42 @@
 поста, CPM, рейтинг). Поиск по @username/названию, фильтр по городу и мин. подписчикам, серверная
 сортировка (рейтинг/подписчики/охват/CPM/цена) + пагинация 100. require_admin.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.services.admin_auth import require_admin
+from apps.api.services.admin_auth import require_admin, write_audit
 from core.db.session import get_async_db
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
+_CATS = {"афиша", "город", "тема", "мусор"}
+
+
+@router.post("/adstat/category")
+async def set_category(
+    request: Request, payload: dict = Body(...),
+    actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db),
+) -> dict:
+    """Ручная категория канала оператором (перебивает LLM и блокируется от авто-переклассификации). Сразу
+    пересчитывает relevance/score/verdict этого канала из сохранённого quality."""
+    username = (payload.get("username") or "").strip().lstrip("@").lower()
+    category = (payload.get("category") or "").strip().lower()
+    if not username or category not in _CATS:
+        raise HTTPException(status_code=422, detail="нужны username + category (афиша|город|тема|мусор)")
+    from apps.adstat.llm_classify import LLM_REL
+    mult, label = LLM_REL[category]
+    res = await db.execute(text(
+        "UPDATE adstat.channels SET llm_category=:cat, llm_locked=true, llm_at=now(), relevance=:label, "
+        "score=round(COALESCE(quality,0) * :mult)::int, score_at=now(), "
+        "verdict = CASE WHEN round(COALESCE(quality,0)*:mult) >= 70 THEN 'брать' "
+        "              WHEN round(COALESCE(quality,0)*:mult) >= 50 THEN 'осторожно' ELSE 'мимо' END "
+        "WHERE username=:u"
+    ), {"cat": category, "label": label, "mult": mult, "u": username})
+    if not res.rowcount:
+        raise HTTPException(status_code=404, detail="канал не найден")
+    await db.commit()
+    await write_audit(db, request, actor, "adstat.category", target=username, params={"category": category}, result="ok")
+    return {"ok": True, "relevance": label}
 _PAGE_SIZE = 100
 _BOT_USERNAME = "okrestmap_bot"  # для рекламных deep-link t.me/<bot>?startapp=src_<channel>
 
