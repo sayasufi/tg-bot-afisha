@@ -273,7 +273,7 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
     await upsert_user_async(
         db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
     )
-    await set_favorite(db, uid, payload.event_id, payload.on)
+    inserted = await set_favorite(db, uid, payload.event_id, payload.on)
     notify: tuple[int, str] | None = None
     friend = "none"  # friendship outcome of this accept: 'accepted' (mutual friends now) / 'none'
     first_friend = False
@@ -298,9 +298,14 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
     else:
         await cancel_reminder(db, uid, payload.event_id)  # un-fav → drop its reminder
     await db.commit()
+    ids = await list_favorite_ids(db, uid)
     if notify:
         await _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
-    return {"ids": await list_favorite_ids(db, uid), "friend": friend, "first_friend": first_friend}
+    # ПЕРВОЕ в жизни сохранение → DM из бота, закрепляющий петлю прямо в канале (напоминание + дайджест).
+    # Once-ever (Redis NX), плюс гейт len(ids)==1 — на случай Redis-простоя не дёргать на повторных.
+    if payload.on and inserted and len(ids) == 1 and await _first_save_dm_once(uid):
+        await _notify_first_save(uid, payload.event_id)
+    return {"ids": ids, "friend": friend, "first_friend": first_friend}
 
 
 @router.post("/reminders")
@@ -546,6 +551,39 @@ async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_i
             )
     except Exception:
         pass  # the favourite is already recorded; the nudge is best-effort
+
+
+async def _first_save_dm_once(uid: int) -> bool:
+    """Redis NX: True только в самый первый раз для юзера — DM на первое сохранение шлём ровно однажды."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    try:
+        return bool(await client.set(f"firstsave:dm:{uid}", "1", nx=True, ex=365 * 24 * 3600))
+    except Exception:
+        return True
+
+
+async def _notify_first_save(uid: int, event_id: str) -> None:
+    """Лучший-effort DM на ПЕРВОЕ сохранение: закрепляем петлю прямо в боте (напоминание + дайджест)."""
+    token = get_app_settings().telegram_bot_token
+    if not token or not uid:
+        return
+    text = (
+        f"{ce('❤️')} <b>Сохранено!</b> Напомню за 2 часа до начала — не пропустишь.\n\n"
+        f"{ce('🔔')} А по выходным присылаю подборку афиши твоего города в личку — уже включена "
+        "(выключить можно в <b>Профиле</b>)."
+    )
+    markup = {"inline_keyboard": [[{"text": "Открыть афишу →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": int(uid), "text": text, "parse_mode": "HTML",
+                      "reply_markup": markup, "disable_web_page_preview": True},
+            )
+    except Exception:
+        pass  # сохранение уже записано; нудж — best-effort
 
 
 async def _arm_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
