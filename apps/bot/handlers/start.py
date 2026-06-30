@@ -1,15 +1,17 @@
 import json
 import re
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
+from sqlalchemy import text
 
 from core.render.formatting import ce
-from apps.bot.keyboards.main import webapp_keyboard
+from apps.bot.keyboards.main import city_picker_keyboard, webapp_keyboard
 from core.config.settings import get_settings
 from core.db.repositories.users import update_settings, upsert_user_async
 from core.db.session import AsyncSessionLocal
+from core.domain.cities import active_cities
 from core.infra.redis import get_redis
 
 router = Router()
@@ -21,6 +23,14 @@ WELCOME = (
     f"{ce('➡️')} Жми <b>«Открыть карту»</b> — где ты, спросим уже в самой карте, "
     "чтобы показать события поблизости."
 )
+# Для нового бот-юзера без города: сначала спрашиваем город — иначе карта/дайджест/выдача мисс-таргетятся
+# на Москву (дефолт) для жителей 14 из 16 городов. Город захватываем ДО открытия карты.
+WELCOME_CITY = (
+    f"{ce('📍')} <b>Окрест</b> — карта культурных событий твоего города.\n\n"
+    "Концерты, выставки, спектакли, фестивали, стендап и лекции на одной карте.\n\n"
+    f"{ce('➡️')} В каком ты городе?"
+)
+_CITY_NAMES = {c.slug: c.name for c in active_cities()}
 
 HELP = (
     "<b>Как устроен Окрест</b>\n\n"
@@ -96,6 +106,14 @@ async def _handle_report(message: Message, event_id: str) -> None:
     await message.answer(f"{ce('🔔')} Спасибо! Отметили неточность — проверим данные по этому событию.")
 
 
+async def _city_slug(user_id: int) -> str | None:
+    """Текущий город юзера (явный read, чтобы не дёргать detached-атрибут после commit)."""
+    async with AsyncSessionLocal() as db:
+        return (await db.execute(
+            text("SELECT city_slug FROM ref.users WHERE telegram_user_id = :u"), {"u": user_id}
+        )).scalar()
+
+
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject) -> None:
     await _save_user(message)
@@ -105,9 +123,35 @@ async def start_handler(message: Message, command: CommandObject) -> None:
     if arg.startswith("report_"):  # «сообщить о неточности» from an event sheet
         await _handle_report(message, arg[len("report_"):])
         return
+    # Нет города → сначала спрашиваем его (фикс мисс-таргета на Москву). Иначе — сразу кнопка карты.
+    if message.from_user and not await _city_slug(message.from_user.id):
+        await message.answer(WELCOME_CITY, reply_markup=city_picker_keyboard())
+        return
     # A prominent inline «Открыть карту» button right in the welcome — the key conversion moment for a
     # new user. (The persistent menu button next to the input is easy to miss on first run.)
     await message.answer(WELCOME, reply_markup=webapp_keyboard(get_settings().telegram_webapp_url))
+
+
+@router.callback_query(F.data.startswith("city:"))
+async def pick_city_handler(cq: CallbackQuery) -> None:
+    """Юзер выбрал город в /start-пикере → пишем city_slug и зовём в карту (уже правильного города)."""
+    slug = (cq.data or "").split(":", 1)[1]
+    name = _CITY_NAMES.get(slug)
+    if not name or not cq.from_user:
+        await cq.answer()
+        return
+    async with AsyncSessionLocal() as db:
+        await upsert_user_async(db, cq.from_user.id, username=cq.from_user.username, first_name=cq.from_user.first_name)
+        await update_settings(db, cq.from_user.id, city=slug)
+        await db.commit()
+    kb = webapp_keyboard(get_settings().telegram_webapp_url)
+    done = f"{ce('📍')} <b>{name}</b> — отлично! Открывай карту: события рядом уже ждут."
+    if cq.message is not None:
+        try:
+            await cq.message.edit_text(done, reply_markup=kb)
+        except Exception:
+            await cq.message.answer(done, reply_markup=kb)
+    await cq.answer(f"Город: {name}")
 
 
 @router.message(Command("help"))

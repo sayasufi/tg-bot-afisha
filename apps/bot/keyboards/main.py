@@ -1,6 +1,22 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from core.domain.cities import active_cities
+
 MAP_BUTTON_TEXT = "🗺 Открыть карту"
+
+
+def city_picker_keyboard() -> InlineKeyboardMarkup:
+    """Сетка кнопок выбора города (2 в ряд) для нового бот-юзера без города — callback `city:<slug>`."""
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for c in active_cities():
+        row.append(InlineKeyboardButton(text=c.name, callback_data=f"city:{c.slug}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _is_https(url: str) -> bool:
