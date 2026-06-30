@@ -63,14 +63,15 @@ def fetch_post_stats(username: str) -> tuple[int | None, int | None]:
     return avg_reach, avg_reactions
 
 
-def refresh_subscribers(limit: int = 400) -> dict:
+def refresh_subscribers(limit: int = 600) -> dict:
     """Обновить реальные подписчики (source='tme') для каналов, не обновлённых с t.me за ~сутки.
-    Крупнейшие сначала (по последнему известному числу) — у них чаще всего расхождение и они важнее."""
+    Приоритет: on-topic → НИКОГДА-не-проверенные t.me (только telega, число часто врёт) → по рейтингу."""
     db = SessionLocal()
     n_ok = n_none = 0
     try:
-        # Порядок — по РЕЙТИНГУ (как в шортлисте админки): сначала каналы, которые реально смотрят.
-        # Telega-число занижено у части каналов, поэтому сортировать по нему нельзя (важные уйдут в конец).
+        # Порядок отбора (важно!): каналы с ТОЛЬКО telega-числом часто занижены (telega врёт), а сортировка по
+        # их же rating уводила их в хвост → t.me-проверка до них не доходила → врали вечно (@voronczova1970:
+        # telega 2306 vs t.me 29373). Поэтому НИКОГДА-не-проверенные t.me ставим вперёд, on-topic — раньше всех.
         rows = db.execute(text(
             "SELECT c.channel_id, c.username FROM adstat.channels c "
             "LEFT JOIN LATERAL (SELECT rating FROM adstat.snapshots s "
@@ -79,7 +80,10 @@ def refresh_subscribers(limit: int = 400) -> dict:
             # перепрогоняем, пока у свежего tme-снапшота нет ОХВАТА (ранние писали только подписчиков)
             "AND NOT EXISTS (SELECT 1 FROM adstat.snapshots t WHERE t.channel_id = c.channel_id "
             "                AND t.source = 'tme' AND t.avg_reach IS NOT NULL AND t.captured_at > now() - interval '20 hours') "
-            "ORDER BY COALESCE(m.rating, 0) DESC LIMIT :lim"
+            "ORDER BY (c.relevance = ANY(ARRAY['афиша','город/локалка'])) DESC, "
+            "  (NOT EXISTS (SELECT 1 FROM adstat.snapshots t2 WHERE t2.channel_id = c.channel_id "
+            "               AND t2.source = 'tme' AND t2.subscribers IS NOT NULL)) DESC, "
+            "  COALESCE(m.rating, 0) DESC LIMIT :lim"
         ), {"lim": limit}).all()
         for cid, uname in rows:
             subs = fetch_subscribers(uname)

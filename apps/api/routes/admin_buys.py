@@ -50,17 +50,33 @@ async def list_buys(actor: str = Depends(require_admin), db: AsyncSession = Depe
         "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag) AS acquired, "
         "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag AND u.onboarded) AS onboarded, "
         "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag "
-        "      AND u.last_active_at > now() - interval '7 days') AS active7 "
+        "      AND u.last_active_at > now() - interval '7 days') AS active7, "
+        # удержан = пришёл по каналу И был активен спустя ≥2 дня после захода (не разовый открыл-закрыл)
+        "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag AND u.acq_at IS NOT NULL "
+        "      AND u.last_active_at > u.acq_at + interval '2 days') AS retained "
         "FROM adstat.ad_buys b ORDER BY b.created_at DESC"
     ))).all()
     items = [{
         "id": r[0], "channel_username": r[1], "src_tag": r[2], "price": r[3],
         "ad_at": r[4].isoformat() if r[4] else None, "status": r[5], "note": r[6],
         "created_at": r[7].isoformat() if r[7] else None,
-        "acquired": int(r[8] or 0), "onboarded": int(r[9] or 0), "active7": int(r[10] or 0),
-        "cpv": round(r[3] / r[8], 1) if (r[3] and r[8]) else None,
+        "acquired": int(r[8] or 0), "onboarded": int(r[9] or 0), "active7": int(r[10] or 0), "retained": int(r[11] or 0),
+        "cpv": round(r[3] / r[8], 1) if (r[3] and r[8]) else None,            # цена за пришедшего
+        "cpr": round(r[3] / r[11], 1) if (r[3] and r[11]) else None,          # цена за удержанного (главная ROI-метрика)
     } for r in rows]
-    return {"items": items, "bot_username": _BOT_USERNAME}
+    spent = sum(b["price"] or 0 for b in items if b["status"] != "cancelled")
+    came = sum(b["acquired"] for b in items)
+    retained = sum(b["retained"] for b in items)
+    by_status: dict = {}
+    for b in items:
+        by_status[b["status"]] = by_status.get(b["status"], 0) + 1
+    summary = {
+        "spent": spent, "came": came, "retained": retained,
+        "cpv": round(spent / came, 1) if came else None,
+        "cpr": round(spent / retained, 1) if retained else None,
+        "by_status": by_status,
+    }
+    return {"items": items, "summary": summary, "bot_username": _BOT_USERNAME}
 
 
 @router.post("/buys")

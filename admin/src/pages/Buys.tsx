@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Badge } from "../components/ui";
+import { Badge, StatCard, fmtNum } from "../components/ui";
 import { apiDelete, apiPatch, apiPost } from "../lib/api";
 import { useApi } from "../lib/useApi";
 
@@ -48,18 +48,27 @@ export function Buys() {
   const setStatus = async (id: string, status: string) => { await apiPatch(`/buys/${id}`, { status }); reload(); };
   const del = async (b: any) => { if (window.confirm(`Удалить закупку @${b.channel_username}?`)) { await apiDelete(`/buys/${b.id}`); reload(); } };
 
-  const totalSpent = items.filter((b) => b.status !== "cancelled").reduce((s, b) => s + (b.price || 0), 0);
-  const totalAcq = items.reduce((s, b) => s + (b.acquired || 0), 0);
+  const sum = data?.summary;
 
   return (
     <div>
       <div className="page__head topbar">
         <div>
           <h1 className="page__title">закупки рекламы</h1>
-          <div className="page__sub">{items.length} размещений · потрачено {totalSpent.toLocaleString("ru-RU")}₽ · привлечено {totalAcq}</div>
+          <div className="page__sub">{items.length} размещений · учёт цены/времени/статуса + ROI по каналам</div>
         </div>
         <button className="btn btn--ghost" onClick={reload}>обновить</button>
       </div>
+
+      {sum && (
+        <div className="statgrid">
+          <StatCard num={`${(sum.spent || 0).toLocaleString("ru-RU")}₽`} label="потрачено" sub="без отменённых" accent />
+          <StatCard num={fmtNum(sum.came)} label="пришло" sub="по рекл. ссылкам" />
+          <StatCard num={fmtNum(sum.retained)} label="удержано" sub="активны спустя 2+ дня" tone={sum.came && !sum.retained ? "warn" : undefined} />
+          <StatCard num={sum.cpv != null ? `${sum.cpv}₽` : "—"} label="CPV" sub="цена за пришедшего" />
+          <StatCard num={sum.cpr != null ? `${sum.cpr}₽` : "—"} label="CPR" sub="цена за удержанного" />
+        </div>
+      )}
 
       <div className="compose" style={{ marginBottom: 18 }}>
         <div className="section__title" style={{ marginTop: 0 }}>новая закупка</div>
@@ -94,7 +103,7 @@ export function Buys() {
         <div className="tablewrap">
           <table className="table">
             <thead>
-              <tr><th>канал</th><th>ссылка</th><th className="num">цена</th><th>когда</th><th>статус</th><th className="num">привёл</th><th className="num">CPV</th><th>заметка</th><th /></tr>
+              <tr><th>канал</th><th>ссылка</th><th className="num">цена</th><th>когда</th><th>статус</th><th className="num">привёл</th><th className="num">удержан</th><th className="num">CPV</th><th className="num">CPR</th><th>заметка</th><th /></tr>
             </thead>
             <tbody>
               {items.map((b) => (
@@ -115,12 +124,14 @@ export function Buys() {
                     {b.acquired || 0}
                     {b.acquired ? <span className="muted" style={{ fontWeight: 400 }}> ({b.onboarded}✓/{b.active7}akt)</span> : null}
                   </td>
+                  <td className="num" style={b.retained ? { color: "var(--acid)", fontWeight: 600 } : undefined} title="активны спустя 2+ дня после захода">{b.retained || 0}</td>
                   <td className="num muted">{b.cpv != null ? `${b.cpv}₽` : "—"}</td>
-                  <td className="muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.note ?? "—"}</td>
+                  <td className="num muted" title="цена за удержанного — главная ROI-метрика">{b.cpr != null ? `${b.cpr}₽` : "—"}</td>
+                  <td className="muted" style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.note ?? "—"}</td>
                   <td style={{ textAlign: "right" }}><button className="iconbtn" onClick={() => del(b)}>✕</button></td>
                 </tr>
               ))}
-              {!items.length && <tr><td colSpan={9} className="muted">пока нет закупок — добавь первую выше</td></tr>}
+              {!items.length && <tr><td colSpan={11} className="muted">пока нет закупок — добавь первую выше</td></tr>}
             </tbody>
           </table>
         </div>
