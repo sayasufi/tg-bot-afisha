@@ -16,6 +16,7 @@ import { DataOps } from "./pages/DataOps";
 import { Dedup } from "./pages/Dedup";
 import { Events } from "./pages/Events";
 import { Flows } from "./pages/Flows";
+import { Funnel } from "./pages/Funnel";
 import { Health } from "./pages/Health";
 import { Settings } from "./pages/Settings";
 import { Sources } from "./pages/Sources";
@@ -40,6 +41,7 @@ function Gate() {
         <Route path="broadcasts" element={<Broadcasts />} />
         <Route path="events" element={<Events />} />
         <Route path="analytics" element={<Analytics />} />
+        <Route path="funnel" element={<Funnel />} />
         <Route path="venues" element={<Venues />} />
         <Route path="dedup" element={<Dedup />} />
         <Route path="settings" element={<Settings />} />

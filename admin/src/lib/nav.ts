@@ -9,6 +9,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Сводка", to: "/" },
       { label: "Аналитика", to: "/analytics" },
+      { label: "Воронка", to: "/funnel" },
       { label: "Здоровье", to: "/health" },
     ],
   },
