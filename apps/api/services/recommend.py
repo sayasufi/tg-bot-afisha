@@ -406,6 +406,27 @@ class RecommendationService:
             })
         return out
 
+    @staticmethod
+    def _reason(e: dict) -> str | None:
+        """ОДИН самый яркий сигнал, почему событие в ленте — chip «причины показа» на карточке. Движок уже
+        посчитал live/дистанцию/даты/free/просмотры; объяснимость = доверие к «Собрано лично» + CTR."""
+        today = datetime.now(_MSK).date()
+        if e.get("live"):
+            return "можно сейчас"
+        d = e.get("dist_km")
+        if d is not None and d <= 1.2:
+            return "рядом"
+        ds, de = e.get("ds"), e.get("de")
+        if ds and de and ds < de and today <= de <= today + timedelta(days=3):
+            return "последний шанс"
+        if ds == today:
+            return "сегодня"
+        if e.get("free"):
+            return "бесплатно"
+        if (e.get("views") or 0) >= 5:
+            return "популярное"
+        return None
+
     def _item(self, e: dict) -> dict:
         c = e["c"]
         return {
@@ -416,6 +437,7 @@ class RecommendationService:
             "venue": c["venue"], "open_now": e.get("open_now"), "lat": c["lat"], "lon": c["lon"],
             "primary_image_url": c["cached_image_url"] or c["primary_image_url"] or None,
             "distance_m": round(e["dist_km"] * 1000) if e["dist_km"] is not None else None,
+            "reason": self._reason(e),
         }
 
     def _rail(self, key, title, subtitle, entries, per_rail, *, min_items=_MIN_RAIL):

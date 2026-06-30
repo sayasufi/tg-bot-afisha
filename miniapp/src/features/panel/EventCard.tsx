@@ -7,7 +7,7 @@ import { distanceLabel, formatDistance, type LatLon } from "../../lib/distance";
 import { CategoryIcon } from "../../lib/icons";
 import { safeHttpUrl } from "../../lib/url";
 
-export type CardItem = EventItem & { distance_m?: number | null };
+export type CardItem = EventItem & { distance_m?: number | null; reason?: string | null };
 
 function priceLabel(p: number | null | undefined): { text: string; free: boolean } | null {
   if (p == null) return null;
@@ -57,7 +57,11 @@ export function EventCard({ item, index = 0, userPos, onSelect }: { item: CardIt
         {dist && <span className="rcard__dist">{dist}</span>}
       </span>
       <span className="rcard__btm">
-        {go.eligible && <span className="rcard__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>}
+        {go.eligible ? (
+          <span className="rcard__live">{go.kind === "soon" ? go.label : "идёт сейчас"}</span>
+        ) : item.reason && item.reason !== "можно сейчас" ? (
+          <span className="rcard__reason">{item.reason}</span>
+        ) : null}
         <span className="rcard__title">{item.title}</span>
         <span className="rcard__foot">
           {metaLine && <span className="rcard__meta">{metaLine}</span>}

@@ -1723,6 +1723,20 @@ mark.hl {
   border-radius: 50%;
   background: var(--cinnabar);
 }
+/* «Причина показа» (рядом / последний шанс / сегодня / бесплатно / популярное) — тот же слот, что live-чип
+   (показывается ВМЕСТО него), без пульса: объясняет, почему событие в персональной ленте. */
+.rcard__reason {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cinnabar-ink);
+  opacity: 0.78;
+}
 .rcard__title {
   display: -webkit-box;
   -webkit-line-clamp: 2;

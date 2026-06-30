@@ -3,7 +3,7 @@ import type { EventItem } from "./types";
 
 // A rail item is an EventItem (so it opens the sheet the same way) plus the
 // server-computed distance from you.
-export type RailItem = EventItem & { distance_m?: number | null };
+export type RailItem = EventItem & { distance_m?: number | null; reason?: string | null };
 // `count` is the collection's TRUE total (for the «N событий» grid tile); auto rails omit it.
 export type Rail = { key: string; title: string; subtitle?: string | null; count?: number; items: RailItem[] };
 export type RecommendationsResponse = { rails: Rail[]; collections: Rail[]; total: number };
