@@ -20,7 +20,7 @@ from core.db.repositories.digest import rank_weekend, weekend_pool, weekend_wind
 from core.db.session import WorkerAsyncSessionLocal
 from core.infra.http_safety import is_public_http_url
 from core.render.card import render_digest_poster
-from core.render.formatting import ce, weekend_day_label, weekend_label, when_phrase
+from core.render.formatting import ce, event_deeplink, glyph, weekend_day_label, weekend_label, when_phrase
 
 log = logging.getLogger(__name__)
 _BOT = "okrestmap_bot"
@@ -42,23 +42,17 @@ async def _due(db):
     ))).all()
 
 
-def _caption() -> str:
-    """Короткая бренд-подпись под постером (детали несёт сам постер). Кастом-эмодзи через ce()."""
-    return (
-        f"{ce('📍')} <b>Окрест</b> — вот что рядом на этой неделе.\n\n"
-        f"{ce('❤️')} Сохраняй сердечком — напомню за 2 часа до начала."
-    )
-
-
-def _text_fallback(items, now) -> str:
-    """Текстовый вариант, если постер не отрисовался / фото отклонено."""
-    lines = [f"• <b>{_esc(str(it.get('title') or 'Событие'))}</b> — "
-             f"{when_phrase(it.get('date_start'), it.get('date_end'), now)}" for it in items]
-    return (
-        f"{ce('📍')} <b>Окрест</b> — вот что рядом на этой неделе:\n\n"
-        + "\n".join(lines)
-        + f"\n\n{ce('❤️')} Сохраняй сердечком — напомню за 2 часа до начала."
-    )
+def _compose(items, now) -> str:
+    """Подпись/текст: как в дайджесте — КАЖДОЕ название кликабельный deep-link на своё событие (глиф
+    категории + жирная ссылка + когда). Постер несёт фото, подпись — ссылки. Кастом-эмодзи в шапке/подвале."""
+    lines = [f"{ce('📍')} <b>Окрест</b> — вот что рядом на этой неделе:\n"]
+    for it in items:
+        title = _esc(str(it.get("title") or "Событие")[:80])
+        link = f'<a href="{event_deeplink(it["event_id"])}"><b>{title}</b></a>'
+        when = when_phrase(it.get("date_start"), it.get("date_end"), now)
+        lines.append(f"{glyph(it.get('category'))} {link}" + (f" · {when}" if when else ""))
+    lines.append(f"\n{ce('❤️')} Сохраняй сердечком — напомню за 2 часа до начала.")
+    return "\n".join(lines)
 
 
 async def _build_and_send(client, base, db, user_id, city, interests, pools, covers, now, label) -> str:
@@ -93,7 +87,8 @@ async def _build_and_send(client, base, db, user_id, city, interests, pools, cov
     first = items[0].get("event_id")
     url = f"https://t.me/{_BOT}?startapp={first}" if first else f"https://t.me/{_BOT}?startapp=weekend"
     markup = {"inline_keyboard": [[{"text": "Открыть афишу →", "url": url}]]}
-    return await _send_digest_one(client, base, user_id, poster, _caption(), _text_fallback(items, now), markup)
+    msg = _compose(items, now)  # кликабельные названия событий (как в дайджесте)
+    return await _send_digest_one(client, base, user_id, poster, msg, msg, markup)
 
 
 async def _stamp(db, user_id) -> None:
