@@ -90,6 +90,43 @@ async def list_buys(actor: str = Depends(require_admin), db: AsyncSession = Depe
     return {"items": items, "summary": summary, "bot_username": _BOT_USERNAME}
 
 
+@router.get("/buy-plan")
+async def buy_plan(
+    city: str = "", actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db),
+) -> dict:
+    """Ранжированный шорт-лист каналов К ЗАКУПКЕ: on-topic, вердикт брать/осторожно, с известной ценой —
+    полный разбор сигналов (ERR, реакции, CPM, охват, город). Жадную раскладку под бюджет делает фронт."""
+    rk = "(CASE source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END)"
+    params: dict = {"r": ["афиша", "город/локалка"], "v": ["брать", "осторожно"]}
+    city_clause = ""
+    if city.strip():
+        city_clause = "AND c.city = :city "
+        params["city"] = city.strip()
+    rows = (await db.execute(text(
+        "SELECT c.username, c.city, c.score, c.verdict, c.ad_price, "
+        "  sub.subscribers, rch.avg_reach, rea.avg_reactions, "
+        "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = c.username) AS acquired "
+        "FROM adstat.channels c "
+        f"LEFT JOIN LATERAL (SELECT subscribers FROM adstat.snapshots s WHERE s.channel_id=c.channel_id AND s.subscribers IS NOT NULL ORDER BY {rk} DESC, captured_at DESC LIMIT 1) sub ON true "
+        f"LEFT JOIN LATERAL (SELECT avg_reach FROM adstat.snapshots s WHERE s.channel_id=c.channel_id AND s.avg_reach IS NOT NULL ORDER BY {rk} DESC, captured_at DESC LIMIT 1) rch ON true "
+        f"LEFT JOIN LATERAL (SELECT avg_reactions FROM adstat.snapshots s WHERE s.channel_id=c.channel_id AND s.avg_reactions IS NOT NULL ORDER BY {rk} DESC, captured_at DESC LIMIT 1) rea ON true "
+        "WHERE c.relevance = ANY(:r) AND c.verdict = ANY(:v) AND c.ad_price > 0 "
+        f"{city_clause}"
+        "ORDER BY c.score DESC NULLS LAST LIMIT 150"
+    ), params)).all()
+    items = []
+    for r in rows:
+        subs, reach, reactions, price = r[5], r[6], r[7], r[4]
+        items.append({
+            "username": r[0], "city": r[1], "score": r[2], "verdict": r[3], "price": price,
+            "subscribers": subs, "reach": reach, "reactions": reactions, "acquired": int(r[8] or 0),
+            "err": round(reach / subs * 100, 1) if (subs and reach) else None,
+            "rrate": round(reactions / reach * 100, 2) if (reactions and reach) else None,
+            "cpm": round(price / reach * 1000) if (price and reach) else None,
+        })
+    return {"items": items, "bot_username": _BOT_USERNAME}
+
+
 @router.post("/buys")
 async def create_buy(
     request: Request, payload: dict = Body(...),
