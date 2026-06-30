@@ -627,6 +627,10 @@ export function App() {
     if (interests.length) {
       setPickedInterests(interests);
       pushSetting("interests", interests); // sync the cold-start taste to the account
+      // Picked interests must shape the FIRST screen the user sees (the map), not only the «Для тебя»
+      // tab almost nobody opens — otherwise the onboarding promise «собрать ленту» is invisible.
+      // Same pattern as onPickCategory: filter the map to the chosen categories.
+      setFilters({ ...EMPTY_FILTERS, categories: interests });
     }
   }, []);
 

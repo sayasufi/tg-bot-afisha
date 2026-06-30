@@ -281,6 +281,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
     .filter((o) => o.date_start && Date.parse(o.date_start) > nowMs);
   const moreDates = futureMore.slice(0, 3);
   const extraDates = Math.max(0, futureMore.length - 3);
+  // Есть ли будущая сессия → сервер заармит напоминание при сохранении (users.py _arm_reminder, лид 2ч).
+  // Озвучиваем это в тосте, чтобы петля «сохранил→напомнили→пошёл» была видна в момент намерения.
+  const headStartIso = occ?.date_start ?? selected.date_start;
+  const willRemind = (headStartIso ? Date.parse(headStartIso) > nowMs : false) || futureMore.length > 0;
   // For an all-day event, show the venue's REAL hours today ("сегодня 10:00–20:00")
   // when we have them; otherwise an honest "время уточняйте". Never a misleading
   // "в часы работы" or a 24/7 "круглосуточно" (that's a matched-territory artefact —
@@ -418,10 +422,10 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             aria-pressed={isFav}
             onClick={() => {
               haptic("light");
-              showToast(isFav ? "Убрано из избранного" : "Добавлено в избранное", {
-                icon: "heart",
-                tone: isFav ? "muted" : "good",
-              });
+              showToast(
+                isFav ? "Убрано из избранного" : willRemind ? "В избранном · напомним за 2 ч до начала" : "Добавлено в избранное",
+                { icon: !isFav && willRemind ? "bell" : "heart", tone: isFav ? "muted" : "good" },
+              );
               onToggleFav();
             }}
           >

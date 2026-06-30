@@ -140,6 +140,10 @@ async def _send_digest_impl(only_user_id: int | None = None) -> int:
 
             for u in users:
                 city = u.get("city_slug")
+                # Без города НЕ шлём: weekend_pool(None) резолвится в Москву → житель другого из 16 городов
+                # получил бы мисс-таргет-подборку (читается как спам). Город захватываем в /start; до этого тихо.
+                if not city:
+                    continue
                 if city not in pools:
                     pools[city] = await weekend_pool(db, city, now)
                 venue_items = await new_at_followed_venues(db, u["user_id"], now)
