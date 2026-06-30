@@ -337,7 +337,11 @@ async def pipeline_backlog_watch():
     enrich_n = int(row[2] or 0)
     dedup_n = int(row[3] or 0)
     result = {"norm": norm_n, "oldest_h": round(oldest_h, 1), "enrich": enrich_n, "dedup": dedup_n, "notified": False}
-    stalled = (norm_n > 0 and oldest_h >= STALE_H) or max(norm_n, enrich_n, dedup_n) >= DEPTH_ALERT
+    # Возрастной триггер — только при СУЩЕСТВЕННОЙ глубине (≥AGE_MIN_DEPTH): несколько старых хвостов,
+    # дренирующихся после восстановления, не должны слать алерт; реальный застой быстро копит сотни.
+    # Депт-бэкстоп ловит огромный бэклог независимо от возраста.
+    AGE_MIN_DEPTH = 250
+    stalled = (norm_n >= AGE_MIN_DEPTH and oldest_h >= STALE_H) or max(norm_n, enrich_n, dedup_n) >= DEPTH_ALERT
     if not stalled or not settings.telegram_bot_token:
         return result
     now = datetime.now(timezone.utc)
