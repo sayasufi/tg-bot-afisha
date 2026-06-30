@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 
+import { Logo } from "../components/Logo";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
@@ -29,6 +30,9 @@ export function Login() {
   return (
     <div className="login">
       <div className="login__card">
+        <div style={{ marginBottom: 14 }}>
+          <Logo size={46} />
+        </div>
         <div className="login__brand">
           <span className="o">о</span>крест
         </div>

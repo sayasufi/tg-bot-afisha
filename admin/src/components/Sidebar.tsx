@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../lib/auth";
 import { NAV } from "../lib/nav";
+import { Logo } from "./Logo";
 
 const ICONS: Record<string, ReactNode> = {
   Обзор: (
@@ -66,11 +67,14 @@ export function Sidebar({ healthWarn }: { healthWarn?: boolean }) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar__brand">
-        <div className="brand-word">
-          <span className="o">о</span>крест
+      <div className="sidebar__brand" style={{ display: "flex", alignItems: "center", gap: 11 }}>
+        <Logo size={28} />
+        <div>
+          <div className="brand-word">
+            <span className="o">о</span>крест
+          </div>
+          <div className="brand-kicker">// admin</div>
         </div>
-        <div className="brand-kicker">// admin</div>
       </div>
 
       <nav className="nav">
