@@ -322,6 +322,10 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
     # Once-ever (Redis NX), плюс гейт len(ids)==1 — на случай Redis-простоя не дёргать на повторных.
     if payload.on and inserted and len(ids) == 1 and await _first_save_dm_once(uid):
         await _notify_first_save(uid, payload.event_id)
+    # Соц-доказательство: на НОВОЕ сохранение пушим друзьям-землякам «друг сохранил это» (возврат-триггер),
+    # с приватностью/городом/mute/дедупом/дневным капом. Best-effort.
+    if payload.on and inserted:
+        await _notify_friends_of_save(db, uid, user.get("first_name") or "", payload.event_id)
     return {"ids": ids, "friend": friend, "first_friend": first_friend}
 
 
@@ -598,6 +602,79 @@ async def _notify_first_save(uid: int, event_id: str) -> None:
             )
     except Exception:
         pass  # сохранение уже записано; нудж — best-effort
+
+
+async def _friend_save_day_ok(recipient_id: int, cap: int = 3) -> bool:
+    """Дневной кап friend-saved-DM на ПОЛУЧАТЕЛЯ — анти-спам. Best-effort (Redis down → allow)."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    key = f"friendsave:day:{recipient_id}:{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    try:
+        n = await client.incr(key)
+        if n == 1:
+            await client.expire(key, 2 * 24 * 3600)
+        return n <= cap
+    except Exception:
+        return True
+
+
+async def _friend_save_dm_once(recipient_id: int, saver_id: int, event_id: str) -> bool:
+    """Redis NX: один friend-saved-DM на (получатель, сохранивший, событие) — без повторов на ре-сейвах."""
+    client = get_redis(decode=True)
+    if client is None:
+        return True
+    try:
+        return bool(await client.set(f"friendsave:once:{recipient_id}:{saver_id}:{event_id}", "1", nx=True, ex=30 * 24 * 3600))
+    except Exception:
+        return True
+
+
+async def _send_friend_save_dm(recipient_id: int, saver_name: str, title: str | None, event_id: str) -> None:
+    token = get_app_settings().telegram_bot_token
+    if not token or not recipient_id:
+        return
+    text_msg = (
+        f"{ce('👥')} <b>{escape(saver_name or 'Друг')}</b> сохранил(а) событие\n{escape(title or '')}\n\n"
+        "Загляни — может, сходите вместе."
+    )
+    markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": int(recipient_id), "text": text_msg, "parse_mode": "HTML",
+                      "reply_markup": markup, "disable_web_page_preview": True},
+            )
+    except Exception:
+        pass
+
+
+async def _notify_friends_of_save(db: AsyncSession, saver_id: int, saver_name: str, event_id: str) -> None:
+    """Соц-доказательство: уведомить друзей-ЗЕМЛЯКОВ, что ты сохранил событие (возврат-триггер). Уважает
+    приватность (friends_private), гейт по городу сохранившего, mute, дедуп и дневной кап получателя — чтобы
+    не спамить. Best-effort, никогда не блокирует ответ."""
+    row = (await db.execute(text(
+        "SELECT friends_private, city_slug FROM ref.users WHERE telegram_user_id = :u"), {"u": saver_id})).first()
+    if not row or row[0] or not row[1]:  # приватный ИЛИ нет города → не пушим
+        return
+    friends = (await db.execute(text(
+        "SELECT f.friend_id FROM ref.user_friends f JOIN ref.users u ON u.telegram_user_id = f.friend_id "
+        "WHERE f.user_id = :s AND f.status = 'accepted' AND u.city_slug = :c "
+        "AND NOT EXISTS (SELECT 1 FROM ref.user_mutes m WHERE (m.user_id = f.friend_id AND m.muted_user_id = :s) "
+        "                OR (m.user_id = :s AND m.muted_user_id = f.friend_id)) LIMIT 30"
+    ), {"s": saver_id, "c": row[1]})).scalars().all()
+    if not friends:
+        return
+    title = await event_title(db, event_id)
+    for fid in friends:
+        if int(fid) == int(saver_id):
+            continue
+        if not await _friend_save_day_ok(int(fid)):
+            continue
+        if not await _friend_save_dm_once(int(fid), saver_id, event_id):
+            continue
+        await _send_friend_save_dm(int(fid), saver_name, title, event_id)
 
 
 async def _arm_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
