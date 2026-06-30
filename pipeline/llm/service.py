@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import logging
@@ -56,7 +57,7 @@ class LLMService:
         cache = _get_redis(self._redis_url)
         if cache is not None:
             try:
-                hit = cache.get(key)
+                hit = await asyncio.to_thread(cache.get, key)
                 if hit:
                     return CategoryResult(**json.loads(hit))
             except Exception:  # cache read must never break classification
@@ -71,7 +72,8 @@ class LLMService:
         # Only cache real classifications, not the empty/uncertain fallback.
         if cache is not None and (result.category != "other" or result.tags):
             try:
-                cache.set(
+                await asyncio.to_thread(
+                    cache.set,
                     key,
                     json.dumps(
                         {
@@ -98,7 +100,7 @@ class LLMService:
         cache = _get_redis(self._redis_url)
         if cache is not None:
             try:
-                hit = cache.get(key)
+                hit = await asyncio.to_thread(cache.get, key)
                 if hit:
                     return json.loads(hit)
             except Exception:
@@ -111,7 +113,7 @@ class LLMService:
             return {"same": False, "confidence": 0.0}
         if cache is not None:
             try:
-                cache.set(key, json.dumps(verdict), ex=_SAME_EVENT_TTL_SECONDS)
+                await asyncio.to_thread(cache.set, key, json.dumps(verdict), ex=_SAME_EVENT_TTL_SECONDS)
             except Exception:
                 logger.debug("llm_dedup_cache_write_failed", exc_info=True)
         return verdict

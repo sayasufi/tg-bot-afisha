@@ -1,5 +1,7 @@
+import asyncio
 import json
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -14,6 +16,37 @@ from core.config.settings import get_settings
 from core.services.llm_limiter import llm_slot
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
 from pipeline.llm.json_utils import parse_llm_json
+
+# Cap concurrent Yandex Maps scrapes. normalize fans out asyncio.gather over a whole batch of telegram posts,
+# each post can yield up to 25 events, each missing an address triggers a keyless yandex.ru/maps scrape — so
+# without a cap one batch launches dozens-to-hundreds of simultaneous scrapes → captcha + IP throttle (the
+# llm_slot only bounds the /api/chat phase, not this). 4 keeps it polite. Process-wide (module-level).
+_YMAPS_SEM = asyncio.Semaphore(4)
+
+# Lightweight per-process circuit-breaker around the LLM POST. A dead/hung LLM otherwise gets FLOODED: every
+# doomed extraction still acquires an llm_slot and blocks the full timeout (~20s), so the whole budget sits
+# on 20s-doomed calls and no work drains (the "81 llm_error floods a dead server" pattern). After N consecutive
+# transport failures the breaker OPENS for a cooldown: calls short-circuit to the fallback WITHOUT a slot or a
+# network hit; after the cooldown a probe half-opens it (success → reset, failure → re-open).
+_CB_THRESHOLD = 8
+_CB_COOLDOWN = 30.0
+_cb_fails = 0
+_cb_open_until = 0.0
+
+
+def _cb_open() -> bool:
+    return time.monotonic() < _cb_open_until
+
+
+def _cb_record(success: bool) -> None:
+    global _cb_fails, _cb_open_until
+    if success:
+        _cb_fails = 0
+        _cb_open_until = 0.0
+    else:
+        _cb_fails += 1
+        if _cb_fails >= _CB_THRESHOLD:
+            _cb_open_until = time.monotonic() + _CB_COOLDOWN
 
 
 @dataclass
@@ -126,14 +159,18 @@ class LLMExtractionService:
             "max_tokens": 2500,
         }
 
+        if _cb_open():
+            return [], "llm_error"  # breaker open: LLM is known-down — fail fast, don't hold a slot or flood it
         try:
             async with llm_slot():  # one of the service-wide LLM concurrency slots
                 async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                     response = await client.post(f"{self.base_url}/api/chat", json=payload)
                     response.raise_for_status()
                     data = response.json()
+            _cb_record(True)
         except (httpx.HTTPError, ValueError):
             # Network/timeout/5xx/non-JSON — skip this one raw, never abort the batch.
+            _cb_record(False)
             return [], "llm_error"
 
         raw = data.get("response") or "{}"
@@ -228,7 +265,8 @@ class LLMExtractionService:
         source_text: str,
     ) -> tuple[str, list[str]]:
         try:
-            candidates = await self.yandex_maps.find_addresses_by_place(venue, city_hint=city_hint, limit=5)
+            async with _YMAPS_SEM:  # cap concurrent map scrapes regardless of the normalize batch fan-out
+                candidates = await self.yandex_maps.find_addresses_by_place(venue, city_hint=city_hint, limit=5)
         except Exception:
             return "", []
         if not candidates:

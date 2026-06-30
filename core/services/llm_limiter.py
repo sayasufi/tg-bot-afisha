@@ -89,7 +89,13 @@ async def llm_slot():
                 holding = True
                 break
             if time.monotonic() >= deadline:
-                break  # budget stuck full → proceed without a slot rather than deadlock the pipeline
+                # Budget stuck full for the whole deadline → don't deadlock the pipeline, but DON'T proceed
+                # unbounded either: yielding with no slot defeats the cap and, under a slow/recovering LLM,
+                # lets the tail of the queue pile on un-slotted load → an overload spiral. Fall back to the
+                # bounded per-process semaphore so real in-flight concurrency always keeps a ceiling.
+                async with _local_sem():
+                    yield
+                return
             await asyncio.sleep(_POLL)
         yield
     finally:
