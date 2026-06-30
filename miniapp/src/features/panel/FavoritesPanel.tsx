@@ -14,11 +14,13 @@ export function FavoritesPanel({
   userPos,
   onSelect,
   onClose,
+  onBrowseWeekend,
 }: {
   favIds: Set<string>;
   userPos?: LatLon | null;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
+  onBrowseWeekend?: () => void;
 }) {
   const [favs, setFavs] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +80,11 @@ export function FavoritesPanel({
             <p className="panelview__hint">
               Отмечай события сердечком в карточке — они соберутся здесь, чтобы вернуться к ним позже.
             </p>
+            {onBrowseWeekend && (
+              <button type="button" className="btn btn--primary" onClick={onBrowseWeekend}>
+                Афиша на выходные →
+              </button>
+            )}
           </div>
         )}
       </div>

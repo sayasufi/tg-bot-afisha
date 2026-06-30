@@ -1083,6 +1083,7 @@ export function App() {
         now={now}
         onSelect={openEvent}
         onClose={() => setListOpen(false)}
+        onClearFilters={() => setFilters(EMPTY_FILTERS)}
       />
 
       <EventSheet
@@ -1160,7 +1161,8 @@ export function App() {
           />
         )}
         {view === "favorites" && (
-          <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")} />
+          <FavoritesPanel favIds={fav.ids} userPos={userPos} onSelect={openEvent} onClose={() => setView("map")}
+            onBrowseWeekend={() => { setFilters({ ...EMPTY_FILTERS, ...rangeFor("weekend") }); setView("map"); }} />
         )}
         {view === "venues" && <FollowedVenuesPanel onOpenVenue={onOpenVenue} onClose={() => setView("map")} />}
         {view === "friends" && (

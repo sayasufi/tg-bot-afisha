@@ -35,6 +35,7 @@ export function ListView({
   now,
   onSelect,
   onClose,
+  onClearFilters,
 }: {
   open: boolean;
   baseParams: URLSearchParams;
@@ -49,6 +50,7 @@ export function ListView({
   now?: number;
   onSelect: (i: EventItem) => void;
   onClose: () => void;
+  onClearFilters?: () => void;
 }) {
   const [sort, setSort] = useState<ListSort>("popularity");
   const [items, setItems] = useState<EventItem[]>([]);
@@ -208,6 +210,11 @@ export function ListView({
             {goNow
               ? "Сейчас застать нечего — сними «сейчас» или подвинь карту."
               : "В этой области по фильтрам пусто. Подвинь карту или сними фильтры."}
+            {onClearFilters && (
+              <div style={{ marginTop: 12 }}>
+                <button type="button" className="btn btn--ghost" onClick={onClearFilters}>Сбросить фильтры</button>
+              </div>
+            )}
           </div>
         )}
         {(loading || searching) && (
