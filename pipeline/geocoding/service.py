@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import re
 
@@ -6,6 +7,11 @@ from core.config.settings import get_settings
 from pipeline.geocoding.providers.nominatim import NominatimGeocoder
 from pipeline.geocoding.providers.yandex import GeoResult, YandexGeocoder
 from pipeline.geocoding.providers.yandex_maps import YandexMapsScraper
+
+# Process-wide guard: Nominatim's public endpoint bans CONCURRENT bursts (policy ≈ 1 req/s). The geocoder
+# is now called concurrently from the parallel enrich phase, so serialise the rare Nominatim fallback
+# (Yandex API → Yandex Maps come first and tolerate concurrency; Nominatim is the last resort).
+_NOMINATIM_SEM = asyncio.Semaphore(1)
 
 
 def _is_city_centroid(result: "GeoResult", city: str | None) -> bool:
@@ -47,7 +53,8 @@ class GeocodingService:
         if not result:
             result = await self._yandex_maps_result(address, effective_city_hint)
         if not result:
-            result = await self.nominatim.geocode(address, effective_city_hint)
+            async with _NOMINATIM_SEM:
+                result = await self.nominatim.geocode(address, effective_city_hint)
         if result and _is_city_centroid(result, effective_city_hint):
             result = None  # city-centroid fallback — not a real location
         if result:
@@ -66,7 +73,8 @@ class GeocodingService:
             result = await self._yandex_maps_result(venue_name, effective_city_hint)
         if not result:
             for query in self._build_venue_queries(venue_name):
-                result = await self.nominatim.geocode(query, effective_city_hint)
+                async with _NOMINATIM_SEM:
+                    result = await self.nominatim.geocode(query, effective_city_hint)
                 if result:
                     break
         if result and _is_city_centroid(result, effective_city_hint):

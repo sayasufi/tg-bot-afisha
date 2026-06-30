@@ -86,101 +86,117 @@ def _source_coords(payload: dict | None) -> tuple[float, float] | None:
     return None
 
 
-async def _enrich_impl() -> dict:
-    geocoder = GeocodingService()
-    llm = LLMService()
-    async with WorkerAsyncSessionLocal() as db:
-        ids = await unresolved_candidate_ids(db)
-        enriched = 0
-        for candidate_id in ids:
+# Concurrency for the geocode/classify PHASE only. The slow per-candidate work is network I/O (geocoder,
+# LLM classify), so resolving candidates in parallel multiplies enrich throughput; the actual venue WRITES
+# stay serial (phase 2) so get_or_create_venue's fuzzy de-dup is never raced into duplicate venues.
+_ENRICH_CONCURRENCY = 6
+
+
+async def _resolve_candidate(geocoder, llm, candidate_id: int) -> dict | None:
+    """PHASE 1 (concurrent, no writes): geocode + classify ONE candidate. Own short-lived session so
+    parallel tasks never share a connection. Returns a plain resolution dict (consumed serially in phase 2)
+    or None (missing/failed — isolated so one bad candidate never blocks the batch)."""
+    try:
+        async with WorkerAsyncSessionLocal() as db:
             candidate = await get_candidate(db, candidate_id)
             if not candidate:
-                continue
-
-            # Isolate each candidate: one that deterministically raises (bad payload,
-            # geocoder/LLM blow-up) must not become a permanent head-of-line block for
-            # every candidate ordered after it. Log with the id, roll back the failed
-            # transaction so the session is usable, and move on.
-            try:
-                venue_name = (candidate.venue or "").strip() or _UNKNOWN_VENUE
-                address = (candidate.address or "").strip()
+                return None
+            venue_name = (candidate.venue or "").strip() or _UNKNOWN_VENUE
+            address = (candidate.address or "").strip()
+            lat = lon = None
+            provider = ""
+            confidence = 0.0
+            raw = await get_raw(db, candidate.raw_id)
+            city_cfg = city_for_source_config(raw.source.config_json if raw and raw.source else None)
+            city = city_cfg.name
+            country = city_cfg.country
+            src = _source_coords(raw.raw_payload_json if raw else None)
+            if src:
+                # 0) Exact coordinates from the source — most accurate, no geocoding.
+                lat, lon = src
+                provider, confidence = "source", 0.95
+            else:
                 geo = None
-                venue = None
-                lat = lon = None
-                provider = ""
-                confidence = 0.0
+                # 1) Source address: geocode it (street/house level) — but NOT a city/country-only address.
+                if address and not _is_city_level_only(address, city, country):
+                    geo = await geocoder.geocode(address, city_hint=city)
+                # 2) Local venue cache: venue + city -> known address (phase 2's get_or_create_venue reuses it).
+                if not geo and not address and venue_name != _UNKNOWN_VENUE:
+                    cached_venue = await find_cached_venue(db, venue_name, city, country)
+                    if cached_venue:
+                        address = cached_venue.address
+                # 3) OSM-first fallback for missing address.
+                if not geo and not address and venue_name != _UNKNOWN_VENUE:
+                    geo = await geocoder.geocode_venue_osm_first(venue_name, city_hint=city)
+                    if geo and geo.normalized_address:
+                        address = geo.normalized_address
+                if geo:
+                    lat, lon, provider, confidence = geo.lat, geo.lon, geo.provider, geo.confidence
+            # Category: trust the structured source's own label first; only ask the LLM when the source gave
+            # nothing usable (the ~20s round-trip is itself part of the parallelised slow work here).
+            source_name = raw.source.name if raw and raw.source else ""
+            category = map_source_category(candidate.tags_json, source_name)
+            extra_tags: list[str] = []
+            if category is None:
+                classify = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
+                category = classify.category
+                extra_tags = classify.tags
+            return {
+                "cid": candidate_id, "venue_name": venue_name, "address": address, "lat": lat, "lon": lon,
+                "provider": provider, "confidence": confidence, "city": city, "country": country,
+                "category": category, "extra_tags": extra_tags,
+            }
+    except Exception:
+        _log.exception("enrich: resolve %s failed, skipping", candidate_id)
+        return None
 
-                raw = await get_raw(db, candidate.raw_id)
-                # City comes from the event's source (multi-city), not a global default.
-                city_cfg = city_for_source_config(raw.source.config_json if raw and raw.source else None)
-                city = city_cfg.name
-                country = city_cfg.country
-                src = _source_coords(raw.raw_payload_json if raw else None)
 
-                if src:
-                    # 0) Exact coordinates from the source — most accurate, no geocoding.
-                    lat, lon = src
-                    provider, confidence = "source", 0.95
-                else:
-                    # 1) Source address: geocode it (street/house level) — but NOT a
-                    # city/country-only address, which only yields the city centroid.
-                    if address and not _is_city_level_only(address, city, country):
-                        geo = await geocoder.geocode(address, city_hint=city)
+async def _enrich_impl() -> dict:
+    geocoder = GeocodingService()  # shared (its in-process geo cache de-dups repeat addresses across tasks)
+    llm = LLMService()
+    async with WorkerAsyncSessionLocal() as db:
+        ids = await unresolved_candidate_ids(db, limit=300)
+    if not ids:
+        return {"enriched": 0}
 
-                    # 2) Local venue cache: venue + city -> known address/coords.
-                    if not geo and not address and venue_name != _UNKNOWN_VENUE:
-                        cached_venue = await find_cached_venue(db, venue_name, city, country)
-                        if cached_venue:
-                            venue = cached_venue
-                            address = cached_venue.address
+    # PHASE 1 — resolve geo + category CONCURRENTLY (network-bound), bounded so we don't hammer providers.
+    sem = asyncio.Semaphore(_ENRICH_CONCURRENCY)
 
-                    # 3) OSM-first fallback for missing address.
-                    if not geo and venue is None and not address and venue_name != _UNKNOWN_VENUE:
-                        geo = await geocoder.geocode_venue_osm_first(venue_name, city_hint=city)
-                        if geo and geo.normalized_address:
-                            address = geo.normalized_address
+    async def _bounded(cid: int):
+        async with sem:
+            return await _resolve_candidate(geocoder, llm, cid)
 
-                    if geo:
-                        lat, lon, provider, confidence = geo.lat, geo.lon, geo.provider, geo.confidence
+    resolutions = [r for r in await asyncio.gather(*(_bounded(cid) for cid in ids)) if r]
 
-                if venue is None:
-                    venue = await get_or_create_venue(
-                        db,
-                        name=venue_name,
-                        address=address,
-                        city=city,
-                        country=country,
-                        lat=lat,
-                        lon=lon,
-                        provider=provider,
-                        confidence=confidence,
-                    )
+    # PHASE 2 — apply writes SERIALLY on one session: get_or_create_venue's fuzzy de-dup stays single-threaded,
+    # so concurrent candidates for the same new venue can't spawn duplicate venues. The slow work is already done.
+    enriched = 0
+    async with WorkerAsyncSessionLocal() as db:
+        for r in resolutions:
+            try:
+                candidate = await get_candidate(db, r["cid"])
+                if not candidate:
+                    continue
+                venue = await get_or_create_venue(
+                    db, name=r["venue_name"], address=r["address"], city=r["city"], country=r["country"],
+                    lat=r["lat"], lon=r["lon"], provider=r["provider"], confidence=r["confidence"],
+                )
                 candidate.venue_id = venue.venue_id
-                # Category: trust the structured source's own label first (Yandex
-                # type / KudaGo category), since the LLM over-fires 'lecture' on any
-                # mention of a master-class. Only ask the LLM when the source gave
-                # nothing usable (untyped events, Telegram free text) — which also
-                # skips the ~20s LLM round-trip for the common, well-typed case.
-                source_name = raw.source.name if raw and raw.source else ""
-                category = map_source_category(candidate.tags_json, source_name)
-                if category is None:
-                    classify = await llm.classify(candidate.title, candidate.description, candidate.tags_json)
-                    category = classify.category
-                    candidate.tags_json = list(set(candidate.tags_json + classify.tags))
-                # Tag the resolved category — INCLUDING "other" — so dedup treats the
-                # candidate as already classified and doesn't pay for a second LLM
-                # classify of the same event.
-                if category:
-                    candidate.tags_json.append(f"category:{category}")
+                if r["extra_tags"]:
+                    candidate.tags_json = list(set(candidate.tags_json + r["extra_tags"]))
+                if r["category"]:
+                    # Tag the resolved category — INCLUDING "other" — so dedup treats the candidate as
+                    # already classified and doesn't pay for a second LLM classify of the same event.
+                    candidate.tags_json.append(f"category:{r['category']}")
                 db.add(candidate)
                 db.add(venue)
                 await db.commit()
                 enriched += 1
             except Exception:
-                _log.exception("enrich: candidate %s failed, skipping", candidate_id)
+                _log.exception("enrich: write %s failed, skipping", r["cid"])
                 await db.rollback()
                 continue
-        return {"enriched": enriched}
+    return {"enriched": enriched}
 
 
 async def _backfill_venues_osm_impl() -> dict:
