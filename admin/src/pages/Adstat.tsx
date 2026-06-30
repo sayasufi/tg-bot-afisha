@@ -16,6 +16,8 @@ type Ch = {
 const VERDICT_KIND: Record<string, "ok" | "warn" | "down" | "off"> = { "брать": "ok", "осторожно": "warn", "мимо": "off" };
 
 const num = (n: number | null) => (n == null ? "—" : n.toLocaleString("ru-RU"));
+const REL_TO_CAT: Record<string, string> = { "афиша": "афиша", "город/локалка": "город", "тема?": "тема", "не тема": "мусор" };
+const CAT_OPTS = ["афиша", "город", "тема", "мусор"];
 
 export function Adstat() {
   const facets = useApi<{ cities: string[]; verdicts: string[]; relevances: string[] }>("/adstat/facets");
@@ -55,6 +57,11 @@ export function Adstat() {
     setRefreshing(true);
     try { await apiPost("/ops/run", { deployment_id: refreshDeploy.id, name: refreshDeploy.name }); }
     finally { setTimeout(() => setRefreshing(false), 2000); }
+  };
+  const setCat = async (username: string, category: string) => {
+    if (!category) return;
+    await apiPost("/adstat/category", { username, category });
+    reload();
   };
   const items: Ch[] = data?.items ?? [];
   const botUser = data?.bot_username || "okrestmap_bot";
@@ -144,7 +151,14 @@ export function Adstat() {
                       {c.title && <div className="code muted" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>}
                     </td>
                     <td className="muted">{c.city ?? "—"}</td>
-                    <td className="muted">{c.relevance ?? "—"}</td>
+                    <td>
+                      <select value={REL_TO_CAT[c.relevance ?? ""] ?? ""} onChange={(e) => setCat(c.username, e.target.value)}
+                        title="ручная категория (перебивает LLM и блокирует авто-переклассификацию)"
+                        style={{ background: "var(--vitrine)", border: "1px solid var(--line)", color: "var(--ink)", fontFamily: "var(--mono)", fontSize: 11, padding: "2px 4px" }}>
+                        {!REL_TO_CAT[c.relevance ?? ""] && <option value="">{c.relevance ?? "—"}</option>}
+                        {CAT_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
                     <td className="num">{num(c.subscribers)}</td>
                     <td className="num muted">{num(c.avg_reach)}</td>
                     <td className="num muted">{num(c.avg_reactions)}</td>
