@@ -128,32 +128,40 @@ def discover_telega(category_id: int = 52, max_pages: int = 60, with_prices: boo
 
 
 def enrich_shortlist_prices(top_n: int = 50, dry_run: bool = False) -> int:
-    """Добрать РЕАЛЬНУЮ цену поста (telega card) по топ-АФИША каналам, у которых ещё нет CPM → CPM завершается
-    → score переводит их в «брать». Цены не тянем на тысячи ежедневно (дорого), а добиваем точечно по шорт-листу.
-    Кто не на бирже telega — цена None (пропуск)."""
+    """Добрать РЕАЛЬНУЮ цену поста (telega card) по топ on-topic каналам без цены → CPM завершается.
+    M9+L4: кандидаты выбираются прямым запросом по ПОДПИСЧИКАМ (источник-приоритет), для «афиша» И «город/
+    локалка», БЕЗ reach-гейта (раньше rank(min_reach=2000) запирал каналы без собранного охвата → цены не было
+    никогда). Охват берём лучший по источнику, если он есть. Кто не на бирже telega — цена None (пропуск)."""
     settings = get_settings()
     if not dry_run and not settings.adstat_enabled:
         log.info("adstat enrich_shortlist_prices: ADSTAT_ENABLED=false — пропуск")
         return 0
-    from apps.adstat.score import rank
+    from sqlalchemy import text
+    from core.db.session import SessionLocal
     from apps.adstat.telega import TelegaClient
 
-    # M9: добираем цену и для «город/локалка» (ключевые гео-цели афиши, дешевле и точнее), не только «афиша»;
-    # min_reach пониже, чтобы шортлист не запирался на reach≥2000.
-    cands = [r for r in rank(min_reach=300, limit=400)
-             if r.get("relevance") in ("афиша", "город/локалка") and not r.get("cpm")][:top_n]
-    if not cands:
+    _rank = "(CASE source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END)"
+    with SessionLocal() as db:
+        cand_db = db.execute(text(
+            "SELECT c.username, sub.subscribers, rch.avg_reach FROM adstat.channels c "
+            "LEFT JOIN LATERAL (SELECT subscribers FROM adstat.snapshots s WHERE s.channel_id = c.channel_id "
+            f"   AND s.subscribers IS NOT NULL ORDER BY {_rank} DESC, captured_at DESC LIMIT 1) sub ON true "
+            "LEFT JOIN LATERAL (SELECT avg_reach FROM adstat.snapshots s WHERE s.channel_id = c.channel_id "
+            f"   AND s.avg_reach IS NOT NULL ORDER BY {_rank} DESC, captured_at DESC LIMIT 1) rch ON true "
+            "WHERE c.relevance = ANY(:r) AND c.ad_price IS NULL AND c.username <> '' "
+            "ORDER BY sub.subscribers DESC NULLS LAST LIMIT :n"
+        ), {"r": ["афиша", "город/локалка"], "n": top_n}).all()
+    if not cand_db:
         log.info("adstat enrich_shortlist_prices: нет on-topic-кандидатов без цены")
         return 0
     client = TelegaClient()
-    cand_rows = [{"source": "telega", "username": r["username"], "avg_reach": r.get("reach"),
-                  "subscribers": r.get("subscribers")} for r in cands]
+    cand_rows = [{"source": "telega", "username": u, "subscribers": s, "avg_reach": rch} for (u, s, rch) in cand_db]
     priced = client.enrich_prices(cand_rows)  # параллельно тянет post_price с card-страниц
     rows = [r for r in priced if r.get("post_price")]
-    for r in rows:  # CPM = цена / охват × 1000
+    for r in rows:  # CPM = цена / охват × 1000 (если охват известен)
         if r.get("avg_reach"):
             r["cpm"] = round(r["post_price"] / r["avg_reach"] * 1000, 1)
-    log.info("adstat enrich_shortlist_prices: %d/%d афиша-каналов получили цену", len(rows), len(cands))
+    log.info("adstat enrich_shortlist_prices: %d/%d on-topic-каналов получили цену", len(rows), len(cand_rows))
     if not dry_run and rows:
         persist_snapshots(rows)
     return len(rows)

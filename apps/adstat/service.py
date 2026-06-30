@@ -132,25 +132,49 @@ def persist_snapshots(rows: list[dict]) -> None:
             ad_price = d.get("ad_price")
             if ad_price is None and d.get("post_price"):
                 ad_price = int(d["post_price"])
-            ins = pg_insert(AdChannel).values(
-                username=uname, peer_id=d.get("peer_id"), title=d.get("title"),
-                language=d.get("language"), is_verified=d.get("is_verified"),
-                ad_price=ad_price, last_scraped_at=now,
-            )
-            # COALESCE(excluded, existing): новый источник без поля не затирает уже известное.
-            stmt = ins.on_conflict_do_update(
-                index_elements=[AdChannel.username],
-                set_={
-                    "peer_id": func.coalesce(ins.excluded.peer_id, AdChannel.peer_id),
-                    "title": func.coalesce(ins.excluded.title, AdChannel.title),
-                    "language": func.coalesce(ins.excluded.language, AdChannel.language),
-                    "is_verified": func.coalesce(ins.excluded.is_verified, AdChannel.is_verified),
-                    "ad_price": func.coalesce(ins.excluded.ad_price, AdChannel.ad_price),
-                    "last_scraped_at": now,
-                    "updated_at": now,
-                },
-            ).returning(AdChannel.channel_id)
-            channel_id = db.execute(stmt).scalar_one()
+            peer_id = d.get("peer_id")
+            channel_id = None
+            # M8: канал мог СМЕНИТЬ @username (стабилен peer_id). Если такой peer_id уже известен — обновляем ту
+            # же строку (в т.ч. username), а НЕ вставляем дубль с расщеплённой историей метрик.
+            if peer_id is not None:
+                existing = db.execute(select(AdChannel).where(AdChannel.peer_id == peer_id)).scalar_one_or_none()
+                if existing is not None:
+                    channel_id = existing.channel_id
+                    vals = {
+                        "title": func.coalesce(d.get("title"), AdChannel.title),
+                        "language": func.coalesce(d.get("language"), AdChannel.language),
+                        "is_verified": func.coalesce(d.get("is_verified"), AdChannel.is_verified),
+                        "ad_price": func.coalesce(ad_price, AdChannel.ad_price),
+                        "last_scraped_at": now, "updated_at": now,
+                    }
+                    if existing.username != uname:
+                        # переименование принимаем, только если новое имя не занято ДРУГИМ каналом (иначе оставляем старое)
+                        taken = db.execute(select(AdChannel.channel_id).where(
+                            AdChannel.username == uname, AdChannel.channel_id != channel_id)).scalar_one_or_none()
+                        if taken is None:
+                            vals["username"] = uname
+                            log.info("adstat: канал peer_id=%s сменил @%s -> @%s", peer_id, existing.username, uname)
+                    db.execute(update(AdChannel).where(AdChannel.channel_id == channel_id).values(**vals))
+            if channel_id is None:
+                ins = pg_insert(AdChannel).values(
+                    username=uname, peer_id=peer_id, title=d.get("title"),
+                    language=d.get("language"), is_verified=d.get("is_verified"),
+                    ad_price=ad_price, last_scraped_at=now,
+                )
+                # COALESCE(excluded, existing): новый источник без поля не затирает уже известное.
+                stmt = ins.on_conflict_do_update(
+                    index_elements=[AdChannel.username],
+                    set_={
+                        "peer_id": func.coalesce(ins.excluded.peer_id, AdChannel.peer_id),
+                        "title": func.coalesce(ins.excluded.title, AdChannel.title),
+                        "language": func.coalesce(ins.excluded.language, AdChannel.language),
+                        "is_verified": func.coalesce(ins.excluded.is_verified, AdChannel.is_verified),
+                        "ad_price": func.coalesce(ins.excluded.ad_price, AdChannel.ad_price),
+                        "last_scraped_at": now,
+                        "updated_at": now,
+                    },
+                ).returning(AdChannel.channel_id)
+                channel_id = db.execute(stmt).scalar_one()
 
             db.add(AdSnapshot(
                 channel_id=channel_id, source=d["source"], captured_at=now,

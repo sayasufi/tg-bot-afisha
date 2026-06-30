@@ -28,7 +28,9 @@ _FIELDS = ["subscribers", "avg_reach", "avg_reactions", "er", "err", "cpm", "pos
 _ERR_PTS = [(3, -14), (6, -4), (11, 6), (22, 18), (35, 24), (50, 16), (70, 2), (100, -8)]  # ERR=охват/подписч %
 _RRATE_PTS = [(0.1, -8), (0.3, 0), (0.7, 8), (1.5, 16), (3, 20), (6, 14), (12, 2), (25, -8)]  # реакции/охват %: низко=накрутка просмотров, очень высоко=реакц-ферма
 _FWD_PTS = [(0.02, 0), (0.1, 3), (0.3, 7), (1.0, 10), (3.0, 8)]  # форварды/охват % → ценность контента
-_CPM_PTS = [(50, 2), (80, 8), (150, 20), (300, 18), (500, 6), (800, -10), (1500, -22)]  # CPM₽ → бонус
+# CPM₽ → бонус. M3: рекалибровано по РЕАЛЬНОМУ CPM (floor-цена telega / реальный охват tme),
+# перцентили p10/50/90 = 493/1403/3246₽ — старая кривая (пик 150₽) штрафовала медианный канал на ~−20.
+_CPM_PTS = [(150, 6), (350, 16), (550, 14), (900, 8), (1400, 2), (2300, -6), (3500, -16), (6000, -28)]
 
 # Релевантность теме афиши. Проверяется по lower(title+username); порядок: мусор → афиша → город → нейтрально.
 _OFF_TOPIC = (
@@ -59,8 +61,17 @@ _CITY = (
 )
 
 
+_SRC_RANK = {"tme": 4, "telethon": 3, "telemetr": 2}  # приоритет источника (telega/прочее → 1)
+
+
+def _snap_key(s):
+    """Ключ сортировки снапшота: сначала приоритет источника, потом свежесть (оба по убыванию)."""
+    return (_SRC_RANK.get(getattr(s, "source", None), 1), getattr(s, "captured_at", None))
+
+
 def _merge(snaps: list[dict]) -> dict:
-    """Из снимков (свежие первыми) берём первое не-None по каждому полю."""
+    """Из снимков (УЖЕ отсортированы: приоритетный источник + свежесть впереди) берём первое не-None по полю.
+    L1: telega-снимок больше не побеждает tme только потому, что свежее."""
     m: dict = {}
     for key in _FIELDS:
         for s in snaps:
@@ -239,10 +250,10 @@ def recompute_scores() -> dict:
         for ch in channels:
             if not ch.username or not _VALID_USERNAME.match(ch.username):
                 continue
-            snaps = db.execute(
+            snaps = sorted(db.execute(  # L1: приоритет источника + свежесть (а не только свежесть)
                 select(AdSnapshot).where(AdSnapshot.channel_id == ch.channel_id)
                 .order_by(AdSnapshot.captured_at.desc()).limit(10)
-            ).scalars().all()
+            ).scalars().all(), key=_snap_key, reverse=True)
             m = _merge([{f: getattr(s, f, None) for f in _FIELDS} for s in snaps])
             bs = best_snap.get(ch.channel_id)
             if bs:
@@ -282,10 +293,10 @@ def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
         for ch in channels:
             if not ch.username or not _VALID_USERNAME.match(ch.username):
                 continue
-            snaps = db.execute(
+            snaps = sorted(db.execute(  # L1: приоритет источника + свежесть (а не только свежесть)
                 select(AdSnapshot).where(AdSnapshot.channel_id == ch.channel_id)
                 .order_by(AdSnapshot.captured_at.desc()).limit(10)
-            ).scalars().all()
+            ).scalars().all(), key=_snap_key, reverse=True)
             m = _merge([{f: getattr(s, f, None) for f in _FIELDS} for s in snaps])
             if not m.get("avg_reach") or m["avg_reach"] < min_reach:
                 continue

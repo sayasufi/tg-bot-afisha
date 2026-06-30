@@ -46,7 +46,10 @@ export function Buys() {
     } finally { setBusy(false); }
   };
   const setStatus = async (id: string, status: string) => { await apiPatch(`/buys/${id}`, { status }); reload(); };
-  const del = async (b: any) => { if (window.confirm(`Удалить закупку @${b.channel_username}?`)) { await apiDelete(`/buys/${b.id}`); reload(); } };
+  const del = async (b: any) => {
+    const warn = b.acquired ? ` Внимание: ${b.acquired} приведённых юзеров потеряют привязку к этой закупке (лучше статус «отменена»).` : "";
+    if (window.confirm(`Удалить закупку @${b.channel_username}?${warn}`)) { await apiDelete(`/buys/${b.id}`); reload(); }
+  };
 
   const sum = data?.summary;
 
