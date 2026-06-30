@@ -121,8 +121,12 @@ class Settings(BaseSettings):
             )
         if self.minio_secret_key == "okrest-minio-secret":
             print("WARNING: MINIO_ROOT_PASSWORD is the insecure dev default in production", file=sys.stderr)
-        if "afisha:afisha@" in self.database_url:
-            print("WARNING: DATABASE_URL uses the default afisha:afisha credentials in production", file=sys.stderr)
+        # afisha:afisha — проблема ТОЛЬКО при ПРЯМОМ коннекте к postgres. В проде app ходит через odyssey-пулер:
+        # там afisha:afisha — лишь client-leg пулера на docker-сети, а сам odyssey ходит в postgres СВОИМ
+        # сильным storage_password. Поэтому ругаемся только на настоящий прямой дефолт (а не на odyssey-leg).
+        if "afisha:afisha@" in self.database_url and "@odyssey" not in self.database_url:
+            print("WARNING: DATABASE_URL connects DIRECTLY to postgres with the default afisha:afisha "
+                  "credentials in production", file=sys.stderr)
         # Admin is optional (disabled = invisible), but a half-configured admin is a footgun: a password
         # without a signing secret can't issue sessions, a secret without a password lets nobody in.
         if bool(self.admin_password.strip()) != bool(self.admin_session_secret.strip()):
