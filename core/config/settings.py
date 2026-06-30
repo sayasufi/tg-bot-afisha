@@ -107,6 +107,15 @@ class Settings(BaseSettings):
     # Falls back to the same-origin API path when empty.
     media_public_base: str = Field(default="", alias="MEDIA_PUBLIC_BASE")
 
+    # Affiliate-монетизация тикет-кликов. Серверный редирект /v1/go/{occurrence} логирует клик и, если цель —
+    # Afisha.ru И задан Admitad-gateway, оборачивает ссылку в партнёрку с SubID = код события (для S2S-постбэка
+    # и атрибуции продажи). Пусто → прозрачный pass-through (только клик-трекинг); включение партнёрки = выставить
+    # env, без правок кода/фронта. Берётся из кабинета Admitad для оффера Afisha.ru, формат
+    # https://ad.admitad.com/g/<hash>/. ВАЖНО: оборачиваем ТОЛЬКО Afisha.ru — у Яндекс.Афиши Admitad-трекинг
+    # идёт лишь по промокодам, не по ссылке, поэтому её НЕ оборачиваем (см. ресёрч 2026-07).
+    affiliate_admitad_afisha_gateway: str = Field(default="", alias="AFFILIATE_ADMITAD_AFISHA_GATEWAY")
+    affiliate_subid_tag: str = Field(default="okrest", alias="AFFILIATE_SUBID_TAG")
+
     @model_validator(mode="after")
     def _fail_fast_on_prod_secrets(self):
         """Every field has a dev-friendly default, which means a misconfigured production deploy would

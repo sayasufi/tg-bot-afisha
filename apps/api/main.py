@@ -19,6 +19,7 @@ from apps.api.routes.admin_sources import router as admin_sources_router
 from apps.api.routes.admin_users import router as admin_users_router
 from apps.api.routes.admin_venues import router as admin_venues_router
 from apps.api.routes.events import router as events_router
+from apps.api.routes.go import router as go_router
 from apps.api.routes.health import router as health_router
 from apps.api.routes.intent import router as intent_router
 from apps.api.routes.media import router as media_router
@@ -136,6 +137,7 @@ async def cache_control(request: Request, call_next):
 
 app.include_router(health_router)
 app.include_router(events_router)
+app.include_router(go_router)
 app.include_router(places_router)
 app.include_router(telegram_router)
 app.include_router(users_router)

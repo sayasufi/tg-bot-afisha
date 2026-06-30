@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchEventDetail, prepareShare, type EventDetail, type EventItem } from "../../api/client";
+import { API_BASE } from "../../api/http";
 import { fetchFriendsFavorited, type Friend } from "../../api/users";
 import { logIntent } from "../../api/intent";
 import { categoryMeta } from "../../lib/categories";
@@ -255,6 +256,9 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const image = safeHttpUrl(detail?.primary_image_url) || "";
   const description = stripHtml(detail?.canonical_description || "");
   const sourceUrl = safeHttpUrl(occ?.source_best_url);
+  // Тикет-клик идёт через наш серверный редирект /v1/go (серверный клик-трекинг + партнёрская обёртка
+  // Afisha.ru с SubID); если по какой-то причине нет occurrence_id — прямой URL как фолбэк.
+  const goUrl = sourceUrl && occ?.occurrence_id != null ? `${API_BASE}/v1/go/${occ.occurrence_id}` : sourceUrl;
   const lat = selected.lat ?? occ?.lat ?? null;
   const lon = selected.lon ?? occ?.lon ?? null;
   // Build a walking route straight to the venue: from the user's location when
@@ -581,7 +585,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
             {sourceUrl && (
               <a
                 className="btn btn--ghost"
-                href={sourceUrl}
+                href={goUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => logIntent("click", selected.event_id)}
