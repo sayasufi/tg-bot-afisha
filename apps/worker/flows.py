@@ -190,7 +190,10 @@ async def source_freshness_watch():
     from core.db.session import WorkerAsyncSessionLocal
     from core.infra.redis import get_redis
 
-    STALE_H = 18
+    # Часть коннекторов (yandex/afisha/telegram) — ЕЖЕСУТОЧНЫЕ, плюс рестарт prefect-serve сбрасывает таймер
+    # interval-флоу. Поэтому порог щедрый: алерт только если коннектор не собирал успешно >30ч (пропустил
+    # более чем суточный цикл = реально мёртв), а не «бежит чуть позже».
+    STALE_H = 30
     settings = get_settings()
     owner = settings.admin_test_user_id or 5222335152  # владелец сервиса (@throlib)
     async with WorkerAsyncSessionLocal() as db:
