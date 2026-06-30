@@ -105,7 +105,7 @@ async def buy_plan(
     rows = (await db.execute(text(
         "SELECT c.username, c.city, c.score, c.verdict, c.ad_price, "
         "  sub.subscribers, rch.avg_reach, rea.avg_reactions, "
-        "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = c.username) AS acquired "
+        "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = c.username) AS acquired, c.relevance "
         "FROM adstat.channels c "
         f"LEFT JOIN LATERAL (SELECT subscribers FROM adstat.snapshots s WHERE s.channel_id=c.channel_id AND s.subscribers IS NOT NULL ORDER BY {rk} DESC, captured_at DESC LIMIT 1) sub ON true "
         f"LEFT JOIN LATERAL (SELECT avg_reach FROM adstat.snapshots s WHERE s.channel_id=c.channel_id AND s.avg_reach IS NOT NULL ORDER BY {rk} DESC, captured_at DESC LIMIT 1) rch ON true "
@@ -119,6 +119,7 @@ async def buy_plan(
         subs, reach, reactions, price = r[5], r[6], r[7], r[4]
         items.append({
             "username": r[0], "city": r[1], "score": r[2], "verdict": r[3], "price": price,
+            "relevance": r[9],
             "subscribers": subs, "reach": reach, "reactions": reactions, "acquired": int(r[8] or 0),
             "err": round(reach / subs * 100, 1) if (subs and reach) else None,
             "rrate": round(reactions / reach * 100, 2) if (reactions and reach) else None,
