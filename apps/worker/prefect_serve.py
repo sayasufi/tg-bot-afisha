@@ -63,6 +63,9 @@ _SCHEDULE = [
     (flows.retry_transient_skips, 1800),
     # Watchdog свежести источников раз в час — DM владельцу при «тихой смерти» коннектора.
     (flows.source_freshness_watch, 3600),
+    # Watchdog ЗАСТОЯ ОБРАБОТКИ (не фетча): глубина+возраст очередей normalize/enrich/dedup → DM владельцу.
+    # Ловит «3957 застряло, никто не заметил». Раз в 30 мин.
+    (flows.pipeline_backlog_watch, 1800),
     # Self-heal venue+event dups every 15 min (ordered: venues then events) so the
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.
@@ -142,7 +145,11 @@ def main() -> None:
     deployments.append(
         flows.send_digest.to_deployment(name=flows.send_digest.name, cron="0 7 * * 5", concurrency_limit=1)
     )
-    serve(*deployments, limit=10)
+    # limit = max flow runs in flight across ALL deployments (per-flow concurrency_limit=1 is orthogonal).
+    # 24 (was 10) so the cheap sanitizers (sweep-orphan-concurrency, sweep-stale-runs) + the 60s pipeline
+    # flows are never starved behind the burst of daily/12h/adstat flows that all come due at once after a
+    # restart. Safe: the worker uses a NullPool and each flow's footprint is small.
+    serve(*deployments, limit=24)
 
 
 if __name__ == "__main__":

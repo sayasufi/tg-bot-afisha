@@ -150,21 +150,23 @@ def sweep_orphan_concurrency_slots():
     eng = create_engine(url, pool_pre_ping=True)
     try:
         with eng.begin() as c:
-            # 1) Kill ZOMBIE running runs first. A run RUNNING longer than the longest flow timeout (30 min)
-            #    is dead — its process was hard-killed (deploy/OOM) so Prefect never finalised it; the record
-            #    lingers AND makes its slot look held. >1h is safely past every flow's timeout. MUST run before
-            #    the slot release below, else the zombie's own RUNNING row blocks that slot from freeing.
+            # 1) Kill ZOMBIE running runs first. A run RUNNING longer than the LONGEST flow timeout (the adstat
+            #    flows are 5400s = 90 min) is dead — its process was hard-killed (OOM/SIGKILL) so Prefect never
+            #    finalised it; the record lingers AND makes its slot look held. 2h is safely past every timeout
+            #    (so a legit 90-min run is NOT killed). MUST run before the slot release, else the zombie's own
+            #    RUNNING row blocks that slot from freeing. (Restart-orphans are cleared eagerly at startup.)
             zombies = c.execute(text(
-                "DELETE FROM flow_run WHERE state_type = 'RUNNING' AND start_time < now() - interval '1 hour'"
+                "DELETE FROM flow_run WHERE state_type = 'RUNNING' AND start_time < now() - interval '2 hours'"
             )).rowcount
-            # 2) Release any deployment slot NOT held by a FRESH (pending, or running <1h) run — frees slots
-            #    orphaned by a kill or by the zombies just deleted.
+            # 2) Release any deployment slot NOT held by a FRESH (pending, or running <2h) run — frees slots
+            #    orphaned by a kill or by the zombies just deleted. <2h matches the kill threshold so a legit
+            #    long run's slot is never released out from under it.
             released = c.execute(text(
                 "UPDATE concurrency_limit_v2 clv SET active_slots = 0 "
                 "WHERE clv.active_slots > 0 AND clv.name LIKE 'deployment:%' "
                 "  AND NOT EXISTS (SELECT 1 FROM flow_run fr WHERE ('deployment:' || fr.deployment_id::text) = clv.name "
                 "    AND (fr.state_type = 'PENDING' "
-                "         OR (fr.state_type = 'RUNNING' AND fr.start_time > now() - interval '1 hour')))"
+                "         OR (fr.state_type = 'RUNNING' AND fr.start_time > now() - interval '2 hours')))"
             )).rowcount
             # 3) Collapse the overdue SCHEDULED pile-up: keep only the LATEST pending run per deployment.
             collapsed = c.execute(text(
@@ -222,9 +224,15 @@ def retry_transient_skips():
             "UPDATE events.raw_events SET skip_reason='llm_error_dead' "
             "WHERE skip_reason IN ('llm_error','invalid_json') AND llm_attempts >= 5"
         )).rowcount
+        # Переоткрываем ПАЧКОЙ (новейшие первыми), а не всё разом: при многочасовом простое LLM накапливаются
+        # тысячи llm_error, и одномоментный reopen затопил бы общий llm_slot-бюджет, вытеснив свежий ингест и
+        # массово докрутив llm_attempts к терминалу. LIMIT 500/цикл (раз в 30 мин) растекает ретраи по времени;
+        # непопавшие остаются с llm_error (llm_attempts НЕ инкрементится зря) и подхватятся следующим прогоном.
         reopened = db.execute(text(
             "UPDATE events.raw_events SET skip_reason='', llm_attempts=llm_attempts+1 "
-            "WHERE skip_reason IN ('llm_error','invalid_json')"
+            "WHERE raw_id IN (SELECT raw_id FROM events.raw_events "
+            "  WHERE skip_reason IN ('llm_error','invalid_json') AND llm_attempts < 5 "
+            "  ORDER BY raw_id DESC LIMIT 500)"
         )).rowcount
         db.commit()
     return {"reopened": reopened, "dead": dead}
@@ -291,6 +299,69 @@ async def source_freshness_watch():
     except Exception:
         pass
     return {"stale": [s[0] for s in stale], "notified": True}
+
+
+@flow(name="pipeline-backlog-watch", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
+async def pipeline_backlog_watch():
+    """Алерт владельцу, если встала ОБРАБОТКА (а не фетч). source_freshness_watch следит за коннекторами;
+    этот — за ВОЗРАСТОМ головы и глубиной очередей normalize/enrich/dedup. Ловит ровно «3957 застряло на
+    сутки, никто не заметил»: если самый старый необработанный raw старше STALE_H ч (очередь не движется)
+    ИЛИ любая очередь глубже DEPTH_ALERT — DM (throttle раз в ~6ч). Возраст головы важнее числа — разовый
+    всплеск ингеста сам рассосётся и голову не состарит."""
+    from datetime import datetime, timezone
+
+    import httpx
+    from sqlalchemy import text
+
+    from core.config.settings import get_settings
+    from core.db.session import WorkerAsyncSessionLocal
+    from core.infra.redis import get_redis
+
+    STALE_H = 4       # голова очереди normalize старше 4ч = застой (а не медленный дренаж большого скана)
+    DEPTH_ALERT = 8000
+    settings = get_settings()
+    owner = settings.admin_test_user_id or 5222335152
+    async with WorkerAsyncSessionLocal() as db:
+        row = (await db.execute(text(
+            "SELECT "
+            "(SELECT count(*) FROM events.raw_events re WHERE re.skip_reason = '' "
+            "   AND NOT EXISTS (SELECT 1 FROM events.event_candidates c WHERE c.raw_id = re.raw_id)), "
+            "(SELECT extract(epoch FROM now() - min(re.fetched_at)) / 3600 FROM events.raw_events re "
+            "   WHERE re.skip_reason = '' AND NOT EXISTS (SELECT 1 FROM events.event_candidates c WHERE c.raw_id = re.raw_id)), "
+            "(SELECT count(*) FROM events.event_candidates c WHERE c.venue_id IS NULL), "
+            "(SELECT count(*) FROM events.event_candidates c WHERE c.venue_id IS NOT NULL "
+            "   AND NOT EXISTS (SELECT 1 FROM events.event_sources es WHERE es.raw_id = c.raw_id))"
+        ))).first()
+    norm_n = int(row[0] or 0)
+    oldest_h = float(row[1]) if row[1] is not None else 0.0
+    enrich_n = int(row[2] or 0)
+    dedup_n = int(row[3] or 0)
+    result = {"norm": norm_n, "oldest_h": round(oldest_h, 1), "enrich": enrich_n, "dedup": dedup_n, "notified": False}
+    stalled = (norm_n > 0 and oldest_h >= STALE_H) or max(norm_n, enrich_n, dedup_n) >= DEPTH_ALERT
+    if not stalled or not settings.telegram_bot_token:
+        return result
+    now = datetime.now(timezone.utc)
+    client = get_redis(decode=True)
+    if client is not None:
+        try:
+            key = f"backlogwatch:{now:%Y%m%d}-{now.hour // 6}"  # один алерт на ~6-часовое окно
+            if not await client.set(key, "1", nx=True, ex=7 * 3600):
+                return result
+        except Exception:
+            pass
+    msg = ("⚠️ <b>Пайплайн застрял</b> (обработка стоит, не фетч)\n\n"
+           f"• normalize: <b>{norm_n}</b> необработанных, старейший <b>{round(oldest_h, 1)}ч</b>\n"
+           f"• enrich: {enrich_n} без площадки\n"
+           f"• dedup: {dedup_n} ждут дедуп\n\n"
+           "Глянь prefect-serve (раннер/слоты/abort), LLM-эндпойнт, sweep-orphan-concurrency.")
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            await c.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                         json={"chat_id": int(owner), "text": msg, "parse_mode": "HTML", "disable_web_page_preview": True})
+        result["notified"] = True
+    except Exception:
+        pass
+    return result
 
 
 @flow(name="reprocess-changed", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=900, log_prints=True)
