@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.schemas.events import (
     CategoryResponse,
-    EventDetailResponse,
 )
 from apps.api.services.events_service import (
     EventQueryService,

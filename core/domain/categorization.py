@@ -53,7 +53,8 @@ _LABEL_TO_CATEGORY: dict[str, str] = {
 # `kids` sits just below, so a children's show / excursion / film still surfaces
 # under the family filter rather than being buried under theatre/tour/cinema.
 _PRIORITY = (
-    "quest", "kids", "standup", "concert", "theatre", "cinema",
+    # kids ВЫШЕ quest: детский квест лучше искать под «Детям» (семейный фильтр), чем под «Квест».
+    "kids", "quest", "standup", "concert", "theatre", "cinema",
     "exhibition", "festival", "tour", "lecture", "party",
 )
 

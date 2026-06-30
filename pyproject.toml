@@ -37,9 +37,24 @@ dev = [
   "ruff==0.12.10",
 ]
 
+[tool.setuptools.packages.find]
+# Плоский layout с кучей top-level папок (admin/miniapp/landing = JS, infra/assets = конфиг/статика,
+# migrations = alembic-скрипты без __init__). Без этого setuptools-авто-дискавери отказывается собирать
+# editable-пакет («Multiple top-level packages discovered»). Явно вайтлистим только Python-пакеты.
+include = ["core*", "apps*", "pipeline*", "connectors*"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# E402 (import-not-at-top) и E702 (compact «;»-стейтменты) — НАМЕРЕННЫЙ стиль репо (поздние модульные импорты
+# для обхода циклических зависимостей; компактные one-liner'ы), не баги. Остальные дефолтные E/F-правила
+# (реальные дефекты — unused/undefined) держим включёнными.
+ignore = ["E402", "E702"]
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

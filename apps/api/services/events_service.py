@@ -640,8 +640,6 @@ class EventQueryService:
         matches. Keeps only events with a future/ongoing occurrence (soonest first)."""
         if not ids:
             return {"items": []}
-        has_pt = lat is not None and lon is not None
-        pt = func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326) if has_pt else None
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
         cols = [

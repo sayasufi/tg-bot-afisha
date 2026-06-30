@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import httpx
 
 from pipeline.geocoding.providers.yandex import GeoResult

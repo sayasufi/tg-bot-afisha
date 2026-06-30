@@ -3,7 +3,7 @@ from datetime import datetime
 
 import dateparser
 
-from core.contracts import NormalizedCandidate  # контракт вынесен в core; re-export для обратной совместимости
+from core.contracts import NormalizedCandidate  # noqa: F401 — re-export для обратной совместимости (контракт в core)
 
 
 AGE_REGEX = re.compile(r"(\d{1,2})\+")
