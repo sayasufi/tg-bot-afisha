@@ -23,9 +23,12 @@ from core.db.models import TelegramChannel
 from core.db.session import WorkerAsyncSessionLocal
 
 log = logging.getLogger(__name__)
-# Reach floor: a venue channel below this many subscribers is too small/dead to be worth ingesting, so
-# the daily subscriber refresh retires it (and keeps it retired). NULL count (unfetchable) is left alone.
-_MIN_SUBSCRIBERS = 500
+# Reach floor: below this many subscribers a channel is near-empty/fake, so the daily subscriber refresh
+# retires it. Kept LOW (100, was 500) — for an EVENT SOURCE the value is "posts events" (the 60-day-silence
+# prune already gates that), NOT popularity: a 200-sub regional venue (small-city theatre, district ДК,
+# gallery) still posts real events we'd otherwise miss, and 500 wrongly retired legit venues (Дворец
+# молодёжи, Манеж Казань). NULL count (unfetchable / throttled) is left alone.
+_MIN_SUBSCRIBERS = 100
 _TIME_RE = re.compile(r'<time[^>]+datetime="([^"]+)"')
 # The public t.me/<channel> page shows the FULL count: <div class="tgme_page_extra">12 345 subscribers</div>
 # (thousands separated by space / nbsp / narrow-nbsp). The s/ feed header only carries an abbreviated
