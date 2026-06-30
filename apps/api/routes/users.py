@@ -33,6 +33,7 @@ from core.db.repositories.reminders import (
     cancel_reminder,
     list_reminder_ids,
     set_reminder,
+    soonest_future_end,
     soonest_future_start,
 )
 from core.db.repositories.friends import (
@@ -75,6 +76,22 @@ from core.infra.redis import get_redis
 
 # Remind this long before the soonest session starts.
 _REMINDER_LEAD = timedelta(hours=2)
+# For an ONGOING event (exhibition/open run) with no upcoming start — remind this long before it CLOSES,
+# so a «схожу потом» save brings the user back near the deadline rather than arming nothing.
+_CLOSING_LEAD = timedelta(days=2)
+
+
+async def _reminder_fire_at(db: AsyncSession, event_id: str):
+    """Когда слать напоминание по сохранённому событию: за _REMINDER_LEAD до ближайшего БУДУЩЕГО старта;
+    если будущего старта нет, но событие ещё идёт — за _CLOSING_LEAD до закрытия; иначе None (всё в прошлом)."""
+    now = datetime.now(timezone.utc)
+    start = await soonest_future_start(db, event_id)
+    if start is not None:
+        return max(now + timedelta(seconds=45), start - _REMINDER_LEAD)
+    end = await soonest_future_end(db, event_id)
+    if end is None:
+        return None
+    return max(now + timedelta(hours=1), end - _CLOSING_LEAD)
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
@@ -316,11 +333,8 @@ async def toggle_reminder(payload: ReminderRequest, db: AsyncSession = Depends(g
     await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
     if payload.event_id is not None and payload.on is not None:
         if payload.on:
-            start = await soonest_future_start(db, payload.event_id)
-            if start is not None:  # no UPCOMING session → can't remind; silently no-op
-                now = datetime.now(timezone.utc)
-                # Fire ~2h before; clamp to the near future so imminent events still fire soon.
-                fire_at = max(now + timedelta(seconds=45), start - _REMINDER_LEAD)
+            fire_at = await _reminder_fire_at(db, payload.event_id)  # будущий старт ИЛИ закрытие ongoing
+            if fire_at is not None:  # всё в прошлом → напомнить не о чем; тихо no-op
                 await set_reminder(db, uid, payload.event_id, fire_at)
         else:
             await cancel_reminder(db, uid, payload.event_id)
@@ -593,22 +607,20 @@ async def _arm_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
     settings = await get_settings(db, uid)
     if settings.get("notify_reminders") is False:
         return
-    start = await soonest_future_start(db, event_id)
-    if start is None:
+    fire_at = await _reminder_fire_at(db, event_id)  # будущий старт ИЛИ закрытие ongoing-события
+    if fire_at is None:
         return
-    now = datetime.now(timezone.utc)
-    await arm_reminder_if_unsent(db, uid, event_id, max(now + timedelta(seconds=45), start - _REMINDER_LEAD))
+    await arm_reminder_if_unsent(db, uid, event_id, fire_at)
 
 
 async def _arm_all_favorite_reminders(db: AsyncSession, uid: int) -> None:
-    """Arm reminders for every favourited event with an UPCOMING session — run when the user switches the
-    profile notifications toggle ON, so reminders cover everything saved while it was off. Non-destructive
-    (arm_reminder_if_unsent): never re-fires a reminder that already delivered, never arms a past event."""
-    now = datetime.now(timezone.utc)
+    """Arm reminders for every favourited event with an UPCOMING session (or an ongoing run that's still
+    open) — run when the user switches the profile notifications toggle ON, so reminders cover everything
+    saved while it was off. Non-destructive (arm_reminder_if_unsent): never re-fires/never arms a past event."""
     for fid in await list_favorite_ids(db, uid):
-        start = await soonest_future_start(db, fid)
-        if start is not None:
-            await arm_reminder_if_unsent(db, uid, fid, max(now + timedelta(seconds=45), start - _REMINDER_LEAD))
+        fire_at = await _reminder_fire_at(db, fid)
+        if fire_at is not None:
+            await arm_reminder_if_unsent(db, uid, fid, fire_at)
 
 
 async def _invite_dm_once(invitee_id: int, event_id: str, inviter_id: int) -> bool:

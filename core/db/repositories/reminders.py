@@ -46,6 +46,18 @@ async def soonest_future_start(db: AsyncSession, event_id: str) -> datetime | No
     )
 
 
+async def soonest_future_end(db: AsyncSession, event_id: str) -> datetime | None:
+    """The soonest occurrence END still in the FUTURE (a still-running exhibition / open run), or None if
+    everything has already ended. Lets us arm a «закрывается скоро» reminder for ONGOING events with no
+    upcoming START — saving such an event (a typical «схожу на выставку потом») would otherwise arm nothing."""
+    now = datetime.now(timezone.utc)
+    return await db.scalar(
+        select(func.min(EventOccurrence.date_end)).where(
+            EventOccurrence.event_id == event_id, EventOccurrence.date_end > now
+        )
+    )
+
+
 async def set_reminder(db: AsyncSession, user_id: int, event_id: str, fire_at: datetime) -> None:
     """Arm (or re-arm) a reminder. Re-setting clears sent_at so it fires again — for an explicit
     single-event action where re-firing is intended."""
