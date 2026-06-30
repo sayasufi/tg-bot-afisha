@@ -91,6 +91,8 @@ _SCHEDULE = [
 
 
 def main() -> None:
+    from core.observability.sentry import init_sentry
+    init_sentry("worker")  # тихие падения инжеста/нормализации/рассылок попадают в Sentry
     deployments = [
         fl.to_deployment(name=fl.name, interval=interval, concurrency_limit=1)
         for fl, interval in _SCHEDULE

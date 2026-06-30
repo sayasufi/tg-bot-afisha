@@ -42,6 +42,8 @@ async def _setup_bot(bot: Bot, webapp_url: str) -> None:
 async def main() -> None:
     settings = get_settings()
     setup_logging(settings.log_level)
+    from core.observability.sentry import init_sentry
+    init_sentry("bot")  # тихие падения хендлеров/рассылок попадают в Sentry, а не только в логи
 
     if not settings.telegram_bot_token:
         logging.getLogger(__name__).warning("TELEGRAM_BOT_TOKEN is not set; bot is disabled")

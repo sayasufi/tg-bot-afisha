@@ -31,15 +31,11 @@ from apps.api.routes.users import router as users_router
 from core.config.settings import get_settings
 from core.logging.setup import setup_logging
 
-try:
-    import sentry_sdk
-except Exception:  # pragma: no cover
-    sentry_sdk = None
+from core.observability.sentry import init_sentry
 
 settings = get_settings()
 setup_logging(settings.log_level)
-if settings.sentry_dsn and sentry_sdk is not None:
-    sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.app_env)
+init_sentry("api")
 
 app = FastAPI(title="Afisha API", version="0.1.0")
 # NOTE: JSON responses are gzipped at the nginx edge (gzip_proxied any in the
