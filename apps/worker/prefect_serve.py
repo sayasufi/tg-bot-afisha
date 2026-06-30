@@ -46,6 +46,8 @@ _SCHEDULE = [
     (flows.refresh_adstat_subs, 21600),
     # Telethon-добор точных метрик для on-topic каналов без t.me-превью — раз в сутки, малый батч (флуд-лимиты).
     (flows.enrich_adstat_telethon, 86400),
+    # LLM-классификация релевантности каналов (точнее кейвордов) — раз в сутки, инкрементально по 400.
+    (flows.classify_adstat_llm, 86400),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),

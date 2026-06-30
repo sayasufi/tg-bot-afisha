@@ -52,12 +52,24 @@ _AFISHA = (
     "культур", "kultur", "экскурс", "ekskurs", "лекци", "мероприят", "выходны", "weekend",
     # B3-добор: культурно-событийные ниши, проваливавшиеся в «тема?»
     "праздник", "ярмарк", "квиз", "квест", "опенэйр", "open air", "перформанс", "иммерс", "мюзикл",
-    "опер", "балет", "джаз", "рейв", "караоке", "квартирник", "артхаус", "артспейс", "креативн",
+    "балет", "джаз", "рейв", "караоке", "квартирник", "артхаус", "артспейс", "креативн",
     "куда пойти", "куда сходить", "путешеств", "туризм", "набережн",
 )
 _CITY = (
     "новост", "novost", "news", "чп", "chp", "происшеств", "инцидент", "incident", "типичн", "tipich",
     "подслушан", "podslushan", "городск", "gorod", "област", "oblast", "регион", "region",
+)
+# «Жёсткий» мусор — перебивает даже афиша-ключ (в отличие от мягкого _OFF_TOPIC, который проверяется ПОСЛЕ
+# афиши). Сюда только однозначно НЕ-событийные категории, способные нести афиша-подстроку («билет»/«праздник»):
+# «Билеты ПДД» (вождение), открытки/поздравления с праздником, церковный календарь, сценарии праздников,
+# рыбалка, переводы манги/манхвы (в названиях бывает «опер…»/«концерт…»).
+_HARD_OFF = (
+    "пдд", "автошкол", "avtoshkol", "вождени",
+    "поздравл", "pozdrav", "открытк", "otkrytk",
+    "церковн", "православн", "именин", "молитв",
+    "сценари",
+    "рыбалк", "рыбал", "рыболов", "fishing",
+    "манхв", "манхуа", "манга", "manhwa", "вебтун", "webtoon",
 )
 
 
@@ -96,6 +108,8 @@ def _relevance(title: str | None, username: str | None) -> tuple[float, str]:
     ×0.10). Только если афиша-ключа нет — режем мусор (×0.10). M7: город 0.85 / тема? 0.80, чтобы вердикт
     «брать» был достижим у сильных локальных/событийных каналов без точного ключевого слова."""
     t = f"{title or ''} {username or ''}".lower()
+    if any(k in t for k in _HARD_OFF):  # жёсткий мусор перебивает афишу (билеты ПДД, открытки, манхва, рыбалка…)
+        return 0.10, "не тема"
     if any(k in t for k in _AFISHA):
         return 1.0, "афиша"
     if any(k in t for k in _OFF_TOPIC):
@@ -246,6 +260,11 @@ def recompute_scores() -> dict:
         )).all())
         # Подсказка города из discovery (явный запрос «афиша <город>») — высшая уверенность.
         target_city = dict(db.execute(text("SELECT username, city FROM adstat.targets WHERE city IS NOT NULL AND city <> ''")).all())
+        # LLM-категория (точнее кейвордов) — если есть, она authoritative для релевантности+города.
+        from apps.adstat.llm_classify import LLM_REL
+        llm = {r[0]: (r[1], r[2]) for r in db.execute(text(
+            "SELECT channel_id, llm_category, llm_city FROM adstat.channels WHERE llm_category IS NOT NULL"
+        )).all()}
         channels = db.execute(select(AdChannel)).scalars().all()
         for ch in channels:
             if not ch.username or not _VALID_USERNAME.match(ch.username):
@@ -273,10 +292,16 @@ def recompute_scores() -> dict:
                     m["posts_per_week"] = tr["posts_per_week"]
             m["cpm"] = None  # пересчитать CPM из реальных цена/охват, а не брать каталожный
             quality, _qv, _why = score_channel(m)
-            rel, rel_label = _relevance(ch.title, ch.username)
+            lc = llm.get(ch.channel_id)
+            if lc and lc[0] in LLM_REL:  # LLM-категория приоритетнее кейвордов
+                rel, rel_label = LLM_REL[lc[0]]
+                city_hint = lc[1] or target_city.get(ch.username)
+            else:
+                rel, rel_label = _relevance(ch.title, ch.username)
+                city_hint = target_city.get(ch.username)
             final = int(round(quality * rel))
             verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
-            city = infer_city(ch.title, ch.username, target_city.get(ch.username))
+            city = infer_city(ch.title, ch.username, city_hint)
             db.execute(text(
                 "UPDATE adstat.channels SET score=:s, quality=:q, verdict=:v, relevance=:r, city=:city, score_at=now() "
                 "WHERE channel_id=:cid"

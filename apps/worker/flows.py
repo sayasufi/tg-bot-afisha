@@ -309,6 +309,16 @@ def refresh_adstat_subs():
     return {**r, **s}
 
 
+@flow(name="classify-adstat-llm", retries=1, retry_delay_seconds=120, timeout_seconds=3600, log_prints=True)
+def classify_adstat_llm():
+    """LLM-классификация каналов (релевантность точнее кейвордов: «билеты ПДД»→мусор и т.п.) + пересчёт скора."""
+    from apps.adstat.llm_classify import classify_channels_llm
+    from apps.adstat.score import recompute_scores
+    r = classify_channels_llm(limit=400)
+    s = recompute_scores()
+    return {**r, **s}
+
+
 @flow(name="enrich-adstat-telethon", retries=0, timeout_seconds=5400, log_prints=True)
 def enrich_adstat_telethon():
     """Дообогатить точными метриками (telethon participants_count + охват) on-topic каналы без свежего
