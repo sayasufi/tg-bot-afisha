@@ -23,8 +23,11 @@ from core.db.session import SessionLocal
 _FIELDS = ["subscribers", "avg_reach", "avg_reactions", "er", "err", "cpm", "post_price", "rating",
            "is_scam", "is_boosting", "sanctioned", "quality_score", "mentions"]
 
-# Кусочно-линейные кривые бонусов (непрерывные → нет «ничьих» внутри банды).
-_REACH_PTS = [(10, 4), (15, 16), (30, 28), (45, 16), (60, -2), (100, -12)]  # охват% подписчиков → бонус
+# Кусочно-линейные кривые бонусов (непрерывные → нет «ничьих» внутри банды). Калибровка по РЕАЛЬНЫМ
+# перцентилям базы (см. замер 2026-06-30): ERR p10/50/90 = 3/11/39%, reaction_rate p10/50/90 = 0.3/0.68/2.3%.
+_ERR_PTS = [(3, -14), (6, -4), (11, 6), (22, 18), (35, 24), (50, 16), (70, 2), (100, -8)]  # ERR=охват/подписч %
+_RRATE_PTS = [(0.1, -8), (0.3, 0), (0.7, 8), (1.5, 16), (3, 20), (6, 14), (12, 2), (25, -8)]  # реакции/охват %: низко=накрутка просмотров, очень высоко=реакц-ферма
+_FWD_PTS = [(0.02, 0), (0.1, 3), (0.3, 7), (1.0, 10), (3.0, 8)]  # форварды/охват % → ценность контента
 _CPM_PTS = [(50, 2), (80, 8), (150, 20), (300, 18), (500, 6), (800, -10), (1500, -22)]  # CPM₽ → бонус
 
 # Релевантность теме афиши. Проверяется по lower(title+username); порядок: мусор → афиша → город → нейтрально.
@@ -120,49 +123,63 @@ def infer_city(title: str | None, username: str | None, hint: str | None = None)
 
 
 def score_channel(m: dict) -> tuple[int, str, str]:
-    """КАЧЕСТВО канала (0–100) по метрикам, без релевантности (её применяет rank). Непрерывное."""
+    """КАЧЕСТВО канала (0–100) по ВСЕМ доступным сигналам, без релевантности (её применяет rank).
+    Непрерывно. Сигналы: ERR (охват/подписч), reaction_rate (реакции/охват — анти-накрутка, боты не
+    реагируют), forward_rate (форварды/охват — ценность контента), частота постинга, CPM, упоминания.
+    Каждый сигнал учитывается ТОЛЬКО если собран — формула деградирует мягко на бедных данных."""
     subs = m.get("subscribers")
     reach = m.get("avg_reach")
     cpm = m.get("cpm")
     price = m.get("post_price")
+    reactions = m.get("avg_reactions")
+    fwd = m.get("avg_forwards")
+    ppw = m.get("posts_per_week")
     mentions = m.get("mentions")
     fraud = m.get("is_scam") or m.get("is_boosting") or m.get("sanctioned")
     if cpm is None and price and reach:
         cpm = price / reach * 1000.0
-
     if fraud:
         return 0, "мимо", "фрод-флаг (scam / накрутка / санкции)"
-    rr = (reach / subs) if (subs and reach) else None  # ERR = охват/подписчики
-    if rr is not None and rr < 0.10:
-        return 8, "мимо", f"охват {rr * 100:.0f}% подписчиков (<10%) — мёртвая/купленная аудитория"
 
     s = 40.0
     why: list[str] = []
-    if rr is not None:
-        p = rr * 100
-        s += _lerp(_REACH_PTS, p)
-        why.append(f"охват {p:.0f}%" + (" — проверить накрутку" if p > 60 else ""))
+    err = (reach / subs * 100) if (subs and reach) else None  # ERR %
+    if err is not None:
+        s += _lerp(_ERR_PTS, err)
+        why.append(f"ERR {err:.0f}%")
     else:
-        why.append("охват неизвестен")
+        why.append("ERR неизвестен")
+
+    rr = (reactions / reach * 100) if (reactions and reach) else None  # реакции/охват %
+    if rr is not None:
+        s += _lerp(_RRATE_PTS, rr)
+        why.append(f"реакции {rr:.1f}%" + (" — мало к просмотрам (накрутка?)" if rr < 0.3 else ""))
+
+    fr = (fwd / reach * 100) if (fwd and reach) else None  # форварды/охват %
+    if fr is not None:
+        s += _lerp(_FWD_PTS, fr)
+        if fr >= 0.5:
+            why.append(f"форварды {fr:.1f}%")
+
+    if ppw is not None:  # частота постинга, постов/нед
+        s += -10 if ppw < 1 else -2 if ppw < 3 else 4 if ppw <= 25 else 0 if ppw <= 50 else -8
+        if ppw < 1:
+            why.append("почти не постит")
+        elif ppw > 50:
+            why.append("частит — спам?")
+
     if cpm:
         s += _lerp(_CPM_PTS, cpm)
-        why.append(f"CPM {cpm:.0f}₽" + (" — дёшево, проверить" if cpm < 80 else ("" if cpm <= 600 else " — дорого")))
+        why.append(f"CPM {cpm:.0f}₽" + (" — дёшево" if cpm < 80 else (" — дорого" if cpm > 600 else "")))
     else:
         why.append("цена не собрана")
     if mentions and mentions > 0:
-        s += 6
-        why.append("есть упоминания")
-    # Реакции — сильный сигнал ЖИВОЙ аудитории (боты не реагируют). Бонус за долю реакций от охвата.
-    reactions = m.get("avg_reactions")
-    if reactions and reach:
-        rrate = reactions / reach
-        if rrate >= 0.005:  # ≥0.5% реакций от просмотров
-            s += min(8.0, rrate * 400)
-            why.append(f"реакции {rrate * 100:.1f}%")
+        s += 5
 
     s = int(max(0, min(100, round(s))))
     verdict = "брать" if s >= 70 else ("осторожно" if s >= 50 else "мимо")
-    if rr is not None and rr < 0.15 and verdict == "брать":
+    # Подстраховка: очень низкий ERR без подтверждённой реакциями живости → не «брать» (могла быть накрутка).
+    if err is not None and err < 8 and (rr is None or rr < 0.3) and verdict == "брать":
         verdict = "осторожно"
     return s, verdict, ", ".join(why) or "мало данных"
 
@@ -189,6 +206,15 @@ def recompute_scores() -> dict:
             "SELECT DISTINCT ON (channel_id) channel_id, avg_reach FROM adstat.snapshots "
             f"WHERE avg_reach IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
         )).all())
+        best_react = dict(db.execute(text(
+            "SELECT DISTINCT ON (channel_id) channel_id, avg_reactions FROM adstat.snapshots "
+            f"WHERE avg_reactions IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
+        )).all())
+        # forwards / частота постинга — из последнего telethon-снапшота (raw JSONB).
+        tele = dict(db.execute(text(
+            "SELECT DISTINCT ON (channel_id) channel_id, raw FROM adstat.snapshots "
+            "WHERE source = 'telethon' AND raw IS NOT NULL ORDER BY channel_id, captured_at DESC"
+        )).all())
         # Подсказка города из discovery (явный запрос «афиша <город>») — высшая уверенность.
         target_city = dict(db.execute(text("SELECT username, city FROM adstat.targets WHERE city IS NOT NULL AND city <> ''")).all())
         channels = db.execute(select(AdChannel)).scalars().all()
@@ -204,6 +230,14 @@ def recompute_scores() -> dict:
                 m["subscribers"] = best[ch.channel_id]   # надёжные подписчики (t.me/telethon)
             if best_reach.get(ch.channel_id):
                 m["avg_reach"] = best_reach[ch.channel_id]  # реальный охват (просмотры постов с t.me/s)
+            if best_react.get(ch.channel_id):
+                m["avg_reactions"] = best_react[ch.channel_id]  # реакции (t.me/s или telethon)
+            tr = tele.get(ch.channel_id)
+            if isinstance(tr, dict):
+                if tr.get("avg_forwards") is not None:
+                    m["avg_forwards"] = tr["avg_forwards"]
+                if tr.get("posts_per_week") is not None:
+                    m["posts_per_week"] = tr["posts_per_week"]
             m["cpm"] = None  # пересчитать CPM из реальных цена/охват, а не брать каталожный
             quality, _qv, _why = score_channel(m)
             rel, rel_label = _relevance(ch.title, ch.username)
