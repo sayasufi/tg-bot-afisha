@@ -3,6 +3,7 @@ import hashlib
 import logging
 import time
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 import orjson
@@ -260,7 +261,9 @@ async def get_event_detail(event_id: UUID, db: AsyncSession = Depends(get_async_
     result = await service.event_detail(event_id)
     if not result:
         raise HTTPException(status_code=404, detail="event not found")
-    body = orjson.dumps(result)
+    # orjson нативно умеет datetime/UUID, но НЕ Decimal (цены) — раньше сериализовала Pydantic-схема.
+    # Decimal→float (остаётся числом, контракт цены не ломается), прочее непредвиденное → строка (безопасно).
+    body = orjson.dumps(result, default=lambda o: float(o) if isinstance(o, Decimal) else str(o))
     if rc is not None:
         try:
             await rc.set(key, body, ex=_DETAIL_TTL)
