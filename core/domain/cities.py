@@ -108,6 +108,28 @@ def active_cities() -> list[CityConfig]:
     return [c for c in CITIES.values() if c.active]
 
 
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    from math import asin, cos, radians, sin, sqrt
+    dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(a))
+
+
+def nearest_city(lat: float, lon: float) -> CityConfig | None:
+    """Ближайший АКТИВНЫЙ город к координатам (масштабируется на любое число городов — без сетки кнопок).
+    Возвращает None, если все города дальше 2× их region_radius (юзер вне покрытия) — лучше ничего, чем
+    приписать далёкий город."""
+    best: CityConfig | None = None
+    best_d = float("inf")
+    for c in active_cities():
+        d = _haversine_km(lat, lon, c.center[0], c.center[1])
+        if d < best_d:
+            best, best_d = c, d
+    if best is not None and best_d <= best.region_radius_km * 2:
+        return best
+    return None
+
+
 def region_predicate_sql(city: "CityConfig | None" = None) -> str:
     """The 'venues.geom within a city's region radius' SQL predicate, OR-ed over the given
     city (or all active cities when None). Single source for the map/list/search/recs region

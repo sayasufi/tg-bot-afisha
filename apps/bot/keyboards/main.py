@@ -1,22 +1,22 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-
-from core.domain.cities import active_cities
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    WebAppInfo,
+)
 
 MAP_BUTTON_TEXT = "🗺 Открыть карту"
 
 
-def city_picker_keyboard() -> InlineKeyboardMarkup:
-    """Сетка кнопок выбора города (2 в ряд) для нового бот-юзера без города — callback `city:<slug>`."""
-    rows: list[list[InlineKeyboardButton]] = []
-    row: list[InlineKeyboardButton] = []
-    for c in active_cities():
-        row.append(InlineKeyboardButton(text=c.name, callback_data=f"city:{c.slug}"))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+def location_request_keyboard() -> ReplyKeyboardMarkup:
+    """Одна кнопка «поделиться геопозицией» для нового юзера без города — определяем ближайший город по гео
+    (масштабируется на любое число городов, в отличие от сетки кнопок-городов). Скрывается после нажатия."""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📍 Определить мой город", request_location=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
 
 
 def _is_https(url: str) -> bool:
