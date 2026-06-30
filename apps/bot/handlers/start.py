@@ -66,6 +66,7 @@ async def _save_acq_source(user_id: int, raw: str) -> None:
     s = raw.strip()
     if not (s and _SRC_RE.match(s)):
         return
+    s = s.lower()  # M10: lowercase — джойн аттрибуции с adstat.channels.username (всегда lowercase) точный
     async with AsyncSessionLocal() as db:
         await db.execute(text(
             "UPDATE ref.users SET acq_source=:s, acq_at=now() WHERE telegram_user_id=:uid AND acq_source IS NULL"

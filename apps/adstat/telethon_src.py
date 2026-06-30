@@ -142,7 +142,7 @@ async def _metrics_ent(client, entity) -> dict | None:
     except Exception:  # noqa: BLE001
         pass
     avg_reach = int(sum(views) / len(views)) if views else None
-    avg_reactions = int(sum(reacts) / len(reacts)) if reacts else None
+    avg_reactions = int(sum(reacts) / len(views)) if (reacts and views) else None  # H1: знаменатель = все посты (как у avg_reach), иначе reaction_rate раздут
     er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
     freq = None
     if len(dates) >= 2:
@@ -200,7 +200,7 @@ async def _metrics(client, username: str) -> dict:
         pass
 
     avg_reach = int(sum(views) / len(views)) if views else None
-    avg_reactions = int(sum(reacts) / len(reacts)) if reacts else None
+    avg_reactions = int(sum(reacts) / len(views)) if (reacts and views) else None  # H1: знаменатель = все посты (как у avg_reach), иначе reaction_rate раздут
     er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
     freq = None
     if len(dates) >= 2:
@@ -258,7 +258,7 @@ async def _enrich_one(client, username: str) -> dict | None:
     except Exception:  # noqa: BLE001
         pass
     avg_reach = int(sum(views) / len(views)) if views else None
-    avg_reactions = int(sum(reacts) / len(reacts)) if reacts else None
+    avg_reactions = int(sum(reacts) / len(views)) if (reacts and views) else None  # H1: знаменатель = все посты (как у avg_reach), иначе reaction_rate раздут
     er = round(avg_reach / subs * 100, 2) if avg_reach and subs else None
     return {"source": "telethon", "username": u, "title": getattr(ent, "title", None), "subscribers": subs,
             "avg_reach": avg_reach, "avg_reactions": avg_reactions, "er": er}

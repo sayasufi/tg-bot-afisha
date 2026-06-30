@@ -18,7 +18,9 @@ def _acq_source(raw: str | None) -> str | None:
     s = raw.strip()
     if s.startswith("src_"):
         s = s[4:]
-    return s if s and _SRC_RE.match(s) else None
+    # M10: нижний регистр — adstat.channels.username всегда lowercase, а джойн аттрибуции точный → иначе
+    # любая заглавная буква в src-метке тихо обнуляла «привёл».
+    return s.lower() if s and _SRC_RE.match(s) else None
 
 from apps.api.services.geo import reverse_city
 from apps.api.services.telegram_auth import validate_init_data
@@ -244,6 +246,9 @@ async def bootstrap(payload: BootstrapRequest, db: AsyncSession = Depends(get_as
     if payload.add and not u.favorites_merged:
         await add_favorites(db, uid, payload.add)
         u.favorites_merged = True
+    # M11: реальное ОТКРЫТИЕ приложения (bootstrap = вызов из мини-аппы). last_active_at бьётся и бот-командами,
+    # поэтому удержание в воронке закупок меряем по этой колонке, а не по last_active_at.
+    await db.execute(text("UPDATE ref.users SET last_app_open_at=now() WHERE telegram_user_id=:uid"), {"uid": uid})
     # Аттрибуция first-touch: фиксируем источник один раз (не перезаписываем).
     src = _acq_source(payload.source)
     if src:

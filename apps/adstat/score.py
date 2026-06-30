@@ -80,15 +80,18 @@ def _lerp(pts: list[tuple[float, float]], x: float) -> float:
 
 
 def _relevance(title: str | None, username: str | None) -> tuple[float, str]:
-    """Релевантность теме афиши по ключам. Мусор режем (×0.1), афишу поднимаем (×1.0), город — середина."""
+    """Релевантность теме афиши по ключам. H2: АФИША проверяется ПЕРВОЙ («афиша побеждает мусор») — иначе
+    off-topic-подстрока убивала настоящую афишу (ставк⊂вы­ставк → любой канал со словом «выставка» получал
+    ×0.10). Только если афиша-ключа нет — режем мусор (×0.10). M7: город 0.85 / тема? 0.80, чтобы вердикт
+    «брать» был достижим у сильных локальных/событийных каналов без точного ключевого слова."""
     t = f"{title or ''} {username or ''}".lower()
-    if any(k in t for k in _OFF_TOPIC):
-        return 0.10, "не тема"
     if any(k in t for k in _AFISHA):
         return 1.0, "афиша"
+    if any(k in t for k in _OFF_TOPIC):
+        return 0.10, "не тема"
     if any(k in t for k in _CITY):
-        return 0.75, "город/локалка"  # локальная аудитория — годная вторичная цель (B3: 0.6→0.75)
-    return 0.65, "тема?"  # прошёл discovery-гейт (не мусор) → не наказываем как мусор (B3: 0.5→0.65)
+        return 0.85, "город/локалка"
+    return 0.80, "тема?"  # прошёл discovery-гейт (не мусор) → не наказываем как мусор
 
 
 # Алиас → каноническое имя города (как в discover._CITIES / core.domain.cities.name). Полные стемы —
@@ -113,12 +116,21 @@ _CITY_ALIASES: dict[str, str] = {
 }
 
 
+def _city_alias_hit(alias: str, t: str) -> bool:
+    """M6: латинский алиас матчим по границам ЛАТИНСКИХ букв (perm не ловится в su**perm**arket / **perm**anent,
+    но ловится в afisha_perm / 'perm city'); кириллический стем — префикс, не предварённый кириллицей (ловит
+    инфлексии «москва/московский», но не середину слова)."""
+    if alias.isascii():
+        return re.search(r"(?<![a-z])" + re.escape(alias) + r"(?![a-z])", t) is not None
+    return re.search(r"(?<![а-я])" + re.escape(alias), t) is not None
+
+
 def infer_city(title: str | None, username: str | None, hint: str | None = None) -> str | None:
     """Город канала (каноническое имя) из подсказки discovery / названия+username. Несколько разных → None."""
     if hint:
         return hint
     t = f"{title or ''} {username or ''}".lower()
-    matched = {name for alias, name in _CITY_ALIASES.items() if alias in t}
+    matched = {name for alias, name in _CITY_ALIASES.items() if _city_alias_hit(alias, t)}
     return next(iter(matched)) if len(matched) == 1 else None
 
 
@@ -144,6 +156,9 @@ def score_channel(m: dict) -> tuple[int, str, str]:
     s = 40.0
     why: list[str] = []
     err = (reach / subs * 100) if (subs and reach) else None  # ERR %
+    if err is None:  # M5: фолбэк на готовый ER от источника (telethon/telemetr/telega, уже в %), если своего нет
+        fallback = m.get("er") or m.get("err")
+        err = float(fallback) if fallback else None
     if err is not None:
         s += _lerp(_ERR_PTS, err)
         why.append(f"ERR {err:.0f}%")
@@ -198,10 +213,6 @@ def recompute_scores() -> dict:
     n = 0
     with SessionLocal() as db:
         _rank = "(CASE source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END)"
-        best = dict(db.execute(text(
-            "SELECT DISTINCT ON (channel_id) channel_id, subscribers FROM adstat.snapshots "
-            f"WHERE subscribers IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
-        )).all())
         best_reach = dict(db.execute(text(
             "SELECT DISTINCT ON (channel_id) channel_id, avg_reach FROM adstat.snapshots "
             f"WHERE avg_reach IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
@@ -210,6 +221,13 @@ def recompute_scores() -> dict:
             "SELECT DISTINCT ON (channel_id) channel_id, avg_reactions FROM adstat.snapshots "
             f"WHERE avg_reactions IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
         )).all())
+        # M1/M2: лучший снапшот ПО ПОДПИСЧИКАМ (источник-приоритет) — подписчики авторитетны (tme>telega),
+        # а охват+реакции берём из ТОЙ ЖЕ строки, если они там есть → ERR/reaction_rate когерентны (один замер).
+        # Если в этой строке нет охвата — падаем на лучший охват по источнику отдельно (без регресса подписчиков).
+        best_snap = {r[0]: (r[1], r[2], r[3]) for r in db.execute(text(
+            "SELECT DISTINCT ON (channel_id) channel_id, subscribers, avg_reach, avg_reactions FROM adstat.snapshots "
+            f"WHERE subscribers IS NOT NULL ORDER BY channel_id, {_rank} DESC, captured_at DESC"
+        )).all()}
         # forwards / частота постинга — из последнего telethon-снапшота (raw JSONB).
         tele = dict(db.execute(text(
             "SELECT DISTINCT ON (channel_id) channel_id, raw FROM adstat.snapshots "
@@ -226,12 +244,16 @@ def recompute_scores() -> dict:
                 .order_by(AdSnapshot.captured_at.desc()).limit(10)
             ).scalars().all()
             m = _merge([{f: getattr(s, f, None) for f in _FIELDS} for s in snaps])
-            if best.get(ch.channel_id):
-                m["subscribers"] = best[ch.channel_id]   # надёжные подписчики (t.me/telethon)
-            if best_reach.get(ch.channel_id):
-                m["avg_reach"] = best_reach[ch.channel_id]  # реальный охват (просмотры постов с t.me/s)
-            if best_react.get(ch.channel_id):
-                m["avg_reactions"] = best_react[ch.channel_id]  # реакции (t.me/s или telethon)
+            bs = best_snap.get(ch.channel_id)
+            if bs:
+                m["subscribers"] = bs[0]  # авторитетные подписчики (источник-приоритет)
+                m["avg_reach"] = bs[1] if bs[1] is not None else best_reach.get(ch.channel_id)
+                m["avg_reactions"] = bs[2] if bs[2] is not None else best_react.get(ch.channel_id)
+            else:  # нет снапшота с подписчиками — берём лучший охват/реакции по источнику отдельно
+                if best_reach.get(ch.channel_id):
+                    m["avg_reach"] = best_reach[ch.channel_id]
+                if best_react.get(ch.channel_id):
+                    m["avg_reactions"] = best_react[ch.channel_id]
             tr = tele.get(ch.channel_id)
             if isinstance(tr, dict):
                 if tr.get("avg_forwards") is not None:

@@ -30,7 +30,7 @@ def _tag(channel: str, raw: str | None) -> str:
     t = (raw or channel).strip().lstrip("@")
     if not _TAG.match(t):
         raise HTTPException(status_code=422, detail="метка: латиница/цифры/_/-, до 64")
-    return t
+    return t.lower()  # M10: lowercase — чтобы метка точно совпала с acq_source юзера (тоже lowercase)
 
 
 def _parse_at(raw):
@@ -45,15 +45,17 @@ def _parse_at(raw):
 
 @router.get("/buys")
 async def list_buys(actor: str = Depends(require_admin), db: AsyncSession = Depends(get_async_db)) -> dict:
+    # M11: активность/удержание считаем по last_app_open_at (реальное открытие приложения), а НЕ last_active_at —
+    # последнее бьётся и бот-командами (/start на DM-дайджест) и завышало бы retention.
     rows = (await db.execute(text(
         "SELECT b.id::text, b.channel_username, b.src_tag, b.price, b.ad_at, b.status, b.note, b.created_at, "
         "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag) AS acquired, "
         "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag AND u.onboarded) AS onboarded, "
         "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag "
-        "      AND u.last_active_at > now() - interval '7 days') AS active7, "
-        # удержан = пришёл по каналу И был активен спустя ≥2 дня после захода (не разовый открыл-закрыл)
+        "      AND u.last_app_open_at > now() - interval '7 days') AS active7, "
+        # удержан = пришёл по каналу И открывал приложение спустя ≥2 дня после захода (не разовый открыл-закрыл)
         "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = b.src_tag AND u.acq_at IS NOT NULL "
-        "      AND u.last_active_at > u.acq_at + interval '2 days') AS retained "
+        "      AND u.last_app_open_at > u.acq_at + interval '2 days') AS retained "
         "FROM adstat.ad_buys b ORDER BY b.created_at DESC"
     ))).all()
     items = [{
@@ -65,8 +67,17 @@ async def list_buys(actor: str = Depends(require_admin), db: AsyncSession = Depe
         "cpr": round(r[3] / r[11], 1) if (r[3] and r[11]) else None,          # цена за удержанного (главная ROI-метрика)
     } for r in rows]
     spent = sum(b["price"] or 0 for b in items if b["status"] != "cancelled")
-    came = sum(b["acquired"] for b in items)
-    retained = sum(b["retained"] for b in items)
+    # M12: суммарные «пришло/удержано» — COUNT(DISTINCT) по тегам АКТИВНЫХ закупок, а не sum по строкам:
+    # две закупки с одной меткой считали бы одних юзеров дважды и занижали сводный CPV/CPR.
+    sm = (await db.execute(text(
+        "SELECT "
+        "  count(DISTINCT u.telegram_user_id) FILTER (WHERE u.telegram_user_id IS NOT NULL), "
+        "  count(DISTINCT u.telegram_user_id) FILTER (WHERE u.acq_at IS NOT NULL "
+        "      AND u.last_app_open_at > u.acq_at + interval '2 days') "
+        "FROM ref.users u WHERE u.acq_source IN "
+        "  (SELECT src_tag FROM adstat.ad_buys WHERE status <> 'cancelled')"
+    ))).first()
+    came, retained = int(sm[0] or 0), int(sm[1] or 0)
     by_status: dict = {}
     for b in items:
         by_status[b["status"]] = by_status.get(b["status"], 0) + 1

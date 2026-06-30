@@ -138,9 +138,12 @@ def enrich_shortlist_prices(top_n: int = 50, dry_run: bool = False) -> int:
     from apps.adstat.score import rank
     from apps.adstat.telega import TelegaClient
 
-    cands = [r for r in rank(limit=300) if r.get("relevance") == "афиша" and not r.get("cpm")][:top_n]
+    # M9: добираем цену и для «город/локалка» (ключевые гео-цели афиши, дешевле и точнее), не только «афиша»;
+    # min_reach пониже, чтобы шортлист не запирался на reach≥2000.
+    cands = [r for r in rank(min_reach=300, limit=400)
+             if r.get("relevance") in ("афиша", "город/локалка") and not r.get("cpm")][:top_n]
     if not cands:
-        log.info("adstat enrich_shortlist_prices: нет афиша-кандидатов без цены")
+        log.info("adstat enrich_shortlist_prices: нет on-topic-кандидатов без цены")
         return 0
     client = TelegaClient()
     cand_rows = [{"source": "telega", "username": r["username"], "avg_reach": r.get("reach"),

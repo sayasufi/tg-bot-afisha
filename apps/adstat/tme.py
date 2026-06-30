@@ -17,8 +17,24 @@ _H = {"Accept-Language": "en-US,en;q=0.9"}
 _PACE = 0.4
 _RE_SUBS = re.compile(r"([\d][\d\s]{0,13})\s*(?:subscriber|member|подписчик)", re.I)
 _RE_VIEWS = re.compile(r"message_views[^>]*>([^<]+)<")
-# Реакция: <span class="tgme_reaction">…</i>97</span> — счётчик после эмодзи (</i>).
-_RE_REACT = re.compile(r'class="tgme_reaction".*?</i>([\d.,KkМмKk\s]+)</span>', re.DOTALL)
+# Реакция = число прямо перед </span> внутри tgme_reaction-спана. Эмодзи закрывается по-разному (</i>,
+# </tg-emoji>, платная звезда tgme_reaction_paid) — поэтому НЕ якоримся на </i> (M4: иначе теряли кастом/
+# платные реакции), а берём спан целиком и достаём хвостовое число.
+_RE_REACT = re.compile(r'class="tgme_reaction[^"]*"[^>]*>(.*?)</span>', re.DOTALL)
+_RE_TRAIL_NUM = re.compile(r"([\d][\d.,]*\s*[KkКкМмMm]?)\s*$")
+
+
+def _react_counts(html: str) -> list[int]:
+    """Счётчики всех реакций (по всем постам превью). Внутри спана убираем вложенные теги эмодзи и берём
+    финальное число."""
+    out = []
+    for inner in _RE_REACT.findall(html):
+        m = _RE_TRAIL_NUM.search(re.sub(r"<[^>]+>", "", inner).strip())
+        if m:
+            n = _num(m.group(1))
+            if n:
+                out.append(n)
+    return out
 
 
 def _num(s: str) -> int | None:
@@ -57,9 +73,10 @@ def fetch_post_stats(username: str) -> tuple[int | None, int | None]:
         return None, None
     views = [n for n in (_num(v) for v in _RE_VIEWS.findall(html)) if n]
     avg_reach = sum(views) // len(views) if views else None
-    rcounts = [n for n in (_num(v) for v in _RE_REACT.findall(html)) if n]
-    posts_with_react = html.count("js-message_reactions")  # постов с реакциями
-    avg_reactions = sum(rcounts) // posts_with_react if (rcounts and posts_with_react) else None
+    # H1: реакции усредняем по ТОМУ ЖЕ числу постов, что и охват (len(views)) — иначе знаменатели разные
+    # (раньше делили на «посты-с-реакциями») и reaction_rate=reactions/reach раздувался, пробивая анти-накрутку.
+    rcounts = _react_counts(html)
+    avg_reactions = sum(rcounts) // len(views) if (rcounts and views) else None
     return avg_reach, avg_reactions
 
 
