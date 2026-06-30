@@ -16,7 +16,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from core.config.settings import get_settings
 from core.db.models import TelegramChannel
@@ -159,3 +159,39 @@ async def refresh_subscribers() -> dict:
         "retired_below_min": retired,
         "min_subscribers": _MIN_SUBSCRIBERS,
     }
+
+
+# Event-yield floor: the prunes above retire channels that are DARK / preview-off / tiny — but a channel can
+# be live, posting, ≥100 subs and STILL never give us an event (it posts only non-events, or always-past
+# dates, or text we can't extract). For an event SOURCE that's dead weight forever. So once a channel has had
+# a fair chance — its source is old enough AND we've actually PROCESSED enough of its posts — yet produced
+# ZERO event candidates, retire it. Conservative thresholds so a new/seasonal venue isn't cut prematurely.
+_YIELD_GRACE_DAYS = 21
+_YIELD_MIN_PROCESSED = 15
+# Source name mirrors ensure_source: "telegram_public:<username, @/space-trimmed, lowercased>".
+_SRC_NAME = "'telegram_public:' || lower(btrim(tc.username, '@ '))"
+
+
+async def retire_zero_yield_channels() -> dict:
+    """Retire active venue channels that have been fetched ≥`_YIELD_GRACE_DAYS` ago AND had
+    ≥`_YIELD_MIN_PROCESSED` posts normalised, yet produced 0 event candidates — i.e. proven NOT an event
+    source. NULL-yield with too-few processed posts (still draining) or a too-young source is left alone."""
+    async with WorkerAsyncSessionLocal() as db:
+        res = await db.execute(text(
+            "UPDATE ref.telegram_channels tc SET is_active = false WHERE tc.is_active "
+            f"  AND EXISTS (SELECT 1 FROM ref.sources s WHERE s.name = {_SRC_NAME} "
+            "              AND s.created_at < now() - make_interval(days => :grace)) "
+            "  AND (SELECT count(*) FROM events.raw_events re JOIN ref.sources s2 "
+            f"       ON s2.source_id = re.source_id AND s2.name = {_SRC_NAME} "
+            "       WHERE re.processed_hash IS NOT NULL) >= :minproc "
+            "  AND NOT EXISTS (SELECT 1 FROM events.event_candidates c "
+            "                  JOIN events.raw_events re2 ON re2.raw_id = c.raw_id "
+            f"                  JOIN ref.sources s3 ON s3.source_id = re2.source_id AND s3.name = {_SRC_NAME}) "
+            "RETURNING tc.username"
+        ), {"grace": _YIELD_GRACE_DAYS, "minproc": _YIELD_MIN_PROCESSED})
+        retired = list(res.scalars().all())
+        await db.commit()
+    if retired:
+        log.info("telegram_yield retired %s (0 candidates after %sd / %s+ processed posts)",
+                 retired, _YIELD_GRACE_DAYS, _YIELD_MIN_PROCESSED)
+    return {"retired_zero_yield": retired, "count": len(retired)}

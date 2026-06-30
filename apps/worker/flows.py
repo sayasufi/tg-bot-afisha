@@ -120,9 +120,12 @@ async def fetch_telegram_public():
 
 @flow(name="prune-telegram-channels", retries=1, retry_delay_seconds=60, timeout_seconds=600, log_prints=True)
 async def prune_telegram_channels():
-    """Daily: deactivate channels that went dark (no posts in 60d / preview gone) so the active set stays live."""
-    from pipeline.maintenance.telegram_health import prune_stale_channels
-    return await prune_stale_channels()
+    """Daily: deactivate channels that went dark (no posts in 60d / preview gone) AND channels that proved
+    NOT to be event sources (fetched long enough, posts processed, but 0 events) so the active set stays live."""
+    from pipeline.maintenance.telegram_health import prune_stale_channels, retire_zero_yield_channels
+    dark = await prune_stale_channels()
+    zero_yield = await retire_zero_yield_channels()
+    return {**dark, **zero_yield}
 
 
 @flow(name="sweep-stale-runs", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
