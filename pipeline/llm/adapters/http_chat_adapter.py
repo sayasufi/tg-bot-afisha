@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -78,12 +79,27 @@ class HTTPChatAdapter(LLMAdapter):
         self.timeout_seconds = timeout_seconds
 
     async def _chat(self, payload: dict) -> dict:
-        """POST to the LLM endpoint while holding ONE service-wide concurrency slot (see core.services.llm_limiter)."""
+        """POST to the LLM endpoint while holding ONE service-wide concurrency slot (see core.services.llm_limiter).
+        One bounded retry on FAST transient failures (a dropped keep-alive, a 502 from the reverse proxy) — a
+        single blip otherwise silently mis-buckets an event as 'other' or suppresses a real dedup merge. NOT
+        retried on read-timeout (would extend the slot-hold against a hung server) nor on 4xx (our own fault)."""
         async with llm_slot():
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.post(f"{self.base_url}/api/chat", json=payload)
-                response.raise_for_status()
-                return response.json()
+                last: Exception = RuntimeError("no attempt")
+                for attempt in range(2):
+                    try:
+                        response = await client.post(f"{self.base_url}/api/chat", json=payload)
+                        response.raise_for_status()
+                        return response.json()
+                    except (httpx.ConnectError, httpx.RemoteProtocolError) as exc:
+                        last = exc
+                    except httpx.HTTPStatusError as exc:
+                        if exc.response.status_code < 500:
+                            raise  # 4xx — our fault, retrying won't help
+                        last = exc
+                    if attempt == 0:
+                        await asyncio.sleep(0.4)
+                raise last
 
     async def judge_same_event(self, title_a: str, title_b: str) -> tuple[bool, float]:
         """Ask whether two same-venue+same-time titles are one event. Returns

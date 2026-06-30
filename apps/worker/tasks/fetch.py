@@ -37,6 +37,9 @@ async def _source_active(db, name: str) -> bool:
     return row is None or bool(row[0])
 
 
+_PER_CITY_TIMEOUT = 300  # hard wall-clock budget per city in _per_city (one hung connector can't starve the rest)
+
+
 async def _per_city(one, source_base: str | None = None) -> dict:
     """Run a single-city fetch ``one(db, city)`` for every ACTIVE city, sharing one DB session.
     A city's failure is recorded under its slug and skipped — it never aborts the others (so a
@@ -50,7 +53,13 @@ async def _per_city(one, source_base: str | None = None) -> dict:
                 out[city.slug] = {"skipped": "disabled"}
                 continue
             try:
-                out[city.slug] = await one(db, city)
+                # Hard per-city budget: a connector whose HTTP client hangs (slow upstream / half-open
+                # socket) must not consume the whole flow's timeout and starve the other ~15 cities. 300s
+                # is generous for a full city scan; on timeout the city is cancelled + recorded, others go on.
+                out[city.slug] = await asyncio.wait_for(one(db, city), timeout=_PER_CITY_TIMEOUT)
+            except asyncio.TimeoutError:
+                await db.rollback()
+                out[city.slug] = {"error": "per-city timeout"}
             except Exception as exc:  # the inner flow already recorded the failed source_run
                 await db.rollback()
                 out[city.slug] = {"error": repr(exc)}
