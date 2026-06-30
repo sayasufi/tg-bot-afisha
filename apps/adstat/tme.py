@@ -17,6 +17,8 @@ _H = {"Accept-Language": "en-US,en;q=0.9"}
 _PACE = 0.4
 _RE_SUBS = re.compile(r"([\d][\d\s]{0,13})\s*(?:subscriber|member|подписчик)", re.I)
 _RE_VIEWS = re.compile(r"message_views[^>]*>([^<]+)<")
+# Реакция: <span class="tgme_reaction">…</i>97</span> — счётчик после эмодзи (</i>).
+_RE_REACT = re.compile(r'class="tgme_reaction".*?</i>([\d.,KkМмKk\s]+)</span>', re.DOTALL)
 
 
 def _num(s: str) -> int | None:
@@ -46,15 +48,19 @@ def fetch_subscribers(username: str) -> int | None:
     return int(digits) if digits else None
 
 
-def fetch_reach(username: str) -> int | None:
-    """Реальный средний охват = среднее просмотров последних постов из t.me/s/<username>. Точнее
-    каталожного avg_reach (тот часто завышен/устарел). None если постов/просмотров нет."""
+def fetch_post_stats(username: str) -> tuple[int | None, int | None]:
+    """Из t.me/s/<username>: (средний охват = среднее просмотров последних постов, средние реакции на
+    пост). Точнее каталога. (None, None) если превью без постов/ошибка."""
     try:
         html = creq.get(f"https://t.me/s/{username}", impersonate="chrome", timeout=20, headers=_H).text
     except Exception:
-        return None
-    nums = [n for n in (_num(v) for v in _RE_VIEWS.findall(html)) if n]
-    return sum(nums) // len(nums) if nums else None
+        return None, None
+    views = [n for n in (_num(v) for v in _RE_VIEWS.findall(html)) if n]
+    avg_reach = sum(views) // len(views) if views else None
+    rcounts = [n for n in (_num(v) for v in _RE_REACT.findall(html)) if n]
+    posts_with_react = html.count("js-message_reactions")  # постов с реакциями
+    avg_reactions = sum(rcounts) // posts_with_react if (rcounts and posts_with_react) else None
+    return avg_reach, avg_reactions
 
 
 def refresh_subscribers(limit: int = 400) -> dict:
@@ -78,14 +84,15 @@ def refresh_subscribers(limit: int = 400) -> dict:
         for cid, uname in rows:
             subs = fetch_subscribers(uname)
             time.sleep(_PACE)
-            reach = fetch_reach(uname)
+            reach, reactions = fetch_post_stats(uname)
             subs = subs if (subs and subs > 0) else None
             reach = reach if (reach and reach > 0) else None
+            reactions = reactions if (reactions and reactions > 0) else None
             if subs or reach:
                 db.execute(text(
-                    "INSERT INTO adstat.snapshots (channel_id, source, captured_at, subscribers, avg_reach) "
-                    "VALUES (:c, 'tme', now(), :s, :r)"
-                ), {"c": cid, "s": subs, "r": reach})
+                    "INSERT INTO adstat.snapshots (channel_id, source, captured_at, subscribers, avg_reach, avg_reactions) "
+                    "VALUES (:c, 'tme', now(), :s, :r, :rx)"
+                ), {"c": cid, "s": subs, "r": reach, "rx": reactions})
                 db.commit()
                 n_ok += 1
             else:

@@ -43,6 +43,7 @@ export const NAV: NavGroup[] = [
       { label: "Пользователи", to: "/users" },
       { label: "Рассылки", to: "/broadcasts" },
       { label: "Реклама", to: "/adstat" },
+      { label: "Закупки", to: "/buys" },
     ],
   },
   {

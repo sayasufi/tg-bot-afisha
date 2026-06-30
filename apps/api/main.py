@@ -7,6 +7,7 @@ from apps.api.routes.admin_adstat import router as admin_adstat_router
 from apps.api.routes.admin_analytics import router as admin_analytics_router
 from apps.api.routes.admin_audit import router as admin_audit_router
 from apps.api.routes.admin_broadcasts import router as admin_broadcasts_router
+from apps.api.routes.admin_buys import router as admin_buys_router
 from apps.api.routes.admin_channels import router as admin_channels_router
 from apps.api.routes.admin_cities import router as admin_cities_router
 from apps.api.routes.admin_dedup import router as admin_dedup_router
@@ -160,3 +161,4 @@ app.include_router(admin_cities_router)
 app.include_router(admin_audit_router)
 app.include_router(admin_adstat_router)
 app.include_router(admin_ops_router)
+app.include_router(admin_buys_router)

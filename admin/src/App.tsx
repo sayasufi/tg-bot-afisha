@@ -6,6 +6,7 @@ import { Adstat } from "./pages/Adstat";
 import { Analytics } from "./pages/Analytics";
 import { Audit } from "./pages/Audit";
 import { Broadcasts } from "./pages/Broadcasts";
+import { Buys } from "./pages/Buys";
 import { Channels } from "./pages/Channels";
 import { Cities } from "./pages/Cities";
 import { Danger } from "./pages/Danger";
@@ -45,6 +46,7 @@ function Gate() {
         <Route path="cities" element={<Cities />} />
         <Route path="audit" element={<Audit />} />
         <Route path="adstat" element={<Adstat />} />
+        <Route path="buys" element={<Buys />} />
         <Route path="ops/data" element={<DataOps />} />
         <Route path="ops/danger" element={<Danger />} />
         <Route path="ops/system" element={<System />} />
