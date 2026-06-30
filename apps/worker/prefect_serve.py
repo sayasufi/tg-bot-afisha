@@ -37,10 +37,10 @@ _SCHEDULE = [
     # Every 30 min: mark source_runs orphaned by a deploy/crash (stuck in 'running') as 'interrupted',
     # so the run log doesn't accumulate phantom in-flight rows. The 2h threshold is well above any run.
     (flows.sweep_stale_runs, 1800),
-    # Self-heal the runner: release orphaned deployment concurrency slots (a crashed/killed run that never
-    # freed its slot wedges that deployment forever → the cause of daily/12h flows silently dying for days)
-    # + collapse the overdue SCHEDULED pile-up. Every 30 min.
-    (flows.sweep_orphan_concurrency_slots, 1800),
+    # Self-heal the runner: kill zombie runs, release orphaned deployment concurrency slots (a crashed/killed
+    # run that never freed its slot wedges that deployment forever → the cause of daily/12h flows silently
+    # dying for days) + collapse the overdue SCHEDULED pile-up. Every 10 min for fast recovery.
+    (flows.sweep_orphan_concurrency_slots, 600),
     # Keep the Meilisearch typeahead index fresh (no-op until MEILI_SEARCH_ENABLED). Cheap full
     # reindex at this scale; the atomic swap means search never sees an empty index.
     (flows.reindex_search, 120),
@@ -99,9 +99,39 @@ _SCHEDULE = [
 ]
 
 
+def _reset_orphaned_runner_state() -> None:
+    """Before serving: the PREVIOUS runner process, if hard-killed (deploy/OOM/`docker restart`), leaves
+    RUNNING/PENDING flow runs and HELD concurrency slots that Prefect never reconciles — so deployments come
+    up already wedged (the runner aborts every submission as 'non-pending SCHEDULED') and never run again.
+    Clear that orphaned state so every restart begins from a clean slate; the schedule is re-created by serve().
+    Best-effort: if the prefect store isn't reachable yet, skip (the periodic sweep-orphan-concurrency catches up)."""
+    import os
+
+    try:
+        from sqlalchemy import create_engine, text
+
+        url = (os.environ.get("PREFECT_API_DATABASE_CONNECTION_URL") or "").replace("+asyncpg", "+psycopg")
+        if not url:
+            pw = os.environ.get("PREFECT_DB_PASSWORD")
+            url = f"postgresql+psycopg://prefect:{pw}@prefect-postgres:5432/prefect" if pw else ""
+        if not url:
+            return
+        eng = create_engine(url, pool_pre_ping=True)
+        try:
+            with eng.begin() as c:
+                runs = c.execute(text("DELETE FROM flow_run WHERE state_type IN ('RUNNING', 'PENDING')")).rowcount
+                slots = c.execute(text("UPDATE concurrency_limit_v2 SET active_slots = 0 WHERE active_slots > 0")).rowcount
+        finally:
+            eng.dispose()
+        print(f"runner-startup: cleared {runs} orphaned runs + released {slots} held slots")
+    except Exception as exc:  # pragma: no cover — never block startup on the cleanup
+        print(f"runner-startup cleanup skipped: {exc!r}")
+
+
 def main() -> None:
     from core.observability.sentry import init_sentry
     init_sentry("worker")  # тихие падения инжеста/нормализации/рассылок попадают в Sentry
+    _reset_orphaned_runner_state()  # every restart starts from a clean runner state (no wedged deployments)
     deployments = [
         fl.to_deployment(name=fl.name, interval=interval, concurrency_limit=1)
         for fl, interval in _SCHEDULE

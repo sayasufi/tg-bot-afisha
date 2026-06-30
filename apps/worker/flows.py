@@ -150,12 +150,23 @@ def sweep_orphan_concurrency_slots():
     eng = create_engine(url, pool_pre_ping=True)
     try:
         with eng.begin() as c:
+            # 1) Kill ZOMBIE running runs first. A run RUNNING longer than the longest flow timeout (30 min)
+            #    is dead — its process was hard-killed (deploy/OOM) so Prefect never finalised it; the record
+            #    lingers AND makes its slot look held. >1h is safely past every flow's timeout. MUST run before
+            #    the slot release below, else the zombie's own RUNNING row blocks that slot from freeing.
+            zombies = c.execute(text(
+                "DELETE FROM flow_run WHERE state_type = 'RUNNING' AND start_time < now() - interval '1 hour'"
+            )).rowcount
+            # 2) Release any deployment slot NOT held by a FRESH (pending, or running <1h) run — frees slots
+            #    orphaned by a kill or by the zombies just deleted.
             released = c.execute(text(
                 "UPDATE concurrency_limit_v2 clv SET active_slots = 0 "
                 "WHERE clv.active_slots > 0 AND clv.name LIKE 'deployment:%' "
-                "  AND NOT EXISTS (SELECT 1 FROM flow_run fr WHERE fr.state_type IN ('RUNNING', 'PENDING') "
-                "                  AND ('deployment:' || fr.deployment_id::text) = clv.name)"
+                "  AND NOT EXISTS (SELECT 1 FROM flow_run fr WHERE ('deployment:' || fr.deployment_id::text) = clv.name "
+                "    AND (fr.state_type = 'PENDING' "
+                "         OR (fr.state_type = 'RUNNING' AND fr.start_time > now() - interval '1 hour')))"
             )).rowcount
+            # 3) Collapse the overdue SCHEDULED pile-up: keep only the LATEST pending run per deployment.
             collapsed = c.execute(text(
                 "DELETE FROM flow_run fr WHERE fr.state_type = 'SCHEDULED' AND fr.deployment_id IS NOT NULL "
                 "  AND EXISTS (SELECT 1 FROM flow_run fr2 WHERE fr2.deployment_id = fr.deployment_id "
@@ -163,9 +174,9 @@ def sweep_orphan_concurrency_slots():
             )).rowcount
     finally:
         eng.dispose()
-    if released or collapsed:
-        print(f"sweep-orphan-concurrency: released {released} stuck slots, collapsed {collapsed} stale scheduled runs")
-    return {"released_slots": released, "collapsed_scheduled": collapsed}
+    if zombies or released or collapsed:
+        print(f"sweep-orphan-concurrency: killed {zombies} zombie runs, released {released} slots, collapsed {collapsed} scheduled")
+    return {"killed_zombies": zombies, "released_slots": released, "collapsed_scheduled": collapsed}
 
 
 @flow(name="sweep-stale-runs", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
