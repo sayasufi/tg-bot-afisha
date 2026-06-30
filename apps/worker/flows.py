@@ -155,6 +155,27 @@ async def normalize_raw():
     return await normalize._normalize_impl()
 
 
+@flow(name="retry-transient-skips", retries=1, retry_delay_seconds=60, timeout_seconds=300, log_prints=True)
+def retry_transient_skips():
+    """Переоткрыть raw_events с ТРАНЗИЕНТНЫМ LLM-skip (llm_error/invalid_json) → попадут обратно в очередь
+    нормализации; счётчик llm_attempts++, после 5 попыток — терминальный 'llm_error_dead'. Чинит
+    безвозвратную потерю TG-событий в окно недоступности LLM (unprocessed_raw_ids берёт только skip_reason='')."""
+    from sqlalchemy import text
+
+    from core.db.session import SessionLocal
+    with SessionLocal() as db:
+        dead = db.execute(text(
+            "UPDATE events.raw_events SET skip_reason='llm_error_dead' "
+            "WHERE skip_reason IN ('llm_error','invalid_json') AND llm_attempts >= 5"
+        )).rowcount
+        reopened = db.execute(text(
+            "UPDATE events.raw_events SET skip_reason='', llm_attempts=llm_attempts+1 "
+            "WHERE skip_reason IN ('llm_error','invalid_json')"
+        )).rowcount
+        db.commit()
+    return {"reopened": reopened, "dead": dead}
+
+
 @flow(name="reprocess-changed", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=900, log_prints=True)
 async def reprocess_changed():
     # Re-normalize structured-source raws whose content changed since first ingest (date shift / price

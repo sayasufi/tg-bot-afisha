@@ -54,6 +54,9 @@ _SCHEDULE = [
     # Re-normalize structured-source raws whose content changed since first ingest (a date shifted as
     # old ones passed, a price appeared) so candidates + occurrences don't freeze at first-seen state.
     (flows.reprocess_changed, 300),
+    # Переоткрыть транзиентные LLM-skip (llm_error/invalid_json) раз в 30 мин — даём LLM восстановиться,
+    # чтобы окно его недоступности не теряло TG-события навсегда.
+    (flows.retry_transient_skips, 1800),
     # Self-heal venue+event dups every 15 min (ordered: venues then events) so the
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.

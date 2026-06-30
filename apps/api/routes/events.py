@@ -17,6 +17,7 @@ from apps.api.schemas.events import (
 )
 from apps.api.services.events_service import (
     EventQueryService,
+    _redis_client,
     map_cache_get,
     map_cache_key,
     map_cache_set,
@@ -240,13 +241,32 @@ async def events_by_ids(payload: ByIdsRequest, db: AsyncSession = Depends(get_as
     return await service.list_by_ids(ids, payload.lat, payload.lon)
 
 
-@router.get("/events/{event_id}", response_model=EventDetailResponse)
+_DETAIL_TTL = 90  # event detail changes only on ingest — short Redis cache absorbs the thundering herd
+# when the FIRST mass digest/broadcast sends everyone to the same few hot events at once.
+
+
+@router.get("/events/{event_id}")
 async def get_event_detail(event_id: UUID, db: AsyncSession = Depends(get_async_db)):
+    rc = _redis_client()
+    key = f"evdetail:{event_id}"
+    if rc is not None:
+        try:
+            cached = await rc.get(key)
+            if cached:
+                return Response(cached, media_type="application/json")
+        except Exception:
+            pass
     service = EventQueryService(db)
     result = await service.event_detail(event_id)
     if not result:
         raise HTTPException(status_code=404, detail="event not found")
-    return result
+    body = orjson.dumps(result)
+    if rc is not None:
+        try:
+            await rc.set(key, body, ex=_DETAIL_TTL)
+        except Exception:
+            pass
+    return Response(body, media_type="application/json")
 
 
 @router.get("/venues/{venue_id}")
