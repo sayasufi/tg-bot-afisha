@@ -57,6 +57,8 @@ _SCHEDULE = [
     # Переоткрыть транзиентные LLM-skip (llm_error/invalid_json) раз в 30 мин — даём LLM восстановиться,
     # чтобы окно его недоступности не теряло TG-события навсегда.
     (flows.retry_transient_skips, 1800),
+    # Watchdog свежести источников раз в час — DM владельцу при «тихой смерти» коннектора.
+    (flows.source_freshness_watch, 3600),
     # Self-heal venue+event dups every 15 min (ordered: venues then events) so the
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.

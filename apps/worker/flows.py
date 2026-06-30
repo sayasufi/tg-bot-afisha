@@ -176,6 +176,66 @@ def retry_transient_skips():
     return {"reopened": reopened, "dead": dead}
 
 
+@flow(name="source-freshness-watch", retries=0, timeout_seconds=120, log_prints=True)
+async def source_freshness_watch():
+    """Алерт владельцу, если КОННЕКТОР (yandex/afisha/kudago/timepad/telegram) перестал УСПЕШНО собирать
+    события > N часов — «тихая смерть» источника (смена схемы/captcha/дохлый токен) иначе видна только
+    вручную в админке. Группируем 376 sources в коннекторы по имени; throttle — раз в день на коннектор."""
+    from datetime import datetime, timezone
+
+    import httpx
+    from sqlalchemy import text
+
+    from core.config.settings import get_settings
+    from core.db.session import WorkerAsyncSessionLocal
+    from core.infra.redis import get_redis
+
+    STALE_H = 18
+    settings = get_settings()
+    owner = settings.admin_test_user_id or 5222335152  # владелец сервиса (@throlib)
+    async with WorkerAsyncSessionLocal() as db:
+        rows = (await db.execute(text(
+            "SELECT CASE WHEN s.kind = 'telegram' THEN 'telegram' ELSE substring(s.name from '^[a-z]+') END AS conn, "
+            "  count(DISTINCT s.source_id) AS srcs, max(r.finished_at) AS last_ok "
+            "FROM ref.sources s "
+            "LEFT JOIN events.source_runs r ON r.source_id = s.source_id AND r.status = 'success' "
+            "  AND r.finished_at > now() - interval '2 days' "
+            "WHERE s.is_active GROUP BY 1"
+        ))).all()
+    now = datetime.now(timezone.utc)
+    stale = []
+    for conn, srcs, last_ok in rows:
+        if not conn:
+            continue
+        age_h = None if last_ok is None else (now - last_ok).total_seconds() / 3600
+        if age_h is None or age_h > STALE_H:
+            stale.append((conn, int(srcs or 0), "никогда(>2д)" if age_h is None else f"{int(age_h)}ч"))
+    if not stale or not settings.telegram_bot_token:
+        return {"stale": [s[0] for s in stale], "notified": False}
+    client = get_redis(decode=True)
+    day = now.strftime("%Y%m%d")
+    lines = []
+    for conn, srcs, age in stale:
+        send = True
+        if client is not None:
+            try:
+                send = bool(await client.set(f"srcwatch:{conn}:{day}", "1", nx=True, ex=2 * 24 * 3600))
+            except Exception:
+                send = True
+        if send:
+            lines.append(f"• <b>{conn}</b> — нет успешного сбора {age} ({srcs} ист.)")
+    if not lines:
+        return {"stale": [s[0] for s in stale], "notified": False}
+    msg = "⚠️ <b>Источники молчат</b>\n\n" + "\n".join(lines) + "\n\nПроверь коннектор/токен/схему (Админка → Источники)."
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            await c.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                         json={"chat_id": int(owner), "text": msg, "parse_mode": "HTML", "disable_web_page_preview": True})
+    except Exception:
+        pass
+    return {"stale": [s[0] for s in stale], "notified": True}
+
+
 @flow(name="reprocess-changed", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=900, log_prints=True)
 async def reprocess_changed():
     # Re-normalize structured-source raws whose content changed since first ingest (date shift / price
