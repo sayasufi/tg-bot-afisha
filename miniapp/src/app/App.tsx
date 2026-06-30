@@ -945,7 +945,13 @@ export function App() {
           primary_image_url: d.primary_image_url,
         });
       })
-      .catch(() => undefined);
+      .catch(() => {
+        // Don't silently dump the user on the default map — a share/invite link is the most valuable
+        // acquisition path, and «друг пригласил → пришёл» breaks here. Tell them, and DROP the guard so
+        // a reload (or re-tapping the link) re-attempts the open (transient API/network).
+        try { sessionStorage.removeItem("okrest_deeplink"); } catch { /* ignore */ }
+        showToast("Не удалось открыть событие — попробуй ещё раз", { tone: "muted" });
+      });
   }, [openEvent]);
 
   return (
