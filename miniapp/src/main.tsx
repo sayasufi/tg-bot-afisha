@@ -1,8 +1,13 @@
 // Entry gate. The map mini-app runs ONLY inside Telegram (it lives at app.okrestmap.ru). A plain browser
 // is bounced to the landing (okrestmap.ru). The heavy map bundle is a dynamic import, so it's never even
 // fetched outside Telegram — the browser just loads this tiny gate and redirects.
-const tg = (window as { Telegram?: { WebApp?: { initData?: string; platform?: string } } }).Telegram?.WebApp;
-const inTelegram = !!(tg && (tg.initData?.length || (tg.platform && tg.platform !== "unknown")));
+function webApp() {
+  return (window as { Telegram?: { WebApp?: { initData?: string; platform?: string } } }).Telegram?.WebApp;
+}
+function inTelegram(): boolean {
+  const tg = webApp();
+  return !!(tg && (tg.initData?.length || (tg.platform && tg.platform !== "unknown")));
+}
 
 const RETRY_KEY = "okrest_chunk_retry";
 
@@ -45,8 +50,20 @@ function mountWithRetry(): void {
     });
 }
 
-if (inTelegram) {
-  mountWithRetry();
-} else {
+// Gate with a short grace window: a real Telegram cold-open sometimes hasn't injected initData/platform yet.
+// If the Telegram.WebApp object is present, give it ~1s (retry) rather than hard-bouncing a real user to the
+// landing «without a way back». A plain browser has NO WebApp object → redirect immediately as before.
+let gateTries = 0;
+function gate(): void {
+  if (inTelegram()) {
+    mountWithRetry();
+    return;
+  }
+  if (webApp() && gateTries < 7) {
+    gateTries += 1;
+    setTimeout(gate, 150);
+    return;
+  }
   window.location.replace("https://okrestmap.ru/");
 }
+gate();

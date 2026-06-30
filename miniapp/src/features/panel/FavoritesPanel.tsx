@@ -25,6 +25,7 @@ export function FavoritesPanel({
   const [favs, setFavs] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [showPast, setShowPast] = useState(false);
   const idsKey = [...favIds].sort().join(",");
 
   const load = () => {
@@ -55,6 +56,16 @@ export function FavoritesPanel({
 
   const ptr = usePullToRefresh(() => load());
 
+  // Прошедшие сейвы не должны висеть навсегда поводом-без-повода: вверху — актуальные (ещё идут/впереди),
+  // прошедшие — под катом «Прошедшие · N», чтобы не загромождать и не путать («это уже было»).
+  const nowMs = Date.now();
+  const isPast = (e: EventItem) => {
+    const end = Date.parse(e.date_end || e.date_start);
+    return Number.isFinite(end) && end < nowMs;
+  };
+  const upcoming = favs.filter((e) => !isPast(e));
+  const past = favs.filter(isPast);
+
   return (
     <div className="panelview listview">
       <header className="panelview__head">
@@ -66,7 +77,28 @@ export function FavoritesPanel({
       <div className="panelview__scroll" ref={ptr.ref}>
         <PullHint pull={ptr.pull} armed={ptr.armed} refreshing={loading} />
         {favs.length > 0 ? (
-          <CatalogFeed items={favs} userPos={userPos} onSelect={onSelect} />
+          <>
+            {upcoming.length > 0 && <CatalogFeed items={upcoming} userPos={userPos} onSelect={onSelect} />}
+            {upcoming.length === 0 && past.length > 0 && (
+              <p className="panelview__hint" style={{ padding: "16px" }}>
+                Все сохранённые события уже прошли. {onBrowseWeekend ? "Загляни в афишу — найдётся новое." : ""}
+              </p>
+            )}
+            {past.length > 0 && (
+              <div style={{ borderTop: "1px solid var(--line)", marginTop: upcoming.length ? 8 : 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowPast((v) => !v)}
+                  style={{ width: "100%", textAlign: "left", padding: "12px 16px", background: "none", border: 0,
+                    color: "var(--ink-dim)", font: "inherit", cursor: "pointer", display: "flex", justifyContent: "space-between" }}
+                >
+                  <span>Прошедшие · {past.length}</span>
+                  <span>{showPast ? "▴" : "▾"}</span>
+                </button>
+                {showPast && <CatalogFeed items={past} userPos={userPos} onSelect={onSelect} />}
+              </div>
+            )}
+          </>
         ) : loading ? null : error ? (
           <div className="favempty">
             <p className="panelview__hint">Не удалось загрузить избранное. Попробуй ещё раз.</p>
