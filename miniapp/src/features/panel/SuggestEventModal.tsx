@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
-import { suggestEvent } from "../../api/suggest";
+import { suggestEvent, uploadSuggestImage } from "../../api/suggest";
 import { IconClose } from "../../lib/icons";
 import { hapticNotify } from "../../lib/telegram";
 
@@ -32,6 +32,8 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
   const [price, setPrice] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [image, setImage] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -39,6 +41,26 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
   if (!open) return null;
 
   const canSubmit = title.trim().length >= 2 && !!date && (!!venue.trim() || !!address.trim());
+
+  async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // let the user re-pick the same file after removing
+    if (!f) return;
+    if (!f.type.startsWith("image/")) {
+      setErr("Нужен файл-изображение");
+      return;
+    }
+    if (f.size > 8 * 1024 * 1024) {
+      setErr("Файл слишком большой — до 8 МБ");
+      return;
+    }
+    setUploading(true);
+    setErr(null);
+    const res = await uploadSuggestImage(f);
+    setUploading(false);
+    if (res.ok) setImage(res.url);
+    else setErr(res.error);
+  }
 
   async function submit() {
     if (!canSubmit || busy) return;
@@ -53,6 +75,7 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
       is_free: isFree,
       price_min: isFree ? 0 : price ? Number(price) : undefined,
       url: url.trim() || undefined,
+      image: image || undefined,
       description: description.trim() || undefined,
     });
     setBusy(false);
@@ -122,6 +145,21 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
                 {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </label>
+
+            <div className="suggest__field">
+              <span className="suggest__label">Афиша / фото</span>
+              {image ? (
+                <div className="suggest__photo">
+                  <img src={image} alt="постер события" />
+                  <button type="button" className="suggest__photo-x" onClick={() => setImage("")}>убрать</button>
+                </div>
+              ) : (
+                <label className={"suggest__upload" + (uploading ? " suggest__upload--busy" : "")}>
+                  <input type="file" accept="image/*" hidden disabled={uploading} onChange={onPickImage} />
+                  <span>{uploading ? "Загружаем…" : "📷 Загрузить фото"}</span>
+                </label>
+              )}
+            </div>
 
             <div className="suggest__field">
               <span className="suggest__label">Цена</span>
