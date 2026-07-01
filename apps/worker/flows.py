@@ -307,7 +307,9 @@ async def pipeline_backlog_watch():
     этот — за ВОЗРАСТОМ головы и глубиной очередей normalize/enrich/dedup. Ловит ровно «3957 застряло на
     сутки, никто не заметил»: если самый старый необработанный raw старше STALE_H ч (очередь не движется)
     ИЛИ любая очередь глубже DEPTH_ALERT — DM (throttle раз в ~6ч). Возраст головы важнее числа — разовый
-    всплеск ингеста сам рассосётся и голову не состарит."""
+    всплеск ингеста сам рассосётся и голову не состарит. Считаем только НИКОГДА-не-пробованные raw
+    (llm_attempts=0): иначе retry_transient_skips, переоткрывая старые llm_error-посты (они несут свой
+    старый fetched_at), ложно триггерил бы «старейший N дней» — это ретрай-churn, а не застой."""
     from datetime import datetime, timezone
 
     import httpx
@@ -324,10 +326,10 @@ async def pipeline_backlog_watch():
     async with WorkerAsyncSessionLocal() as db:
         row = (await db.execute(text(
             "SELECT "
-            "(SELECT count(*) FROM events.raw_events re WHERE re.skip_reason = '' "
+            "(SELECT count(*) FROM events.raw_events re WHERE re.skip_reason = '' AND re.llm_attempts = 0 "
             "   AND NOT EXISTS (SELECT 1 FROM events.event_candidates c WHERE c.raw_id = re.raw_id)), "
             "(SELECT extract(epoch FROM now() - min(re.fetched_at)) / 3600 FROM events.raw_events re "
-            "   WHERE re.skip_reason = '' AND NOT EXISTS (SELECT 1 FROM events.event_candidates c WHERE c.raw_id = re.raw_id)), "
+            "   WHERE re.skip_reason = '' AND re.llm_attempts = 0 AND NOT EXISTS (SELECT 1 FROM events.event_candidates c WHERE c.raw_id = re.raw_id)), "
             "(SELECT count(*) FROM events.event_candidates c WHERE c.venue_id IS NULL), "
             "(SELECT count(*) FROM events.event_candidates c WHERE c.venue_id IS NOT NULL "
             "   AND NOT EXISTS (SELECT 1 FROM events.event_sources es WHERE es.raw_id = c.raw_id))"
