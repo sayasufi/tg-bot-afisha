@@ -265,6 +265,12 @@ def score_channel(m: dict) -> tuple[int, str, str]:
     else:
         why.append("охват неизвестен")
 
+    # Абсолютный high-side гейт: устойчивый средний охват > числа подписчиков = внешняя накрутка просмотров
+    # (веб-ресёрч: «>100% — definitive», на ЛЮБОМ размере). Относительная кривая одна это не ловит у МАЛЫХ
+    # каналов (×7 нормы у 2k-канала = 100% просмотров, но кривая там ещё в плюсе). Малым до 100% не мешаем.
+    if err is not None and err > 100:
+        s -= 20; why.append("охват > подписчиков — накрутка просмотров")
+
     rr = (reactions / reach * 100) if (reactions and reach) else None  # реакции/охват %
     if rr is not None:
         s += _lerp(_RRATE_PTS, rr)
