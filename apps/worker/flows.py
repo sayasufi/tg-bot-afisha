@@ -265,7 +265,9 @@ async def source_freshness_watch():
             "FROM ref.sources s "
             "LEFT JOIN events.source_runs r ON r.source_id = s.source_id AND r.status = 'success' "
             "  AND r.finished_at > now() - interval '2 days' "
-            "WHERE s.is_active GROUP BY 1"
+            # user_submission-<city> sources are WRITE-TIME containers (raw_events written on admin approve),
+            # NOT fetched connectors — they never have a source_run, so exclude them or they always false-alarm.
+            "WHERE s.is_active AND s.kind <> 'user_submission' GROUP BY 1"
         ))).all()
     now = datetime.now(timezone.utc)
     stale = []
