@@ -1480,6 +1480,19 @@ mark.hl {
   transform: translateX(20px);
 }
 
+/* «Помощь» → написать менеджеру: same row grammar as a toggle, but a nav chevron instead of a
+   track (it navigates out to the manager DM, it doesn't hold state). */
+.profile__switch-chev {
+  flex: none;
+  font-family: var(--grotesk);
+  font-size: 19px;
+  color: var(--ink-faint);
+  transition: transform 0.16s var(--ease-cut);
+}
+.profile__switch--link:active .profile__switch-chev {
+  transform: translateX(3px);
+}
+
 /* ---------- Рекомендации — horizontal discovery rails ---------- */
 .panelview__scroll--rails {
   /* Same 8px side gutters as the list/favorites posters (heads + tracks inset by these). */

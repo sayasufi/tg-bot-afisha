@@ -28,6 +28,19 @@ type TelegramWebApp = {
 
 const BOT_LINK = "https://t.me/okrestmap_bot";
 
+// Human manager — the one contact for any question. Opened via openTelegramLink so it stays
+// inside Telegram (a plain <a> would bounce to the in-app browser and dead-end on the profile).
+export const MANAGER_LINK = "https://t.me/okrest_manager";
+
+export function openTelegramLink(url: string): void {
+  const wa = getWebApp();
+  if (wa?.openTelegramLink) {
+    wa.openTelegramLink(url);
+    return;
+  }
+  window.open(url, "_blank");
+}
+
 // Share an event via Telegram's native share sheet (falls back to the Web
 // Share API, then a plain share link).
 export function shareEvent(opts: { title: string; text?: string; url?: string | null }): void {

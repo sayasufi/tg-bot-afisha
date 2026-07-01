@@ -7,6 +7,8 @@ from aiogram.types import (
 )
 
 MAP_BUTTON_TEXT = "🗺 Открыть карту"
+MANAGER_URL = "https://t.me/okrest_manager"
+MANAGER_BUTTON_TEXT = "✉️ Написать менеджеру"
 
 
 def location_request_keyboard() -> ReplyKeyboardMarkup:
@@ -33,3 +35,13 @@ def webapp_inline(webapp_url: str) -> InlineKeyboardButton:
 def webapp_keyboard(webapp_url: str) -> InlineKeyboardMarkup:
     """A single inline button that opens the map."""
     return InlineKeyboardMarkup(inline_keyboard=[[webapp_inline(webapp_url)]])
+
+
+def manager_inline() -> InlineKeyboardButton:
+    """Direct line to the human manager for any question (a plain t.me URL, always tappable)."""
+    return InlineKeyboardButton(text=MANAGER_BUTTON_TEXT, url=MANAGER_URL)
+
+
+def help_keyboard(webapp_url: str) -> InlineKeyboardMarkup:
+    """/help gets the map button + a one-tap line to the manager for support."""
+    return InlineKeyboardMarkup(inline_keyboard=[[webapp_inline(webapp_url)], [manager_inline()]])

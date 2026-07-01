@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { fetchEventsByIds, type City, type EventItem } from "../../api/client";
 import { viewedCount } from "../../lib/affinity";
 import { IconClose } from "../../lib/icons";
-import type { ThemeName, TgUser } from "../../lib/telegram";
+import { MANAGER_LINK, openTelegramLink, type ThemeName, type TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { TasteCard } from "./TasteCard";
 
@@ -191,6 +191,21 @@ export function ProfilePanel({
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />
           </span>
+        </button>
+
+        {/* One human contact for anything — questions, ideas, "something's off". Opens the manager
+            DM inside Telegram (openTelegramLink), never the in-app browser. */}
+        <div className="recs__section">Помощь</div>
+        <button
+          type="button"
+          className="profile__switch profile__switch--link"
+          onClick={() => openTelegramLink(MANAGER_LINK)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Написать менеджеру</span>
+            <span className="profile__switch-sub">Вопросы, идеи или что-то не так — ответим в личке</span>
+          </span>
+          <span className="profile__switch-chev" aria-hidden="true">›</span>
         </button>
       </div>
     </div>

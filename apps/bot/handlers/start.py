@@ -7,7 +7,7 @@ from aiogram.types import Message
 from sqlalchemy import text
 
 from core.render.formatting import ce
-from apps.bot.keyboards.main import location_request_keyboard, webapp_keyboard
+from apps.bot.keyboards.main import help_keyboard, location_request_keyboard, webapp_keyboard
 from core.config.settings import get_settings
 from core.db.repositories.users import update_settings, upsert_user_async
 from core.db.session import AsyncSessionLocal
@@ -41,7 +41,8 @@ HELP = (
     f"{ce('🔔')} <b>Напоминание</b> — сохрани событие в избранное, и я напомню за 2 часа до начала.\n"
     f"{ce('🔔')} <b>Афиша на выходные</b> — еженедельная подборка в личку, включена по умолчанию. "
     "Выключить — команда /digest или в приложении <b>Профиль → «Афиша на выходные»</b>.\n\n"
-    "События собираем из открытых источников и обновляем автоматически."
+    "События собираем из открытых источников и обновляем автоматически.\n\n"
+    f"{ce('💬')} <b>Вопросы, идеи, что-то не так?</b> Пиши менеджеру — @okrest_manager, поможем."
 )
 
 DIGEST_ON_MSG = (
@@ -160,7 +161,7 @@ async def location_handler(message: Message) -> None:
 async def help_handler(message: Message) -> None:
     await _save_user(message)
     url = get_settings().telegram_webapp_url
-    await message.answer(HELP, reply_markup=webapp_keyboard(url))
+    await message.answer(HELP, reply_markup=help_keyboard(url))
 
 
 @router.message(Command("digest"))
