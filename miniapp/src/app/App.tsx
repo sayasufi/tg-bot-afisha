@@ -736,6 +736,17 @@ export function App() {
     return () => clearTimeout(t);
   }, [locateNonce]);
 
+  // On an explicit "locate" tap, snap the map's city to the NEAREST one so ITS events load. Without this
+  // the camera flew to the user (e.g. Волгоград) but the events layer stayed on the previously-selected
+  // city (Воронеж) — far off-screen → the map looked empty. Transient (viewCity), so it doesn't overwrite
+  // the saved home; keyed on locateNonce so passive position updates don't keep re-switching the city.
+  useEffect(() => {
+    if (locateNonce === 0 || !userPos || cities.length < 2) return;
+    const near = nearestOf(userPos, cities);
+    if (near && near.item.slug !== currentCity?.slug) viewCity(near.item.slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locateNonce]);
+
   const openEvent = useCallback((i: EventItem) => {
     haptic("light");
     // A slim-index map pin carries no title/venue/code — overlay the hydrated full event if we have it
