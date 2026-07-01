@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     llm_api_base_url: str = Field(default="http://176.109.82.96:5000", alias="LLM_API_BASE_URL")
     llm_timeout_seconds: float = Field(default=20.0, alias="LLM_TIMEOUT_SECONDS")
     # Service-wide cap on concurrent in-flight LLM requests (a shared Redis budget across api + worker).
-    llm_max_concurrency: int = Field(default=20, alias="LLM_MAX_CONCURRENCY")
+    # Day = 10 (was 20): the local LLM server is at its edge near 20 (a burst of 20 produced ~96% llm_error),
+    # so 10 trades some backlog-drain speed for a stable, low-error steady state during user-traffic hours.
+    llm_max_concurrency: int = Field(default=10, alias="LLM_MAX_CONCURRENCY")
     # Higher night cap (MSK 22:00–06:00): user traffic is low, so the batch pipeline gets more LLM
     # headroom to drain backfills faster. core.services.llm_limiter switches between the two by Moscow hour.
     llm_night_max_concurrency: int = Field(default=40, alias="LLM_NIGHT_MAX_CONCURRENCY")
