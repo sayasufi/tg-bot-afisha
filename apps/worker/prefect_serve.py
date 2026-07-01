@@ -62,6 +62,8 @@ _SCHEDULE = [
     (flows.enrich_adstat_telethon, 86400),
     # LLM-классификация релевантности каналов (точнее кейвордов) — раз в сутки, инкрементально по 400.
     (flows.classify_adstat_llm, 86400),
+    # Анти-накрутка скан (разброс просмотров + динамика роста + когерентность) → множитель antifraud + пересчёт.
+    (flows.antifraud_scan_adstat, 86400),
     (flows.normalize_raw, 60),
     (flows.enrich_candidates, 60),
     (flows.dedup_candidates, 60),

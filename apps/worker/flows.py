@@ -716,6 +716,18 @@ def classify_adstat_llm():
     return {**r, **s}
 
 
+@flow(name="antifraud-scan-adstat", retries=0, timeout_seconds=5400, log_prints=True)
+def antifraud_scan_adstat():
+    """Анти-накрутка скан актуального пула (verdict≠мимо): разброс просмотров (t.me/s) + динамика роста
+    (TGStat через FlareSolverr) + когерентность реакций → множитель `antifraud`, затем пересчёт скора.
+    Ловит «надутые» каналы (плоский охват/спайк-заливка/мёртвая аудитория), которые точечный ERR не видит."""
+    from apps.adstat.antifraud import antifraud_scan
+    from apps.adstat.score import recompute_scores
+    r = antifraud_scan(limit=200)
+    s = recompute_scores()
+    return {**r, **s}
+
+
 @flow(name="enrich-adstat-telethon", retries=0, timeout_seconds=5400, log_prints=True)
 def enrich_adstat_telethon():
     """Дообогатить точными метриками (telethon participants_count + охват) on-topic каналы без свежего

@@ -303,6 +303,11 @@ def recompute_scores() -> dict:
         llm = {r[0]: (r[1], r[2]) for r in db.execute(text(
             "SELECT channel_id, llm_category, llm_city FROM adstat.channels WHERE llm_category IS NOT NULL"
         )).all()}
+        # Анти-накрутка множитель (antifraud.py: разброс просмотров + динамика роста + когерентность реакций).
+        # NULL = канал не сканирован → ×1.0 (нейтрально). Считается отдельным медленным сканом.
+        af_mult = dict(db.execute(text(
+            "SELECT channel_id, antifraud FROM adstat.channels WHERE antifraud IS NOT NULL"
+        )).all())
         channels = db.execute(select(AdChannel)).scalars().all()
         for ch in channels:
             if not ch.username or not _VALID_USERNAME.match(ch.username):
@@ -339,7 +344,8 @@ def recompute_scores() -> dict:
                 city_hint = target_city.get(ch.username)
             city = infer_city(ch.title, ch.username, city_hint)
             cov, _cov_label = _coverage(f"{ch.title or ''} {ch.username or ''}".lower(), city)
-            final = int(round(quality * rel * cov))  # ИТОГ = качество × релевантность × ПОКРЫТИЕ
+            af = af_mult.get(ch.channel_id, 1.0) or 1.0
+            final = int(round(quality * rel * cov * af))  # качество × релевантность × покрытие × АНТИ-НАКРУТКА
             verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
             db.execute(text(
                 "UPDATE adstat.channels SET score=:s, quality=:q, verdict=:v, relevance=:r, city=:city, score_at=now() "
@@ -351,8 +357,12 @@ def recompute_scores() -> dict:
 
 
 def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
+    from sqlalchemy import text
     out: list[dict] = []
     with SessionLocal() as db:
+        af_mult = dict(db.execute(text(
+            "SELECT channel_id, antifraud FROM adstat.channels WHERE antifraud IS NOT NULL"
+        )).all())
         channels = db.execute(select(AdChannel)).scalars().all()
         for ch in channels:
             if not ch.username or not _VALID_USERNAME.match(ch.username):
@@ -368,7 +378,8 @@ def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
             rel, rel_label = _relevance(ch.title, ch.username)
             city = infer_city(ch.title, ch.username)
             cov, _cov_label = _coverage(f"{ch.title or ''} {ch.username or ''}".lower(), city)
-            final = int(round(quality * rel * cov))  # ИТОГ = качество × релевантность × покрытие
+            af = af_mult.get(ch.channel_id, 1.0) or 1.0
+            final = int(round(quality * rel * cov * af))  # × анти-накрутка
             verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
             out.append({
                 "username": ch.username, "title": ch.title, "score": final, "quality": quality,
