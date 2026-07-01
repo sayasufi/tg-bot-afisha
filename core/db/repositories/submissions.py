@@ -166,6 +166,38 @@ async def ingest_event_submission(db: AsyncSession, submission: dict) -> int:
     return raw.raw_id
 
 
+async def approve_channel_submission(db: AsyncSession, submission: dict) -> int | None:
+    """Approved channel → ref.telegram_channels via the case-insensitive admin path (SELECT LOWER(username)
+    → UPDATE-on-hit / INSERT-on-miss), NOT a seed ON CONFLICT (usernames are mixed-case → dupes). is_active
+    so the NEXT fetch-telegram cycle picks it up (no synchronous fetch trigger). Returns the channel_id."""
+    data = submission.get("data") or {}
+    uname = (data.get("username_norm") or "").strip().lower()
+    if not uname:
+        return None
+    city = city_by_slug(submission.get("city_slug") or "moscow")
+    city_id = city.city_id or 1  # city_id is NOT NULL; every active city has one, fall back to Moscow
+    existing = (await db.execute(
+        text("SELECT channel_id FROM ref.telegram_channels WHERE LOWER(username) = :u"), {"u": uname}
+    )).first()
+    if existing:
+        cid = existing[0]
+        await db.execute(
+            text("UPDATE ref.telegram_channels SET city_id = :c, is_active = true WHERE channel_id = :id"),
+            {"c": city_id, "id": cid},
+        )
+    else:
+        row = (await db.execute(
+            text(
+                "INSERT INTO ref.telegram_channels (username, city_id, is_active) "
+                "VALUES (:u, :c, true) RETURNING channel_id"
+            ),
+            {"u": uname, "c": city_id},
+        )).first()
+        cid = row[0] if row else None
+    await db.commit()
+    return cid
+
+
 async def set_status(
     db: AsyncSession,
     submission_id: str,
@@ -175,6 +207,7 @@ async def set_status(
     reject_code: str | None = None,
     target_raw_id: int | None = None,
     target_event_id: str | None = None,
+    target_channel_id: int | None = None,
 ) -> None:
     await db.execute(
         text(
@@ -183,12 +216,14 @@ async def set_status(
             "reviewed_at = CASE WHEN :rev IS NULL THEN reviewed_at ELSE :now END, "
             "reject_code = COALESCE(:rc, reject_code), "
             "target_raw_id = COALESCE(:raw, target_raw_id), "
-            "target_event_id = COALESCE(CAST(:eid AS uuid), target_event_id) "
+            "target_event_id = COALESCE(CAST(:eid AS uuid), target_event_id), "
+            "target_channel_id = COALESCE(:chid, target_channel_id) "
             "WHERE submission_id = :sid"
         ),
         {
             "status": status, "now": datetime.now(timezone.utc), "rev": reviewed_by,
-            "rc": reject_code, "raw": target_raw_id, "eid": target_event_id, "sid": submission_id,
+            "rc": reject_code, "raw": target_raw_id, "eid": target_event_id,
+            "chid": target_channel_id, "sid": submission_id,
         },
     )
     await db.commit()

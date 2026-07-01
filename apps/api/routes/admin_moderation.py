@@ -14,6 +14,7 @@ from apps.api.services.admin_auth import require_admin, write_audit
 from core.config.settings import get_settings
 from core.render.formatting import ce
 from core.db.repositories.submissions import (
+    approve_channel_submission,
     count_submissions,
     get_submission,
     ingest_event_submission,
@@ -82,8 +83,20 @@ async def approve(
         raise HTTPException(status_code=404, detail="not found")
     if sub["status"] not in ("needs_review", "auto_rejected"):
         raise HTTPException(status_code=409, detail=f"уже обработано ({sub['status']})")
-    if sub["kind"] != "event":
-        raise HTTPException(status_code=400, detail="пока поддерживаются только события")
+
+    if sub["kind"] == "channel":
+        channel_id = await approve_channel_submission(db, sub)
+        await set_status(db, submission_id, "approved", reviewed_by=actor, target_channel_id=channel_id)
+        await write_audit(
+            db, request, actor, "moderation.approve",
+            target=submission_id, params={"kind": "channel", "channel_id": channel_id}, result="ok",
+        )
+        uname = (sub.get("data") or {}).get("username_norm") or ""
+        await _dm(
+            int(sub["submitted_by"]),
+            f"{ce('✨')} <b>Спасибо!</b> Канал @{uname} добавлен — события из него появятся на карте в течение суток.",
+        )
+        return {"ok": True, "status": "approved", "channel_id": channel_id}
 
     raw_id = await ingest_event_submission(db, sub)
     await set_status(db, submission_id, "approved", reviewed_by=actor, target_raw_id=raw_id)

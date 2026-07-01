@@ -6,15 +6,18 @@ Anti-abuse: a per-user daily cap (Redis fast-path + durable fallback).
 """
 import base64
 import io
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.telegram_auth import validate_init_data
@@ -23,6 +26,7 @@ from core.db.session import get_async_db
 from core.domain.cities import CITIES
 from core.infra.redis import get_redis
 from core.media.storage import ensure_bucket, public_url, put_image
+from pipeline.maintenance.telegram_health import _fetch_subs, _probe, _UA
 
 router = APIRouter(prefix="/v1/suggest", tags=["suggest"])
 
@@ -216,3 +220,78 @@ async def suggest_upload(payload: ImageUploadRequest):
     except Exception:
         raise HTTPException(status_code=422, detail="Не удалось обработать изображение")
     return {"ok": True, "url": url}
+
+
+# ---- Channel submissions ----------------------------------------------------
+
+_CHANNEL_RE = re.compile(r"^[a-z0-9_]{5,32}$")
+
+
+def _norm_channel(raw: str) -> str | None:
+    """Normalize a Telegram channel handle → lower ASCII, or None if it isn't a valid handle. The
+    ASCII-only gate rejects Cyrillic-homoglyph look-alikes (а/a, о/o) that would dodge dedup."""
+    u = (raw or "").strip()
+    for prefix in ("https://t.me/", "http://t.me/", "t.me/", "@"):
+        if u.lower().startswith(prefix):
+            u = u[len(prefix):]
+    u = u.strip().lstrip("@").strip().rstrip("/").lower()
+    return u if _CHANNEL_RE.match(u) else None
+
+
+async def _probe_channel(username: str) -> dict:
+    """Cheap liveness/reach probe reusing the production prune helpers (follow_redirects=False, so a
+    disabled-preview 302 is detected). No LLM — just t.me/s reachability + subscriber count."""
+    timeout = httpx.Timeout(connect=10, read=20, write=10, pool=10)
+    checks: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=timeout, headers=_UA, follow_redirects=False) as client:
+            status, info = await _probe(client, username)
+            checks["probe"] = status
+            if status == "ok" and hasattr(info, "isoformat"):
+                checks["newest"] = info.isoformat()
+            checks["subscribers"] = await _fetch_subs(client, username)
+    except Exception:
+        checks["probe"] = "error"
+    return checks
+
+
+class ChannelSuggestRequest(BaseModel):
+    init_data: str
+    username: str = Field(max_length=120)
+    city: str | None = None
+
+
+@router.post("/channel")
+async def suggest_channel(payload: ChannelSuggestRequest, request: Request, db: AsyncSession = Depends(get_async_db)):
+    user = validate_init_data(payload.init_data)
+    uid = user.get("id")
+    if not uid:
+        raise HTTPException(status_code=401, detail="no user")
+    uname = _norm_channel(payload.username)
+    if not uname:
+        raise HTTPException(status_code=422, detail="Укажи @username канала (латиница, 5–32 символа)")
+    if not await _rate_limit_ok(db, int(uid)):
+        raise HTTPException(status_code=429, detail="Слишком много заявок за сегодня — попробуй завтра")
+    # Already a source? (case-insensitive — stored usernames are mixed-case)
+    row = (await db.execute(
+        text("SELECT is_active FROM ref.telegram_channels WHERE LOWER(username) = :u"), {"u": uname}
+    )).first()
+    if row and row[0]:
+        raise HTTPException(status_code=409, detail="Этот канал уже подключён — события из него уже собираем")
+    # Cheap liveness check (no LLM). Not found / no posts → reject up front, don't clutter the queue.
+    checks = await _probe_channel(uname)
+    checks["reactivation"] = bool(row and not row[0])
+    if checks.get("probe") == "gone":
+        raise HTTPException(status_code=422, detail="Канал не найден или без постов — проверь @username")
+    city_slug = await _resolve_city_slug(db, int(uid), payload.city)
+    data = {"username_norm": uname, "username_raw": payload.username.strip()[:120], "city_slug": city_slug}
+    try:
+        sid = await create_submission(
+            db, kind="channel", data=data, submitted_by=int(uid),
+            submitted_username=user.get("username"), city_slug=city_slug,
+            status="needs_review", checks=checks,
+        )
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Этот канал уже на модерации")
+    return {"ok": True, "submission_id": sid, "status": "needs_review"}

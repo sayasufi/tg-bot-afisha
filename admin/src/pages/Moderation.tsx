@@ -55,6 +55,15 @@ function price(d: Record<string, any>): string {
   return "цена не указана";
 }
 
+function freshDays(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  return days <= 0 ? "сегодня" : days === 1 ? "вчера" : `${days} дн назад`;
+}
+
+const PROBE_LABEL: Record<string, string> = { ok: "жив", preview_off: "превью выкл", gone: "мёртв", error: "не проверен" };
+
 export function Moderation() {
   const [status, setStatus] = useState("needs_review");
   const [page, setPage] = useState(0);
@@ -133,31 +142,53 @@ export function Moderation() {
       <div className="modlist">
         {items.map((s) => {
           const d = s.data || {};
+          const c = s.checks || {};
+          const isChannel = s.kind === "channel";
           const place = [d.venue, d.address].filter(Boolean).join(" · ");
           const open = s.status === "needs_review";
           return (
             <div className="modcard" key={s.submission_id}>
               <div className="modcard__body">
-                <div className="modcard__title">{d.title || "без названия"}</div>
-                {d.image && (
-                  <img
-                    className="modcard__poster"
-                    src={d.image}
-                    alt=""
-                    loading="lazy"
-                    title="нажми, чтобы увеличить"
-                    onClick={() => setLightbox(d.image)}
-                  />
+                {isChannel ? (
+                  <>
+                    <div className="modcard__title">
+                      <a href={`https://t.me/s/${d.username_norm}`} target="_blank" rel="noopener noreferrer">
+                        @{d.username_norm}
+                      </a>{" "}
+                      <span className="code" style={{ fontSize: 11, opacity: 0.7 }}>канал</span>
+                    </div>
+                    <div className="modcard__meta">
+                      <span className="code">{PROBE_LABEL[c.probe] ?? "?"}</span>
+                      {c.subscribers != null && <span>{c.subscribers} подп.</span>}
+                      {c.newest && <span>пост {freshDays(c.newest)}</span>}
+                      {c.reactivation && <span className="code">реактивация</span>}
+                      {s.city_slug && <span className="code">{s.city_slug}</span>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="modcard__title">{d.title || "без названия"}</div>
+                    {d.image && (
+                      <img
+                        className="modcard__poster"
+                        src={d.image}
+                        alt=""
+                        loading="lazy"
+                        title="нажми, чтобы увеличить"
+                        onClick={() => setLightbox(d.image)}
+                      />
+                    )}
+                    <div className="modcard__meta">
+                      <span>{eventDate(d.date_start)}</span>
+                      {d.category && <span className="code">{d.category}</span>}
+                      <span>{price(d)}</span>
+                      {s.city_slug && <span className="code">{s.city_slug}</span>}
+                    </div>
+                    {place && <div className="modcard__place">{place}</div>}
+                    {d.description && <div className="modcard__desc">{String(d.description).slice(0, 400)}</div>}
+                    {d.url && <div className="modcard__url muted code">{d.url}</div>}
+                  </>
                 )}
-                <div className="modcard__meta">
-                  <span>{eventDate(d.date_start)}</span>
-                  {d.category && <span className="code">{d.category}</span>}
-                  <span>{price(d)}</span>
-                  {s.city_slug && <span className="code">{s.city_slug}</span>}
-                </div>
-                {place && <div className="modcard__place">{place}</div>}
-                {d.description && <div className="modcard__desc">{String(d.description).slice(0, 400)}</div>}
-                {d.url && <div className="modcard__url muted code">{d.url}</div>}
                 <div className="modcard__foot muted">
                   от {s.submitted_username ? "@" + s.submitted_username : s.submitted_by} · {when(s.created_at)}
                   {s.status !== "needs_review" && <> · <span className="code">{s.status}</span></>}
