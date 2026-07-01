@@ -457,6 +457,28 @@ a { color: inherit; text-decoration: none; }
 
 .pager { display: flex; gap: 14px; align-items: center; justify-content: center; margin-top: 16px; }
 
+/* ---------- Moderation queue (Модерация) ---------- */
+.modlist { display: flex; flex-direction: column; gap: 12px; }
+.modcard {
+  display: flex; gap: 16px; align-items: flex-start; justify-content: space-between;
+  padding: 16px; border: 1px solid var(--line); background: var(--vitrine);
+}
+.modcard__body { min-width: 0; flex: 1; }
+.modcard__title { font-family: var(--grotesk); font-weight: 700; font-size: 16px; color: var(--ink); margin-bottom: 7px; }
+.modcard__meta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; color: var(--ink); margin-bottom: 6px; }
+.modcard__meta .code { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; }
+.modcard__place { font-size: 13px; color: var(--ink); margin-bottom: 6px; }
+.modcard__desc { font-size: 12px; line-height: 1.4; color: var(--ink-faint); margin-bottom: 8px; }
+.modcard__url { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); word-break: break-all; margin-bottom: 8px; }
+.modcard__foot { font-size: 11px; color: var(--ink-faint); }
+.modcard__foot .code { font-family: var(--mono); text-transform: uppercase; }
+.modcard__actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; flex: none; width: 170px; }
+.modcard__reject { display: flex; gap: 6px; }
+.modcard__reject select {
+  flex: 1; min-width: 0; padding: 8px; font-family: var(--grotesk); font-size: 12px;
+  color: var(--ink); background: transparent; border: 1px solid var(--line); cursor: pointer;
+}
+
 /* ---------- Line chart (Аналитика) ---------- */
 .linechart {
   width: 100%;

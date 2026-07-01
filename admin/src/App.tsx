@@ -24,6 +24,7 @@ import { System } from "./pages/System";
 import { Users } from "./pages/Users";
 import { Venues } from "./pages/Venues";
 import { Login } from "./pages/Login";
+import { Moderation } from "./pages/Moderation";
 
 function Gate() {
   const { user, ready } = useAuth();
@@ -34,6 +35,7 @@ function Gate() {
     <Routes>
       <Route element={<Shell />}>
         <Route index element={<Dashboard />} />
+        <Route path="moderation" element={<Moderation />} />
         <Route path="health" element={<Health />} />
         <Route path="ops/flows" element={<Flows />} />
         <Route path="channels" element={<Channels />} />

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.admin_auth import require_admin, write_audit
 from core.config.settings import get_settings
+from core.render.formatting import ce
 from core.db.repositories.submissions import (
     count_submissions,
     get_submission,
@@ -92,7 +93,7 @@ async def approve(
     )
     await _dm(
         int(sub["submitted_by"]),
-        "✅ <b>Спасибо!</b> Твоё событие одобрено — появится на карте в течение часа.",
+        f"{ce('✨')} <b>Спасибо!</b> Твоё событие одобрено — появится на карте в течение часа.",
     )
     return {"ok": True, "status": "approved", "raw_id": raw_id}
 
@@ -118,6 +119,7 @@ async def reject(
     )
     await _dm(
         int(sub["submitted_by"]),
-        f"Спасибо за заявку! В этот раз не добавили: {_REJECT_REASONS[code]}. Пробуй ещё — мы рады новым событиям.",
+        f"{ce('📍')} Спасибо за заявку! В этот раз не добавили: {_REJECT_REASONS[code]}. "
+        "Пробуй ещё — мы рады новым событиям.",
     )
     return {"ok": True, "status": "rejected", "reject_code": code}

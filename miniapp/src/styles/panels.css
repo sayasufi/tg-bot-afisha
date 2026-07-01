@@ -1443,9 +1443,9 @@ mark.hl {
   font-weight: 500;
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: var(--ink-dim);
-}
-.profile__switch--on .profile__switch-label {
+  /* Always full-ink so the label is readable regardless of state — the toggle track/knob (or the
+     nav chevron on --link rows) carries the on/off signal, not the label colour. Dimming it made
+     OFF toggles and the «Написать менеджеру» link look washed-out next to the ON ones. */
   color: var(--ink);
 }
 .profile__switch-sub {
