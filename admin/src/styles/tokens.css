@@ -477,8 +477,11 @@ a { color: inherit; text-decoration: none; }
 .modcard__reject { display: flex; gap: 6px; }
 .modcard__reject select {
   flex: 1; min-width: 0; padding: 8px; font-family: var(--grotesk); font-size: 12px;
-  color: var(--ink); background: transparent; border: 1px solid var(--line); cursor: pointer;
+  /* Explicit dark bg + option colours — a transparent select renders its popup as dark-on-dark
+     (unreadable) in the dark admin theme. */
+  color: var(--ink); background: var(--vitrine); border: 1px solid var(--line); cursor: pointer;
 }
+.modcard__reject select option { background: var(--vitrine); color: var(--ink); }
 
 /* ---------- Line chart (Аналитика) ---------- */
 .linechart {
