@@ -367,8 +367,9 @@ async def submissions_status_watch():
                     text("SELECT skip_reason FROM events.raw_events WHERE raw_id = :r"), {"r": rid}
                 )).scalar()
                 geo_fail = (await db.execute(text(
-                    "SELECT 1 FROM events.event_candidates WHERE raw_id = :r AND venue_id IS NULL "
-                    "AND created_at < now() - interval '2 hours' LIMIT 1"
+                    "SELECT 1 FROM events.event_candidates ec JOIN events.raw_events r ON r.raw_id = ec.raw_id "
+                    "WHERE ec.raw_id = :r AND ec.venue_id IS NULL "
+                    "AND r.fetched_at < now() - interval '2 hours' LIMIT 1"
                 ), {"r": rid})).first()
                 reason = None
                 if skip and skip not in ("llm_error", "invalid_json"):  # transient skips still retry
