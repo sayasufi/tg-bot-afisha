@@ -131,6 +131,7 @@ export function Moderation() {
             <div className="modcard" key={s.submission_id}>
               <div className="modcard__body">
                 <div className="modcard__title">{d.title || "без названия"}</div>
+                {d.image && <img className="modcard__poster" src={d.image} alt="" loading="lazy" />}
                 <div className="modcard__meta">
                   <span>{eventDate(d.date_start)}</span>
                   {d.category && <span className="code">{d.category}</span>}
