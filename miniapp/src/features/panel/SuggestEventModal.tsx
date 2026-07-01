@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 import { suggestEvent } from "../../api/suggest";
 import { IconClose } from "../../lib/icons";
@@ -64,8 +65,8 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
     }
   }
 
-  return (
-    <div className="panelview suggest" role="dialog" aria-modal="true" aria-label="Предложить событие">
+  return createPortal(
+    <div className="suggest" role="dialog" aria-modal="true" aria-label="Предложить событие">
       <header className="panelview__head">
         <h2>предложить событие</h2>
         <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
@@ -156,6 +157,7 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

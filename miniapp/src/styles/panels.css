@@ -1497,8 +1497,16 @@ mark.hl {
 .suggest {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  /* Portaled to <body> and above the panel drawer (.panelview z-index 1400 / host 1500) so it actually
+     covers the profile instead of rendering behind it. */
+  z-index: 2000;
   background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.suggest .panelview__scroll {
+  flex: 1;
+  min-height: 0;
 }
 .suggest__lead {
   font-family: var(--grotesk);
