@@ -219,12 +219,16 @@ async def _normalize_batch() -> dict | None:
                     last_skip_reason = "kudago_out_of_window"
                     skipped_reasons[last_skip_reason] += 1
                     continue
-                if _is_telegram_source_name(source_name) and not _is_telegram_candidate_in_window(c):
+                # User submissions share telegram's gates: only upcoming events, and title+date+place
+                # required. Without this a past/incomplete user event slips into events, and a date-less
+                # one becomes a "ghost" (no occurrence, never expires). The gate fns are generic.
+                _gated = _is_telegram_source_name(source_name) or source_name.startswith("user_submission")
+                if _gated and not _is_telegram_candidate_in_window(c):
                     skipped += 1
-                    last_skip_reason = "telegram_past_event"
+                    last_skip_reason = "telegram_past_event" if _is_telegram_source_name(source_name) else "submission_past"
                     skipped_reasons[last_skip_reason] += 1
                     continue
-                if _is_telegram_source_name(source_name) and not _is_candidate_complete(c):
+                if _gated and not _is_candidate_complete(c):
                     skipped += 1
                     last_skip_reason = _candidate_incomplete_reason(c)
                     skipped_reasons[last_skip_reason] += 1

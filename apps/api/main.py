@@ -9,6 +9,7 @@ from apps.api.routes.admin_audit import router as admin_audit_router
 from apps.api.routes.admin_broadcasts import router as admin_broadcasts_router
 from apps.api.routes.admin_buys import router as admin_buys_router
 from apps.api.routes.admin_funnel import router as admin_funnel_router
+from apps.api.routes.admin_moderation import router as admin_moderation_router
 from apps.api.routes.admin_channels import router as admin_channels_router
 from apps.api.routes.admin_cities import router as admin_cities_router
 from apps.api.routes.admin_dedup import router as admin_dedup_router
@@ -27,6 +28,7 @@ from apps.api.routes.places import router as places_router
 from apps.api.routes.recommend import router as recommend_router
 from apps.api.routes.share import router as share_router
 from apps.api.routes.stats import router as stats_router
+from apps.api.routes.suggest import router as suggest_router
 from apps.api.routes.telegram import router as telegram_router
 from apps.api.routes.users import router as users_router
 from core.config.settings import get_settings
@@ -141,6 +143,7 @@ app.include_router(go_router)
 app.include_router(places_router)
 app.include_router(telegram_router)
 app.include_router(users_router)
+app.include_router(suggest_router)
 app.include_router(media_router)
 app.include_router(share_router)
 app.include_router(recommend_router)
@@ -158,6 +161,7 @@ app.include_router(admin_settings_router)
 app.include_router(admin_users_router)
 app.include_router(admin_cities_router)
 app.include_router(admin_audit_router)
+app.include_router(admin_moderation_router)
 app.include_router(admin_adstat_router)
 app.include_router(admin_ops_router)
 app.include_router(admin_buys_router)
