@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 
 import { suggestEvent, uploadSuggestImage } from "../../api/suggest";
+import type { City } from "../../api/types";
 import { IconClose } from "../../lib/icons";
 import { hapticNotify } from "../../lib/telegram";
 
@@ -22,8 +23,19 @@ const CATEGORIES: { value: string; label: string }[] = [
 
 // Full-screen form to propose an event; posts to /v1/suggest/event → admin moderation. Kept
 // self-contained (own overlay) so it drops into ProfilePanel without app-shell routing.
-export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SuggestEventModal({
+  open,
+  onClose,
+  cities,
+  defaultCity,
+}: {
+  open: boolean;
+  onClose: () => void;
+  cities: City[];
+  defaultCity: string;
+}) {
   const [title, setTitle] = useState("");
+  const [city, setCity] = useState(defaultCity || cities[0]?.slug || "");
   const [date, setDate] = useState("");
   const [venue, setVenue] = useState("");
   const [address, setAddress] = useState("");
@@ -77,6 +89,7 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
       url: url.trim() || undefined,
       image: image || undefined,
       description: description.trim() || undefined,
+      city: city || undefined,
     });
     setBusy(false);
     if (res.ok) {
@@ -121,6 +134,13 @@ export function SuggestEventModal({ open, onClose }: { open: boolean; onClose: (
               <span className="suggest__label">Дата и время *</span>
               <input className="suggest__input" type="datetime-local" value={date}
                 onChange={(e) => setDate(e.target.value)} />
+            </label>
+
+            <label className="suggest__field">
+              <span className="suggest__label">Город *</span>
+              <select className="suggest__input" value={city} onChange={(e) => setCity(e.target.value)}>
+                {cities.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+              </select>
             </label>
 
             <label className="suggest__field">

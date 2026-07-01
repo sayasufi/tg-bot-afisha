@@ -47,6 +47,7 @@ export function ProfilePanel({
   const [channelOpen, setChannelOpen] = useState(false);
   // Cities A→Z (Cyrillic-aware) so the picker stays scannable as it grows past a dozen.
   const sortedCities = [...cities].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  const currentCitySlug = cities.find((c) => c.name === city)?.slug ?? cities[0]?.slug ?? "";
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
@@ -239,8 +240,12 @@ export function ProfilePanel({
         </button>
       </div>
     </div>
-    {suggestOpen && <SuggestEventModal open onClose={() => setSuggestOpen(false)} />}
-    {channelOpen && <SuggestChannelModal open onClose={() => setChannelOpen(false)} />}
+    {suggestOpen && (
+      <SuggestEventModal open onClose={() => setSuggestOpen(false)} cities={sortedCities} defaultCity={currentCitySlug} />
+    )}
+    {channelOpen && (
+      <SuggestChannelModal open onClose={() => setChannelOpen(false)} cities={sortedCities} defaultCity={currentCitySlug} />
+    )}
     </>
   );
 }

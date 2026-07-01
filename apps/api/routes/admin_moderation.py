@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.admin_auth import require_admin, write_audit
 from core.config.settings import get_settings
+from core.domain.cities import CITIES
 from core.render.formatting import ce
 from core.db.repositories.submissions import (
     approve_channel_submission,
@@ -75,6 +76,7 @@ async def queue(
 async def approve(
     submission_id: str,
     request: Request,
+    city_slug: str | None = Body(None, embed=True),
     actor: str = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -85,6 +87,8 @@ async def approve(
         raise HTTPException(status_code=409, detail=f"уже обработано ({sub['status']})")
 
     if sub["kind"] == "channel":
+        if city_slug and city_slug in CITIES:
+            sub["city_slug"] = city_slug  # admin corrected the channel's city before approving
         channel_id = await approve_channel_submission(db, sub)
         await set_status(db, submission_id, "approved", reviewed_by=actor, target_channel_id=channel_id)
         await write_audit(

@@ -2,26 +2,39 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 
 import { suggestChannel } from "../../api/suggest";
+import type { City } from "../../api/types";
 import { IconClose } from "../../lib/icons";
 import { hapticNotify } from "../../lib/telegram";
 
 // Full-screen form to add a Telegram channel as an event source; posts to /v1/suggest/channel →
-// admin moderation. Portaled to <body> so it overlays the profile panel.
-export function SuggestChannelModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+// admin moderation. Portaled to <body> so it overlays the profile panel. The city is chosen here
+// (default = the user's city, but the channel may cover a DIFFERENT city — the submitter knows it).
+export function SuggestChannelModal({
+  open,
+  onClose,
+  cities,
+  defaultCity,
+}: {
+  open: boolean;
+  onClose: () => void;
+  cities: City[];
+  defaultCity: string;
+}) {
   const [username, setUsername] = useState("");
+  const [city, setCity] = useState(defaultCity || cities[0]?.slug || "");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   if (!open) return null;
 
-  const canSubmit = username.trim().replace(/^@/, "").length >= 5;
+  const canSubmit = username.trim().replace(/^@/, "").length >= 5 && !!city;
 
   async function submit() {
     if (!canSubmit || busy) return;
     setBusy(true);
     setErr(null);
-    const res = await suggestChannel(username.trim());
+    const res = await suggestChannel(username.trim(), city);
     setBusy(false);
     if (res.ok) {
       hapticNotify("success");
@@ -69,7 +82,15 @@ export function SuggestChannelModal({ open, onClose }: { open: boolean; onClose:
                 onChange={(e) => setUsername(e.target.value)}
               />
             </label>
-            <div className="suggest__hint">Только публичный канал (не приватный). Город определим по твоему профилю.</div>
+            <label className="suggest__field">
+              <span className="suggest__label">Город канала *</span>
+              <select className="suggest__input" value={city} onChange={(e) => setCity(e.target.value)}>
+                {cities.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+              </select>
+            </label>
+            <div className="suggest__hint">
+              Только публичный канал (не приватный). Город нужен, чтобы события встали на карту в нужном месте.
+            </div>
             {err && <div className="suggest__err">{err}</div>}
             <button type="button" className="suggest__submit" disabled={!canSubmit || busy} onClick={submit}>
               {busy ? "Отправляем…" : "Отправить на модерацию"}

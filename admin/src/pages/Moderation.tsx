@@ -70,7 +70,10 @@ export function Moderation() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [reason, setReason] = useState<Record<string, string>>({});
+  const [cityOverride, setCityOverride] = useState<Record<string, string>>({});
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const cityList = useApi<any>("/cities");
+  const cityOptions = (cityList.data?.items ?? []) as { slug: string; name: string }[];
 
   useEffect(() => {
     if (!lightbox) return;
@@ -93,11 +96,16 @@ export function Moderation() {
   const pageSize = data?.page_size ?? 50;
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
-  async function act(id: string, kind: "approve" | "reject") {
+  async function act(id: string, kind: "approve" | "reject", cityForApprove?: string | null) {
     setBusy(id);
     setMsg(null);
     try {
-      const body = kind === "reject" ? { reject_code: reason[id] ?? "other" } : undefined;
+      const body =
+        kind === "reject"
+          ? { reject_code: reason[id] ?? "other" }
+          : cityForApprove
+            ? { city_slug: cityForApprove }
+            : undefined;
       await apiPost(`/moderation/${id}/${kind}`, body);
       setMsg(kind === "approve" ? "Одобрено — событие уйдёт на карту." : "Отклонено.");
       reload();
@@ -197,10 +205,22 @@ export function Moderation() {
               </div>
               {open && (
                 <div className="modcard__actions">
+                  {isChannel && (
+                    <select
+                      className="modcard__city"
+                      title="город канала"
+                      value={cityOverride[s.submission_id] ?? s.city_slug ?? ""}
+                      onChange={(e) => setCityOverride((m) => ({ ...m, [s.submission_id]: e.target.value }))}
+                    >
+                      {cityOptions.map((o) => <option key={o.slug} value={o.slug}>{o.name}</option>)}
+                    </select>
+                  )}
                   <button
                     className="btn btn--solid"
                     disabled={busy === s.submission_id}
-                    onClick={() => act(s.submission_id, "approve")}
+                    onClick={() =>
+                      act(s.submission_id, "approve", isChannel ? (cityOverride[s.submission_id] ?? s.city_slug) : undefined)
+                    }
                   >
                     {busy === s.submission_id ? "…" : "одобрить"}
                   </button>
