@@ -78,6 +78,9 @@ _SCHEDULE = [
     (flows.pipeline_backlog_watch, 1800),
     # Телеметрия покрытия по городам (события/гео%/фото%) + алерт на «пустую карту в городе X». Раз в день.
     (flows.city_coverage_watch, 86400),
+    # Замыкание петли юзер-заявок: approved → ingested (+DM «уже на карте») или failed (+честный DM при
+    # гео-фейле/не-событии). Чтобы ничего не висело в approved. Раз в 5 мин.
+    (flows.submissions_status_watch, 300),
     # Self-heal venue+event dups every 15 min (ordered: venues then events) so the
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.

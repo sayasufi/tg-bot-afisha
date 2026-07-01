@@ -303,6 +303,112 @@ async def source_freshness_watch():
     return {"stale": [s[0] for s in stale], "notified": True}
 
 
+@flow(name="submissions-status-watch", retries=0, timeout_seconds=120, log_prints=True)
+async def submissions_status_watch():
+    """Close the loop on APPROVED user submissions: advance to a terminal state + DM the submitter.
+    Nothing should hang in 'approved'. Signals:
+      • EVENT ingested → a row in events.event_sources for target_raw_id (dedup wrote the event↔raw link)
+        → 'ingested' + «уже на карте: <deep-link>».
+      • EVENT failed → the raw got a terminal skip_reason (not-an-event/past), OR its candidate stayed
+        venue_id NULL >2h (address ungeocodable), OR nothing after 24h → 'failed' + honest DM.
+      • CHANNEL ingested → a successful source_run for telegram_public:<username> (the channel was read)
+        → 'ingested' + «канал подключён»."""
+    from datetime import datetime, timedelta, timezone
+
+    import httpx
+    from sqlalchemy import text
+
+    from core.config.settings import get_settings
+    from core.db.session import WorkerAsyncSessionLocal
+    from core.render.formatting import ce, event_deeplink
+
+    token = get_settings().telegram_bot_token
+
+    async def _dm(uid, body: str) -> None:
+        if not token or not uid:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=8) as c:
+                await c.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                             json={"chat_id": int(uid), "text": body, "parse_mode": "HTML",
+                                   "disable_web_page_preview": True})
+        except Exception:
+            pass
+
+    ingested = failed = 0
+    now = datetime.now(timezone.utc)
+    async with WorkerAsyncSessionLocal() as db:
+        rows = (await db.execute(text(
+            "SELECT submission_id, kind, submitted_by, data, target_raw_id, created_at "
+            "FROM ref.pending_submissions WHERE status = 'approved' ORDER BY created_at LIMIT 500"
+        ))).mappings().all()
+        for r in rows:
+            sid, kind, uid = r["submission_id"], r["kind"], r["submitted_by"]
+            data = r["data"] or {}
+            if kind == "event":
+                rid = r["target_raw_id"]
+                if not rid:
+                    continue
+                es = (await db.execute(
+                    text("SELECT event_id FROM events.event_sources WHERE raw_id = :r LIMIT 1"), {"r": rid}
+                )).first()
+                if es:
+                    eid = str(es[0])
+                    await db.execute(text(
+                        "UPDATE ref.pending_submissions SET status='ingested', "
+                        "target_event_id = CAST(:e AS uuid), updated_at = now() WHERE submission_id = :s"
+                    ), {"e": eid, "s": sid})
+                    await db.commit()
+                    ingested += 1
+                    await _dm(uid, f"{ce('✨')} <b>Готово!</b> Твоё событие уже на карте — "
+                                   f"<a href=\"{event_deeplink(eid)}\">открыть</a>. Спасибо!")
+                    continue
+                skip = (await db.execute(
+                    text("SELECT skip_reason FROM events.raw_events WHERE raw_id = :r"), {"r": rid}
+                )).scalar()
+                geo_fail = (await db.execute(text(
+                    "SELECT 1 FROM events.event_candidates WHERE raw_id = :r AND venue_id IS NULL "
+                    "AND created_at < now() - interval '2 hours' LIMIT 1"
+                ), {"r": rid})).first()
+                reason = None
+                if skip and skip not in ("llm_error", "invalid_json"):  # transient skips still retry
+                    reason = "не удалось распознать событие"
+                elif geo_fail:
+                    reason = "не получилось найти место по адресу"
+                elif r["created_at"] and r["created_at"] < now - timedelta(hours=24):
+                    reason = "не удалось разместить событие"
+                if reason:
+                    await db.execute(text(
+                        "UPDATE ref.pending_submissions SET status='failed', reject_code='ingest_failed', "
+                        "updated_at = now() WHERE submission_id = :s"
+                    ), {"s": sid})
+                    await db.commit()
+                    failed += 1
+                    await _dm(uid, f"{ce('📍')} С твоим событием загвоздка: {reason}. Проверь данные и "
+                                   "пришли ещё раз — Профиль → «Предложить событие».")
+            elif kind == "channel":
+                uname = (data.get("username_norm") or "").strip().lower()
+                if not uname:
+                    continue
+                ok = (await db.execute(text(
+                    "SELECT 1 FROM ref.sources s JOIN events.source_runs r "
+                    "  ON r.source_id = s.source_id AND r.status = 'success' "
+                    "WHERE s.name = :n LIMIT 1"
+                ), {"n": f"telegram_public:{uname}"})).first()
+                if ok:
+                    await db.execute(text(
+                        "UPDATE ref.pending_submissions SET status='ingested', updated_at = now() "
+                        "WHERE submission_id = :s"
+                    ), {"s": sid})
+                    await db.commit()
+                    ingested += 1
+                    await _dm(uid, f"{ce('✨')} <b>Готово!</b> Канал @{uname} подключён — собираем афишу, "
+                                   "события уже появляются на карте. Спасибо!")
+    if ingested or failed:
+        print(f"submissions-status-watch: ingested={ingested} failed={failed}")
+    return {"ingested": ingested, "failed": failed}
+
+
 @flow(name="pipeline-backlog-watch", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
 async def pipeline_backlog_watch():
     """Алерт владельцу, если встала ОБРАБОТКА (а не фетч). source_freshness_watch следит за коннекторами;

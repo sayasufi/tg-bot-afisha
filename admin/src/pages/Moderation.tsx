@@ -21,6 +21,7 @@ const STATUS_TABS: { key: string; label: string }[] = [
   { key: "approved", label: "одобрено" },
   { key: "ingested", label: "на карте" },
   { key: "rejected", label: "отклонено" },
+  { key: "failed", label: "не удалось" },
   { key: "", label: "все" },
 ];
 
