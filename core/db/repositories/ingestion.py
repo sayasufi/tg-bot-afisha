@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, case, exists, func, or_, select, text
@@ -21,6 +22,8 @@ from core.matching.scorer import MatchDecision
 from core.matching.title_match import same_event, same_slot_title, title_nkey, translit_tokens
 from core.matching.venue_match import name_match_score
 from core.contracts import NormalizedCandidate
+
+_log = logging.getLogger(__name__)
 
 # Sources list events up to ~a year ahead; a short window dropped every session of
 # a far-future event, after which the dedup used to fall back to "now" and the
@@ -502,7 +505,15 @@ async def reprocess_raw(db: AsyncSession, raw_id: int, normalizer) -> str:
         event = await db.get(Event, link.event_id)
         venue = await db.get(Venue, cand.venue_id) if cand.venue_id else None
         if event is not None:
-            await _upsert_occurrences(db, event, cand, venue, raw_id)
+            # Savepoint: an occurrence-upsert failure (a transient geometry/constraint blip) rolls back ONLY
+            # itself, so the candidate field-refresh above AND the processed_hash stamp below still persist.
+            # Without it the caller's rollback discards everything and this raw re-loops at the head of the
+            # selector forever (content_hash != processed_hash on every pass) — head-of-line starvation.
+            try:
+                async with db.begin_nested():
+                    await _upsert_occurrences(db, event, cand, venue, raw_id)
+            except Exception:
+                _log.warning("reprocess_upsert_failed", extra={"raw_id": raw_id}, exc_info=True)
     raw.processed_hash = raw.content_hash
     return "refreshed"
 

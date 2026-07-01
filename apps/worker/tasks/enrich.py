@@ -90,6 +90,11 @@ def _source_coords(payload: dict | None) -> tuple[float, float] | None:
 # LLM classify), so resolving candidates in parallel multiplies enrich throughput; the actual venue WRITES
 # stay serial (phase 2) so get_or_create_venue's fuzzy de-dup is never raced into duplicate venues.
 _ENRICH_CONCURRENCY = 6
+# Drain the enrich queue across up to this many 300-candidate batches per run (bounded by a wall-clock budget
+# under the flow's timeout), so an ingest spike doesn't outrun a single 300/tick. This does NOT raise LLM
+# concurrency — every classify still passes through the shared llm_slot cap; the loop just keeps feeding it.
+_ENRICH_MAX_BATCHES = 20
+_ENRICH_TIME_BUDGET = 480.0  # seconds — comfortably under the flow's 600s timeout
 
 
 async def _resolve_candidate(geocoder, llm, candidate_id: int) -> dict | None:
@@ -151,13 +156,13 @@ async def _resolve_candidate(geocoder, llm, candidate_id: int) -> dict | None:
         return None
 
 
-async def _enrich_impl() -> dict:
-    geocoder = GeocodingService()  # shared (its in-process geo cache de-dups repeat addresses across tasks)
-    llm = LLMService()
+async def _enrich_batch(geocoder: GeocodingService, llm: LLMService) -> int | None:
+    """One 300-candidate batch (phase 1 concurrent resolve → phase 2 serial write). Returns the enriched
+    count, or None when the queue is empty (so the drain loop stops)."""
     async with WorkerAsyncSessionLocal() as db:
         ids = await unresolved_candidate_ids(db, limit=300)
     if not ids:
-        return {"enriched": 0}
+        return None
 
     # PHASE 1 — resolve geo + category CONCURRENTLY (network-bound), bounded so we don't hammer providers.
     sem = asyncio.Semaphore(_ENRICH_CONCURRENCY)
@@ -196,7 +201,27 @@ async def _enrich_impl() -> dict:
                 _log.exception("enrich: write %s failed, skipping", r["cid"])
                 await db.rollback()
                 continue
-    return {"enriched": enriched}
+    return enriched
+
+
+async def _enrich_impl() -> dict:
+    """Drain the enrich queue in ONE run: loop batches until it empties, capped by _ENRICH_MAX_BATCHES and a
+    wall-clock budget under the flow timeout. An ingest spike (Yandex full-scan, a channel mass-seed) can
+    arrive faster than a single 300/tick clears it → the queue would grow unbounded with no drain-loop.
+    Steady state = one batch, then stop. LLM concurrency is unchanged (every classify honours llm_slot)."""
+    geocoder = GeocodingService()  # shared (its in-process geo cache de-dups repeat addresses across batches)
+    llm = LLMService()
+    total = batches = 0
+    start = time.monotonic()
+    for _ in range(_ENRICH_MAX_BATCHES):
+        n = await _enrich_batch(geocoder, llm)
+        if n is None:
+            break  # queue drained
+        total += n
+        batches += 1
+        if time.monotonic() - start > _ENRICH_TIME_BUDGET:
+            break
+    return {"enriched": total, "batches": batches}
 
 
 async def _backfill_venues_osm_impl() -> dict:
@@ -351,6 +376,9 @@ _VENUE_HOURS_QUERY = (
 )
 
 
+_VENUE_HOURS_BUDGET = 900.0  # wall-clock cap for the per-run venue loop, well under the 1200s flow timeout
+
+
 def _resolve_venue_hours_impl(limit: int = 15):
     """Resolve opening hours for venues that don't have them yet, via Yandex Maps
     (source-agnostic, by name + coords + a representative event title). Cached in
@@ -362,7 +390,13 @@ def _resolve_venue_hours_impl(limit: int = 15):
     try:
         rows = db.execute(text(_VENUE_HOURS_QUERY), {"lim": limit}).all()
         stored = relocated = blocked = 0
+        start = time.monotonic()
         for vid, name, address, lat, lon, vcity, ev_title in rows:
+            # Bounded budget: one venue can cost ~50s (3 query candidates × 2 URLs × 8s + polite sleeps), and a
+            # captcha wave makes every try burn the full timeout. Stop before the 1200s flow timeout kills the
+            # run mid-loop → a kill→retry cycle that keeps re-hitting the same captcha-blocked venues forever.
+            if time.monotonic() - start > _VENUE_HOURS_BUDGET:
+                break
             # Per-venue city (NOT a global "Москва") — works for any city: the search
             # hint, the centre the relocation guard anchors on, and the country.
             cc = city_by_name(vcity) or DEFAULT_CITY
