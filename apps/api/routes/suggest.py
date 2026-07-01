@@ -4,6 +4,7 @@ initData-authenticated; each submission lands in ref.pending_submissions for adm
 straight into the catalog). Cheap validation only (no LLM): required fields, an upcoming date, a place.
 Anti-abuse: a per-user daily cap (Redis fast-path + durable fallback).
 """
+import asyncio
 import base64
 import io
 import re
@@ -36,16 +37,25 @@ _CATEGORIES = {
     "concert", "theatre", "exhibition", "cinema", "standup",
     "festival", "lecture", "tour", "party", "quest", "kids", "other",
 }
-_MAX_UPLOAD = 8 * 1024 * 1024  # 8 MB
+_MAX_UPLOAD = 8 * 1024 * 1024  # 8 MB (compressed)
 _MAX_DIM = 1600  # px — downscale the long edge
 _UPLOAD_CAP = 30  # images per user per day
+_MAX_PIXELS = 40_000_000  # decompression-bomb guard: a tiny compressed file can decode to huge pixels
+_MAX_EDGE = 12000  # …or an absurd single dimension
+Image.MAX_IMAGE_PIXELS = 50_000_000  # Pillow hard ceiling too (defence in depth)
+_PROBE_SEM = asyncio.Semaphore(6)  # cap concurrent outbound t.me probes (DoS / amplification / DB-pool)
+_PROBE_BUDGET = 12.0  # hard total-time budget (s) per channel probe
 
 
 def _process_and_store(raw: bytes) -> str:
     """Validate + normalize an uploaded image (honour EXIF orientation, then strip metadata, downscale,
     re-encode JPEG) and store it in MinIO. Returns the public URL. Blocking — call via threadpool."""
     Image.open(io.BytesIO(raw)).verify()  # reject truncated / non-image bytes
-    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+    src = Image.open(io.BytesIO(raw))  # reopen — verify() leaves the file unusable
+    w, h = src.size  # header-only, no pixel decode yet → cheap decompression-bomb guard BEFORE convert()
+    if w * h > _MAX_PIXELS or max(w, h) > _MAX_EDGE:
+        raise ValueError("image dimensions too large")
+    img = ImageOps.exif_transpose(src).convert("RGB")
     img.thumbnail((_MAX_DIM, _MAX_DIM))
     out = io.BytesIO()
     img.save(out, format="JPEG", quality=85)
@@ -56,18 +66,21 @@ def _process_and_store(raw: bytes) -> str:
 
 
 async def _upload_limit_ok(uid: int) -> bool:
+    # Uploads leave no durable per-user row to count (unlike submissions), so there is no safe fallback:
+    # fail CLOSED when Redis is unavailable, or the whole cap vanishes the moment Redis blips (which would
+    # let one initData store unbounded images in MinIO). Uploads briefly disabled ≫ storage exhaustion.
     day = datetime.now(_MSK).strftime("%Y%m%d")
     try:
         r = get_redis(decode=True)
-        if r is not None:
-            key = f"suggest:upl:{uid}:{day}"
-            n = await r.incr(key)
-            if n == 1:
-                await r.expire(key, 86400)
-            return n <= _UPLOAD_CAP
+        if r is None:
+            return False
+        key = f"suggest:upl:{uid}:{day}"
+        n = await r.incr(key)
+        if n == 1:
+            await r.expire(key, 86400)
+        return n <= _UPLOAD_CAP
     except Exception:
-        pass
-    return True  # Redis unavailable → don't block uploads
+        return False
 
 
 class EventSuggestRequest(BaseModel):
@@ -100,17 +113,16 @@ def _clean_url(u: str | None) -> str:
     return u[:1000]
 
 
-def _parse_future(s: str) -> datetime | None:
-    """Parse an ISO datetime (Moscow-assumed if naive) and require its MSK calendar day to be
-    today or later — mirrors the pipeline's upcoming-window gate so a past event is rejected up front."""
+def _parse_future(s: str, tz: timezone) -> datetime | None:
+    """Parse an ISO datetime. A naive value is the event's LOCAL wall-clock in its city's timezone `tz`
+    (NOT always Moscow — Новосибирск is +7 etc). Require its local calendar day to be today or later."""
     try:
         dt = datetime.fromisoformat((s or "").strip().replace("Z", "+00:00"))
     except (ValueError, AttributeError):
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_MSK)
-    today_msk = datetime.now(_MSK).date()
-    if dt.astimezone(_MSK).date() < today_msk:
+        dt = dt.replace(tzinfo=tz)
+    if dt.astimezone(tz).date() < datetime.now(tz).date():
         return None
     return dt
 
@@ -150,7 +162,10 @@ async def suggest_event(payload: EventSuggestRequest, request: Request, db: Asyn
     title = payload.title.strip()
     if len(title) < 2:
         raise HTTPException(status_code=422, detail="Укажи название события")
-    dt = _parse_future(payload.date_start)
+    # Resolve the city FIRST so the event's naive datetime is read in ITS timezone, not always Moscow.
+    city_slug = await _resolve_city_slug(db, int(uid), payload.city)
+    city_tz = timezone(timedelta(hours=CITIES[city_slug].utc_offset_hours))
+    dt = _parse_future(payload.date_start, city_tz)
     if dt is None:
         raise HTTPException(status_code=422, detail="Дата должна быть сегодня или в будущем")
     venue = (payload.venue or "").strip()
@@ -161,7 +176,6 @@ async def suggest_event(payload: EventSuggestRequest, request: Request, db: Asyn
     if not await _rate_limit_ok(db, int(uid)):
         raise HTTPException(status_code=429, detail="Слишком много заявок за сегодня — попробуй завтра")
 
-    city_slug = await _resolve_city_slug(db, int(uid), payload.city)
     category = (payload.category or "").strip().lower() or None
     if category not in _CATEGORIES:
         category = None
@@ -241,7 +255,7 @@ def _norm_channel(raw: str) -> str | None:
 async def _probe_channel(username: str) -> dict:
     """Cheap liveness/reach probe reusing the production prune helpers (follow_redirects=False, so a
     disabled-preview 302 is detected). No LLM — just t.me/s reachability + subscriber count."""
-    timeout = httpx.Timeout(connect=10, read=20, write=10, pool=10)
+    timeout = httpx.Timeout(connect=5, read=6, write=5, pool=5)
     checks: dict = {}
     try:
         async with httpx.AsyncClient(timeout=timeout, headers=_UA, follow_redirects=False) as client:
@@ -278,9 +292,18 @@ async def suggest_channel(payload: ChannelSuggestRequest, request: Request, db: 
     )).first()
     if row and row[0]:
         raise HTTPException(status_code=409, detail="Этот канал уже подключён — события из него уже собираем")
-    # Cheap liveness check (no LLM). Not found / no posts → reject up front, don't clutter the queue.
-    checks = await _probe_channel(uname)
-    checks["reactivation"] = bool(row and not row[0])
+    reactivation = bool(row and not row[0])
+    # Release the DB connection BEFORE the (bounded) outbound probe — otherwise the open transaction holds
+    # a pooled connection for the whole probe and a few slow probes exhaust the per-worker pool (500s).
+    await db.commit()
+    # Cheap liveness check (no LLM), BOUNDED: a global semaphore caps concurrent outbound t.me probes and
+    # wait_for caps total time, so a slow/hanging t.me can't pile up on the request path (DoS/amplification).
+    async with _PROBE_SEM:
+        try:
+            checks = await asyncio.wait_for(_probe_channel(uname), timeout=_PROBE_BUDGET)
+        except Exception:
+            checks = {"probe": "error"}  # our own timeout/error → let the admin see «не проверен», don't 500
+    checks["reactivation"] = reactivation
     if checks.get("probe") == "gone":
         raise HTTPException(status_code=422, detail="Канал не найден или без постов — проверь @username")
     city_slug = await _resolve_city_slug(db, int(uid), payload.city)

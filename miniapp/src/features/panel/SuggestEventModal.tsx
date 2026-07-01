@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { suggestEvent, uploadSuggestImage } from "../../api/suggest";
@@ -50,9 +50,15 @@ export function SuggestEventModal({
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Sync the city picker once /v1/cities resolves (useState init is one-time → otherwise an event opened
+  // on a slow network could submit with city="" and be silently bucketed to Moscow).
+  useEffect(() => {
+    if (!city && (defaultCity || cities[0])) setCity(defaultCity || cities[0].slug);
+  }, [defaultCity, cities, city]);
+
   if (!open) return null;
 
-  const canSubmit = title.trim().length >= 2 && !!date && (!!venue.trim() || !!address.trim());
+  const canSubmit = title.trim().length >= 2 && !!date && !!city && (!!venue.trim() || !!address.trim());
 
   async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];

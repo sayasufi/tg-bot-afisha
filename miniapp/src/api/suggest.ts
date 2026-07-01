@@ -31,35 +31,11 @@ function readDataUrl(file: File): Promise<string> {
   });
 }
 
-// Downscale + re-encode to JPEG on the client so the upload body stays small (well under any proxy
-// body limit) and uploads fast. Modern webviews apply EXIF orientation when drawing to canvas; the
-// server also re-processes. Falls back to the original data URL on any canvas error.
-async function downscaleToDataUrl(file: File, maxDim = 1280, quality = 0.82): Promise<string> {
-  const original = await readDataUrl(file);
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return resolve(original);
-      try {
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      } catch {
-        resolve(original);
-      }
-    };
-    img.onerror = () => resolve(original);
-    img.src = original;
-  });
-}
-
 // Upload a poster/photo (as a base64 data URL) → returns the stored public URL to put in the form.
+// We send the ORIGINAL file (not a canvas re-encode): a canvas toDataURL drops the EXIF orientation tag,
+// so portrait phone photos arrived sideways on webviews that don't auto-orient. The server validates,
+// EXIF-rotates and downscales to 1600px; the client only enforces the 8MB size cap, whose base64 (~10.7MB)
+// stays under the 12MB proxy limit.
 export async function uploadSuggestImage(
   file: File,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
@@ -67,7 +43,7 @@ export async function uploadSuggestImage(
   if (!init) return { ok: false, error: "Открой приложение из Telegram" };
   let dataUrl: string;
   try {
-    dataUrl = await downscaleToDataUrl(file);
+    dataUrl = await readDataUrl(file);
   } catch {
     return { ok: false, error: "Не удалось прочитать файл" };
   }

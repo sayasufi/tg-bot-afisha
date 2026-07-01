@@ -339,7 +339,7 @@ async def submissions_status_watch():
     now = datetime.now(timezone.utc)
     async with WorkerAsyncSessionLocal() as db:
         rows = (await db.execute(text(
-            "SELECT submission_id, kind, submitted_by, data, target_raw_id, created_at "
+            "SELECT submission_id, kind, submitted_by, data, target_raw_id, reviewed_at "
             "FROM ref.pending_submissions WHERE status = 'approved' ORDER BY created_at LIMIT 500"
         ))).mappings().all()
         for r in rows:
@@ -366,17 +366,16 @@ async def submissions_status_watch():
                 skip = (await db.execute(
                     text("SELECT skip_reason FROM events.raw_events WHERE raw_id = :r"), {"r": rid}
                 )).scalar()
-                geo_fail = (await db.execute(text(
-                    "SELECT 1 FROM events.event_candidates ec JOIN events.raw_events r ON r.raw_id = ec.raw_id "
-                    "WHERE ec.raw_id = :r AND ec.venue_id IS NULL "
-                    "AND r.fetched_at < now() - interval '2 hours' LIMIT 1"
-                ), {"r": rid})).first()
+                # Failure signals (NO venue_id-NULL geo-fail check: enrich always sets venue_id — a real
+                # geocode failure still yields a geom-less venue + an event, so it goes 'ingested'; venue_id
+                # NULL only means «enrich hasn't run yet», which during a backlog would false-fail a valid
+                # event). Backstop anchors on reviewed_at (APPROVAL time), not created_at — else a submission
+                # moderated >24h after submit is failed instantly before the pipeline even runs.
+                reviewed = r["reviewed_at"]
                 reason = None
                 if skip and skip not in ("llm_error", "invalid_json"):  # transient skips still retry
                     reason = "не удалось распознать событие"
-                elif geo_fail:
-                    reason = "не получилось найти место по адресу"
-                elif r["created_at"] and r["created_at"] < now - timedelta(hours=24):
+                elif reviewed and reviewed < now - timedelta(hours=48):  # genuinely stuck 48h after approval
                     reason = "не удалось разместить событие"
                 if reason:
                     await db.execute(text(

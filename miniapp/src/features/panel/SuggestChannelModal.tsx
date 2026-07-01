@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { suggestChannel } from "../../api/suggest";
@@ -25,6 +25,12 @@ export function SuggestChannelModal({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // cities load async — if the modal opened before /v1/cities resolved, sync the picker once they arrive
+  // (useState init runs once, so without this the <select> stays empty and «Отправить» stays disabled).
+  useEffect(() => {
+    if (!city && (defaultCity || cities[0])) setCity(defaultCity || cities[0].slug);
+  }, [defaultCity, cities, city]);
 
   if (!open) return null;
 
