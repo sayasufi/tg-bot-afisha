@@ -5,6 +5,7 @@ import { viewedCount } from "../../lib/affinity";
 import { IconClose } from "../../lib/icons";
 import { MANAGER_LINK, openTelegramLink, type ThemeName, type TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
+import { SuggestChannelModal } from "./SuggestChannelModal";
 import { SuggestEventModal } from "./SuggestEventModal";
 import { TasteCard } from "./TasteCard";
 
@@ -43,6 +44,7 @@ export function ProfilePanel({
 }) {
   const [cityOpen, setCityOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [channelOpen, setChannelOpen] = useState(false);
   // Cities A→Z (Cyrillic-aware) so the picker stays scannable as it grows past a dozen.
   const sortedCities = [...cities].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
@@ -209,6 +211,17 @@ export function ProfilePanel({
           </span>
           <span className="profile__switch-chev" aria-hidden="true">›</span>
         </button>
+        <button
+          type="button"
+          className="profile__switch profile__switch--link"
+          onClick={() => setChannelOpen(true)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Добавить свой канал</span>
+            <span className="profile__switch-sub">Ведёшь TG-канал площадки? Будем собирать афишу оттуда</span>
+          </span>
+          <span className="profile__switch-chev" aria-hidden="true">›</span>
+        </button>
 
         {/* One human contact for anything — questions, ideas, "something's off". Opens the manager
             DM inside Telegram (openTelegramLink), never the in-app browser. */}
@@ -227,6 +240,7 @@ export function ProfilePanel({
       </div>
     </div>
     {suggestOpen && <SuggestEventModal open onClose={() => setSuggestOpen(false)} />}
+    {channelOpen && <SuggestChannelModal open onClose={() => setChannelOpen(false)} />}
     </>
   );
 }

@@ -94,6 +94,33 @@ export async function uploadSuggestImage(
   }
 }
 
+// Submit a Telegram channel (of a venue / the user's own) as a source for moderation.
+export async function suggestChannel(username: string, city?: string): Promise<SuggestResult> {
+  const init = initData();
+  if (!init) return { ok: false, error: "Открой приложение из Telegram" };
+  try {
+    const r = await fetch(`${API_BASE}/v1/suggest/channel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: init, username, city }),
+    });
+    if (r.ok) {
+      const j = await r.json();
+      return { ok: true, submissionId: String(j.submission_id ?? "") };
+    }
+    let detail = "Не удалось отправить";
+    try {
+      const j = await r.json();
+      if (typeof j.detail === "string") detail = j.detail;
+    } catch {
+      /* non-JSON error body */
+    }
+    return { ok: false, error: detail };
+  } catch {
+    return { ok: false, error: "Нет связи. Попробуй ещё раз." };
+  }
+}
+
 // Submit a user event for admin moderation. Authenticated via signed Telegram initData; returns a
 // friendly error string (never throws) so the form can show it inline.
 export async function suggestEvent(input: EventSuggestInput): Promise<SuggestResult> {
