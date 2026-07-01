@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { apiPost, ApiError } from "../lib/api";
 import { useApi } from "../lib/useApi";
@@ -61,6 +61,14 @@ export function Moderation() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [reason, setReason] = useState<Record<string, string>>({});
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLightbox(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
 
   const path = useMemo(() => {
     const p = new URLSearchParams();
@@ -131,7 +139,16 @@ export function Moderation() {
             <div className="modcard" key={s.submission_id}>
               <div className="modcard__body">
                 <div className="modcard__title">{d.title || "без названия"}</div>
-                {d.image && <img className="modcard__poster" src={d.image} alt="" loading="lazy" />}
+                {d.image && (
+                  <img
+                    className="modcard__poster"
+                    src={d.image}
+                    alt=""
+                    loading="lazy"
+                    title="нажми, чтобы увеличить"
+                    onClick={() => setLightbox(d.image)}
+                  />
+                )}
                 <div className="modcard__meta">
                   <span>{eventDate(d.date_start)}</span>
                   {d.category && <span className="code">{d.category}</span>}
@@ -183,6 +200,12 @@ export function Moderation() {
           <button className="iconbtn" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← назад</button>
           <span className="filter-count" style={{ margin: 0 }}>стр {page + 1} из {pages}</span>
           <button className="iconbtn" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)}>вперёд →</button>
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="modlightbox" role="dialog" aria-modal="true" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="постер события" />
         </div>
       )}
     </div>

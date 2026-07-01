@@ -465,7 +465,19 @@ a { color: inherit; text-decoration: none; }
 }
 .modcard__body { min-width: 0; flex: 1; }
 .modcard__title { font-family: var(--grotesk); font-weight: 700; font-size: 16px; color: var(--ink); margin-bottom: 7px; }
-.modcard__poster { display: block; max-width: 200px; max-height: 130px; object-fit: cover; border: 1px solid var(--line); margin-bottom: 9px; }
+.modcard__poster { display: block; max-width: 200px; max-height: 130px; object-fit: cover; border: 1px solid var(--line); margin-bottom: 9px; cursor: zoom-in; }
+.modlightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.88);
+  cursor: zoom-out;
+}
+.modlightbox img { max-width: 92vw; max-height: 92vh; object-fit: contain; border: 1px solid var(--line); }
 .modcard__meta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; color: var(--ink); margin-bottom: 6px; }
 .modcard__meta .code { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; }
 .modcard__place { font-size: 13px; color: var(--ink); margin-bottom: 6px; }
