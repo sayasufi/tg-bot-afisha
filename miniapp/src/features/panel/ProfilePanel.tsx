@@ -5,6 +5,7 @@ import { viewedCount } from "../../lib/affinity";
 import { IconClose } from "../../lib/icons";
 import { MANAGER_LINK, openTelegramLink, type ThemeName, type TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
+import { SuggestEventModal } from "./SuggestEventModal";
 import { TasteCard } from "./TasteCard";
 
 export function ProfilePanel({
@@ -41,6 +42,7 @@ export function ProfilePanel({
   onClose: () => void;
 }) {
   const [cityOpen, setCityOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
   // Cities A→Z (Cyrillic-aware) so the picker stays scannable as it grows past a dozen.
   const sortedCities = [...cities].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
@@ -64,6 +66,7 @@ export function ProfilePanel({
   }, [idsKey]);
 
   return (
+    <>
     <div className="panelview">
       <header className="panelview__head">
         <h2>профиль</h2>
@@ -193,6 +196,20 @@ export function ProfilePanel({
           </span>
         </button>
 
+        {/* Community contribution — propose an event that isn't on the map yet (admin-moderated). */}
+        <div className="recs__section">Добавить</div>
+        <button
+          type="button"
+          className="profile__switch profile__switch--link"
+          onClick={() => setSuggestOpen(true)}
+        >
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Предложить событие</span>
+            <span className="profile__switch-sub">Знаешь событие, которого нет на карте? Добавим после проверки</span>
+          </span>
+          <span className="profile__switch-chev" aria-hidden="true">›</span>
+        </button>
+
         {/* One human contact for anything — questions, ideas, "something's off". Opens the manager
             DM inside Telegram (openTelegramLink), never the in-app browser. */}
         <div className="recs__section">Помощь</div>
@@ -209,5 +226,7 @@ export function ProfilePanel({
         </button>
       </div>
     </div>
+    {suggestOpen && <SuggestEventModal open onClose={() => setSuggestOpen(false)} />}
+    </>
   );
 }

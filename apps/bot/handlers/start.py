@@ -54,6 +54,13 @@ DIGEST_OFF_MSG = (
     "Включить обратно — снова /digest."
 )
 
+SUGGEST_MSG = (
+    f"{ce('📍')} <b>Предложить событие</b>\n\n"
+    "Знаешь событие, которого ещё нет на карте? Открой приложение → <b>Профиль</b> → "
+    "<b>«Предложить событие»</b> и заполни короткую форму — добавим после быстрой проверки.\n\n"
+    "Если что-то не так или есть вопрос — напиши менеджеру."
+)
+
 
 async def _save_user(message: Message):
     """Upsert the bot user on the ASYNC stack — the handler is async, so blocking sync DB I/O
@@ -176,3 +183,12 @@ async def digest_handler(message: Message) -> None:
         await update_settings(db, user.id, notify_digest=now_on)
         await db.commit()
     await message.answer(DIGEST_ON_MSG if now_on else DIGEST_OFF_MSG)
+
+
+@router.message(Command("suggest"))
+async def suggest_handler(message: Message) -> None:
+    """Bot entry to «предложить событие» — points to the Mini App form (structured input belongs there,
+    not a free-text bot dialog). The manager button covers «что-то не так»."""
+    await _save_user(message)
+    url = get_settings().telegram_webapp_url
+    await message.answer(SUGGEST_MSG, reply_markup=help_keyboard(url))

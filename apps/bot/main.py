@@ -15,6 +15,7 @@ from core.logging.setup import setup_logging
 COMMANDS = [
     BotCommand(command="start", description="Открыть карту"),
     BotCommand(command="help", description="Как это работает"),
+    BotCommand(command="suggest", description="Предложить событие"),
 ]
 
 DESCRIPTION = (

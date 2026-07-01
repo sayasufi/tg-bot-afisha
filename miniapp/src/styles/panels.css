@@ -1493,6 +1493,114 @@ mark.hl {
   transform: translateX(3px);
 }
 
+/* ---------- «Предложить событие» form (SuggestEventModal) ---------- */
+.suggest {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: var(--bg);
+}
+.suggest__lead {
+  font-family: var(--grotesk);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+  margin: 4px 0 18px;
+}
+.suggest__field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 15px;
+}
+.suggest__label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.suggest__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  font-family: var(--grotesk);
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.suggest__input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--acid);
+}
+.suggest__input::placeholder { color: var(--ink-dim); opacity: 0.7; }
+.suggest__textarea { min-height: 84px; resize: vertical; }
+.suggest__hint,
+.suggest__fine {
+  font-family: var(--grotesk);
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin: -8px 0 16px;
+}
+.suggest__fine { margin: 12px 0 0; text-align: center; }
+.suggest__free {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--grotesk);
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.suggest__free input { width: 18px; height: 18px; accent-color: var(--acid); }
+.suggest__err {
+  font-family: var(--grotesk);
+  font-size: 13px;
+  color: var(--cinnabar);
+  margin: 4px 0 12px;
+}
+.suggest__submit {
+  width: 100%;
+  padding: 15px;
+  font-family: var(--grotesk);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--on-acid);
+  background: var(--acid);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--cinnabar);
+}
+.suggest__submit:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.suggest__done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 40px 12px;
+}
+.suggest__done-glyph {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  color: var(--on-acid);
+  background: var(--acid);
+  border: 1px solid var(--line);
+}
+.suggest__done-title { font-family: var(--grotesk); font-weight: 800; font-size: 22px; color: var(--ink); }
+.suggest__done-sub { font-family: var(--grotesk); font-size: 14px; line-height: 1.45; color: var(--ink-dim); max-width: 300px; }
+.suggest__done .suggest__submit { margin-top: 10px; max-width: 200px; }
+
 /* ---------- Рекомендации — horizontal discovery rails ---------- */
 .panelview__scroll--rails {
   /* Same 8px side gutters as the list/favorites posters (heads + tracks inset by these). */
