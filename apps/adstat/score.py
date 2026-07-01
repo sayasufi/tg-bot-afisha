@@ -115,8 +115,46 @@ def _relevance(title: str | None, username: str | None) -> tuple[float, str]:
     if any(k in t for k in _OFF_TOPIC):
         return 0.10, "не тема"
     if any(k in t for k in _CITY):
-        return 0.85, "город/локалка"
+        return 0.60, "город/локалка"  # M8: новости/локалка — вторичны для афиша-аппа (было 0.85 → топ забивали ЧП)
     return 0.80, "тема?"  # прошёл discovery-гейт (не мусор) → не наказываем как мусор
+
+
+# ---- Гейт ПОКРЫТИЯ: скор имеет смысл только для городов, где мы собираем события. -----------------------
+# Наши 16 (каноническое имя = core.domain.cities name). Засеивать чужую страну/город = слив бюджета.
+_COVERED = {
+    "Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Казань", "Красноярск",
+    "Нижний Новгород", "Челябинск", "Уфа", "Краснодар", "Самара", "Ростов-на-Дону",
+    "Омск", "Воронеж", "Пермь", "Волгоград",
+}
+# Признаки НЕ-РФ (по названию/username/llm-городу). Каналы чужих стран нам бесполезны.
+_FOREIGN = (
+    "беларус", "belarus", "минск", "minsk", "гомел", "гродно", "grodno", "витебск", "могил", "брест", "бобруйск",
+    "казахстан", "kazakh", "алматы", "almaty", "астана", "astana", "нур-султан", "шымкент", "караганд",
+    "украин", "ukrain", "киев", "kyiv", "kiev", "харьков", "kharkiv", "одесс", "odes", "львов", "lviv", "днепр",
+    "армен", "ереван", "yerevan", "грузи", "тбилиси", "tbilisi", "азербайдж", "ташкент", "tashkent", "бишкек", "bishkek",
+    "молдов", "кишин", "chisinau",
+)
+# Крупные города РФ ВНЕ наших 16 — их засеивать бессмысленно (у нас там нет событий). Только distinctive-стемы.
+_OTHER_RU = (
+    "оренбург", "orenburg", "курган", "kurgan", "тюмен", "tyumen", "барнаул", "иркутск", "irkutsk",
+    "владивосток", "vladivostok", "хабаровск", "саратов", "saratov", "тольятти", "ижевск", "izhevsk",
+    "ярославл", "yaroslavl", "махачкал", "томск", "tomsk", "кемеров", "kemerovo", "астрахан",
+    "великий новгород", "евпатор", "симферопол", "севастопол", "донецк", "луганск", "стерлитамак",
+    "междуреченск", "мыски", "кузбас", "сургут", "калининград", "kaliningrad", "сочи", "sochi", "белгород",
+)
+
+
+def _coverage(t_lower: str, city: str | None) -> tuple[float, str]:
+    """Множитель покрытия: наш город ×1.0, не-РФ ×0.05, другой РФ-город ×0.25, город не подтверждён ×0.65.
+    Так «топ рекламных афиша-каналов ВООБЩЕ» превращается в «топ, который реально принесёт нам юзеров»."""
+    cl = (city or "").strip().lower()
+    if any(k in t_lower for k in _FOREIGN) or (cl and any(k in cl for k in _FOREIGN)):
+        return 0.05, "не РФ"
+    if city in _COVERED:
+        return 1.0, "наш город"
+    if (cl and any(k in cl for k in _OTHER_RU)) or any(k in t_lower for k in _OTHER_RU):
+        return 0.25, "другой город РФ"
+    return 0.65, "город не подтверждён"
 
 
 # Алиас → каноническое имя города (как в discover._CITIES / core.domain.cities.name). Полные стемы —
@@ -299,9 +337,10 @@ def recompute_scores() -> dict:
             else:
                 rel, rel_label = _relevance(ch.title, ch.username)
                 city_hint = target_city.get(ch.username)
-            final = int(round(quality * rel))
-            verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
             city = infer_city(ch.title, ch.username, city_hint)
+            cov, _cov_label = _coverage(f"{ch.title or ''} {ch.username or ''}".lower(), city)
+            final = int(round(quality * rel * cov))  # ИТОГ = качество × релевантность × ПОКРЫТИЕ
+            verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
             db.execute(text(
                 "UPDATE adstat.channels SET score=:s, quality=:q, verdict=:v, relevance=:r, city=:city, score_at=now() "
                 "WHERE channel_id=:cid"
@@ -327,7 +366,9 @@ def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
                 continue
             quality, _qv, why = score_channel(m)
             rel, rel_label = _relevance(ch.title, ch.username)
-            final = int(round(quality * rel))  # ИТОГ = качество × релевантность
+            city = infer_city(ch.title, ch.username)
+            cov, _cov_label = _coverage(f"{ch.title or ''} {ch.username or ''}".lower(), city)
+            final = int(round(quality * rel * cov))  # ИТОГ = качество × релевантность × покрытие
             verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
             out.append({
                 "username": ch.username, "title": ch.title, "score": final, "quality": quality,
