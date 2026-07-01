@@ -77,19 +77,21 @@ def antifraud_mult(af: dict) -> tuple[float, list[str], bool]:
     mult = 1.0
     low_conf = int(af.get("n_posts") or 0) < _MIN_POSTS
 
-    # C1 — view variance (flat views = bought views). Strongest, cheapest signal.
+    # C1 — view variance (flat views = bought views). Calibrated on REAL data: live niche listing channels
+    # sit at cv 0.15-0.31 (free_concerts 0.21, ppuummkkaaufa 0.31), the manufactured @mosdetail at cv 0.124 /
+    # peak 1.09. So only EXTREME flatness flags — the old cv<0.25 «low_view_var» tier false-flagged legit
+    # consistent channels. peak = max/median (a live channel has ≥1 post ≫ the rest).
     cv, peak = af.get("view_cv"), af.get("view_peak")
     if cv is not None and peak is not None:
-        if cv < 0.15 and peak < 1.4:
-            mult *= 0.35; flags.append("flat_views")
-        elif cv < 0.25 and peak < 1.6:
-            mult *= 0.65; flags.append("low_view_var")
-        elif cv > 1.5:
-            mult *= 0.9; flags.append("erratic_views")
+        if cv < 0.10 and peak < 1.15:
+            mult *= 0.4; flags.append("very_flat_views")
+        elif cv < 0.14 and peak < 1.2:
+            mult *= 0.5; flags.append("flat_views")
         elif peak >= 3:
             mult *= 1.05; flags.append("healthy_virality")
 
-    # C4 — coherence (views ≫ reactions = dead audience; too many reactions = reaction farm).
+    # C4 — coherence: a BIG channel (reach>20k) with almost no reactions = dead audience. Small channels
+    # exempt (low absolute reactions are normal there) so free_concerts-type channels aren't touched.
     rr, reach = af.get("react_ratio"), af.get("avg_reach")
     if rr is not None:
         if rr < 0.005 and int(reach or 0) > 20000:
@@ -97,20 +99,38 @@ def antifraud_mult(af: dict) -> tuple[float, list[str], bool]:
         elif rr > 0.15:
             mult *= 0.85; flags.append("reaction_farm")
 
-    # C3 — growth integrity (spike without a citing source / re-buy after churn).
-    subs, dt, dm, cit = af.get("subscribers"), af.get("delta_today"), af.get("delta_month"), af.get("citing_channels")
-    if dt is not None and subs:
+    # C3 — growth integrity. Only EXTREME daily growth flags: >10%/day is not organically possible. (The
+    # card's mentions/citing are LIFETIME, not today's, so «spike without today's source» isn't computable
+    # from it — dropped to avoid false positives; the ad-efficiency C2 signal will cover bought growth.)
+    subs, dt = af.get("subscribers"), af.get("delta_today")
+    if dt is not None and subs and subs > 0:
         g = dt / subs
-        if g > 0.08:
-            mult *= 0.4; flags.append("growth_impossible")
-        elif g > 0.03 and cit == 0:
-            mult *= 0.5; flags.append("spike_no_source")
-        if cit and dt / max(cit, 1) > 2000:
-            mult *= 0.8; flags.append("subs_per_mention")
-    if dm is not None and dt and dm < 0 < dt:
-        mult *= 0.6; flags.append("rebuy_after_churn")
+        if g > 0.10:
+            mult *= 0.45; flags.append("growth_impossible")
+        elif g > 0.05:
+            mult *= 0.8; flags.append("rapid_growth")
 
     return max(0.02, min(1.05, round(mult, 3))), flags, low_conf
+
+
+def recompute_stored() -> dict:
+    """Recompute the `antifraud` multiplier from ALREADY-STORED `af` signals (no re-fetch) — for threshold
+    recalibration. Fast; run it, then recompute_scores()."""
+    import json as _json
+
+    n = 0
+    with SessionLocal() as db:
+        rows = db.execute(text("SELECT channel_id, af FROM adstat.channels WHERE af IS NOT NULL")).all()
+        for cid, af in rows:
+            if not isinstance(af, dict):
+                continue
+            mult, flags, low_conf = antifraud_mult(af)
+            af = {**af, "flags": flags, "low_conf": low_conf}
+            db.execute(text("UPDATE adstat.channels SET af = CAST(:af AS jsonb), antifraud = :m WHERE channel_id = :c"),
+                       {"af": _json.dumps(af, ensure_ascii=False), "m": mult, "c": cid})
+            n += 1
+        db.commit()
+    return {"recomputed": n}
 
 
 def antifraud_scan(limit: int = 150) -> dict:
