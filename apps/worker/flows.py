@@ -370,6 +370,72 @@ async def pipeline_backlog_watch():
     return result
 
 
+@flow(name="city-coverage-watch", retries=1, retry_delay_seconds=30, timeout_seconds=120, log_prints=True)
+async def city_coverage_watch():
+    """Телеметрия ПОКРЫТИЯ по городам + алерт на «пустую карту в городе X». По каждому активному городу:
+    будущие события, % с гео (venue.geom — без него событие НЕ на карте) и % с фото. Полная таблица в лог
+    (видно в Prefect). DM владельцу, если активный (крупный) город — слепое пятно: событий < MIN_EVENTS
+    ИЛИ гео < MIN_GEO_PCT (события есть, а карта пустая = сломан источник/геокодинг). Throttle раз в день."""
+    from datetime import datetime, timezone
+
+    import httpx
+    from sqlalchemy import text
+
+    from core.config.settings import get_settings
+    from core.db.session import WorkerAsyncSessionLocal
+    from core.domain.cities import active_cities
+    from core.infra.redis import get_redis
+
+    MIN_EVENTS, MIN_GEO_PCT = 15, 55
+    settings = get_settings()
+    owner = settings.admin_test_user_id or 5222335152
+    names = [c.name for c in active_cities()]
+    async with WorkerAsyncSessionLocal() as db:
+        rows = (await db.execute(text(
+            "SELECT v.city, count(DISTINCT e.event_id) n, "
+            "count(DISTINCT e.event_id) FILTER (WHERE v.geom IS NOT NULL) geo, "
+            "count(DISTINCT e.event_id) FILTER (WHERE coalesce(e.cached_image_url, e.primary_image_url) IS NOT NULL) photo "
+            "FROM events.events e JOIN events.event_occurrences o ON o.event_id = e.event_id "
+            "JOIN events.venues v ON v.venue_id = o.venue_id "
+            "WHERE e.status = 'active' AND coalesce(o.date_end, o.date_start) >= now() AND v.city = ANY(:c) GROUP BY v.city"
+        ), {"c": names})).all()
+    cov: dict = {}
+    for city, n, geo, photo in rows:
+        n = int(n or 0)
+        cov[city] = {"n": n, "geo": round(100 * (geo or 0) / n) if n else 0, "photo": round(100 * (photo or 0) / n) if n else 0}
+    for name in names:
+        cov.setdefault(name, {"n": 0, "geo": 0, "photo": 0})  # город без событий = слепое пятно
+    print("city_coverage:", cov)
+    blind = [(c, m) for c, m in cov.items() if m["n"] < MIN_EVENTS or m["geo"] < MIN_GEO_PCT]
+    result = {"coverage": cov, "blind": [b[0] for b in blind], "notified": False}
+    if not blind or not settings.telegram_bot_token:
+        return result
+    now = datetime.now(timezone.utc)
+    client = get_redis(decode=True)
+    day = now.strftime("%Y%m%d")
+    lines = []
+    for city, m in blind:
+        if client is not None:
+            try:
+                if not await client.set(f"covwatch:{city}:{day}", "1", nx=True, ex=2 * 24 * 3600):
+                    continue
+            except Exception:
+                pass
+        why = "мало событий" if m["n"] < MIN_EVENTS else f"низкое гео {m['geo']}%"
+        lines.append(f"• <b>{city}</b> — {m['n']} событий, гео {m['geo']}%, фото {m['photo']}% ({why})")
+    if not lines:
+        return result
+    msg = "⚠️ <b>Пустая карта в городе</b>\n\n" + "\n".join(lines) + "\n\nПроверь источники/геокодинг этих городов."
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            await c.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                         json={"chat_id": int(owner), "text": msg, "parse_mode": "HTML", "disable_web_page_preview": True})
+        result["notified"] = True
+    except Exception:
+        pass
+    return result
+
+
 @flow(name="reprocess-changed", retries=_RETRIES, retry_delay_seconds=_RETRY_DELAY, timeout_seconds=900, log_prints=True)
 async def reprocess_changed():
     # Re-normalize structured-source raws whose content changed since first ingest (date shift / price

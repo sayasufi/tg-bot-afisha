@@ -76,6 +76,8 @@ _SCHEDULE = [
     # Watchdog ЗАСТОЯ ОБРАБОТКИ (не фетча): глубина+возраст очередей normalize/enrich/dedup → DM владельцу.
     # Ловит «3957 застряло, никто не заметил». Раз в 30 мин.
     (flows.pipeline_backlog_watch, 1800),
+    # Телеметрия покрытия по городам (события/гео%/фото%) + алерт на «пустую карту в городе X». Раз в день.
+    (flows.city_coverage_watch, 86400),
     # Self-heal venue+event dups every 15 min (ordered: venues then events) so the
     # cross-venue-row case can't linger. Write-time dedup already handles the
     # common same-venue case immediately.

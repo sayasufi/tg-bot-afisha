@@ -647,3 +647,40 @@
   text-transform: uppercase;
   color: var(--ink-dim);
 }
+
+/* Empty-search zero-state: recent queries + example chips, so a blank search isn't a dead end. */
+.searchov__zero {
+  padding: 6px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.searchov__zhead {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: 9px;
+}
+.searchov__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.searchov__chip {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.searchov__chip:hover,
+.searchov__chip:active {
+  border-color: var(--acid);
+  color: var(--acid);
+}

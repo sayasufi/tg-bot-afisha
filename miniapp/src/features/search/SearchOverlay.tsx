@@ -11,6 +11,29 @@ import { EventRow } from "../panel/EventRow";
 const CODE_RE = /^[A-Za-z]{2,4}[-·\s]?[0-9A-Za-z]{2,8}$/;
 const looksLikeCode = (s: string) => CODE_RE.test(s) && (s.includes("-") || /\d/.test(s));
 
+// Empty-state helpers: recent queries (per-device) + example chips, so a blank search isn't a dead end.
+const RECENT_KEY = "search:recent";
+const SUGGESTIONS = ["концерт", "выставка", "стендап", "театр", "вечеринка", "экскурсия"];
+
+function loadRecent(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 6) : [];
+  } catch {
+    return [];
+  }
+}
+function pushRecent(q: string): void {
+  const s = q.trim();
+  if (s.length < 2 || looksLikeCode(s)) return; // don't stash codes / stray chars
+  try {
+    const cur = loadRecent().filter((x) => x.toLowerCase() !== s.toLowerCase());
+    localStorage.setItem(RECENT_KEY, JSON.stringify([s, ...cur].slice(0, 6)));
+  } catch {
+    /* private mode / quota — recent is a nicety, never block search */
+  }
+}
+
 // Full-screen typeahead over the map: search events by code / title / venue with a live
 // ranked dropdown. Debounced + aborted so fast typing never races. Opens an event sheet
 // on tap (with no extra fetch — rows carry coords/date).
@@ -32,6 +55,7 @@ export function SearchOverlay({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [active, setActive] = useState(-1); // keyboard-highlighted result (-1 = none)
+  const [recent, setRecent] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   useFocusTrap(overlayRef, open, inputRef); // trap focus in the overlay; land on the search input
@@ -44,6 +68,7 @@ export function SearchOverlay({
     setLoading(false);
     setError(false);
     setActive(-1);
+    setRecent(loadRecent());
     const t = setTimeout(() => inputRef.current?.focus(), 60);
     return () => clearTimeout(t);
   }, [open]);
@@ -88,6 +113,12 @@ export function SearchOverlay({
   if (!open) return null;
   const s = q.trim();
   const showEmpty = !loading && !error && s.length >= 2 && items.length === 0;
+  const showZero = !loading && !error && s.length < 2 && !looksLikeCode(s); // blank input → suggestions, not void
+  const choose = (x: EventItem) => {
+    pushRecent(q); // remember the query that led to a real tap (per-device)
+    onSelect(x);
+    onClose();
+  };
 
   return (
     <div className="searchov" role="dialog" aria-modal="true" aria-label="Поиск" ref={overlayRef} tabIndex={-1}>
@@ -122,11 +153,8 @@ export function SearchOverlay({
                 e.preventDefault();
                 setActive((a) => Math.max(a - 1, 0));
               } else if (e.key === "Enter") {
-                const pick = items[active >= 0 ? active : 0];
-                if (pick) {
-                  onSelect(pick);
-                  onClose();
-                }
+                const hit = items[active >= 0 ? active : 0];
+                if (hit) choose(hit);
               }
             }}
           />
@@ -158,14 +186,34 @@ export function SearchOverlay({
                 userPos={userPos}
                 active={i === active}
                 optionId={`searchov-opt-${i}`}
-                onSelect={(x) => {
-                  onSelect(x);
-                  onClose();
-                }}
+                onSelect={choose}
               />
             ))}
             {showEmpty && <div className="searchov__empty">Ничего не найдено</div>}
             {error && <div className="searchov__empty">Не удалось загрузить. Попробуй ещё раз.</div>}
+          </div>
+        )}
+
+        {showZero && (
+          <div className="searchov__zero">
+            {recent.length > 0 && (
+              <div className="searchov__zsec">
+                <div className="searchov__zhead">Недавнее</div>
+                <div className="searchov__chips">
+                  {recent.map((r) => (
+                    <button type="button" key={r} className="searchov__chip" onClick={() => setQ(r)}>{r}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="searchov__zsec">
+              <div className="searchov__zhead">Попробуй</div>
+              <div className="searchov__chips">
+                {SUGGESTIONS.map((r) => (
+                  <button type="button" key={r} className="searchov__chip" onClick={() => setQ(r)}>{r}</button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

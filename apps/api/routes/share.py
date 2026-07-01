@@ -1,5 +1,6 @@
 """Shareable event page with Open Graph tags — gives a branded card preview when
 the link is shared into any Telegram chat (or anywhere)."""
+import json
 from datetime import datetime
 from html import escape
 from urllib.parse import urlparse
@@ -86,6 +87,39 @@ def _safe_image(url: str) -> str:
     return url
 
 
+def _jsonld(occ, venue, city, title, desc, image, url) -> str:
+    """schema.org Event JSON-LD for rich link/search previews. Escaped for the inline <script> context so a
+    feed value can't break out with </script>. Only well-formed fields are emitted."""
+    data: dict = {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        "name": title,
+        "url": url,
+        "eventStatus": "https://schema.org/EventScheduled",
+    }
+    if occ and occ.date_start:
+        data["startDate"] = occ.date_start.isoformat()
+    if occ and occ.date_end:
+        data["endDate"] = occ.date_end.isoformat()
+    if image:
+        data["image"] = image
+    if desc:
+        data["description"] = desc
+    if venue or city:
+        loc: dict = {"@type": "Place"}
+        if venue:
+            loc["name"] = venue
+        if city:
+            loc["address"] = {"@type": "PostalAddress", "addressLocality": city}
+        data["location"] = loc
+    if occ and occ.price_min is not None:
+        data["offers"] = {
+            "@type": "Offer", "price": float(occ.price_min), "priceCurrency": occ.currency or "RUB",
+            "availability": "https://schema.org/InStock", "url": url,
+        }
+    return json.dumps(data, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+
+
 _PAGE = """<!doctype html>
 <html lang="ru">
 <head>
@@ -102,6 +136,7 @@ _PAGE = """<!doctype html>
 <meta name="twitter:title" content="__TITLE__">
 <meta name="twitter:description" content="__DESC__">
 <meta name="twitter:image" content="__IMAGE__">
+<script type="application/ld+json">__JSONLD__</script>
 <style>
   * { margin: 0; box-sizing: border-box; }
   body { background: #f4f4ef; color: #0b0b0b; font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -163,12 +198,14 @@ async def share(event_id: UUID, ref: int | None = None, db: AsyncSession = Depen
     )
     og_image = card or image
     cover_style = f"background-image:url('{image}')" if image else ""
+    share_url = f"{base}/v1/share/{event_id}"
 
     html = (
         _PAGE.replace("__TITLE__", escape(title))
         .replace("__DESC__", escape(desc))
         .replace("__IMAGE__", escape(og_image))
-        .replace("__URL__", escape(f"{base}/v1/share/{event_id}"))
+        .replace("__URL__", escape(share_url))
+        .replace("__JSONLD__", _jsonld(occ, venue, city, title, desc, og_image, share_url))
         .replace("__COVERSTYLE__", cover_style)
         .replace("__BOT__", _open_url(event_id, ref))
     )
