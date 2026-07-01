@@ -7,9 +7,19 @@ Each deployment gets ``concurrency_limit=1`` so a run never overlaps itself — 
 equivalent of the old ``single_instance`` Redis lock, but enforced + visible in the
 Prefect UI.
 """
+from datetime import datetime, timedelta, timezone
+
 from prefect import serve
+from prefect.client.schemas.schedules import IntervalSchedule
 
 from apps.worker import flows
+
+# Fixed schedule anchor. Interval schedules compute runs as anchor + N*interval. Anchoring to this STABLE
+# date (not the process start, which is what a bare `interval=` does) makes the schedule survive restarts:
+# without it every restart pushed the next run of each long-interval flow out by a full interval, so the
+# daily/12h flows silently didn't run for days across a restart-heavy window. A per-flow phase offset also
+# staggers same-interval flows so they don't all come due in the same second after a restart (thundering herd).
+_SCHEDULE_ANCHOR = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 # (flow, interval_seconds) — mirrors the former Celery beat schedule.
 _SCHEDULE = [
@@ -135,10 +145,13 @@ def main() -> None:
     from core.observability.sentry import init_sentry
     init_sentry("worker")  # тихие падения инжеста/нормализации/рассылок попадают в Sentry
     _reset_orphaned_runner_state()  # every restart starts from a clean runner state (no wedged deployments)
-    deployments = [
-        fl.to_deployment(name=fl.name, interval=interval, concurrency_limit=1)
-        for fl, interval in _SCHEDULE
-    ]
+    deployments = []
+    for i, (fl, interval) in enumerate(_SCHEDULE):
+        # Stable, per-flow-staggered anchor (NOT the process start) so a restart never pushes a long-interval
+        # flow's next run out by a full interval. 137 is coprime-ish → distinct phase per flow within its interval.
+        anchor = _SCHEDULE_ANCHOR + timedelta(seconds=(i * 137) % interval)
+        schedule = IntervalSchedule(interval=timedelta(seconds=interval), anchor_date=anchor)
+        deployments.append(fl.to_deployment(name=fl.name, schedules=[schedule], concurrency_limit=1))
     # Weekly digest — a CRON, not an interval, so it lands a fixed local time (the weekend-
     # planning moment) instead of "1 week after this process last restarted". Fri 07:00 UTC =
     # 10:00 MSK (MSK is a fixed UTC+3, no DST), so a plain UTC cron is stable year-round.
