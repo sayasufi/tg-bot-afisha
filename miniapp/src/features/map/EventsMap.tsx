@@ -4,6 +4,7 @@ import { AttributionControl, MapContainer, Marker, Polyline, useMap, useMapEvent
 import MarkerClusterGroup from "react-leaflet-cluster";
 
 import type { City, EventItem, MapCluster } from "../../api/client";
+import { nearestOf } from "../../lib/distance";
 import type { ThemeName } from "../../lib/telegram";
 import { Basemap } from "./basemap";
 import { MapController } from "./MapController";
@@ -225,25 +226,34 @@ function CityOverview({ active, cities, center }: { active: boolean; cities: Cit
 function ZoomCityPicker({ cities, currentSlug, onSelect }: { cities: City[]; currentSlug: string | null; onSelect: (slug: string) => void }) {
   const map = useMap();
   const prevZoom = useRef(map.getZoom());
+
+  // Switch the transient viewing city to the one nearest the map centre so ITS events load. `guard`:
+  // when PANNING we only switch once the centre is actually inside a city's region radius (so a pan
+  // within a city — or over the empty gap between cities — doesn't flip the city); when ZOOMING onto a
+  // city we switch unconditionally (a deliberate gesture). Safe from loops: switching the city never
+  // moves the map (MapController only recenters on a selected event / the locate tap).
+  const snapToCenter = (guard: boolean) => {
+    if (cities.length < 2) return;
+    const c = map.getCenter();
+    const near = nearestOf([c.lat, c.lng], cities);
+    if (!near || near.item.slug === currentSlug) return;
+    if (guard && near.meters > (near.item.radius_km || 100) * 1000) return;
+    onSelect(near.item.slug);
+  };
+
   useMapEvents({
     zoomend: () => {
       const z = map.getZoom();
       const prev = prevZoom.current;
       prevZoom.current = z;
-      // Only on a crossing UP out of the picker band into city-detail zoom (not while already zoomed in).
-      if (prev <= CITY_PICK_MAX_ZOOM && z > CITY_PICK_MAX_ZOOM && cities.length > 1) {
-        const c = map.getCenter();
-        let best: City | null = null;
-        let bestD = Infinity;
-        for (const city of cities) {
-          const d = (city.lat - c.lat) ** 2 + (city.lon - c.lng) ** 2;
-          if (d < bestD) {
-            bestD = d;
-            best = city;
-          }
-        }
-        if (best && best.slug !== currentSlug) onSelect(best.slug);
-      }
+      // Crossing UP out of the picker band into city-detail zoom.
+      if (prev <= CITY_PICK_MAX_ZOOM && z > CITY_PICK_MAX_ZOOM) snapToCenter(false);
+    },
+    // Panning at detail zoom into another city's territory → switch so its events appear (the bug: a pan
+    // Воронеж→Волгоград at close zoom never crossed the zoom band, so the city — and its events — never
+    // changed and the map looked empty).
+    moveend: () => {
+      if (map.getZoom() > CITY_PICK_MAX_ZOOM) snapToCenter(true);
     },
   });
   return null;
