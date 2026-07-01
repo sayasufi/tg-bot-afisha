@@ -148,10 +148,33 @@ def _reset_orphaned_runner_state() -> None:
         print(f"runner-startup cleanup skipped: {exc!r}")
 
 
+def _interrupt_orphaned_source_runs() -> None:
+    """On a fresh runner start NOTHING is fetching yet, so any events.source_runs still 'running' is a corpse
+    left by the PREVIOUS (killed/restarted) process between create_source_run and finish_source_run. Mark them
+    'interrupted' immediately instead of waiting up to ~2h for the periodic sweep — otherwise a burst of
+    deploy-restarts piles hundreds of phantom in-flight rows that clutter the health check ('186 зависших').
+    Safe: nothing is live at startup; a run swept in error self-corrects when its finish_source_run lands.
+    Best-effort — never block startup on it (uses the APP db, not the prefect store)."""
+    try:
+        from sqlalchemy import text
+
+        from core.db.session import SessionLocal
+        with SessionLocal() as db:
+            n = db.execute(text(
+                "UPDATE events.source_runs SET status='interrupted', finished_at=now() WHERE status='running'"
+            )).rowcount
+            db.commit()
+        if n:
+            print(f"runner-startup: interrupted {n} orphaned source_runs")
+    except Exception as exc:  # pragma: no cover — never block startup on the cleanup
+        print(f"runner-startup source_runs cleanup skipped: {exc!r}")
+
+
 def main() -> None:
     from core.observability.sentry import init_sentry
     init_sentry("worker")  # тихие падения инжеста/нормализации/рассылок попадают в Sentry
     _reset_orphaned_runner_state()  # every restart starts from a clean runner state (no wedged deployments)
+    _interrupt_orphaned_source_runs()  # + clear app-level 'running' source_runs orphaned by the killed process
     deployments = []
     for i, (fl, interval) in enumerate(_SCHEDULE):
         # Stable, per-flow-staggered anchor (NOT the process start) so a restart never pushes a long-interval
