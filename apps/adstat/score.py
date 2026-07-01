@@ -255,7 +255,7 @@ def score_channel(m: dict) -> tuple[int, str, str]:
         s += 5
 
     s = int(max(0, min(100, round(s))))
-    verdict = "брать" if s >= 70 else ("осторожно" if s >= 50 else "мимо")
+    verdict = "брать" if s >= 65 else ("осторожно" if s >= 50 else "мимо")
     # Подстраховка: очень низкий ERR без подтверждённой реакциями живости → не «брать» (могла быть накрутка).
     if err is not None and err < 8 and (rr is None or rr < 0.3) and verdict == "брать":
         verdict = "осторожно"
@@ -346,7 +346,7 @@ def recompute_scores() -> dict:
             cov, _cov_label = _coverage(f"{ch.title or ''} {ch.username or ''}".lower(), city)
             af = af_mult.get(ch.channel_id, 1.0) or 1.0
             final = int(round(quality * rel * cov * af))  # качество × релевантность × покрытие × АНТИ-НАКРУТКА
-            verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
+            verdict = "брать" if final >= 65 else ("осторожно" if final >= 50 else "мимо")
             db.execute(text(
                 "UPDATE adstat.channels SET score=:s, quality=:q, verdict=:v, relevance=:r, city=:city, score_at=now() "
                 "WHERE channel_id=:cid"
@@ -380,7 +380,7 @@ def rank(min_reach: int = 2000, limit: int = 100) -> list[dict]:
             cov, _cov_label = _coverage(f"{ch.title or ''} {ch.username or ''}".lower(), city)
             af = af_mult.get(ch.channel_id, 1.0) or 1.0
             final = int(round(quality * rel * cov * af))  # × анти-накрутка
-            verdict = "брать" if final >= 70 else ("осторожно" if final >= 50 else "мимо")
+            verdict = "брать" if final >= 65 else ("осторожно" if final >= 50 else "мимо")
             out.append({
                 "username": ch.username, "title": ch.title, "score": final, "quality": quality,
                 "relevance": rel_label, "verdict": verdict, "reason": f"{why} · {rel_label}",
