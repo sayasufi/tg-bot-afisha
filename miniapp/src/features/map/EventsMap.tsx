@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboa
 import L from "leaflet";
 import { AttributionControl, MapContainer, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
+import { isDesktopNow } from "../../lib/useIsDesktop";
 
 import type { City, EventItem, MapCluster } from "../../api/client";
 import { nearestOf } from "../../lib/distance";
@@ -613,7 +614,10 @@ export function EventsMap({
         showCoverageOnHover={false}
         spiderfyOnMaxZoom={false}
         zoomToBoundsOnClick={false}
-        maxClusterRadius={48}
+        // ПК-вьюпорт в разы больше → те же 48px давали сотни одиночных DOM-пинов (лаги на пане).
+        // Радиус 76 собирает их в кластеры; на мобиле поведение прежнее.
+        maxClusterRadius={isDesktopNow() ? 76 : 48}
+        chunkedLoading
         iconCreateFunction={clusterIcon}
         animate={false}
         eventHandlers={clusterHandlers}

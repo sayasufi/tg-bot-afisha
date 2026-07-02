@@ -39,14 +39,17 @@
   .peek {
     left: var(--rail);
   }
+  /* Пилюля/поиск центрируются ПО ШИРИНЕ КАРТЫ (область правее rail) — как и всё остальное. */
   .cmdpill {
-    left: calc(var(--rail) + 16px);
-    right: auto;
+    left: var(--rail);
+    right: 0;
+    margin-inline: auto;
     width: min(560px, calc(100vw - var(--rail) - 32px));
   }
   .searchov__panel {
-    left: calc(var(--rail) + 16px);
-    right: auto;
+    left: var(--rail);
+    right: 0;
+    margin-inline: auto;
     width: min(560px, calc(100vw - var(--rail) - 32px));
   }
   /* Прижатый к левому краю карт-хром уезжает за rail (кнопка «Списком» иначе прячется под ним). */
@@ -55,8 +58,9 @@
     left: calc(var(--rail) + 14px);
   }
   .focusbar {
-    left: calc(var(--rail) + 12px);
-    right: auto;
+    left: var(--rail);
+    right: 0;
+    margin-inline: auto;
     width: min(560px, calc(100vw - var(--rail) - 32px));
   }
   .emptystate {
@@ -187,12 +191,12 @@
 /* ================= Э4. Фильтры = дропдаун-плинт у пилюли (не шторка на весь низ) ================= */
 @media (min-width: 1024px) {
   .csheet__panel {
-    /* Ровно под пилюлей и ровно её ширины — читается как выпадение из шапки. */
+    /* Ровно под пилюлей (обе центрированы по карте) и ровно её ширины. */
     top: calc(env(safe-area-inset-top) + 12px + 48px + 6px);
     bottom: auto;
-    left: 16px;
-    right: auto;
-    margin-inline: 0;
+    left: 0;
+    right: 0;
+    margin-inline: auto;
     width: min(560px, calc(100vw - var(--rail) - 32px));
     max-height: calc(100dvh - 120px);
     border: 1px solid var(--line);
@@ -278,6 +282,15 @@
   }
   /* NB: hero-спан 2×2 пробовали — aspect-ratio карточек в auto-fill сетке даёт дыры; ровная
      сетка с display-заголовками читается лучше. Не возвращать без grid-auto-flow:dense-прототипа. */
+
+  /* Плитки «Подборки» — display-титулы, как у секций (единый журнальный голос). */
+  .recsview .reccoll__title {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+  }
 
   /* Пилюля: подпись-намёк, что это фильтры (одинокая сводка «ВСЕ · ВСЕ ДАТЫ» читалась глухо). */
   .cmdpill__summary::before {

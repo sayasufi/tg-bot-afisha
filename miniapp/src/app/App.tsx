@@ -33,8 +33,9 @@ import { FriendInviteAccept } from "../features/panel/FriendInviteAccept";
 import { bootstrap, fetchFriendsFavorited, manageFriends, type Friend } from "../api/users";
 import { showToast } from "../lib/toast";
 import { logIntent } from "../api/intent";
-import { isWebMode } from "../lib/webAuth";
+import { getWebToken, isWebMode } from "../lib/webAuth";
 import { useIsDesktop } from "../lib/useIsDesktop";
+import { WebAccountPanel } from "../features/auth/WebAccountPanel";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { OfflineBanner } from "../features/offline/OfflineBanner";
@@ -683,6 +684,34 @@ export function App() {
     logIntent("geo");
   }, [userPos]);
 
+  // ВЕБ: каждая вкладка — свой путь (/map /recs /favorites /venues /friends /profile): back/forward
+  // браузера работают, вкладки шарятся ссылкой. В Telegram (single-URL webview) не трогаем.
+  const fromPopRef = useRef(false);
+  useEffect(() => {
+    if (!isWebMode()) return;
+    const pathToView = (p: string) =>
+      ((["map", "recs", "favorites", "venues", "friends", "profile"] as const).find((v) => p === `/${v}`) ?? "map");
+    // стартовый путь → вкладка (прямой заход на /recs и т.п.)
+    const initial = pathToView(window.location.pathname);
+    if (initial !== "map") setView(initial);
+    const onPop = () => {
+      fromPopRef.current = true;
+      setView(pathToView(window.location.pathname));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!isWebMode()) return;
+    if (fromPopRef.current) {
+      fromPopRef.current = false; // навигация пришла из истории — не пушим её обратно
+      return;
+    }
+    const path = `/${view}`;
+    if (window.location.pathname !== path) window.history.pushState({ view }, "", path + window.location.search);
+  }, [view]);
+
   // ПК: поиск по Ctrl/Cmd+K и «/» (стандарт десктоп-веба). Инпуты не перехватываем.
   useEffect(() => {
     if (!isDesktop) return;
@@ -1307,7 +1336,11 @@ export function App() {
             onClose={() => setFriendProfile(null)}
           />
         )}
-        {view === "profile" && (
+        {/* Веб-гость без входа профиль не видит: сразу форма входа/регистрации. */}
+        {view === "profile" && isWebMode() && !getWebToken() && (
+          <WebAccountPanel onClose={() => setView("map")} />
+        )}
+        {view === "profile" && (!isWebMode() || !!getWebToken()) && (
           <ProfilePanel
             webMode={isWebMode()}
             user={tgUser}
