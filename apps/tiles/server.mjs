@@ -38,9 +38,10 @@ async function getBrowser() {
   browser = await chromium.launch({
     args: [
       "--disable-dev-shm-usage",
-      // WebGL на серверном NVIDIA (ANGLE→EGL→драйвер, инжектится nvidia-runtime'ом при
-      // NVIDIA_DRIVER_CAPABILITIES=graphics). Если GPU недоступен — chromium сам молча
-      // падает на SwiftShader, т.е. это строго ускорение без нового режима отказа.
+      // ANGLE→EGL: вместо дефолтного SwiftShader берётся системный Mesa **llvmpipe** —
+      // многопоточный растеризатор на всех ядрах: метатайл 4000мс → 100-350мс (замерено).
+      // (NVIDIA L40S хоста занята соседним voice-api — не подселяемся; если EGL-стек
+      // недоступен, chromium сам молча падает обратно на SwiftShader.)
       "--use-angle=gl-egl",
       "--ignore-gpu-blocklist",
       "--enable-gpu",

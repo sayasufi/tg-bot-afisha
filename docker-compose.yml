@@ -272,14 +272,15 @@ services:
       # тайлы на полной скорости.
       PREWARM: "all"
       PAGES_PER_THEME: "4"
-      # graphics — обязательный кап для EGL/WebGL внутри контейнера (иначе только compute).
+      # graphics — кап для EGL внутри контейнера. Фактический рендерер сейчас — Mesa
+      # llvmpipe на всех ядрах (~11× быстрее SwiftShader); L40S хоста занята соседним
+      # voice-api (44/46ГБ), но если освободится — ANGLE сможет подхватить её без правок.
       NVIDIA_DRIVER_CAPABILITIES: "graphics,compute,utility"
     ports:
       - "127.0.0.1:8787:8787"
     volumes:
       - tiles_cache:/cache
     shm_size: "1gb"
-    # Рендер на L40S вместо программного SwiftShader: холодный метатайл в разы быстрее.
     deploy:
       resources:
         reservations:
