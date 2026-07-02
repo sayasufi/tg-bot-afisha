@@ -5,13 +5,15 @@ import { viewedCount } from "../../lib/affinity";
 import { IconClose } from "../../lib/icons";
 import { MANAGER_LINK, openTelegramLink, type ThemeName, type TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
-import { authSetCredentials } from "../../lib/webAuth";
+import { authLinkCode, authMe, authSetCredentials, getWebEmail, getWebToken, logoutWeb } from "../../lib/webAuth";
+import { WebAccountPanel } from "../auth/WebAccountPanel";
 import { showToast } from "../../lib/toast";
 import { SuggestChannelModal } from "./SuggestChannelModal";
 import { SuggestEventModal } from "./SuggestEventModal";
 import { TasteCard } from "./TasteCard";
 
 export function ProfilePanel({
+  webMode = false,
   user,
   city,
   cities,
@@ -28,6 +30,7 @@ export function ProfilePanel({
   onOpenFavorites,
   onClose,
 }: {
+  webMode?: boolean; // браузер без Telegram: секция веб-аккаунта, TG-специфика скрыта/приглушена
   user: TgUser | null;
   city: string;
   cities: City[];
@@ -47,6 +50,23 @@ export function ProfilePanel({
   const [cityOpen, setCityOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [channelOpen, setChannelOpen] = useState(false);
+  // Веб-аккаунт (браузер): вход-оверлей + связка с Telegram. authMe даёт linked-статус.
+  const [webAuthOpen, setWebAuthOpen] = useState(false);
+  const [webLinked, setWebLinked] = useState<boolean | null>(null);
+  const webAuthed = webMode && !!getWebToken();
+  useEffect(() => {
+    if (!webAuthed) return;
+    void authMe().then((m) => {
+      if (m) setWebLinked(m.telegram_linked);
+    });
+  }, [webAuthed]);
+  // Уведомления шлёт БОТ: чисто-веб аккаунту (без связки) тумблеры честно приглушаем.
+  const notifyLocked = webMode && webAuthed && webLinked === false;
+  const linkTg = async () => {
+    const url = await authLinkCode();
+    if (url) window.open(url, "_blank");
+    else showToast("Не получилось — попробуй позже", { tone: "muted" });
+  };
   // «Вход на сайте»: email+пароль на этот же TG-аккаунт → логин на okrestmap.ru/в приложениях
   // ведёт в тот же аккаунт (избранное/настройки общие).
   const [webCredsOpen, setWebCredsOpen] = useState(false);
@@ -72,10 +92,15 @@ export function ProfilePanel({
   // Cities A→Z (Cyrillic-aware) so the picker stays scannable as it grows past a dozen.
   const sortedCities = [...cities].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const currentCitySlug = cities.find((c) => c.name === city)?.slug ?? cities[0]?.slug ?? "";
-  const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
+  const webAccEmail = webMode ? getWebEmail() : null;
+  const name = webMode
+    ? (webAccEmail ?? "Гость")
+    : user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
   const initial = (name[0] || "?").toUpperCase();
   const avatarUrl = safeHttpUrl(user?.photo_url);
-  const handle = user?.username ? `@${user.username}` : "Telegram";
+  const handle = webMode
+    ? (webAuthed ? "веб-аккаунт" : "не выполнен вход")
+    : user?.username ? `@${user.username}` : "Telegram";
   // «Просмотрено» — unique events opened on this device (a real behavioural metric, not derivable
   // from the Избранное list). Read once on open.
   const [viewed] = useState(() => viewedCount());
@@ -162,11 +187,17 @@ export function ProfilePanel({
           className={`profile__switch${notifyReminders ? " profile__switch--on" : ""}`}
           role="switch"
           aria-checked={notifyReminders}
-          onClick={() => onToggleReminders(!notifyReminders)}
+          disabled={notifyLocked}
+          style={notifyLocked ? { opacity: 0.5 } : undefined}
+          onClick={() => !notifyLocked && onToggleReminders(!notifyReminders)}
         >
           <span className="profile__switch-text">
             <span className="profile__switch-label">Напоминания</span>
-            <span className="profile__switch-sub">Бот напомнит перед началом событий из избранного. Выключи, чтобы приглушить все разом</span>
+            <span className="profile__switch-sub">
+              {notifyLocked
+                ? "Придут в Telegram — свяжи аккаунт выше"
+                : "Бот напомнит перед началом событий из избранного. Выключи, чтобы приглушить все разом"}
+            </span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />
@@ -178,11 +209,17 @@ export function ProfilePanel({
           className={`profile__switch${notifyDigest ? " profile__switch--on" : ""}`}
           role="switch"
           aria-checked={notifyDigest}
-          onClick={() => onToggleDigest(!notifyDigest)}
+          disabled={notifyLocked}
+          style={notifyLocked ? { opacity: 0.5 } : undefined}
+          onClick={() => !notifyLocked && onToggleDigest(!notifyDigest)}
         >
           <span className="profile__switch-text">
             <span className="profile__switch-label">Афиша на выходные</span>
-            <span className="profile__switch-sub">Раз в неделю бот пришлёт, что нового рядом и на твоих площадках</span>
+            <span className="profile__switch-sub">
+              {notifyLocked
+                ? "Придёт в Telegram — свяжи аккаунт выше"
+                : "Раз в неделю бот пришлёт, что нового рядом и на твоих площадках"}
+            </span>
           </span>
           <span className="profile__switch-track" aria-hidden="true">
             <span className="profile__switch-knob" />
@@ -207,6 +244,43 @@ export function ProfilePanel({
         </button>
 
         <div className="recs__section">Аккаунт</div>
+        {webMode && !webAuthed && (
+          <button type="button" className="profile__switch" onClick={() => setWebAuthOpen(true)}>
+            <span className="profile__switch-text">
+              <span className="profile__switch-label">Войти или создать аккаунт</span>
+              <span className="profile__switch-sub">Избранное и настройки сохранятся за тобой</span>
+            </span>
+            <span aria-hidden="true" style={{ opacity: 0.6 }}>→</span>
+          </button>
+        )}
+        {webMode && webAuthed && (
+          <>
+            {webLinked === false && (
+              <button type="button" className="profile__switch" onClick={() => void linkTg()}>
+                <span className="profile__switch-text">
+                  <span className="profile__switch-label">Связать Telegram</span>
+                  <span className="profile__switch-sub">Избранное станет общим, а бот будет напоминать о событиях</span>
+                </span>
+                <span aria-hidden="true" style={{ opacity: 0.6 }}>→</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="profile__switch"
+              onClick={() => {
+                logoutWeb();
+                window.location.reload();
+              }}
+            >
+              <span className="profile__switch-text">
+                <span className="profile__switch-label">Выйти</span>
+                <span className="profile__switch-sub">{webAccEmail ?? "веб-аккаунт"}</span>
+              </span>
+              <span aria-hidden="true" style={{ opacity: 0.6 }}>×</span>
+            </button>
+          </>
+        )}
+        {!webMode && (<>
         <button type="button" className="profile__switch" onClick={() => setWebCredsOpen((v) => !v)}>
           <span className="profile__switch-text">
             <span className="profile__switch-label">Вход на сайте</span>
@@ -247,6 +321,7 @@ export function ProfilePanel({
             </button>
           </div>
         )}
+        </>)}
 
         <div className="recs__section">Оформление</div>
         <button
@@ -312,6 +387,7 @@ export function ProfilePanel({
     {channelOpen && (
       <SuggestChannelModal open onClose={() => setChannelOpen(false)} cities={sortedCities} defaultCity={currentCitySlug} />
     )}
+    {webAuthOpen && <WebAccountPanel onClose={() => setWebAuthOpen(false)} />}
     </>
   );
 }

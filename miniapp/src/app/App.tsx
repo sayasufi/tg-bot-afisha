@@ -35,7 +35,6 @@ import { showToast } from "../lib/toast";
 import { logIntent } from "../api/intent";
 import { isWebMode } from "../lib/webAuth";
 import { useIsDesktop } from "../lib/useIsDesktop";
-import { WebAccountPanel } from "../features/auth/WebAccountPanel";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { OfflineBanner } from "../features/offline/OfflineBanner";
@@ -684,6 +683,34 @@ export function App() {
     logIntent("geo");
   }, [userPos]);
 
+  // ПК: поиск по Ctrl/Cmd+K и «/» (стандарт десктоп-веба). Инпуты не перехватываем.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") || e.key === "/") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isDesktop]);
+
+  // Заголовок вкладки по разделу (в TG-webview не виден, в браузере — навигация по табам).
+  useEffect(() => {
+    const names: Record<string, string> = {
+      map: "Окрест — карта событий рядом",
+      recs: "Подборка — Окрест",
+      favorites: "Избранное — Окрест",
+      venues: "Площадки — Окрест",
+      friends: "Друзья — Окрест",
+      profile: "Профиль — Окрест",
+    };
+    document.title = names[view] ?? "Окрест";
+  }, [view]);
+
   const dismissOnboarding = useCallback((interests: string[] = []) => {
     haptic("light");
     try {
@@ -1280,9 +1307,9 @@ export function App() {
             onClose={() => setFriendProfile(null)}
           />
         )}
-        {view === "profile" && isWebMode() && <WebAccountPanel onClose={() => setView("map")} />}
-        {view === "profile" && !isWebMode() && (
+        {view === "profile" && (
           <ProfilePanel
+            webMode={isWebMode()}
             user={tgUser}
             city={settingsCity?.name ?? CITY}
             cities={cities}

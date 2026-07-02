@@ -180,6 +180,101 @@
   }
 }
 
+/* ================= Э4. Фильтры = дропдаун-плинт у пилюли (не шторка на весь низ) ================= */
+@media (min-width: 1024px) {
+  .csheet__panel {
+    top: calc(env(safe-area-inset-top) + 12px + 48px + 8px);
+    bottom: auto;
+    left: 16px;
+    right: auto;
+    margin-inline: 0;
+    width: min(600px, calc(100vw - var(--rail) - 48px));
+    max-height: calc(100dvh - 120px);
+    border: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.12);
+    transform: translateY(-10px);
+    opacity: 0;
+    transition: transform 0.18s var(--ease-cut), opacity 0.18s var(--ease-cut);
+  }
+  .csheet--open .csheet__panel {
+    transform: none;
+    opacity: 1;
+  }
+
+  /* ============ Э4. Подборка: рейлы-полосы → журнальные сетки (весь рейл виден сразу) ============ */
+  .rail__track {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    overflow-x: visible;
+    gap: 10px;
+  }
+  .rcard {
+    width: auto;
+    height: auto;
+    aspect-ratio: 3 / 4;
+  }
+
+  /* Детали коллекции: 2 мобильные колонки → плотная афишная сетка. */
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+
+  /* ================= Э3. Полиш: скроллбар / selection / focus / тосты ================= */
+  .panelview__scroll,
+  .sheet,
+  .csheet__panel {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink) transparent;
+  }
+  ::selection {
+    background: var(--acid);
+    color: var(--on-acid);
+  }
+  :focus-visible {
+    outline: 2px solid var(--cinnabar);
+    outline-offset: 2px;
+  }
+  .toast {
+    max-width: 380px;
+    white-space: normal;
+  }
+}
+
+/* ================= Э3. Hover-язык VITRINE (только настоящая мышь) ================= */
+@media (hover: hover) and (min-width: 1024px) {
+  /* «Оттиск»: карточка приподнимается на печатный шаг, offset-тень растёт. */
+  .rcard:hover,
+  .lrow:hover,
+  .cat:hover,
+  .reccoll:hover,
+  .erow:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--line);
+    transition: transform 0.12s var(--ease-cut), box-shadow 0.12s var(--ease-cut);
+  }
+  .btn:hover,
+  .sheet__picon:hover,
+  .panelview__close:hover {
+    transform: translate(-1px, -1px);
+    transition: transform 0.1s var(--ease-cut);
+  }
+  .navitem:hover {
+    background: var(--vitrine);
+  }
+  .quickchip:hover,
+  .listview__sort:hover,
+  .rail__more:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  /* Пины отзываются на мышь (чистый CSS, без канала в React — он в Э5). */
+  .leaflet-marker-icon:hover {
+    cursor: pointer;
+    filter: brightness(1.06);
+  }
+}
+
 @media (min-width: 1440px) {
   .sheet {
     width: 480px;
