@@ -46,30 +46,17 @@ map.on("error", (e) => {
   console.warn("[tilerender]", (e as any)?.error?.message || "map error");
 });
 
-// Ждём полной отрисовки текущего вида. jumpTo на тот же вид может не породить событий —
-// поэтому есть быстрый путь через areTilesLoaded().
-function waitIdle(): Promise<void> {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (!done) {
-        done = true;
-        resolve();
-      }
-    };
-    map.once("idle", finish);
-    if (map.isStyleLoaded() && (map as any).areTilesLoaded?.() && !map.isMoving()) {
-      window.setTimeout(finish, 60); // кадр на дорисовку
-    }
-  });
-}
-
 (window as any).__renderTile = async (z: number, x: number, y: number): Promise<string> => {
   const n = 2 ** z;
   const lon = ((x + 0.5) / n) * 360 - 180;
   const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n))) * 180) / Math.PI;
   map.jumpTo({ center: [lon, lat], zoom: z - 1 });
-  await waitIdle();
+  // ВСЕГДА форсируем кадр и ждём честный idle: «быстрые пути» через areTilesLoaded()
+  // стреляли ДО перерисовки (тайлы уже в кэше maplibre → пустой снимок фона).
+  // idle после triggerRepaint гарантирован даже для no-op jumpTo на тот же вид.
+  const idle = new Promise<void>((resolve) => map.once("idle", () => resolve()));
+  map.triggerRepaint();
+  await idle;
   const src = map.getCanvas();
   const out = document.createElement("canvas");
   out.width = TILE * RATIO;
