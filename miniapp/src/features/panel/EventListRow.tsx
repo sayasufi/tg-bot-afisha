@@ -1,4 +1,4 @@
-import { memo, type CSSProperties } from "react";
+import { memo, useState, type CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
 import { formatWhenShort, goNowState } from "../../lib/datetime";
@@ -29,7 +29,8 @@ function EventListRowImpl({
   now?: number; // shared minute-tick, so the list's "идёт сейчас"/countdown matches the map
   onSelect: (i: EventItem) => void;
 }) {
-  const img = safeHttpUrl(item.primary_image_url);
+  const [imgFailed, setImgFailed] = useState(false); // битое фото → бренд-заглушка
+  const img = imgFailed ? null : safeHttpUrl(item.primary_image_url);
   const dist = item.lat != null && item.lon != null ? distanceLabel(userPos, [item.lat, item.lon]) : null;
   const nowDate = now != null ? new Date(now) : undefined;
   const go = goNowState(item.date_start, item.date_end, item.open_now, nowDate);
@@ -45,7 +46,7 @@ function EventListRowImpl({
       onClick={() => onSelect(item)}
     >
       {img ? (
-        <img className="lrow__img" src={img} alt="" loading="lazy" decoding="async" />
+        <img className="lrow__img" src={img} alt="" loading="lazy" decoding="async" onError={() => setImgFailed(true)} />
       ) : (
         <span className="lrow__glyph">
           <CategoryIcon cat={item.category} size={44} />

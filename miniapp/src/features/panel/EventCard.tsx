@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
 import { categoryMeta } from "../../lib/categories";
@@ -21,7 +21,9 @@ function priceLabel(p: number | null | undefined): { text: string; free: boolean
 export function EventCard({ item, index = 0, userPos, onSelect }: { item: CardItem; index?: number; userPos?: LatLon | null; onSelect: (i: EventItem) => void }) {
   const meta = categoryMeta(item.category);
   const go = goNowState(item.date_start, item.date_end, item.open_now);
-  const img = safeHttpUrl(item.primary_image_url);
+  // Протухшая картинка (телеграм-CDN ссылки смертны) → карточка честно падает в бренд-заглушку.
+  const [imgFailed, setImgFailed] = useState(false);
+  const img = imgFailed ? null : safeHttpUrl(item.primary_image_url);
   const dist =
     item.distance_m != null
       ? formatDistance(item.distance_m)
@@ -42,7 +44,7 @@ export function EventCard({ item, index = 0, userPos, onSelect }: { item: CardIt
       onClick={() => onSelect(item)}
     >
       {img ? (
-        <img className="rcard__img" src={img} alt="" loading="lazy" decoding="async" />
+        <img className="rcard__img" src={img} alt="" loading="lazy" decoding="async" onError={() => setImgFailed(true)} />
       ) : (
         <span className="rcard__glyph" aria-hidden="true">
           <CategoryIcon cat={item.category} size={34} />

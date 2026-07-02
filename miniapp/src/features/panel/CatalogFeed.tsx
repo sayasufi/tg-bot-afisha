@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 import type { EventItem } from "../../api/client";
 import { formatWhenShort, goNowState } from "../../lib/datetime";
@@ -75,7 +75,7 @@ function PhotoCard({
     >
       {c.img ? (
         <>
-          <img className="cat__img" src={c.img} alt="" loading="lazy" decoding="async" />
+          <img className="cat__img" src={c.img} alt="" loading="lazy" decoding="async" onError={(e) => { const el = e.currentTarget.closest(".cat"); if (el) el.classList.add("cat--noimg"); e.currentTarget.remove(); }} />
           <span className="poster-grain" aria-hidden="true" />
         </>
       ) : (
