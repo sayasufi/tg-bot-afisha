@@ -105,7 +105,7 @@ export function CollectionDetail({
   if (!open) return null;
 
   return (
-    <div className="panelview">
+    <div className="panelview panelview--wide">
       <header className="panelview__head">
         <h2>{(title || "подборка").toLowerCase()}</h2>
         <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>

@@ -10,3 +10,4 @@
 @import "./styles/filters.css"; /* bottom filter sheet */
 @import "./styles/peek.css"; /* cluster mini-list peek */
 @import "./styles/signature.css"; /* print-proof signature layer + entrances */
+@import "./styles/desktop.css"; /* >=1024px: веб-версия — контент-колонки, центр-модалки */

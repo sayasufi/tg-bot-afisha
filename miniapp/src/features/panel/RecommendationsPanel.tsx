@@ -165,7 +165,7 @@ export function RecommendationsPanel({
   const gridCollections = collections.slice(1);
 
   return (
-    <div className="panelview">
+    <div className="panelview recsview">
       <header className="panelview__head">
         <h2>подборка</h2>
         <button type="button" className="panelview__close" aria-label="Закрыть" onClick={onClose}>
