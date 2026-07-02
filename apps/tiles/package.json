@@ -1,0 +1,9 @@
+{
+  "name": "okrest-tiles",
+  "private": true,
+  "type": "module",
+  "description": "Серверный рендер растровых тайлов из нашего векторного стиля (для клиентов без аппаратного WebGL)",
+  "dependencies": {
+    "playwright": "1.49.0"
+  }
+}

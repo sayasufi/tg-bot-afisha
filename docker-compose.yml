@@ -258,6 +258,23 @@ services:
       api:
         condition: service_healthy
 
+  # Рендерер растровых тайлов для клиентов без аппаратного WebGL: headless-chromium открывает
+  # /tilerender.html миниаппа (тот же векторный стиль) и нарезает PNG. Loopback-only: наружу
+  # смотрит host-nginx (/tiles/ с proxy_cache); ниже — вечный дисковый кэш в томе.
+  tiles:
+    build:
+      context: ./apps/tiles
+    restart: unless-stopped
+    environment:
+      RENDER_BASE: http://miniapp:5173
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - tiles_cache:/cache
+    shm_size: "1gb"
+    depends_on:
+      - miniapp
+
   # Owner-only admin panel (admin.okrestmap.ru). Separate lightweight SPA, bound to LOOPBACK only
   # (reachable solely via the host nginx, unlike the public miniapp on :5173).
   admin:
@@ -283,3 +300,4 @@ volumes:
   prefect_pg_data:
   redis_data:
   meili_data:
+  tiles_cache:
