@@ -5,6 +5,7 @@
 import { API_BASE } from "../api/http";
 
 const TOKEN_KEY = "okrest_web_token";
+const EMAIL_KEY = "okrest_web_email"; // для показа в сайдбаре/профиле (не источник истины — им остаётся /auth/me)
 
 export function getWebToken(): string | null {
   try {
@@ -17,9 +18,28 @@ export function getWebToken(): string | null {
 export function setWebToken(t: string | null): void {
   try {
     if (t) localStorage.setItem(TOKEN_KEY, t);
-    else localStorage.removeItem(TOKEN_KEY);
+    else {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(EMAIL_KEY);
+    }
   } catch {
     /* приват-режим — сессия проживёт вкладку */
+  }
+}
+
+export function getWebEmail(): string | null {
+  try {
+    return localStorage.getItem(EMAIL_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setWebEmail(e: string | null): void {
+  try {
+    if (e) localStorage.setItem(EMAIL_KEY, e);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -55,13 +75,19 @@ async function post(path: string, body: unknown): Promise<{ ok: boolean; status:
 
 export async function authRegister(email: string, password: string) {
   const r = await post("/v1/auth/register", { email, password });
-  if (r.ok && r.data.token) setWebToken(r.data.token);
+  if (r.ok && r.data.token) {
+    setWebToken(r.data.token);
+    setWebEmail(r.data.email ?? email);
+  }
   return r;
 }
 
 export async function authLogin(email: string, password: string) {
   const r = await post("/v1/auth/login", { email, password });
-  if (r.ok && r.data.token) setWebToken(r.data.token);
+  if (r.ok && r.data.token) {
+    setWebToken(r.data.token);
+    setWebEmail(r.data.email ?? email);
+  }
   return r;
 }
 

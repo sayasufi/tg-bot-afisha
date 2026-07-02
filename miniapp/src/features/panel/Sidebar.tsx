@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { IconBuilding, IconHeart, IconMap, IconPeople, IconSparkle } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
+import { getWebEmail, getWebToken, isWebMode } from "../../lib/webAuth";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import type { View } from "./view";
 
@@ -38,9 +39,17 @@ export function Sidebar({
   // The «Профиль» nav item is gone; this account block at the bottom is the entry to the profile
   // screen (where notifications / city / taste live) — Linear/Slack-style.
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Гость" : "Гость";
-  const handle = user?.username ? `@${user.username}` : "Telegram";
+  // Веб-режим (браузер, не Telegram): аккаунт-блок честно отражает состояние сессии —
+  // не вошёл → «Войти» (тап открывает форму), вошёл → email аккаунта. TG-заглушка «Telegram»
+  // здесь была бы враньём.
+  const web = isWebMode();
+  const webAuthed = web && !!getWebToken();
+  const handle = web
+    ? (webAuthed ? (getWebEmail() ?? "Аккаунт") : "Войти")
+    : user?.username ? `@${user.username}` : "Telegram";
+  const cap = web ? (webAuthed ? "аккаунт" : "избранное и настройки") : "профиль";
   const avatarUrl = safeHttpUrl(user?.photo_url);
-  const initial = (name[0] || "?").toUpperCase();
+  const initial = web ? (webAuthed ? (getWebEmail() ?? "@")[0].toUpperCase() : "→") : (name[0] || "?").toUpperCase();
   const panelRef = useRef<HTMLElement>(null);
   useFocusTrap(panelRef, open); // contain keyboard focus in the menu while it's open
   return (
@@ -87,7 +96,7 @@ export function Sidebar({
           </span>
           <span className="drawer__account-id">
             <span className="drawer__handle">{handle}</span>
-            <span className="drawer__account-cap">профиль</span>
+            <span className="drawer__account-cap">{cap}</span>
           </span>
           <span className="drawer__account-go" aria-hidden="true">›</span>
         </button>
