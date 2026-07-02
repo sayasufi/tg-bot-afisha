@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 
 from core.db.models import Event, EventSource, RawEvent, Source
 from core.db.session import SessionLocal, WorkerAsyncSessionLocal
-from core.infra.http_safety import is_public_http_url
+from core.infra.http_safety import is_public_http_url, safe_get
 from core.media.storage import ensure_bucket, object_exists, public_url, put_image
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,9 @@ def _cache_one(db, event: Event) -> bool:
     if not is_public_http_url(src):
         return False
     try:
-        # follow_redirects=False so a public URL can't 30x into an internal host.
-        resp = httpx.get(src, timeout=20, follow_redirects=False, headers={"User-Agent": "okrest-media/1.0"})
+        # safe_get re-validates the host is public, blocks redirects, and PINS the resolved public IP
+        # so the URL can't be DNS-rebound into an internal host between the check above and the connect.
+        resp = safe_get(src, timeout=20, headers={"User-Agent": "okrest-media/1.0"})
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGB")
         img.info.pop("xmp", None)  # some posters carry XMP > 64 KB, which overflows the JPEG marker on save
@@ -43,7 +44,7 @@ def _cache_one(db, event: Event) -> bool:
         event.cached_image_url = public_url(key)
         db.add(event)
         return True
-    except (httpx.HTTPError, UnidentifiedImageError) as exc:
+    except (ValueError, httpx.HTTPError, UnidentifiedImageError) as exc:  # ValueError = safe_get rejected a non-public/rebound host
         # Expected at scale — a blocked/dead/malformed image URL, or bytes that aren't an image.
         # Skip just this one image (the event keeps its source URL); a one-line INFO, not a
         # stack-trace WARNING, so health checks aren't drowned in benign image-cache noise.

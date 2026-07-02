@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from core.infra.http_safety import is_public_http_url
+from core.infra.http_safety import is_public_http_url, safe_get
 from core.media.storage import ensure_bucket, get_object, object_exists, public_url, put_image
 
 logger = logging.getLogger(__name__)
@@ -252,7 +252,7 @@ def _event_photo_bytes(event_id: str, src_url: str | None) -> bytes | None:
     the fallback. SSRF-guarded. None when neither is usable (caller falls back to a text DM)."""
     if src_url and is_public_http_url(src_url):
         try:
-            r = httpx.get(src_url, timeout=8, follow_redirects=False, headers={"User-Agent": "okrest-card/1.0"})
+            r = safe_get(src_url, timeout=8, headers={"User-Agent": "okrest-card/1.0"})  # validate+block-redirect+pin IP
             r.raise_for_status()
             return r.content
         except Exception:

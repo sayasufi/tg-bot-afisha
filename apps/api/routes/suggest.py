@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.telegram_auth import validate_init_data
+from core.config.settings import get_settings
 from core.db.repositories.submissions import count_user_submissions_today, create_submission
 from core.db.session import get_async_db
 from core.domain.cities import CITIES
@@ -30,6 +31,30 @@ from core.media.storage import ensure_bucket, public_url, put_image
 from pipeline.maintenance.telegram_health import _fetch_subs, _probe, _UA
 
 router = APIRouter(prefix="/v1/suggest", tags=["suggest"])
+
+
+async def _notify_moderator(kind: str, sid: str, city: str | None) -> None:
+    """C3: best-effort DM the owner that a new user submission landed — the moderation queue is pull-only,
+    and the approve flow promises «появится в течение часа», which needs a human to actually look. One fast
+    DM on a rare endpoint (submissions are infrequent), never blocks/raises."""
+    s = get_settings()
+    token = s.telegram_bot_token
+    owner = s.admin_test_user_id or 5222335152  # владелец сервиса (@throlib) — как в watchdog-ах flows.py
+    if not token or not owner:
+        return
+    label = "событие" if kind == "event" else "канал"
+    msg = (
+        f"🆕 Новая заявка на модерацию: <b>{label}</b>" + (f" · {city}" if city else "")
+        + f"\nID <code>{sid}</code> — открой админку → <b>Модерация</b>."
+    )
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": int(owner), "text": msg, "parse_mode": "HTML", "disable_web_page_preview": True},
+            )
+    except Exception:
+        pass  # заявка уже сохранена; уведомление — best-effort
 
 _MSK = timezone(timedelta(hours=3))
 _DAILY_CAP = 10  # submissions per user per day
@@ -198,6 +223,7 @@ async def suggest_event(payload: EventSuggestRequest, request: Request, db: Asyn
         db, kind="event", data=data, submitted_by=int(uid),
         submitted_username=user.get("username"), city_slug=city_slug, status="needs_review",
     )
+    await _notify_moderator("event", str(sid), city_slug)
     return {"ok": True, "submission_id": sid, "status": "needs_review"}
 
 
@@ -318,4 +344,5 @@ async def suggest_channel(payload: ChannelSuggestRequest, request: Request, db: 
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Этот канал уже на модерации")
+    await _notify_moderator("channel", str(sid), city_slug)
     return {"ok": True, "submission_id": sid, "status": "needs_review"}

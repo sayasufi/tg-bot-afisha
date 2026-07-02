@@ -85,13 +85,19 @@ def parse_price(text: str) -> tuple[float | None, float | None]:
     return float(min(found)), float(max(found))
 
 
+# A17: a bare "19:00"/"5 мая" is Moscow local wall-clock, not UTC. Without a timezone the parsed
+# datetime is naive → downstream treats it as UTC → the event time shifts +3h. Interpret naive results
+# as Europe/Moscow and return tz-aware, mirroring the already-tz-aware parse in rules.py.
+_DP_SETTINGS = {"TIMEZONE": "Europe/Moscow", "RETURN_AS_TIMEZONE_AWARE": True}
+
+
 def parse_dates(text: str) -> tuple[datetime | None, datetime | None]:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     for line in lines:
-        dt = dateparser.parse(line, languages=["ru", "en"])
+        dt = dateparser.parse(line, languages=["ru", "en"], settings=_DP_SETTINGS)
         if dt:
             return dt, None
-    dt = dateparser.parse(text, languages=["ru", "en"])
+    dt = dateparser.parse(text, languages=["ru", "en"], settings=_DP_SETTINGS)
     return dt, None
 
 

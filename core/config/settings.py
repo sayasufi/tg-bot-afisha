@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     admin_password: str = Field(default="", alias="ADMIN_PASSWORD")
     # HMAC secret for signing admin session tokens. Rotate (+ restart api) to revoke all sessions.
     admin_session_secret: str = Field(default="", alias="ADMIN_SESSION_SECRET")
-    admin_session_ttl_hours: int = Field(default=12, alias="ADMIN_SESSION_TTL_HOURS")
+    admin_session_ttl_hours: int = Field(default=720, alias="ADMIN_SESSION_TTL_HOURS")  # 30 дней: owner-only панель, вход не должен слетать по разу в день (было 12ч)
     # Telegram user id для ТЕСТ-рассылок из админки (дайджест/напоминание «себе»). 0 → тест-кнопки
     # отключены. ЕДИНСТВЕННЫЙ адресат теста — этот id (жёстко гардится в impl, спам исключён).
     admin_test_user_id: int = Field(default=0, alias="ADMIN_TEST_USER_ID")
