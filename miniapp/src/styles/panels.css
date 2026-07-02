@@ -1789,6 +1789,20 @@ mark.hl {
   place-items: center;
   color: rgba(244, 244, 239, 0.22);
 }
+/* Заглушка «без фото» — фирменная: ink-поле с халфтон-растром (печатный приём VITRINE)
+   и крупным категорийным глифом. Одна система для рейлов/списка/каталога. */
+.rcard--noimg,
+.lrow--noimg,
+.cat--noimg {
+  background-image: radial-gradient(rgba(244, 244, 239, 0.08) 1px, transparent 1.4px);
+  background-size: 8px 8px;
+}
+.rcard--noimg .rcard__glyph svg,
+.lrow--noimg .lrow__glyph svg,
+.cat--noimg .cat__glyph svg {
+  width: 64px;
+  height: 64px;
+}
 /* Legibility scrim — heavy at the bottom (title), a touch at the top (code/distance). */
 .rcard::after {
   content: "";

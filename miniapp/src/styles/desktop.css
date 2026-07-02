@@ -247,6 +247,13 @@
     outline: 2px solid var(--cinnabar);
     outline-offset: 2px;
   }
+  /* У полей ввода СВОИ focus-стили (ink-рамка контейнера) — глобальный киноварный outline
+     на инпуте поиска читался как ошибка валидации. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+  }
   .toast {
     max-width: 380px;
     white-space: normal;
@@ -282,6 +289,25 @@
   }
   /* NB: hero-спан 2×2 пробовали — aspect-ratio карточек в auto-fill сетке даёт дыры; ровная
      сетка с display-заголовками читается лучше. Не возвращать без grid-auto-flow:dense-прототипа. */
+
+  /* Поиск: подсказки-чипы на прозрачном фоне сливались с пинами карты — solid-плита. */
+  .searchov__chips {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.1);
+    padding: 12px;
+  }
+  .searchov__chip {
+    background: var(--plinth);
+  }
+  .searchov__chip:hover,
+  .searchov__chip:active {
+    /* acid на светлой плите не читается (бренд-урок) — кликабельность на светлом = INK. */
+    border-color: var(--ink);
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 
   /* Плитки «Подборки» — display-титулы, как у секций (единый журнальный голос). */
   .recsview .reccoll__title {

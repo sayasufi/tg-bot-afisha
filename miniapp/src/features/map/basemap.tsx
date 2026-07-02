@@ -1,5 +1,6 @@
 import L from "leaflet";
 import maplibregl from "maplibre-gl";
+import { isDesktopNow } from "../../lib/useIsDesktop";
 import { useEffect } from "react";
 import { useMap } from "react-leaflet";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -87,7 +88,14 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
   const map = useMap();
   useEffect(() => {
     const pal = PALETTE[theme];
-    const gl = (L as any).maplibreGL({ style: STYLE[theme] }).addTo(map);
+    const gl = (L as any).maplibreGL({
+      style: STYLE[theme],
+      // ПК: кап пиксель-рейшо канваса. На HiDPI и/или ПРОГРАММНОМ WebGL (выключенное аппаратное
+      // ускорение — замерено: софт-GL даёт 14 FPS против 100 на GPU) рендер в полном DPR
+      // умножает работу растеризатора в 2-4×. 1.5 визуально неотличим на подложке.
+      // Мобайл не трогаем (там DPR 3 важен для чёткости лейблов).
+      ...(isDesktopNow() ? { pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) } : {}),
+    }).addTo(map);
     const mlMap = gl.getMaplibreMap();
     // Cyrillic-only labels (drop the Latin transliteration the OMT style adds).
     const cyrillic = ["coalesce", ["get", "name:ru"], ["get", "name:nonlatin"], ["get", "name"]];
