@@ -30,6 +30,14 @@ from core.db.models import Event, EventOccurrence, Venue
 from core.infra.redis import get_redis
 
 _MSK = timezone(timedelta(hours=3))
+
+
+def _city_tz(city) -> timezone:
+    """The city's fixed UTC offset as tzinfo (Russia has no DST). Multi-city: recommendation
+    «today»/«this hour»/«open now»/«идёт сейчас» must be the USER'S wall-clock, not always Moscow —
+    else a +7 city's evening events bucket under the wrong day and the live badge is hours off."""
+    off = getattr(city, "utc_offset_hours", None)
+    return timezone(timedelta(hours=off if off is not None else 3))
 _POOL_CAP = 1200  # soonest-upcoming events scored into the base pool (was 6000 → 2000 → 1200). The rails
 # are soon-biased and show ≤~84 events, so the soonest ~1200 cover the visible feed while cutting every
 # per-request scan/sort/copy ~40%; the base is cached, so this also bounds the once-per-window recompute.
@@ -113,8 +121,8 @@ class RecommendationService:
         recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][-_RECENT_CAP:]  # keep the FRESHEST opens
         affinity = self._affinity(favs, recent)
         now = datetime.now(timezone.utc)
-        msk = now.astimezone(_MSK)
-        today, hour = msk.date(), msk.hour
+        loc = now.astimezone(_city_tz(city))  # user-city wall-clock, not always MSK (multi-city)
+        today, hour = loc.date(), loc.hour
 
         # 1) Non-personal base score for the city, computed once per window and cached.
         base = await self._base_scored(now, today, hour, city)
@@ -144,8 +152,8 @@ class RecommendationService:
         recent = [c for c in (recent or []) if c in _CATEGORY_LABELS][-_RECENT_CAP:]  # keep the FRESHEST opens
         affinity = self._affinity(favs, recent)
         now = datetime.now(timezone.utc)
-        msk = now.astimezone(_MSK)
-        today, hour = msk.date(), msk.hour
+        loc = now.astimezone(_city_tz(city))  # user-city wall-clock, not always MSK (multi-city)
+        today, hour = loc.date(), loc.hour
         base = await self._base_scored(now, today, hour, city)
         scored = self._personalize(base, lat, lon, affinity)
         # event_id as a stable secondary key → a fully canonical order, so paging the collection
@@ -234,7 +242,7 @@ class RecommendationService:
             # Release the DB connection BEFORE the CPU-heavy scoring so it is not held
             # 'idle in transaction' across the O(n) Python pass (the pool-exhaustion 500s).
             await self.db.close()
-            base = self._score_all(pool, now, today, hour, None, None, {}, views)
+            base = self._score_all(pool, now, today, hour, None, None, {}, views, _city_tz(city))
             _base_cache[slug] = (time.monotonic() + _BASE_TTL, today, hour6, base)
             return base
 
@@ -337,7 +345,7 @@ class RecommendationService:
             return {}
 
     @staticmethod
-    def _is_live(c: dict, now: datetime) -> bool:
+    def _is_live(c: dict, now: datetime, tz=_MSK) -> bool:
         """"Можно успеть прямо сейчас" — mirrors the map's goNowState so the rail can't
         disagree with the pins. A TIMED event (real clock time, run ≤24h) is catchable
         only if it HASN'T started yet and starts within 3h (you can't catch a film that
@@ -349,8 +357,8 @@ class RecommendationService:
             return False
         e = c["date_end"]
         end = e if e is not None else s + timedelta(hours=3)
-        s_msk = s.astimezone(_MSK)
-        timed = (s_msk.hour != 0 or s_msk.minute != 0) and (end - s) <= timedelta(hours=24)
+        s_loc = s.astimezone(tz)
+        timed = (s_loc.hour != 0 or s_loc.minute != 0) and (end - s) <= timedelta(hours=24)
         if timed:
             secs = (s - now).total_seconds()
             return 0 < secs <= 3 * 3600  # not started yet, starts within 3 hours
@@ -359,18 +367,18 @@ class RecommendationService:
         far_future = e is not None and e.year > now.year + 5  # open-ended sentinel
         if e is not None and not far_future and now > e:
             return False  # run already over
-        return _venue_open_now(c["venue_hours"], now.astimezone(_MSK)) is True
+        return _venue_open_now(c["venue_hours"], now.astimezone(tz)) is True
 
-    def _score_all(self, pool, now, today, hour, lat, lon, affinity, views):
+    def _score_all(self, pool, now, today, hour, lat, lon, affinity, views, tz=_MSK):
         max_views = max((views.get(str(c["event_id"]), 0) for c in pool), default=0)
         pop_norm = math.log1p(max_views) or 1.0
-        now_msk = now.astimezone(_MSK)
+        now_loc = now.astimezone(tz)
         out = []
         for c in pool:
             s, e = c["date_start"], c["date_end"]
-            ds = s.astimezone(_MSK).date() if s else today
-            de = e.astimezone(_MSK).date() if e else ds
-            live = self._is_live(c, now)
+            ds = s.astimezone(tz).date() if s else today
+            de = e.astimezone(tz).date() if e else ds
+            live = self._is_live(c, now, tz)
             days = (ds - today).days
 
             soon = 1.0 if (live or days <= 0) else max(0.0, 1.0 - days / 14.0)
@@ -402,7 +410,7 @@ class RecommendationService:
                 "ds": ds, "de": de, "free": free, "views": v,
                 # Compact open-now (Moscow time) — the rails ship this, not the full
                 # weekly schedule, matching the map payload (see events_service).
-                "open_now": _venue_open_now(c["venue_hours"], now_msk),
+                "open_now": _venue_open_now(c["venue_hours"], now_loc),
             })
         return out
 
