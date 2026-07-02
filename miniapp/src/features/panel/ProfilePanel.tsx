@@ -24,8 +24,6 @@ export function ProfilePanel({
   theme = "light",
   onToggleTheme,
   onOpenFavorites,
-  onEditInterests,
-  interestsCount = 0,
   onClose,
 }: {
   user: TgUser | null;
@@ -42,8 +40,6 @@ export function ProfilePanel({
   theme?: ThemeName;
   onToggleTheme?: () => void;
   onOpenFavorites: () => void;
-  onEditInterests?: () => void; // переоткрыть пикер интересов (тот же экран, что в онбординге)
-  interestsCount?: number;
   onClose: () => void;
 }) {
   const [cityOpen, setCityOpen] = useState(false);
@@ -134,20 +130,6 @@ export function ProfilePanel({
 
         {/* «Твой вкус» — a constellation of your saved-event genres (the «кружочки»); tap → Избранное. */}
         <TasteCard events={favs} title="Твой вкус" onTap={onOpenFavorites} />
-
-        {/* Интересы — единственная персонализация, не требующая плотности; пикер был заперт в
-            онбординге новых юзеров, теперь редактируется в любой момент. */}
-        {onEditInterests && (
-          <button type="button" className="profile__switch" onClick={onEditInterests}>
-            <span className="profile__switch-text">
-              <span className="profile__switch-label">Мои интересы</span>
-              <span className="profile__switch-sub">
-                {interestsCount ? `Выбрано тем: ${interestsCount} — настроить «Для тебя»` : "Выбери темы — «Для тебя» соберётся под вкус"}
-              </span>
-            </span>
-            <span aria-hidden="true" style={{ fontFamily: "var(--font-mono, monospace)", opacity: 0.6 }}>→</span>
-          </button>
-        )}
 
         {/* Settings, grouped under their own header below the passport. */}
         <div className="recs__section">Уведомления</div>

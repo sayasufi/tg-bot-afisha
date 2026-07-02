@@ -124,7 +124,6 @@ export function App() {
   // Categories the user picked at onboarding — warms «Для тебя» from cold (merged with the
   // favourite-derived categories below). Hydrated from the account on load.
   const [pickedInterests, setPickedInterests] = useState<string[]>([]);
-  const [interestsOpen, setInterestsOpen] = useState(false); // переоткрытый пикер интересов (из Профиля)
   // Reminder DMs — default ON (the per-event bell is the consent); this is a global mute.
   const [notifyReminders, setNotifyReminders] = useState(true);
   const toggleReminders = useCallback((on: boolean) => {
@@ -1291,24 +1290,10 @@ export function App() {
             theme={theme}
             onToggleTheme={toggleTheme}
             onOpenFavorites={() => setView("favorites")}
-            onEditInterests={() => setInterestsOpen(true)}
-            interestsCount={pickedInterests.length}
             onClose={() => setView("map")}
           />
         )}
       </Suspense>
-
-      {interestsOpen && (
-        <Onboarding
-          edit
-          initial={pickedInterests}
-          onClose={(ints) => {
-            setInterestsOpen(false);
-            setPickedInterests(ints);
-            pushSetting("interests", ints);
-          }}
-        />
-      )}
 
       {friendDisclosure && (
         <FriendDisclosure

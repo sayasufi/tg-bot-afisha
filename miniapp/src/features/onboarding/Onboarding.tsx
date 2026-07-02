@@ -14,16 +14,8 @@ const MIN_PICK = 1;
 // "other" is a catch-all bucket, not a taste — leave it out of the picker.
 const PICKABLE = CATEGORIES.filter((c) => c.key !== "other");
 
-export function Onboarding({
-  onClose,
-  initial,
-  edit = false,
-}: {
-  onClose: (interests: string[]) => void;
-  initial?: string[]; // предзаполнение (режим редактирования интересов из Профиля)
-  edit?: boolean; // true → это переоткрытый пикер, не первый запуск: другой заголовок/CTA
-}) {
-  const [picked, setPicked] = useState<string[]>(initial ?? []);
+export function Onboarding({ onClose }: { onClose: (interests: string[]) => void }) {
+  const [picked, setPicked] = useState<string[]>([]);
   const toggle = (key: string) => {
     haptic("light");
     setPicked((p) => (p.includes(key) ? p.filter((k) => k !== key) : [...p, key]));
@@ -37,7 +29,7 @@ export function Onboarding({
   return (
     <div className="onboard" role="dialog" aria-modal="true" aria-label="Что вам интересно">
       <div className="onboard__sheet">
-        <span className="onboard__kicker">{edit ? "ОКРЕСТ · ИНТЕРЕСЫ" : "ОКРЕСТ · НАСТРОЙКА"}</span>
+        <span className="onboard__kicker">ОКРЕСТ · НАСТРОЙКА</span>
         <h2 className="onboard__title">что вам интересно?</h2>
         <p className="onboard__lede">
           Отметьте темы — и «Для тебя» соберётся под вас. Поменять можно когда угодно.
@@ -71,14 +63,10 @@ export function Onboarding({
             disabled={!ready}
             onClick={finish}
           >
-            {edit
-              ? `Сохранить${picked.length ? ` · ${picked.length}` : ""} →`
-              : ready
-                ? `Собрать ленту · ${picked.length} →`
-                : "Выберите хотя бы одну"}
+            {ready ? `Собрать ленту · ${picked.length} →` : "Выберите хотя бы одну"}
           </button>
-          <button type="button" className="onboard__skip" onClick={() => onClose(edit ? (initial ?? []) : picked)}>
-            {edit ? "отмена" : "пропустить"}
+          <button type="button" className="onboard__skip" onClick={() => onClose(picked)}>
+            пропустить
           </button>
         </div>
       </div>
