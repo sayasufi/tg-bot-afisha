@@ -14,6 +14,7 @@ import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
+import { useVenueFollows } from "../../lib/venueFollows";
 import { SimilarEvents } from "./SimilarEvents";
 import { accessionNo, formatPrice, stripHtml } from "./sheetFormat";
 
@@ -70,6 +71,10 @@ type Props = {
 export function EventSheet({ selected, query, userPos, items, siblings, metro, isFav, onToggleFav, invitedBy, onAccept, onSelect, onShowMap, onOpenVenue, onClose }: Props) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [descOpen, setDescOpen] = useState(false);
+  // Venue-follow прайминг: показать «Следить за площадкой» ровно в момент сохранения события —
+  // единственный персональный блок дайджеста оживает без друзей/плотности.
+  const [followHint, setFollowHint] = useState(false);
+  const venueFollows = useVenueFollows();
   const [datesOpen, setDatesOpen] = useState(false);
   const [swipeHint, setSwipeHint] = useState(false);
   // «друг сохранил это» — friends who saved THIS event (faces). Whether MY favourites are visible to
@@ -307,8 +312,11 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const openNow = venueOpenNow(occ?.venue_hours) ?? selected.open_now ?? null;
   const go = goNowState(occ?.date_start ?? selected.date_start, occ?.date_end ?? selected.date_end, openNow);
 
-  // The source link is the primary "act on it" click — plain "Подробнее".
-  const ticketLabel = "Подробнее";
+  // Тикетный хост → это самый монетизируемый глагол воронки: кнопка становится PRIMARY и честно
+  // называет действие. Не-тикетные источники (сайт площадки, TG-канал) остаются тихим «Подробнее».
+  const isTicketSource =
+    !!sourceUrl && /(afisha\.yandex\.|afisha\.ru|timepad\.ru|kassir\.ru|ticketland|ticketscloud|qtickets|intickets|radario|bileter)/i.test(sourceUrl);
+  const ticketLabel = isTicketSource ? "Билеты и детали" : "Подробнее";
 
   // Trust line: where the data is from + when it was last refreshed + a way to flag it wrong.
   const sourceHost = sourceUrl ? hostOf(sourceUrl) : null;
@@ -430,6 +438,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
                 isFav ? "Убрано из избранного" : willRemind ? "В избранном · напомним за 2 ч до начала" : "Добавлено в избранное",
                 { icon: !isFav && willRemind ? "bell" : "heart", tone: isFav ? "muted" : "good" },
               );
+              if (!isFav) setFollowHint(true); // сохранение → предложить следить за площадкой
               onToggleFav();
             }}
           >
@@ -569,6 +578,21 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           ) : null}
         </div>
 
+        {followHint && venue && venueId != null && !venueFollows.has(String(venueId)) && (
+          <button
+            type="button"
+            className="btn btn--ghost sheet__followhint"
+            onClick={() => {
+              haptic("light");
+              venueFollows.toggle(String(venueId));
+              setFollowHint(false);
+              showToast("Следишь за площадкой — новое придёт в дайджесте", { tone: "good" });
+            }}
+          >
+            + Следить за «{venue}» — новые события в еженедельной подборке
+          </button>
+        )}
+
         {description && (
           <div className={`sheet__desc-wrap${descOpen ? " is-open" : ""}`}>
             <p className="sheet__desc">{description}</p>
@@ -584,7 +608,7 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
           <div className="sheet__actions">
             {sourceUrl && (
               <a
-                className="btn btn--ghost"
+                className={`btn ${isTicketSource ? "btn--primary" : "btn--ghost"}`}
                 href={goUrl}
                 target="_blank"
                 rel="noopener noreferrer"

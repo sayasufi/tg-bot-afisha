@@ -143,6 +143,29 @@ export function Filters({ value, total, open, hasLocation, onOpenChange, onChang
         </button>
       </div>
 
+      {/* Квик-чипы под пилюлей: два главных вопроса первой сессии («что сегодня?» / «что на
+          выходных?») в один тап, без похода в шторку фильтров. Скрываются, пока шторка открыта. */}
+      {!open && (
+        <div className="quickchips" role="group" aria-label="Быстрые даты">
+          <button
+            type="button"
+            className={`quickchip${activePreset === "today" ? " quickchip--on" : ""}`}
+            aria-pressed={activePreset === "today"}
+            onClick={() => tapPreset("today")}
+          >
+            Сегодня
+          </button>
+          <button
+            type="button"
+            className={`quickchip${activePreset === "weekend" ? " quickchip--on" : ""}`}
+            aria-pressed={activePreset === "weekend"}
+            onClick={() => tapPreset("weekend")}
+          >
+            Выходные
+          </button>
+        </div>
+      )}
+
       {/* Unified filter sheet — bottom-anchored. */}
       <div className={`csheet${open ? " csheet--open" : ""}`} aria-hidden={!open}>
         <button type="button" className="csheet__scrim" aria-label="Закрыть" tabIndex={-1} onClick={close} />

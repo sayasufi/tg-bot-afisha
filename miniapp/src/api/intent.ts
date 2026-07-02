@@ -5,7 +5,7 @@ import { API_BASE } from "./http";
 // through to tickets/source, sharing, or setting a reminder. Fire-and-forget with
 // keepalive so it survives the tab navigating away to the source site / Yandex Maps.
 // Never throws and never blocks the action it measures.
-export type IntentKind = "click" | "route" | "share" | "reminder" | "calendar";
+export type IntentKind = "click" | "route" | "share" | "reminder" | "calendar" | "geo";
 
 export function logIntent(kind: IntentKind, eventId?: string): void {
   try {

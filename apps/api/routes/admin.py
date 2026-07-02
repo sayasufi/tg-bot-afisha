@@ -104,6 +104,15 @@ async def admin_overview(actor: str = Depends(require_admin), db: AsyncSession =
             "AND EXISTS (SELECT 1 FROM events.event_occurrences o "
             "WHERE o.event_id = e.event_id AND o.date_start > now())"
         ))).scalar()
+        # ГЛАВНЫЙ РИСК КАТАЛОГА как KPI: доля активных событий, у которых ЕДИНСТВЕННЫЙ источник —
+        # реверснутый Яндекс (закроет GraphQL → ровно эта доля каталога перестанет обновляться).
+        yandex_only = (await db.execute(text(
+            "SELECT count(*) FROM events.events e WHERE e.status='active' "
+            "AND EXISTS (SELECT 1 FROM events.event_sources es JOIN ref.sources s ON s.source_id=es.source_id "
+            "            WHERE es.event_id = e.event_id AND s.name LIKE 'yandex%') "
+            "AND NOT EXISTS (SELECT 1 FROM events.event_sources es2 JOIN ref.sources s2 ON s2.source_id=es2.source_id "
+            "                WHERE es2.event_id = e.event_id AND s2.name NOT LIKE 'yandex%')"
+        ))).scalar()
         out["catalog"] = {
             "active": int(r[0] or 0),
             "with_image": int(r[1] or 0),
@@ -114,6 +123,8 @@ async def admin_overview(actor: str = Depends(require_admin), db: AsyncSession =
             "new_7d": int(r[3] or 0),
             "total": int(r[4] or 0),
             "venues": int(venues or 0),
+            "yandex_only": int(yandex_only or 0),
+            "yandex_only_share": round((yandex_only or 0) / r[0], 3) if r[0] else 0.0,
         }
     except Exception:
         pass

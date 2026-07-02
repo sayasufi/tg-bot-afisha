@@ -123,8 +123,9 @@ async def _send_welcome_nudges_impl() -> int:
                     pools[city] = await weekend_pool(db, city, now)
             result = await _build_and_send(client, base, user_id, city, interests, pools, covers, now, label)
             if result == "empty":
-                async with WorkerAsyncSessionLocal() as db:
-                    await _stamp(db, user_id)  # нет событий в городе — штампуем, чтобы не зацикливаться
+                # НЕ штампуем: пустота часто транзиентна (строгий interest-фильтр, межсезонье). Юзер
+                # остаётся в очереди и выпадает сам по верхней границе окна (60ч) — вечного молчания
+                # с первой попытки больше нет, и зацикливания тоже (окно конечное).
                 continue
             if result == "retry":
                 continue  # transient → не штампуем, следующий проход повторит
@@ -135,6 +136,66 @@ async def _send_welcome_nudges_impl() -> int:
             await asyncio.sleep(PACE)
     if sent:
         log.info("sent %s welcome nudges", sent)
+    return sent
+
+
+async def _due_d4(db) -> list:
+    """Юзеры в окне D4-D5: открыли апп 96–120ч назад и с тех пор тихо (last_app_open_at и есть та
+    самая последняя активность), НИЧЕГО не сохранили, welcome уже получали (или окно D1 пропущено),
+    d4-нудж ещё не слали. Жёсткий кап касаний: welcome (D1) + этот = максимум два, дальше только
+    opt-in дайджест."""
+    return (await db.execute(text(
+        "SELECT u.telegram_user_id, u.city_slug, u.interests FROM ref.users u "
+        "WHERE u.d4_nudge_at IS NULL "
+        "  AND u.city_slug IS NOT NULL AND u.city_slug <> '' "
+        "  AND u.last_app_open_at IS NOT NULL "
+        "  AND u.last_app_open_at < now() - interval '96 hours' "
+        "  AND u.last_app_open_at > now() - interval '120 hours' "
+        "  AND COALESCE(u.notify_digest, true) "
+        "  AND NOT EXISTS (SELECT 1 FROM ref.user_favorites f WHERE f.telegram_user_id = u.telegram_user_id) "
+        "ORDER BY u.last_app_open_at LIMIT 200"
+    ))).all()
+
+
+async def _stamp_d4(db, user_id) -> None:
+    await db.execute(text("UPDATE ref.users SET d4_nudge_at = now() WHERE telegram_user_id = :u"), {"u": user_id})
+    await db.commit()
+
+
+async def _send_d4_nudges_impl() -> int:
+    """D4-D5 нудж не-сохранившим — закрывает «мёртвую зону» D2-D6 (после welcome и до пятничного
+    дайджеста ноль касаний). Тот же постер/письмо, что welcome (шаблон уже конвертит), другой штамп."""
+    token = get_settings().telegram_bot_token
+    if not token:
+        return 0
+    base = f"https://api.telegram.org/bot{token}"
+    now = datetime.now(timezone.utc)
+    sat, sun, _, _ = weekend_window(now)
+    label = weekend_label(sat, sun)
+    sent = 0
+    async with WorkerAsyncSessionLocal() as db:
+        due = await _due_d4(db)
+    if not due:
+        return 0
+    pools: dict[str, list] = {}
+    covers: dict[str, bytes | None] = {}
+    async with httpx.AsyncClient(timeout=15) as client:
+        for user_id, city, interests in due:
+            if city not in pools:
+                async with WorkerAsyncSessionLocal() as db:
+                    pools[city] = await weekend_pool(db, city, now)
+            result = await _build_and_send(client, base, user_id, city, interests, pools, covers, now, label)
+            if result == "empty":
+                continue  # транзиентная пустота — юзер выпадет из окна сам (120ч)
+            if result == "retry":
+                continue
+            async with WorkerAsyncSessionLocal() as db:
+                await _stamp_d4(db, user_id)
+            if result == "ok":
+                sent += 1
+            await asyncio.sleep(PACE)
+    if sent:
+        log.info("sent %s d4 nudges", sent)
     return sent
 
 

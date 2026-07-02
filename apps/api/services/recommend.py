@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.concurrency import run_in_threadpool
 from geoalchemy2 import Geometry
-from sqlalchemy import cast, func, select, text
+from sqlalchemy import cast, func, literal_column, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.events_service import _venue_open_now
@@ -300,12 +300,19 @@ class RecommendationService:
         region = region_predicate_sql(city)
         # One row per event = its soonest upcoming occurrence (DISTINCT ON requires
         # the event_id lead in ORDER BY).
+        # ЭКСКЛЮЗИВ: событие есть ТОЛЬКО у нас (все источники — TG-каналы площадок / юзер-заявки,
+        # ни одного агрегатора). Питает рейл «Этого нет в афишах» — видимый пруф отличия от Яндекса.
+        exclusive_col = literal_column(
+            "(NOT EXISTS (SELECT 1 FROM events.event_sources es JOIN ref.sources s ON s.source_id = es.source_id "
+            "WHERE es.event_id = events.events.event_id AND s.name NOT LIKE 'telegram%' AND s.name NOT LIKE 'user%'))"
+        ).label("exclusive")
         inner = (
             select(
                 Event.event_id, Event.display_no, Event.canonical_title.label("title"), Event.category,
                 Event.created_at, Event.cached_image_url, Event.primary_image_url,
                 EventOccurrence.date_start, EventOccurrence.date_end, EventOccurrence.price_min,
                 Venue.name.label("venue"), Venue.city.label("city"), Venue.hours_json.label("venue_hours"), lat_col, lon_col,
+                exclusive_col,
             )
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
@@ -518,6 +525,11 @@ class RecommendationService:
         # "Идёт сейчас" rail was a strict subset of this AND every card already shows a
         # live badge, so it's dropped — it only padded the feed with repeats.
         add("today", "Сегодня", None, [e for e in by_score if e["live"] or (e["ds"] <= today <= e["de"])])
+
+        # «Этого нет в афишах» — эксклюзивный хвост из TG-каналов площадок и юзер-заявок (единственный
+        # некопируемый контент): видимый ответ на «зачем вы, если есть Яндекс» и опора рекламного крео.
+        add("exclusive", "Этого нет в афишах", "Из каналов самих площадок — агрегаторы такого не видят",
+            [e for e in by_score if e["c"].get("exclusive")], diverse=True)
 
         # "На выходных" — the current-or-upcoming weekend as a contiguous Sat+Sun.
         wd = today.weekday()

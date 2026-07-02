@@ -687,6 +687,14 @@ async def welcome_nudge():
     return await welcome._send_welcome_nudges_impl()
 
 
+@flow(name="d4-nudge", retries=1, retry_delay_seconds=30, timeout_seconds=300, log_prints=True)
+async def d4_nudge():
+    """D4-D5 нудж не-сохранившим: закрывает «мёртвую зону» D2-D6 (после welcome — ноль касаний до
+    пятницы). Жёсткий кап: welcome + этот = максимум два нуджа. Идемпотентно (d4_nudge_at)."""
+    from apps.worker.tasks import welcome
+    return await welcome._send_d4_nudges_impl()
+
+
 @flow(name="send-digest", retries=1, retry_delay_seconds=30, timeout_seconds=300, log_prints=True)
 async def send_digest():
     """Weekly opt-in roundup DM: new at followed venues + the best of the coming weekend.

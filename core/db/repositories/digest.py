@@ -263,23 +263,20 @@ def rank_weekend(
     view_counts: dict,
     limit: int = 5,
 ) -> list[dict]:
-    """Pure, per-user ranking of a (shared) weekend pool: filter to the user's interests if they
-    picked any, drop anything already shown in their followed-venue list, then sort by the LIVE
-    rec:views signal (DESC) and soonest start (ASC) as the tiebreak. Top N."""
+    """Pure, per-user ranking of a (shared) weekend pool: PREFER the user's interests, drop anything
+    already shown in their followed-venue list, sort by the LIVE rec:views signal (DESC) and soonest
+    start (ASC). МЯГКИЙ фильтр: интересы — приоритет, а не отсечка; если профильных меньше limit,
+    добиваем городским топом — иначе узкий пик интересов (напр. только «стендап») давал пустой/тощий
+    weekend-блок и юзер получал молчащий дайджест при полном городе событий."""
     wanted = set(interests or [])
     skip = {x for x in (exclude_ids or []) if x}
-    items = [
-        it
-        for it in pool
-        if it["event_id"] not in skip and (not wanted or (it.get("category") in wanted))
-    ]
-    items.sort(
-        key=lambda it: (
-            -int(view_counts.get(it["event_id"], 0) or 0),
-            it.get("date_start") or "",
-        )
-    )
-    return items[:limit]
+    pool_ok = [it for it in pool if it["event_id"] not in skip]
+    key = lambda it: (-int(view_counts.get(it["event_id"], 0) or 0), it.get("date_start") or "")  # noqa: E731
+    matched = sorted([it for it in pool_ok if not wanted or (it.get("category") in wanted)], key=key)
+    if len(matched) >= limit or not wanted:
+        return matched[:limit]
+    rest = sorted([it for it in pool_ok if it.get("category") not in wanted], key=key)
+    return (matched + rest)[:limit]
 
 
 async def mark_digest_sent(db: AsyncSession, user_ids: list[int]) -> None:

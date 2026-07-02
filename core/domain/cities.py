@@ -72,15 +72,17 @@ _MILLIONNIKI = [
     # slug, name, tz, utc_offset, lat, lon, yandex_city, kudago_location, afisha_city, code
     # `code` = airport-style public event-code prefix ("NSK-04PN"); the registry is the ONE source
     # of truth for core.domain.codes (which previously had a stale parallel dict covering only 6/16).
-    ("novosibirsk", "Новосибирск", "Asia/Novosibirsk", 7, 55.03977, 82.89163, "novosibirsk", None, "novosibirsk", "NSK"),
+    # kudago_location: ВСЕ города, которые KudaGo реально поддерживает (nsk/krasnoyarsk/ufa/krd/smr
+    # добавлены 2026-07-02) — легальное дублирование Яндекс-инжеста, снижает yandex-only долю каталога.
+    ("novosibirsk", "Новосибирск", "Asia/Novosibirsk", 7, 55.03977, 82.89163, "novosibirsk", "nsk", "novosibirsk", "NSK"),
     ("ekaterinburg", "Екатеринбург", "Asia/Yekaterinburg", 5, 56.83894, 60.60570, "yekaterinburg", "ekb", "ekaterinburg", "EKB"),
     ("kazan", "Казань", "Europe/Moscow", 3, 55.79636, 49.10889, "kazan", "kzn", "kazan", "KZN"),
-    ("krasnoyarsk", "Красноярск", "Asia/Krasnoyarsk", 7, 56.01083, 92.85237, "krasnoyarsk", None, "krasnoyarsk", "KJA"),
+    ("krasnoyarsk", "Красноярск", "Asia/Krasnoyarsk", 7, 56.01083, 92.85237, "krasnoyarsk", "krasnoyarsk", "krasnoyarsk", "KJA"),
     ("nizhny-novgorod", "Нижний Новгород", "Europe/Moscow", 3, 56.32867, 44.00205, "nizhny-novgorod", "nnv", "nnovgorod", "NIN"),
     ("chelyabinsk", "Челябинск", "Asia/Yekaterinburg", 5, 55.15402, 61.42915, "chelyabinsk", None, "chelyabinsk", "CEK"),
-    ("ufa", "Уфа", "Asia/Yekaterinburg", 5, 54.73479, 55.95790, "ufa", None, "ufa", "UFA"),
-    ("krasnodar", "Краснодар", "Europe/Moscow", 3, 45.03547, 38.97532, "krasnodar", None, "krasnodar", "KRR"),
-    ("samara", "Самара", "Europe/Samara", 4, 53.19506, 50.10199, "samara", None, "samara", "KUF"),
+    ("ufa", "Уфа", "Asia/Yekaterinburg", 5, 54.73479, 55.95790, "ufa", "ufa", "ufa", "UFA"),
+    ("krasnodar", "Краснодар", "Europe/Moscow", 3, 45.03547, 38.97532, "krasnodar", "krd", "krasnodar", "KRR"),
+    ("samara", "Самара", "Europe/Samara", 4, 53.19506, 50.10199, "samara", "smr", "samara", "KUF"),
     ("rostov-on-don", "Ростов-на-Дону", "Europe/Moscow", 3, 47.22209, 39.71889, "rostov-na-donu", None, "rostov-na-donu", "ROV"),
     ("omsk", "Омск", "Asia/Omsk", 6, 54.98855, 73.32426, "omsk", None, "omsk", "OMS"),
     ("voronezh", "Воронеж", "Europe/Moscow", 3, 51.66078, 39.20029, "voronezh", None, "voronezh", "VOZ"),

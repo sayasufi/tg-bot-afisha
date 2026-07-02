@@ -19,7 +19,7 @@ from core.infra.redis import get_redis
 
 router = APIRouter(prefix="/v1", tags=["intent"])
 
-_KINDS = {"click", "route", "share", "reminder", "calendar"}
+_KINDS = {"click", "route", "share", "reminder", "calendar", "geo"}  # geo = первый гео-грант (метрика гео-прайминга)
 _WAU_TTL = 5 * 7 * 24 * 3600  # keep ~5 weekly sets, then they self-expire
 _ACT_TTL = 120 * 24 * 3600
 

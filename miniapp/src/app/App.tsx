@@ -32,6 +32,7 @@ import { FriendDisclosure } from "../features/panel/FriendDisclosure";
 import { FriendInviteAccept } from "../features/panel/FriendInviteAccept";
 import { bootstrap, fetchFriendsFavorited, manageFriends, type Friend } from "../api/users";
 import { showToast } from "../lib/toast";
+import { logIntent } from "../api/intent";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { OfflineBanner } from "../features/offline/OfflineBanner";
@@ -123,6 +124,7 @@ export function App() {
   // Categories the user picked at onboarding — warms «Для тебя» from cold (merged with the
   // favourite-derived categories below). Hydrated from the account on load.
   const [pickedInterests, setPickedInterests] = useState<string[]>([]);
+  const [interestsOpen, setInterestsOpen] = useState(false); // переоткрытый пикер интересов (из Профиля)
   // Reminder DMs — default ON (the per-event bell is the consent); this is a global mute.
   const [notifyReminders, setNotifyReminders] = useState(true);
   const toggleReminders = useCallback((on: boolean) => {
@@ -169,6 +171,9 @@ export function App() {
   // If the user changes theme/city before the settings GET resolves, don't let the (older)
   // account value snap it back. Set when they act; checked when the load lands.
   const settingsTouched = useRef({ theme: false, city: false });
+  const serverCityEmpty = useRef(false); // аккаунт пришёл без city_slug → зальём активный город карты
+  const deepNow = useRef(false); // ?startapp=now: ждём данные, чтобы сфолбэчить «пусто → Сегодня»
+  const geoLogged = useRef(false); // intent 'geo' шлём один раз за жизнь девайса
   // Persisted city pick — ONLY from the profile. Marks the city touched (so a late settings GET can't
   // revert it) then writes it (local + account). The map's picks are transient (viewCity) and never land here.
   const pickCity = useCallback((slug: string) => {
@@ -201,6 +206,9 @@ export function App() {
         setTheme(s.theme);
       }
       if (!settingsTouched.current.city && typeof s.city === "string" && s.city) seedCity(s.city);
+      // city-gap: аккаунт без города = юзер вне ВСЕГО outbound (дайджест/welcome). Помечаем — как
+      // только карта устаканится на городе, зальём его как домашний (см. эффект city-fallback ниже).
+      if (!s.city) serverCityEmpty.current = true;
       // First-run flags are sticky-true across devices: adopt the account's "seen", and
       // push this device's local "seen" up once so other devices skip it too.
       const reconcile = (lsKey: string, key: "onboarded" | "coach" | "swipe_seen", seen: boolean | undefined, markSeen?: () => void) => {
@@ -637,6 +645,40 @@ export function App() {
     };
   }, [queryKey, clusterMode, refreshNonce]);
 
+  // ?startapp=now, а прямо сейчас пусто (утренний клик по вечернему крео) → не оставляем юзера на
+  // пустой карте: переключаем на «Сегодня» с подписью. Срабатывает один раз, когда данные загрузились.
+  useEffect(() => {
+    if (!deepNow.current || !filters.goNow || !radiusItems.length) return;
+    if (goNowIds.size === 0) {
+      deepNow.current = false;
+      setFilters((prev) => ({ ...prev, goNow: false, ...rangeFor("today") }));
+      showToast("Прямо сейчас пусто — вот афиша на сегодня", { tone: "muted" });
+    } else {
+      deepNow.current = false; // события есть — обещание крео выполнено
+    }
+  }, [goNowIds, filters.goNow, radiusItems.length]);
+
+  // city-fallback: аккаунт без city_slug (никогда не дал гео) + карта устаканилась на городе →
+  // сохраняем его как домашний. Это ворота ВСЕГО outbound (дайджест/welcome); явный выбор города
+  // юзером (settingsTouched.city) не перетираем — он и так пушится сам.
+  useEffect(() => {
+    if (!serverCityEmpty.current || settingsTouched.current.city || !currentCity?.slug) return;
+    if ((zoom ?? 99) <= 6) return; // на дальнем зуме «текущий город» ещё не выбор
+    serverCityEmpty.current = false;
+    pushSetting("city", currentCity.slug);
+  }, [currentCity?.slug, zoom]);
+
+  // Первый полученный гео-фикс → intent 'geo' (метрика гео-прайминга в воронке), раз за девайс.
+  useEffect(() => {
+    if (!userPos || geoLogged.current) return;
+    geoLogged.current = true;
+    try {
+      if (localStorage.getItem("okrest_geo_intent") === "1") return;
+      localStorage.setItem("okrest_geo_intent", "1");
+    } catch { /* приват-режим — просто шлём */ }
+    logIntent("geo");
+  }, [userPos]);
+
   const dismissOnboarding = useCallback((interests: string[] = []) => {
     haptic("light");
     try {
@@ -653,6 +695,7 @@ export function App() {
       // tab almost nobody opens — otherwise the onboarding promise «собрать ленту» is invisible.
       // Same pattern as onPickCategory: filter the map to the chosen categories.
       setFilters({ ...EMPTY_FILTERS, categories: interests });
+      showToast(`Карта настроена на ${interests.length} ${interests.length === 1 ? "тему" : interests.length < 5 ? "темы" : "тем"}`, { tone: "good" });
     }
   }, []);
 
@@ -954,6 +997,12 @@ export function App() {
       if (eventId === "weekend") {
         setFilters((prev) => ({ ...prev, goNow: false, ...rangeFor("weekend") }));
         setView("map");
+      } else if (eventId === "now") {
+        // Посадка рекламного крео «успеешь прямо сейчас» — ровно в обещание. Если прямо сейчас
+        // пусто (утренний клик), эффект ниже сфолбэчит на «Сегодня» с подписью — не пустая карта.
+        deepNow.current = true;
+        setFilters((prev) => ({ ...EMPTY_FILTERS, categories: prev.categories, goNow: true }));
+        setView("map");
       } else if (eventId === "friend" && Number.isFinite(inviterId) && inviteSig) {
         setFriendInvite({ inviterId, sig: inviteSig }); // «friend_<id>_<sig>» — show the accept screen
       } else if (eventId === "friends") {
@@ -1021,7 +1070,10 @@ export function App() {
           live={liveCount > 0}
           onClick={() => {
             haptic("light");
-            setView("recs");
+            // «МОЖНО ПОЙТИ N» обещает главный job (успеешь прямо сейчас) — тап и должен его включать
+            // в 1 жест, а не уводить в подборки. В подборки — только когда прямо сейчас пусто.
+            if (liveCount > 0) setFilters((prev) => ({ ...EMPTY_FILTERS, categories: prev.categories, goNow: true }));
+            else setView("recs");
           }}
         />
       )}
@@ -1239,10 +1291,24 @@ export function App() {
             theme={theme}
             onToggleTheme={toggleTheme}
             onOpenFavorites={() => setView("favorites")}
+            onEditInterests={() => setInterestsOpen(true)}
+            interestsCount={pickedInterests.length}
             onClose={() => setView("map")}
           />
         )}
       </Suspense>
+
+      {interestsOpen && (
+        <Onboarding
+          edit
+          initial={pickedInterests}
+          onClose={(ints) => {
+            setInterestsOpen(false);
+            setPickedInterests(ints);
+            pushSetting("interests", ints);
+          }}
+        />
+      )}
 
       {friendDisclosure && (
         <FriendDisclosure
@@ -1279,7 +1345,16 @@ export function App() {
 
       <ProofFrame />
 
-      {!onboarded && <Onboarding onClose={dismissOnboarding} />}
+      {!onboarded && (
+        <Onboarding
+          onClose={(ints) => {
+            dismissOnboarding(ints);
+            // Гео-прайминг ровно в момент жеста (тап CTA/«пропустить»): грант per-bot одноразовый,
+            // а гео — предусловие главного дифференциатора («что рядом прямо сейчас»).
+            onLocate();
+          }}
+        />
+      )}
 
       <Toaster />
       <OfflineBanner />
