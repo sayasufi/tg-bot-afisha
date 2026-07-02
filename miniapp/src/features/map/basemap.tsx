@@ -92,6 +92,9 @@ function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
     };
     const self = L.tileLayer(SELF_TILES[theme], {
       maxZoom: 19,
+      // z18-19 — растянутый z17 (номера домов там уже есть): в 16 раз меньше серверных
+      // рендеров на сверхблизких зумах, чёткость приемлемая.
+      maxNativeZoom: 17,
       detectRetina: false,
       attribution: "© OpenStreetMap",
     });
