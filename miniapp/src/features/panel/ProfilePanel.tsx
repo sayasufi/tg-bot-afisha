@@ -60,8 +60,9 @@ export function ProfilePanel({
       if (m) setWebLinked(m.telegram_linked);
     });
   }, [webAuthed]);
-  // Уведомления шлёт БОТ: чисто-веб аккаунту (без связки) тумблеры честно приглушаем.
-  const notifyLocked = webMode && webAuthed && webLinked === false;
+  // Уведомления шлёт БОТ: в вебе тумблеры честно приглушены, пока аккаунт не связан с Telegram
+  // (гостю без входа — тем более: переключение всё равно не сохранится).
+  const notifyLocked = webMode && (!webAuthed || webLinked === false);
   const linkTg = async () => {
     const url = await authLinkCode();
     if (url) window.open(url, "_blank");
@@ -195,7 +196,7 @@ export function ProfilePanel({
             <span className="profile__switch-label">Напоминания</span>
             <span className="profile__switch-sub">
               {notifyLocked
-                ? "Придут в Telegram — свяжи аккаунт выше"
+                ? "Напоминания приходят в Telegram — войди и свяжи аккаунт (раздел «Аккаунт» ниже)"
                 : "Бот напомнит перед началом событий из избранного. Выключи, чтобы приглушить все разом"}
             </span>
           </span>
@@ -217,7 +218,7 @@ export function ProfilePanel({
             <span className="profile__switch-label">Афиша на выходные</span>
             <span className="profile__switch-sub">
               {notifyLocked
-                ? "Придёт в Telegram — свяжи аккаунт выше"
+                ? "Подборка приходит в Telegram — войди и свяжи аккаунт (раздел «Аккаунт» ниже)"
                 : "Раз в неделю бот пришлёт, что нового рядом и на твоих площадках"}
             </span>
           </span>
