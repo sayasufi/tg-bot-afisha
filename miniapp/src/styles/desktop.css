@@ -29,6 +29,9 @@
   /* Всё, что жило от левого края экрана, сдвигается за rail. Карта НЕ сдвигается (full-bleed). */
   .panelview {
     left: var(--rail);
+    /* Мобильный янтарный угол-глоу на ПК вылезает СЛЕВА от контент-колонки пятном другого
+       оттенка (панель шире колонки) — на десктопе фон плоский. */
+    background: var(--bg);
   }
   .csheet {
     left: var(--rail);
@@ -273,11 +276,8 @@
     letter-spacing: -0.03em;
     text-transform: lowercase;
   }
-  /* Hero: первая карточка первого рейла («Для тебя») — 2×2 в сетке. */
-  .recsview .rail:first-of-type .rail__track .rcard:first-child {
-    grid-column: span 2;
-    grid-row: span 2;
-  }
+  /* NB: hero-спан 2×2 пробовали — aspect-ratio карточек в auto-fill сетке даёт дыры; ровная
+     сетка с display-заголовками читается лучше. Не возвращать без grid-auto-flow:dense-прототипа. */
 
   /* Пилюля: подпись-намёк, что это фильтры (одинокая сводка «ВСЕ · ВСЕ ДАТЫ» читалась глухо). */
   .cmdpill__summary::before {
