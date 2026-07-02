@@ -16,6 +16,63 @@ const STYLE: Record<ThemeName, string> = {
   dark: "https://tiles.openfreemap.org/styles/dark",
 };
 
+// Растровые тайлы для машин БЕЗ аппаратного WebGL: софт-растеризация векторной карты — это
+// 14 FPS (замерено; у владельца WARP давал ровно это). Готовые PNG процессор только блитит —
+// быстро даже на CPU. Плата: без метро-точек/парк-лейблов/панели тюнинга. Carto — бесплатные
+// с обязательной атрибуцией OSM+CARTO.
+const RASTER: Record<ThemeName, string> = {
+  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+};
+
+// Один раз за сессию: рендерит ли WebGL железо или программный растеризатор (WARP/SwiftShader/
+// llvmpipe). Нет контекста вообще → тоже растровый фолбэк. Неизвестный рендерер (скрыт
+// приватностью) считаем железом — не даунгрейдим зря.
+let _softGL: boolean | null = null;
+function isSoftwareGL(): boolean {
+  if (_softGL !== null) return _softGL;
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+    if (!gl) return (_softGL = true);
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "") : "";
+    _softGL = /swiftshader|llvmpipe|software|basic render|warp/i.test(renderer);
+  } catch {
+    _softGL = true;
+  }
+  return _softGL;
+}
+
+// Лёгкая подложка для софт-GL: обычный Leaflet-тайллейер (без ретины — меньше пикселей на CPU).
+function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const layer = L.tileLayer(RASTER[theme], {
+      subdomains: "abcd",
+      maxZoom: 19,
+      detectRetina: false,
+      attribution: "© OpenStreetMap · © CARTO",
+    });
+    layer.addTo(map);
+    let readyFired = false;
+    const fire = () => {
+      if (!readyFired) {
+        readyFired = true;
+        onReady?.();
+      }
+    };
+    layer.once("load", fire);
+    const t = window.setTimeout(fire, 4000); // сеть тормозит — апп всё равно оживает
+    return () => {
+      window.clearTimeout(t);
+      map.removeLayer(layer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, theme]);
+  return null;
+}
+
 // Per-theme palette: the white-cube by day, warm-ink gallery after dark. Every
 // repaint below reads from this object so one switch re-skins the whole map.
 type MapPalette = {
@@ -480,5 +537,7 @@ function VectorBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
 }
 
 export function Basemap({ theme, onReady }: { theme: ThemeName; onReady?: () => void }) {
+  // Софт-WebGL (WARP/SwiftShader/нет контекста) → растровые тайлы: плавность важнее тюнинга.
+  if (isSoftwareGL()) return <RasterBasemap theme={theme} onReady={onReady} />;
   return <VectorBasemap theme={theme} onReady={onReady} />;
 }
