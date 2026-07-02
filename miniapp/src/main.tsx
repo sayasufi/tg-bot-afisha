@@ -64,6 +64,12 @@ function gate(): void {
     setTimeout(gate, 150);
     return;
   }
-  mountWithRetry(); // браузер без Telegram → веб-режим
+  // Браузер без Telegram: публичный веб-фронт живёт ТОЛЬКО на okrestmap.ru/map (app.* — это
+  // Telegram-webview URL из BotFather, снаружи туда не ходят). С app.* уводим на канонический адрес.
+  if (window.location.hostname.startsWith("app.")) {
+    window.location.replace("https://okrestmap.ru/map");
+    return;
+  }
+  mountWithRetry(); // веб-режим (okrestmap.ru/map)
 }
 gate();
