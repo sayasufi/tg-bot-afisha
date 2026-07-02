@@ -9,6 +9,9 @@ import { chromium } from "playwright";
 
 const PORT = Number(process.env.PORT || 8787);
 const RENDER_BASE = process.env.RENDER_BASE || "http://miniapp:5173";
+// Метро/парки (/v1/places) страница просит с публичного домена — из контейнера это упирается
+// в CORS/hairpin-NAT. Перехватываем и отвечаем данными из внутренней сети (api:8000).
+const API_BASE = process.env.API_BASE || "http://api:8000";
 const CACHE_DIR = process.env.CACHE_DIR || "/cache";
 const MAX_Z = 19;
 // Страниц-рендереров на тему: каждая держит свой maplibre-инстанс. 3 — компромисс
@@ -42,6 +45,16 @@ async function newPage(theme) {
   const page = await b.newPage({ viewport: { width: 512, height: 512 } });
   page.on("console", (m) => {
     if (m.type() === "warning" || m.type() === "error") console.log(`[page:${theme}]`, m.text());
+  });
+  await page.route("**/v1/places*", async (route) => {
+    try {
+      const u = new URL(route.request().url());
+      const r = await fetch(`${API_BASE}${u.pathname}${u.search}`);
+      const body = Buffer.from(await r.arrayBuffer());
+      await route.fulfill({ status: r.status, contentType: r.headers.get("content-type") || "application/json", body });
+    } catch {
+      await route.abort();
+    }
   });
   await page.goto(`${RENDER_BASE}/tilerender.html?theme=${theme}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
   await page.waitForFunction("window.__ready === true", null, { timeout: 60_000 });
