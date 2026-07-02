@@ -156,7 +156,7 @@ async def _send_digest_impl(only_user_id: int | None = None) -> int:
                 # «Что сохранили друзья» — always on now (the «О друзьях» opt-out was removed), deduped
                 # against the followed-venue block. Sits between «новое на площадках» and «на выходных».
                 seen = {e["event_id"] for e in venue_items}
-                friend_items = await friends_saved(db, u["user_id"], now)
+                friend_items = await friends_saved(db, u["user_id"], now, city_slug=city)
             friend_items = [it for it in friend_items if it["event_id"] not in seen]
             seen |= {it["event_id"] for it in friend_items}
             weekend_items = rank_weekend(

@@ -27,17 +27,27 @@ _NEW_WINDOW = timedelta(days=8)
 _POOL_CAP = 3000
 
 
-def weekend_window(now: datetime) -> tuple[datetime, datetime, datetime, datetime]:
-    """The upcoming Sat+Sun as (sat_date, sun_date, start_utc, end_exclusive_utc). Computed in
-    Moscow time so 'this weekend' means the local calendar weekend; on Sat/Sun it's the current
-    one. The end is HALF-OPEN — Monday 00:00 MSK (exclusive) — so callers gate with `< end`."""
-    today = now.astimezone(_MSK).date()
+def weekend_window(now: datetime, offset_hours: int = 3) -> tuple[datetime, datetime, datetime, datetime]:
+    """The upcoming Sat+Sun as (sat_date, sun_date, start_utc, end_exclusive_utc), computed in the
+    CITY's local time (offset_hours; default MSK=+3). Multi-city: a +7 city's «this weekend» is its
+    OWN Sat 00:00 → Mon 00:00 local, not clipped to Moscow's — else a Novosibirsk user's Saturday
+    morning events fall outside the window and Moscow's late-Sunday spill in. The end is HALF-OPEN
+    (local Monday 00:00, exclusive) → callers gate with `< end`."""
+    tz = timezone(timedelta(hours=offset_hours))
+    today = now.astimezone(tz).date()
     sat = today + timedelta(days=(5 - today.weekday()) % 7)  # Mon..Fri → coming Sat; Sat → today
     sun = sat + timedelta(days=1)
     mon = sun + timedelta(days=1)
-    start = datetime(sat.year, sat.month, sat.day, 0, 0, 0, tzinfo=_MSK).astimezone(timezone.utc)
-    end_exclusive = datetime(mon.year, mon.month, mon.day, 0, 0, 0, tzinfo=_MSK).astimezone(timezone.utc)
+    start = datetime(sat.year, sat.month, sat.day, 0, 0, 0, tzinfo=tz).astimezone(timezone.utc)
+    end_exclusive = datetime(mon.year, mon.month, mon.day, 0, 0, 0, tzinfo=tz).astimezone(timezone.utc)
     return sat, sun, start, end_exclusive
+
+
+def _city_offset(city_slug: str | None) -> int:
+    """UTC offset (hours) for a city slug, defaulting to Moscow (+3) when unknown — so the weekend
+    window is anchored to the user's own wall-clock."""
+    cfg = city_by_slug(city_slug)
+    return cfg.utc_offset_hours if cfg else 3
 
 
 def _item(row) -> dict:
@@ -137,7 +147,7 @@ async def new_at_followed_venues(db: AsyncSession, user_id: int, now: datetime, 
     return [_item(r) for r in rows]
 
 
-async def friends_saved(db: AsyncSession, user_id: int, now: datetime, limit: int = 3) -> list[dict]:
+async def friends_saved(db: AsyncSession, user_id: int, now: datetime, limit: int = 3, city_slug: str | None = None) -> list[dict]:
     """Events the user's FRIENDS saved that overlap the coming weekend — the «что сохранили друзья»
     digest section. Privacy-gated exactly like the in-app signal (accepted friend, friend not globally
     private, the favourite not per-item hidden, neither side muted). Ranked by how many friends saved
@@ -167,7 +177,7 @@ async def friends_saved(db: AsyncSession, user_id: int, now: datetime, limit: in
     if not counts:
         return []
     nby = {r.event_id: int(r.n) for r in counts}
-    _, _, start, end = weekend_window(now)
+    _, _, start, end = weekend_window(now, _city_offset(city_slug))  # user's own-city weekend window
     soon = (
         select(
             EventOccurrence.event_id.label("eid"),
@@ -206,7 +216,7 @@ async def weekend_pool(
     region-guarded, WITHOUT any interest filter. Fetched ONCE per distinct city (then ranked
     per-user in memory). An event overlaps the window if it starts before the (half-open) end
     AND its run hasn't finished before the start: date_start < end AND coalesce(end, start) >= start."""
-    _, _, start, end = weekend_window(now)
+    _, _, start, end = weekend_window(now, _city_offset(city_slug))  # weekend in the CITY's tz, not always MSK
     soon = (
         select(
             EventOccurrence.event_id.label("eid"),
