@@ -7,7 +7,7 @@ WORKDIR /tiles
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY package*.json ./
 RUN npm install --omit=dev
-COPY server.mjs ./
+COPY server.mjs cities.json ./
 
 EXPOSE 8787
 CMD ["node", "server.mjs"]
