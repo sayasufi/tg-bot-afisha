@@ -18,6 +18,7 @@ from core.render.formatting import digest_caption, digest_message, weekend_day_l
 from apps.worker.tasks.tg_send import PACE, classify, retry_after
 from core.config.settings import get_settings
 from core.db.repositories.digest import (
+    _city_offset,
     friends_saved,
     mark_digest_sent,
     new_at_followed_venues,
@@ -148,6 +149,7 @@ async def _send_digest_impl(only_user_id: int | None = None) -> int:
             # получил бы мисс-таргет-подборку (читается как спам). Город захватываем в /start; до этого тихо.
             if not city:
                 continue
+            off = _city_offset(city)  # render all times in the user's own city tz (multi-city)
             # DB read phase — one short session, released before the network send below.
             async with WorkerAsyncSessionLocal() as db:
                 if city not in pools:
@@ -170,8 +172,8 @@ async def _send_digest_impl(only_user_id: int | None = None) -> int:
             # Build the poster: followed-venue → friends → weekend; covers fetched (cached), a
             # when-phrase per tile. Render off the event loop (PIL is CPU-bound).
             poster_items = [
-                {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now),
-                 "day": weekend_day_label(it.get("date_start"), it.get("date_end")),
+                {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now, off),
+                 "day": weekend_day_label(it.get("date_start"), it.get("date_end"), off),
                  "photo": await cover(it.get("image"))}
                 for it in (venue_items + friend_items + weekend_items)[:6]
             ]
@@ -184,8 +186,8 @@ async def _send_digest_impl(only_user_id: int | None = None) -> int:
             # code · when · venue, so the caption stays short. Text roundup is the fallback.
             result = await _send_digest_one(
                 client, base, u["user_id"], poster,
-                digest_caption(venue_items, friend_items, weekend_items, label),
-                digest_message(venue_items, friend_items, weekend_items, label, now),
+                digest_caption(venue_items, friend_items, weekend_items, label, off),
+                digest_message(venue_items, friend_items, weekend_items, label, now, off),
                 markup,
             )
             if result == "retry":

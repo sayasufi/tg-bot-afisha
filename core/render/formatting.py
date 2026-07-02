@@ -97,19 +97,20 @@ def _parse_dt(v) -> datetime | None:
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
-def when_phrase(start, end=None, now: datetime | None = None) -> str:
-    """Urgency-first phrasing of WHEN, in Moscow time — answers 'should I act now?' at a
-    glance: 'через 2 часа · сегодня в 09:30', 'завтра в 19:30', 'идёт сейчас · до 22:00'."""
+def when_phrase(start, end=None, now: datetime | None = None, offset_hours: int = 3) -> str:
+    """Urgency-first phrasing of WHEN, in the CITY's local time (offset_hours; default MSK+3) — answers
+    'should I act now?' at a glance: 'через 2 часа · сегодня в 09:30', 'завтра в 19:30', 'идёт сейчас'."""
     s = _parse_dt(start)
     if s is None:
         return ""
     now = now or datetime.now(timezone.utc)
-    sm, nm = s.astimezone(_MSK), now.astimezone(_MSK)
+    tz = timezone(timedelta(hours=offset_hours))
+    sm, nm = s.astimezone(tz), now.astimezone(tz)
     hhmm = f"{sm:%H:%M}"
     if s <= now:  # already started / ongoing
         e = _parse_dt(end)
-        if e and e > now and e.astimezone(_MSK).date() == nm.date():
-            return f"идёт сейчас · до {e.astimezone(_MSK):%H:%M}"
+        if e and e > now and e.astimezone(tz).date() == nm.date():
+            return f"идёт сейчас · до {e.astimezone(tz):%H:%M}"
         return "идёт сейчас"
     secs = (s - now).total_seconds()
     days = (sm.date() - nm.date()).days
@@ -205,9 +206,11 @@ def weekend_label(sat, sun) -> str:
 _WD_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 
-def weekend_day_label(date_start, date_end=None) -> str:
-    """Compact weekend day for the digest: «сб» / «вс» (day-of-week in MSK), or «оба дня» for a run that
-    spans more than one calendar day (an exhibition open all weekend). Empty when there's no date."""
+def weekend_day_label(date_start, date_end=None, offset_hours: int = 3) -> str:
+    """Compact weekend day for the digest: «сб» / «вс» (day-of-week in the city's tz), or «оба дня» for a
+    run spanning >1 calendar day (an exhibition open all weekend). Empty when there's no date."""
+    tz = timezone(timedelta(hours=offset_hours))
+
     def _p(v):
         if not v:
             return None
@@ -218,7 +221,7 @@ def weekend_day_label(date_start, date_end=None) -> str:
                 dt = datetime.fromisoformat(str(v))
             except ValueError:
                 return None
-        return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).astimezone(_MSK)
+        return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).astimezone(tz)
     ds = _p(date_start)
     if ds is None:
         return ""
@@ -228,7 +231,7 @@ def weekend_day_label(date_start, date_end=None) -> str:
     return _WD_SHORT[ds.weekday()]
 
 
-def _digest_line(item: dict, now: datetime | None) -> str:
+def _digest_line(item: dict, now: datetime | None, offset_hours: int = 3) -> str:
     title = escape(str(item.get("title") or "Событие")[:90])
     # Accession code · when · venue — same signature grammar as reminder_caption, so a digest
     # row and a reminder for the same event read identically (the code is escaped + monospaced).
@@ -236,7 +239,7 @@ def _digest_line(item: dict, now: datetime | None) -> str:
         p
         for p in [
             escape(str(item.get("code") or "").strip()),
-            when_phrase(item.get("date_start"), item.get("date_end"), now),
+            when_phrase(item.get("date_start"), item.get("date_end"), now, offset_hours),
             escape(str(item.get("venue") or "").strip()),
         ]
         if p
@@ -251,6 +254,7 @@ def digest_message(
     weekend_items: list[dict],
     label: str,
     now: datetime | None = None,
+    offset_hours: int = 3,
 ) -> str:
     """The weekly roundup DM: a hero, then 'new at your venues' (the follow loop), 'what friends saved',
     + the best of this weekend. Each title is a deep-link that opens the event in the Mini App."""
@@ -260,17 +264,17 @@ def digest_message(
         lines.append(f"<i>{escape(label)}</i>")
     if venue_items:
         lines.append("\n<b>новое на ваших площадках</b>")
-        lines.extend(_digest_line(it, now) for it in venue_items)
+        lines.extend(_digest_line(it, now, offset_hours) for it in venue_items)
     if friend_items:
         lines.append(f"\n{ce('👥')} <b>что сохранили друзья</b>")
-        lines.extend(_digest_line(it, now) for it in friend_items)
+        lines.extend(_digest_line(it, now, offset_hours) for it in friend_items)
     if weekend_items:
         lines.append(f"\n{ce('📍')} <b>на выходных рядом</b>")
-        lines.extend(_digest_line(it, now) for it in weekend_items)
+        lines.extend(_digest_line(it, now, offset_hours) for it in weekend_items)
     return "\n".join(lines)
 
 
-def digest_caption(venue_items: list[dict], friend_items: list[dict], weekend_items: list[dict], label: str) -> str:
+def digest_caption(venue_items: list[dict], friend_items: list[dict], weekend_items: list[dict], label: str, offset_hours: int = 3) -> str:
     """Caption UNDER the digest poster — the tappable index: a hero line, then sectioned events where
     each title is a BOLD deep-link into the Mini App with its price beside it. The poster carries the
     photos + venue; the caption carries the links + price, so it stays a clean, scannable agenda."""
@@ -284,7 +288,7 @@ def digest_caption(venue_items: list[dict], friend_items: list[dict], weekend_it
         for it in items:
             title = escape(str(it.get("title") or "Событие")[:80])
             link = f'<a href="{event_deeplink(it["event_id"])}"><b>{title}</b></a>'
-            day = weekend_day_label(it.get("date_start"), it.get("date_end"))
+            day = weekend_day_label(it.get("date_start"), it.get("date_end"), offset_hours)
             price = _price_short(it.get("price_min"), it.get("price_max"))
             tail = " · ".join(p for p in [day, price] if p)
             n = int(it.get("nfriends") or 0)  # social proof for the friends block

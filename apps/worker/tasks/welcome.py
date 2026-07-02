@@ -16,7 +16,7 @@ from sqlalchemy import text
 from apps.worker.tasks.digest import _send_digest_one
 from apps.worker.tasks.tg_send import PACE
 from core.config.settings import get_settings
-from core.db.repositories.digest import rank_weekend, weekend_pool, weekend_window
+from core.db.repositories.digest import _city_offset, rank_weekend, weekend_pool, weekend_window
 from core.db.session import WorkerAsyncSessionLocal
 from core.infra.http_safety import is_public_http_url
 from core.render.card import render_digest_poster
@@ -42,14 +42,14 @@ async def _due(db):
     ))).all()
 
 
-def _compose(items, now) -> str:
+def _compose(items, now, offset_hours: int = 3) -> str:
     """Подпись/текст: как в дайджесте — КАЖДОЕ название кликабельный deep-link на своё событие (глиф
     категории + жирная ссылка + когда). Постер несёт фото, подпись — ссылки. Кастом-эмодзи в шапке/подвале."""
     lines = [f"{ce('📍')} <b>Окрест</b> — вот что рядом на этой неделе:\n"]
     for it in items:
         title = _esc(str(it.get("title") or "Событие")[:80])
         link = f'<a href="{event_deeplink(it["event_id"])}"><b>{title}</b></a>'
-        when = when_phrase(it.get("date_start"), it.get("date_end"), now)
+        when = when_phrase(it.get("date_start"), it.get("date_end"), now, offset_hours)
         lines.append(f"{glyph(it.get('category'))} {link}" + (f" · {when}" if when else ""))
     lines.append(f"\n{ce('❤️')} Сохраняй сердечком — напомню за 2 часа до начала.")
     return "\n".join(lines)
@@ -58,6 +58,7 @@ def _compose(items, now) -> str:
 async def _build_and_send(client, base, user_id, city, interests, pools, covers, now, label) -> str:
     # No DB session here (B9): the weekend pool for `city` is resolved by the caller into `pools` in a
     # short session, so this holds NO Postgres connection across the cover fetches / poster send below.
+    off = _city_offset(city)  # render times in the user's own city tz (multi-city)
     items = rank_weekend(pools.get(city) or [], list(interests or []), [], {})[:4]
     if not items:
         return "empty"
@@ -75,8 +76,8 @@ async def _build_and_send(client, base, user_id, city, interests, pools, covers,
         return covers[url]
 
     poster_items = [
-        {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now),
-         "day": weekend_day_label(it.get("date_start"), it.get("date_end")),
+        {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now, off),
+         "day": weekend_day_label(it.get("date_start"), it.get("date_end"), off),
          "photo": await cover(it.get("image"))}
         for it in items
     ]
@@ -87,7 +88,7 @@ async def _build_and_send(client, base, user_id, city, interests, pools, covers,
     first = items[0].get("event_id")
     url = f"https://t.me/{_BOT}?startapp={first}" if first else f"https://t.me/{_BOT}?startapp=weekend"
     markup = {"inline_keyboard": [[{"text": "Открыть афишу →", "url": url}]]}
-    msg = _compose(items, now)  # кликабельные названия событий (как в дайджесте)
+    msg = _compose(items, now, off)  # кликабельные названия событий (как в дайджесте)
     return await _send_digest_one(client, base, user_id, poster, msg, msg, markup)
 
 
