@@ -49,6 +49,17 @@
   .ticker {
     left: calc(var(--rail) + 14px);
   }
+  /* Прижатый к левому краю карт-хром уезжает за rail (кнопка «Списком» иначе прячется под ним). */
+  .listfab,
+  .cityswitch {
+    left: calc(var(--rail) + 14px);
+  }
+  .focusbar {
+    left: calc(var(--rail) + 12px);
+  }
+  .emptystate {
+    left: var(--rail);
+  }
 
   /* Бренд и навигация теперь в rail'е — бургер+вордмарка в пилюле лишние. */
   .cmdpill__menu {
@@ -132,9 +143,21 @@
   .panelview__scroll--rails {
     padding-inline: 16px;
   }
-  /* «Подборки»: плитки в 3 колонки. */
+  /* «Подборки»: плитки в 3 колонки. Мобильное правило «нечётный последний спанит ряд»
+     рассчитано на 2 колонки — в трёх оно рвёт сетку (пустая ячейка + плитка во всю ширину). */
   .recgrid {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .reccoll:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+  /* В 3-колоночном гриде ряд добивается по остатку от 3: один хвостовой тайл — на весь ряд,
+     два — пополам. nth-child(3n+1):last = 1 в последнем ряду; 3n+2:last = 2 в ряду. */
+  .reccoll:last-child:nth-child(3n + 1) {
+    grid-column: 1 / -1;
+  }
+  .reccoll:last-child:nth-child(3n + 2) {
+    grid-column: span 2;
   }
 
   /* Пик кластера и шторка фильтров — центр-колонки в области правее rail'а. */
