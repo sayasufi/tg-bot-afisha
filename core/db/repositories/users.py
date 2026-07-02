@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from core.db.models import City, Event, RawEvent, User, UserFavorite, Venue
 from core.db.models.ref.user_venue_follow import UserVenueFollow
+from core.domain.cities import CITIES  # валидация city_slug в update_settings
 from core.db.repositories.ingestion import ensure_source, upsert_raw_event
 
 
