@@ -661,7 +661,23 @@ export function EventsMap({
 
   return (
     <div ref={wrapRef} className={`map-wrap${revealed ? " map-wrap--revealed" : ""}${selected ? " map-wrap--has-selected" : ""}${focusOut ? " map-wrap--focus-out" : ""}`}>
-      <MapContainer center={center ?? MOSCOW} zoom={11} minZoom={4} maxZoom={19} zoomControl={false} attributionControl={false} renderer={mapRenderer} style={{ height: "100%", width: "100%" }}>
+      <MapContainer
+        center={center ?? MOSCOW}
+        zoom={11}
+        minZoom={4}
+        maxZoom={19}
+        zoomControl={false}
+        attributionControl={false}
+        renderer={mapRenderer}
+        // Плавный зум «как у Яндекса»: дробные уровни вместо целых скачков. Колесо крутит
+        // четвертями уровня (пиксели колеса → мельче шаг), пинч на мобиле останавливается
+        // там, где отпустили пальцы (снап 0.25 почти незаметен). Кнопки/dblclick — по-прежнему
+        // целый уровень (zoomDelta не трогаем). markercluster дробные зумы поддерживает.
+        zoomSnap={0.25}
+        wheelPxPerZoomLevel={100}
+        wheelDebounceTime={25}
+        style={{ height: "100%", width: "100%" }}
+      >
         <AttributionControl position="bottomright" prefix={false} />
         <Basemap theme={theme} onReady={onReady} />
         <ViewportReporter onChange={handleViewport} />

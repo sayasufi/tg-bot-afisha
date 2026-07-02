@@ -259,17 +259,9 @@
     white-space: normal;
   }
 
-  /* ---- Перф на больших вьюпортах: сотни DOM-пинов и постеров. contain изолирует layout/paint
-     каждого маркера и карточки; content-visibility пропускает рендер офскрин-секций подборки. */
-  .leaflet-marker-icon {
-    contain: layout style;
-  }
-  .rcard,
-  .cat,
-  .lrow,
-  .erow {
-    contain: layout paint;
-  }
+  /* ---- Перф: contain пинов/карточек теперь ГЛОБАЛЬНО в map.css/panels.css (мобиле тоже);
+     здесь остаётся только content-visibility — скип рендера офскрин-секций подборки
+     (на мобиле не включаем: прыжки скроллбара заметнее на коротком вьюпорте). */
   .recsview .rail,
   .recsview .recshelf {
     content-visibility: auto;

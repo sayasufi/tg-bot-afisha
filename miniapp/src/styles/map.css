@@ -618,3 +618,9 @@ html[data-theme="dark"] .vpin--active::before {
   }
 }
 
+
+/* Перф (все вьюпорты): изоляция layout/style каждого DOM-пина — драг карты не
+   перечитывает геометрию сотен соседей. Ранее жило только в desktop.css. */
+.leaflet-marker-icon {
+  contain: layout style;
+}

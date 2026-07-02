@@ -2875,3 +2875,12 @@ mark.hl {
   font-size: clamp(18px, 5vw, 24px);
   -webkit-line-clamp: 4;
 }
+
+/* Перф (все вьюпорты): каждая карточка — изолированный layout/paint контекст,
+   скролл длинных лент не перерисовывает соседей. Ранее жило только в desktop.css. */
+.rcard,
+.cat,
+.lrow,
+.erow {
+  contain: layout paint;
+}

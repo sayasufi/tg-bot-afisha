@@ -57,6 +57,10 @@ function isSoftwareGL(): boolean {
 // Лёгкая подложка для софт-GL: обычный Leaflet-тайллейер (без ретины — меньше пикселей на CPU).
 // Наши тайлы; если рендерер отдаёт ошибки и ни один тайл не загрузился — молча пересаживаемся
 // на Carto, чтобы карта не осталась пустой.
+// Плавность: тайлы догружаются ВО ВРЕМЯ панорамирования (на мобиле Leaflet по умолчанию ждёт
+// конца жеста — выглядит как лаг), и вокруг вьюпорта держится запас в 4 ряда, чтобы драг не
+// открывал дыры. Во время зум-анимации сетку не трогаем (updateWhenZooming:false).
+const SMOOTH_TILES = { updateWhenIdle: false, updateWhenZooming: false, keepBuffer: 4 } as const;
 function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => void }) {
   const map = useMap();
   useEffect(() => {
@@ -77,6 +81,7 @@ function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
         maxZoom: 19,
         detectRetina: false,
         attribution: "© OpenStreetMap · © CARTO",
+        ...SMOOTH_TILES,
       });
       base.addTo(map);
       base.once("load", fire);
@@ -86,6 +91,7 @@ function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
         minZoom: CARTO_LABELS_MINZOOM,
         maxZoom: 19,
         detectRetina: false,
+        ...SMOOTH_TILES,
       });
       labels.addTo(map);
       added.push(labels);
@@ -97,6 +103,7 @@ function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
       maxNativeZoom: 17,
       detectRetina: false,
       attribution: "© OpenStreetMap",
+      ...SMOOTH_TILES,
     });
     self.on("tileload", () => {
       loads++;
