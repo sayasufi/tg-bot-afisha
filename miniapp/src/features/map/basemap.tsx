@@ -21,11 +21,19 @@ const STYLE: Record<ThemeName, string> = {
 // быстро даже на CPU. Плата: без метро-точек/парк-лейблов/панели тюнинга. Carto — бесплатные
 // с обязательной атрибуцией OSM+CARTO.
 const RASTER: Record<ThemeName, string> = {
-  // *_nolabels: у Carto подписи латиницей («KHIMKI») — без них чище и брендовее,
-  // весь смысл на карте несут наши пины.
+  // *_nolabels: у Carto подписи ГОРОДОВ/районов латиницей («KHIMKI») — на обзорных зумах
+  // без них чище и брендовее, весь смысл там несут наши пины.
   light: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
   dark: "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
 };
+// …но с зума 14 включаем прозрачный слой «только подписи»: там это уже названия УЛИЦ, а у улиц
+// в OSM редко есть name:en → Carto падает на локальный name = кириллица («Цветной бульвар»,
+// проверено тайлами z14-16). Латиница районов живёт на z<14 — туда слой не пускаем.
+const RASTER_LABELS: Record<ThemeName, string> = {
+  light: "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
+  dark: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png",
+};
+const RASTER_LABELS_MINZOOM = 14;
 
 // Один раз за сессию: рендерит ли WebGL железо или программный растеризатор (WARP/SwiftShader/
 // llvmpipe). Нет контекста вообще → тоже растровый фолбэк. Неизвестный рендерер (скрыт
@@ -57,6 +65,13 @@ function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
       attribution: "© OpenStreetMap · © CARTO",
     });
     layer.addTo(map);
+    const labels = L.tileLayer(RASTER_LABELS[theme], {
+      subdomains: "abcd",
+      minZoom: RASTER_LABELS_MINZOOM,
+      maxZoom: 19,
+      detectRetina: false,
+    });
+    labels.addTo(map);
     let readyFired = false;
     const fire = () => {
       if (!readyFired) {
@@ -68,6 +83,7 @@ function RasterBasemap({ theme, onReady }: { theme: ThemeName; onReady?: () => v
     const t = window.setTimeout(fire, 4000); // сеть тормозит — апп всё равно оживает
     return () => {
       window.clearTimeout(t);
+      map.removeLayer(labels);
       map.removeLayer(layer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
