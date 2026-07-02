@@ -162,6 +162,16 @@ export function IconPeople({ size = 18, className }: UiProps) {
   );
 }
 
+// Single person (account) — head + shoulders, same weight as IconPeople.
+export function IconUser({ size = 18, className }: UiProps) {
+  return (
+    <svg {...strokeProps(size, className)}>
+      <path d="M19.5 20.5v-1.8a3.8 3.8 0 0 0-3.8-3.8H8.3a3.8 3.8 0 0 0-3.8 3.8v1.8" />
+      <circle cx="12" cy="7.3" r="3.8" />
+    </svg>
+  );
+}
+
 // "All categories" mark — a filled 2×2 grid (reads as "everything").
 export function IconGrid({ size = 18, className }: UiProps) {
   return (

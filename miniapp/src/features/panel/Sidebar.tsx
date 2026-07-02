@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import { IconBuilding, IconHeart, IconMap, IconPeople, IconSparkle } from "../../lib/icons";
+import { IconBuilding, IconHeart, IconMap, IconPeople, IconSparkle, IconUser } from "../../lib/icons";
 import type { TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
 import { getWebEmail, getWebToken, isWebMode } from "../../lib/webAuth";
@@ -47,9 +47,9 @@ export function Sidebar({
   const handle = web
     ? (webAuthed ? (getWebEmail() ?? "Аккаунт") : "Войти")
     : user?.username ? `@${user.username}` : "Telegram";
-  const cap = web ? (webAuthed ? "аккаунт" : "избранное и настройки") : "профиль";
+  const cap = web ? "аккаунт" : "профиль";
   const avatarUrl = safeHttpUrl(user?.photo_url);
-  const initial = web ? (webAuthed ? (getWebEmail() ?? "@")[0].toUpperCase() : "→") : (name[0] || "?").toUpperCase();
+  const initial = web ? (webAuthed ? (getWebEmail() ?? "@")[0].toUpperCase() : "") : (name[0] || "?").toUpperCase();
   const panelRef = useRef<HTMLElement>(null);
   useFocusTrap(panelRef, open); // contain keyboard focus in the menu while it's open
   return (
@@ -92,7 +92,7 @@ export function Sidebar({
             className="drawer__avatar"
             style={avatarUrl ? { backgroundImage: `url("${avatarUrl}")` } : undefined}
           >
-            {avatarUrl ? "" : initial}
+            {avatarUrl ? "" : web && !webAuthed ? <IconUser size={18} /> : initial}
           </span>
           <span className="drawer__account-id">
             <span className="drawer__handle">{handle}</span>

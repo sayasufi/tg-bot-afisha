@@ -14,4 +14,5 @@ export {
   IconSparkle,
   IconBuilding,
   IconPeople,
+  IconUser,
 } from "./ui";
