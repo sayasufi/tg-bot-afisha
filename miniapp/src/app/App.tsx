@@ -34,6 +34,7 @@ import { bootstrap, fetchFriendsFavorited, manageFriends, type Friend } from "..
 import { showToast } from "../lib/toast";
 import { logIntent } from "../api/intent";
 import { isWebMode } from "../lib/webAuth";
+import { useIsDesktop } from "../lib/useIsDesktop";
 import { WebAccountPanel } from "../features/auth/WebAccountPanel";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
@@ -87,6 +88,9 @@ export function App() {
   focusedRef.current = focused;
   const [peek, setPeek] = useState<EventItem[] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // ПК-раскладка (≥1024px): Sidebar пришвартован (см. styles/desktop.css), drawerOpen остаётся
+  // false — Esc/BackButton-стек его не видит, а закрытия по клику безвредно бьют в false.
+  const isDesktop = useIsDesktop();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   // The venue page (opened by tapping the place in an event sheet); holds the venue id.
@@ -1317,7 +1321,7 @@ export function App() {
       )}
 
       <Sidebar
-        open={drawerOpen}
+        open={drawerOpen || isDesktop}
         view={view}
         favCount={fav.ids.size}
         venueCount={venueFollows.ids.size}

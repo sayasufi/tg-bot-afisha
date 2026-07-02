@@ -14,6 +14,7 @@ import { pushSetting } from "../../lib/settings";
 import { getWebApp, haptic, shareEvent } from "../../lib/telegram";
 import { showToast } from "../../lib/toast";
 import { safeHttpUrl } from "../../lib/url";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 import { SimilarEvents } from "./SimilarEvents";
 import { accessionNo, formatPrice, stripHtml } from "./sheetFormat";
 
@@ -77,7 +78,9 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   const [friendFaces, setFriendFaces] = useState<Friend[]>([]);
   const sheetRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
-  useFocusTrap(sheetRef, true); // the sheet mounts only while open → always active here
+  const isDesktop = useIsDesktop();
+  // ПК: событие — правый док, карта остаётся интерактивной → фокус НЕ запираем (это не модалка).
+  useFocusTrap(sheetRef, !isDesktop);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -95,6 +98,19 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
   navRef.current = nav;
   const hasSiblingsRef = useRef(hasSiblings);
   hasSiblingsRef.current = hasSiblings;
+
+  // ПК: листание сиблингов стрелками клавиатуры (мобайл листает свайпом — там не мешаем).
+  useEffect(() => {
+    if (!isDesktop) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (e.key === "ArrowRight") navRef.current(1);
+      else if (e.key === "ArrowLeft") navRef.current(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isDesktop]);
 
   useEffect(() => {
     setDetail(null);
@@ -422,6 +438,28 @@ export function EventSheet({ selected, query, userPos, items, siblings, metro, i
         {/* Segmented action toolbar, docked flush to the poster's top-right corner so its top
             edge meets the start of the photo: favourite / share / close. */}
         <div className="sheet__pacts">
+          {isDesktop && hasSiblings && siblings && (
+            <>
+              <button
+                type="button"
+                className="sheet__picon"
+                aria-label="Предыдущее событие здесь же"
+                disabled={sibIndex <= 0}
+                onClick={() => nav(-1)}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="sheet__picon"
+                aria-label="Следующее событие здесь же"
+                disabled={sibIndex >= siblings.length - 1}
+                onClick={() => nav(1)}
+              >
+                ›
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={`sheet__picon${isFav ? " sheet__picon--on" : ""}`}

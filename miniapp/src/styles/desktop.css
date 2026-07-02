@@ -1,55 +1,116 @@
-/* ДЕСКТОП-СЛОЙ (веб-версия okrestmap.ru/map). Мобильная вёрстка — источник истины и не трогается;
-   здесь ТОЛЬКО ≥1024px-переопределения. Диагноз до слоя: bottom-sheet и панели растягивались на всю
-   ширину (постер-билборд, строки списка по 1900px, плитки подборок во весь экран, пилюля через весь
-   верх). Рецепт: карта остаётся full-bleed; ВСЕ контент-поверхности получают читабельную колонку
-   (ширина через --panel-w), шторки-снизу становятся центрированными: left/right:0 + margin-inline:auto
-   + width-кап — БЕЗ transform (открытие/закрытие анимируется translateY, конфликтов нет). */
+/* ДЕСКТОП-СЛОЙ (веб-версия okrestmap.ru/map). Мобильная вёрстка — источник истины и НЕ трогается:
+   здесь только @media (min-width:1024px)-переопределения, ни одного правила вне медиа.
+   Скелет ПК (план desktop-redesign, Э1+Э2): постоянный левый rail 240px (тот же Sidebar, docked
+   через CSS — БЕЗ ре-парентинга JSX), full-bleed карта, панели открываются правее rail'а,
+   событие — правый док-инспектор (карта остаётся видимой), тикер статичен. Одно JSX-дерево
+   на всех ширинах; карта никогда не ресайзится (rail и док лежат ПОВЕРХ неё). */
 
 @media (min-width: 1024px) {
-  /* ---- Командная пилюля: слева у бургера, не через весь экран. Поиск-оверлей — той же ширины. */
+  :root {
+    --rail: 240px;
+  }
+
+  /* ================= Э1. Постоянный rail ================= */
+  /* Дровер всегда «открыт»: скрим прозрачен и не ловит клики, панель пришвартована. */
+  .drawer {
+    visibility: visible;
+    background: transparent;
+    pointer-events: none;
+    transition: none;
+  }
+  .drawer__panel {
+    transform: none;
+    transition: none;
+    pointer-events: auto;
+    width: var(--rail);
+    border-right: 1px solid var(--line);
+  }
+
+  /* Всё, что жило от левого края экрана, сдвигается за rail. Карта НЕ сдвигается (full-bleed). */
+  .panelview {
+    left: var(--rail);
+  }
+  .csheet {
+    left: var(--rail);
+  }
+  .peek {
+    left: var(--rail);
+  }
   .cmdpill {
+    left: calc(var(--rail) + 16px);
     right: auto;
-    width: min(560px, calc(100vw - 32px));
+    width: min(560px, calc(100vw - var(--rail) - 32px));
   }
   .searchov__panel {
+    left: calc(var(--rail) + 16px);
     right: auto;
-    width: min(560px, calc(100vw - 32px));
+    width: min(560px, calc(100vw - var(--rail) - 32px));
+  }
+  .ticker {
+    left: calc(var(--rail) + 14px);
   }
 
-  /* ---- Карточка события: колонка-модалка по центру вместо full-bleed шторки. */
+  /* Бренд и навигация теперь в rail'е — бургер+вордмарка в пилюле лишние. */
+  .cmdpill__menu {
+    display: none;
+  }
+
+  /* Тикер: статичная mono-статус-строка вместо бегущей (marquee на ПК = ярмарка). */
+  .ticker__track {
+    animation: none;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .ticker__track span + span {
+    display: none;
+  }
+
+  /* ================= Э2. Событие = правый док-инспектор ================= */
+  /* Вместо центр-модалки/шторки: карточка-экспонат пришвартована справа, карта видна и живёт. */
   .sheet {
-    left: 0;
+    left: auto;
     right: 0;
-    margin-inline: auto;
-    width: min(720px, calc(100vw - 48px));
-    bottom: 24px;
-    max-height: calc(100dvh - 48px);
-    border: 1px solid var(--line);
-    box-shadow: 12px 12px 0 rgba(0, 0, 0, 0.14);
+    top: 0;
+    bottom: 0;
+    margin: 0;
+    width: 440px;
+    max-height: none;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    box-shadow: -10px 0 0 rgba(0, 0, 0, 0.1);
+    animation: dockIn 0.18s var(--ease-cut) both;
   }
-  /* Display-тайтл в колонке не должен упираться в мобильный vw-масштаб. */
+  @keyframes dockIn {
+    from {
+      transform: translateX(28px);
+      opacity: 0.4;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  /* Затемнение карты убираем — карта интерактивна при открытом доке (2ГИС-паттерн). */
+  .sheet-veil {
+    display: none;
+  }
+  /* Мобильные жесты в доке не живут. */
+  .sheet__grip,
+  .sheet__swipehint {
+    display: none;
+  }
+  /* Display-тайтл в колонке 440px без мобильного vw-масштаба. */
   .sheet__title {
-    font-size: clamp(32px, 4.4vw, 48px);
+    font-size: clamp(26px, 2.6vw, 38px);
+  }
+  /* Кнопки листания сиблингов ‹ › (рендерятся только на ПК из EventSheet). */
+  .sheet__picon:disabled {
+    opacity: 0.35;
+    pointer-events: none;
   }
 
-  /* ---- Пик кластера и шторка фильтров: те же центр-колонки. */
-  .peek__panel {
-    margin-inline: auto;
-    width: min(600px, calc(100vw - 48px));
-    border: 1px solid var(--line);
-    border-bottom: 0;
-  }
-  .csheet__panel {
-    margin-inline: auto;
-    width: min(600px, calc(100vw - 48px));
-    border: 1px solid var(--line);
-    border-bottom: 0;
-  }
-
-  /* ---- Полноэкранные панели: фон остаётся во весь экран, КОНТЕНТ — колонка --panel-w.
-     Базовая колонка 760px (профиль/друзья/площадки — читабельная лента);
-     .listview (список карты + избранное) — 920px (постер-строки);
-     .recsview (подборка) и .panelview--wide (детали коллекции) — 1240px (журнальная сетка). */
+  /* ================= Контент-колонки панелей (внутри области правее rail) ================= */
   .panelview {
     --panel-w: 760px;
   }
@@ -67,20 +128,32 @@
     max-width: var(--panel-w);
     margin-inline: auto;
   }
-  /* Frameless-рейлы (трек в край экрана) — мобильный приём; в колонке возвращаем гаттеры. */
+  /* Frameless-рейлы — мобильный приём; в колонке возвращаем гаттеры. */
   .panelview__scroll--rails {
     padding-inline: 16px;
   }
-
-  /* ---- «Подборки»: плитки в 3 колонки вместо двух гигантских. */
+  /* «Подборки»: плитки в 3 колонки. */
   .recgrid {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  /* ---- Онбординг/веб-аккаунт уже капнуты (392px), дровер 300px — не трогаем. */
+  /* Пик кластера и шторка фильтров — центр-колонки в области правее rail'а. */
+  .peek__panel,
+  .csheet__panel {
+    margin-inline: auto;
+    width: min(600px, calc(100vw - var(--rail) - 48px));
+    border: 1px solid var(--line);
+    border-bottom: 0;
+  }
 }
 
-/* Широкий десктоп: чуть больше воздуха контент-колонкам. */
+@media (min-width: 1440px) {
+  .sheet {
+    width: 480px;
+  }
+}
+
+/* Широкий десктоп: больше воздуха контент-колонкам. */
 @media (min-width: 1600px) {
   .panelview.recsview,
   .panelview.panelview--wide {
