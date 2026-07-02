@@ -21,8 +21,10 @@ const STYLE: Record<ThemeName, string> = {
 // быстро даже на CPU. Плата: без метро-точек/парк-лейблов/панели тюнинга. Carto — бесплатные
 // с обязательной атрибуцией OSM+CARTO.
 const RASTER: Record<ThemeName, string> = {
-  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+  // *_nolabels: у Carto подписи латиницей («KHIMKI») — без них чище и брендовее,
+  // весь смысл на карте несут наши пины.
+  light: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+  dark: "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
 };
 
 // Один раз за сессию: рендерит ли WebGL железо или программный растеризатор (WARP/SwiftShader/
