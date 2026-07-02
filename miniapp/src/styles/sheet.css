@@ -824,17 +824,6 @@ html[data-theme="dark"] .sheet-veil {
 .btn--ghost {
   background: var(--plinth);
 }
-
-/* Venue-follow прайминг: полноширинный тихий чип под гридом «Где/Цена» — появляется в момент
-   сохранения события; текст длинный (имя площадки) → разрешаем перенос. */
-.sheet__followhint {
-  width: 100%;
-  margin-top: 10px;
-  white-space: normal;
-  line-height: 1.35;
-  font-size: 12.5px;
-}
-
 .btn--ghost:active {
   background: var(--vitrine);
 }
