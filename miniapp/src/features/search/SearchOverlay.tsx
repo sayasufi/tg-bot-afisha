@@ -13,7 +13,6 @@ const looksLikeCode = (s: string) => CODE_RE.test(s) && (s.includes("-") || /\d/
 
 // Empty-state helpers: recent queries (per-device) + example chips, so a blank search isn't a dead end.
 const RECENT_KEY = "search:recent";
-const SUGGESTIONS = ["концерт", "выставка", "стендап", "театр", "вечеринка", "экскурсия"];
 
 function loadRecent(): string[] {
   try {
@@ -194,22 +193,14 @@ export function SearchOverlay({
           </div>
         )}
 
-        {showZero && (
+        {/* Подсказки «Попробуй» убраны по решению владельца — пустой поиск чистый.
+            «Недавнее» (личная история) остаётся и появляется только когда она есть. */}
+        {showZero && recent.length > 0 && (
           <div className="searchov__zero">
-            {recent.length > 0 && (
-              <div className="searchov__zsec">
-                <div className="searchov__zhead">Недавнее</div>
-                <div className="searchov__chips">
-                  {recent.map((r) => (
-                    <button type="button" key={r} className="searchov__chip" onClick={() => setQ(r)}>{r}</button>
-                  ))}
-                </div>
-              </div>
-            )}
             <div className="searchov__zsec">
-              <div className="searchov__zhead">Попробуй</div>
+              <div className="searchov__zhead">Недавнее</div>
               <div className="searchov__chips">
-                {SUGGESTIONS.map((r) => (
+                {recent.map((r) => (
                   <button type="button" key={r} className="searchov__chip" onClick={() => setQ(r)}>{r}</button>
                 ))}
               </div>
