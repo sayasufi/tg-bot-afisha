@@ -127,6 +127,47 @@ async def _city_slug(user_id: int) -> str | None:
         )).scalar()
 
 
+async def _handle_web_link(message: Message, code: str) -> None:
+    """Связка веб-аккаунта с Telegram: /start link_<code>. Код одноразовый (Redis, 10 мин) и
+    указывает на синтетический веб-uid; сливаем его данные в НАСТОЯЩИЙ tg-аккаунт отправителя."""
+    user = message.from_user
+    if not user:
+        return
+    web_uid = None
+    try:
+        client = get_redis(decode=True)
+        if client is not None:
+            key = f"weblink:{code[:32]}"
+            raw = await client.get(key)
+            if raw:
+                await client.delete(key)  # одноразовость: повторный тап по той же ссылке не сработает
+                web_uid = int(raw)
+    except Exception:
+        web_uid = None
+    if not web_uid:
+        await message.answer(
+            f"{ce('🔔')} Ссылка связки устарела или уже использована. Открой сайт → «Связать Telegram» ещё раз."
+        )
+        return
+    from core.db.repositories.accounts import merge_web_into_telegram
+
+    async with AsyncSessionLocal() as db:
+        ok = await merge_web_into_telegram(db, web_uid, user.id)
+        if ok:
+            await db.commit()
+    if ok:
+        await message.answer(
+            f"{ce('📍')} <b>Аккаунты связаны!</b> Избранное и настройки с сайта теперь здесь, "
+            "а вход по email ведёт в этот же аккаунт. Напоминания и дайджест тоже включились.",
+            reply_markup=webapp_keyboard(get_settings().telegram_webapp_url),
+        )
+    else:
+        await message.answer(
+            f"{ce('🔔')} Не получилось связать: на этом Telegram-аккаунте уже настроен вход по email. "
+            "Если это не так — напиши менеджеру @okrest_manager."
+        )
+
+
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject) -> None:
     await _save_user(message)
@@ -135,6 +176,9 @@ async def start_handler(message: Message, command: CommandObject) -> None:
         await _save_acq_source(message.from_user.id, arg[len("src_"):])
     if arg.startswith("report_"):  # «сообщить о неточности» from an event sheet
         await _handle_report(message, arg[len("report_"):])
+        return
+    if arg.startswith("link_"):  # связка веб-аккаунта с Telegram
+        await _handle_web_link(message, arg[len("link_"):])
         return
     # Нет города → просим геопозицию (определим ближайший город). Иначе — сразу кнопка карты.
     if message.from_user and not await _city_slug(message.from_user.id):

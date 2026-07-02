@@ -1,9 +1,10 @@
 import { API_BASE } from "./http";
+import { getAuthPayload } from "../lib/webAuth";
 
 // Ask the backend to prepare a photo inline-message for the current user, so the
 // Mini App can share an actual image (not a link) via Telegram.WebApp.shareMessage.
 export async function prepareShare(eventId: string): Promise<{ ok: boolean; id?: string }> {
-  const initData = (window as any)?.Telegram?.WebApp?.initData as string | undefined;
+  const initData = getAuthPayload();
   if (!initData) return { ok: false };
   try {
     const res = await fetch(`${API_BASE}/v1/share/prepare`, {

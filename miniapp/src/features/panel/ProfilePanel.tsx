@@ -5,6 +5,8 @@ import { viewedCount } from "../../lib/affinity";
 import { IconClose } from "../../lib/icons";
 import { MANAGER_LINK, openTelegramLink, type ThemeName, type TgUser } from "../../lib/telegram";
 import { safeHttpUrl } from "../../lib/url";
+import { authSetCredentials } from "../../lib/webAuth";
+import { showToast } from "../../lib/toast";
 import { SuggestChannelModal } from "./SuggestChannelModal";
 import { SuggestEventModal } from "./SuggestEventModal";
 import { TasteCard } from "./TasteCard";
@@ -45,6 +47,28 @@ export function ProfilePanel({
   const [cityOpen, setCityOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [channelOpen, setChannelOpen] = useState(false);
+  // «Вход на сайте»: email+пароль на этот же TG-аккаунт → логин на okrestmap.ru/в приложениях
+  // ведёт в тот же аккаунт (избранное/настройки общие).
+  const [webCredsOpen, setWebCredsOpen] = useState(false);
+  const [webEmail, setWebEmail] = useState("");
+  const [webPassword, setWebPassword] = useState("");
+  const [webBusy, setWebBusy] = useState(false);
+  const saveWebCreds = async () => {
+    if (!webEmail.trim() || webPassword.length < 8) {
+      showToast(webPassword.length < 8 ? "Пароль — минимум 8 символов" : "Укажи email", { tone: "muted" });
+      return;
+    }
+    setWebBusy(true);
+    const r = await authSetCredentials(webEmail, webPassword);
+    setWebBusy(false);
+    if (r.ok) {
+      showToast("Готово — входи на сайте с этим email", { tone: "good" });
+      setWebCredsOpen(false);
+      setWebPassword("");
+    } else {
+      showToast(r.data.detail || "Не получилось — попробуй позже", { tone: "muted" });
+    }
+  };
   // Cities A→Z (Cyrillic-aware) so the picker stays scannable as it grows past a dozen.
   const sortedCities = [...cities].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const currentCitySlug = cities.find((c) => c.name === city)?.slug ?? cities[0]?.slug ?? "";
@@ -181,6 +205,48 @@ export function ProfilePanel({
             <span className="profile__switch-knob" />
           </span>
         </button>
+
+        <div className="recs__section">Аккаунт</div>
+        <button type="button" className="profile__switch" onClick={() => setWebCredsOpen((v) => !v)}>
+          <span className="profile__switch-text">
+            <span className="profile__switch-label">Вход на сайте</span>
+            <span className="profile__switch-sub">
+              Задай email и пароль — и этот же аккаунт откроется на okrestmap.ru и в будущих приложениях
+            </span>
+          </span>
+          <span aria-hidden="true" style={{ opacity: 0.6 }}>{webCredsOpen ? "×" : "→"}</span>
+        </button>
+        {webCredsOpen && (
+          <div style={{ display: "grid", gap: 8, padding: "4px 2px 10px" }}>
+            <input
+              type="email"
+              placeholder="email"
+              autoComplete="email"
+              value={webEmail}
+              onChange={(e) => setWebEmail(e.target.value)}
+              style={{ height: 42, padding: "0 12px", background: "var(--plinth)", color: "var(--ink)",
+                       border: 0, boxShadow: "inset 0 0 0 1px var(--ink)", fontSize: 14 }}
+            />
+            <input
+              type="password"
+              placeholder="пароль (мин. 8 символов)"
+              autoComplete="new-password"
+              value={webPassword}
+              onChange={(e) => setWebPassword(e.target.value)}
+              style={{ height: 42, padding: "0 12px", background: "var(--plinth)", color: "var(--ink)",
+                       border: 0, boxShadow: "inset 0 0 0 1px var(--ink)", fontSize: 14 }}
+            />
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={webBusy}
+              onClick={() => void saveWebCreds()}
+              style={{ height: 42 }}
+            >
+              {webBusy ? "…" : "Сохранить"}
+            </button>
+          </div>
+        )}
 
         <div className="recs__section">Оформление</div>
         <button

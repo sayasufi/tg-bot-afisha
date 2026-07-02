@@ -1,8 +1,10 @@
 import { API_BASE, toNum } from "./http";
 import type { EventItem } from "./types";
 
+import { getAuthPayload } from "../lib/webAuth";
+
 function initData(): string | undefined {
-  return (window as any)?.Telegram?.WebApp?.initData as string | undefined;
+  return getAuthPayload(); // TG initData ИЛИ "web:<token>" (веб-аккаунт) — оба понимает бэк
 }
 
 // Persist the user's home city from their first map geolocation (replaces the

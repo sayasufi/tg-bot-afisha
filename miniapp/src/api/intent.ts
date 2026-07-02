@@ -1,5 +1,5 @@
-import { getWebApp } from "../lib/telegram";
 import { API_BASE } from "./http";
+import { getAuthPayload } from "../lib/webAuth";
 
 // North-star telemetry: a user taking a real INTENT action — opening a route, clicking
 // through to tickets/source, sharing, or setting a reminder. Fire-and-forget with
@@ -9,7 +9,7 @@ export type IntentKind = "click" | "route" | "share" | "reminder" | "calendar" |
 
 export function logIntent(kind: IntentKind, eventId?: string): void {
   try {
-    const init_data = getWebApp()?.initData || "";
+    const init_data = getAuthPayload() || "";
     void fetch(`${API_BASE}/v1/intent`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

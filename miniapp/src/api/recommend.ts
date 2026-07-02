@@ -1,3 +1,4 @@
+import { getAuthPayload } from "../lib/webAuth";
 import { API_BASE, getJson, toNum } from "./http";
 import type { EventItem } from "./types";
 
@@ -60,7 +61,7 @@ export async function fetchCollection(
 // signal (an unauthenticated ping is silently ignored server-side).
 export function logEventSeen(eventId: string): void {
   try {
-    const initData = (window as any)?.Telegram?.WebApp?.initData as string | undefined;
+    const initData = getAuthPayload();
     void fetch(`${API_BASE}/v1/recommendations/seen/${eventId}`, {
       method: "POST",
       keepalive: true,

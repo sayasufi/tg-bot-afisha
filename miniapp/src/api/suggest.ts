@@ -1,7 +1,9 @@
 import { API_BASE } from "./http";
 
+import { getAuthPayload } from "../lib/webAuth";
+
 function initData(): string | undefined {
-  return (window as any)?.Telegram?.WebApp?.initData as string | undefined;
+  return getAuthPayload(); // TG initData ИЛИ "web:<token>" — оба понимает бэк
 }
 
 export type EventSuggestInput = {

@@ -33,6 +33,8 @@ import { FriendInviteAccept } from "../features/panel/FriendInviteAccept";
 import { bootstrap, fetchFriendsFavorited, manageFriends, type Friend } from "../api/users";
 import { showToast } from "../lib/toast";
 import { logIntent } from "../api/intent";
+import { isWebMode } from "../lib/webAuth";
+import { WebAccountPanel } from "../features/auth/WebAccountPanel";
 import { IconList } from "../lib/icons";
 import { Onboarding } from "../features/onboarding/Onboarding";
 import { OfflineBanner } from "../features/offline/OfflineBanner";
@@ -1274,7 +1276,8 @@ export function App() {
             onClose={() => setFriendProfile(null)}
           />
         )}
-        {view === "profile" && (
+        {view === "profile" && isWebMode() && <WebAccountPanel onClose={() => setView("map")} />}
+        {view === "profile" && !isWebMode() && (
           <ProfilePanel
             user={tgUser}
             city={settingsCity?.name ?? CITY}

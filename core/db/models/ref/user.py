@@ -11,6 +11,11 @@ class User(Base):
     __table_args__ = {"schema": "ref"}
 
     telegram_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # Веб-аккаунт (email+scrypt-пароль) поверх той же строки: TG-юзер может задать их из миниаппа
+    # («вход на сайте»), а чистый веб-юзер живёт на СИНТЕТИЧЕСКОМ id ≥ 10^15 (ref.web_user_id_seq)
+    # до связки с Telegram (0063). NULL = входа по email нет.
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # The account's Telegram avatar (captured from initData) — for the friend social-proof faces.

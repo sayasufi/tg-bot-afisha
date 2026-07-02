@@ -19,6 +19,7 @@ from apps.api.routes.admin_settings import router as admin_settings_router
 from apps.api.routes.admin_sources import router as admin_sources_router
 from apps.api.routes.admin_users import router as admin_users_router
 from apps.api.routes.admin_venues import router as admin_venues_router
+from apps.api.routes.auth import router as auth_router
 from apps.api.routes.events import router as events_router
 from apps.api.routes.go import router as go_router
 from apps.api.routes.health import router as health_router
@@ -158,6 +159,7 @@ app.include_router(media_router)
 app.include_router(share_router)
 app.include_router(recommend_router)
 app.include_router(intent_router)
+app.include_router(auth_router)
 app.include_router(stats_router)
 app.include_router(admin_router)
 app.include_router(admin_channels_router)

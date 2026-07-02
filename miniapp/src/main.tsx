@@ -50,9 +50,9 @@ function mountWithRetry(): void {
     });
 }
 
-// Gate with a short grace window: a real Telegram cold-open sometimes hasn't injected initData/platform yet.
-// If the Telegram.WebApp object is present, give it ~1s (retry) rather than hard-bouncing a real user to the
-// landing «without a way back». A plain browser has NO WebApp object → redirect immediately as before.
+// ВЕБ-ВЕРСИЯ (2026-07): гейт «только Telegram» снят — обычный браузер монтирует апп в веб-режиме
+// (свои аккаунты email+пароль, lib/webAuth). Короткое grace-окно оставлено только чтобы дождаться
+// инъекции initData при холодном старте ВНУТРИ Telegram (иначе TG-юзер стартовал бы как «веб»).
 let gateTries = 0;
 function gate(): void {
   if (inTelegram()) {
@@ -64,6 +64,6 @@ function gate(): void {
     setTimeout(gate, 150);
     return;
   }
-  window.location.replace("https://okrestmap.ru/");
+  mountWithRetry(); // браузер без Telegram → веб-режим
 }
 gate();

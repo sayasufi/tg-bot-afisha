@@ -16,11 +16,23 @@ _INIT_DATA_MAX_AGE_SECONDS = 24 * 3600
 
 
 def validate_init_data(init_data: str) -> dict:
-    """Return the verified Telegram user dict, or raise HTTPException.
+    """Return the verified user dict, or raise HTTPException.
 
-    The signature is checked per Telegram's WebApp spec:
-    secret = HMAC_SHA256("WebAppData", bot_token); hash = HMAC_SHA256(secret, data_check_string).
+    ДВА транспорта в одном поле (клиент веб-версии шлёт свой сессионный токен с префиксом
+    ``web:`` там же, где мини-апп шлёт Telegram initData — так все эндпойнты работают для
+    обоих миров без изменения контрактов):
+      * ``web:<token>``  — HMAC-сессия веб-аккаунта (services/web_auth) → {"id": uid, "web": True};
+      * иначе           — Telegram initData по спеке WebApp:
+        secret = HMAC_SHA256("WebAppData", bot_token); hash = HMAC_SHA256(secret, data_check_string).
     """
+    if (init_data or "").startswith("web:"):
+        from apps.api.services.web_auth import verify_web_token  # local: no import cycle
+
+        uid = verify_web_token(init_data[4:])
+        if uid is None:
+            raise HTTPException(status_code=401, detail="invalid web session")
+        return {"id": uid, "web": True}
+
     settings = get_settings()
     if not settings.telegram_bot_token:
         raise HTTPException(status_code=503, detail="bot token is not configured")
