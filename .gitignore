@@ -39,3 +39,4 @@ infra/odyssey/odyssey.conf
 # stray agent/tool-result artifacts (a workflow agent once wrote a mangled path here)
 *tool-results*
 *frontend_diff.txt
+about-gpu-*.txt
