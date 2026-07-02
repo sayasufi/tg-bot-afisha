@@ -17,23 +17,20 @@ _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # 32 unambiguous symbols (no I 
 _DECODE = {c: i for i, c in enumerate(_CROCKFORD)}
 _DECODE.update({"I": 1, "L": 1, "O": 0, "U": 0})  # forgive the dropped look-alikes
 
-# Curated airport-style city codes; extend as cities are added. Unknown cities
-# fall back to MSK for now (the only live city) — revisit when multi-city ships.
-_CITY_CODE = {
-    "москва": "MSK",
-    "санкт-петербург": "SPB",
-    "санкт петербург": "SPB",
-    "екатеринбург": "EKB",
-    "новосибирск": "NSK",
-    "казань": "KZN",
-    "нижний новгород": "NIN",
-    "сочи": "AER",
-}
 _DEFAULT_CITY_CODE = "MSK"
 
 
 def city_code(city: str | None) -> str:
-    return _CITY_CODE.get((city or "").strip().lower(), _DEFAULT_CITY_CODE)
+    """Airport-style prefix ("MSK") for a city given by display name ("Москва") OR slug
+    ("moscow"). Resolved from the core.domain.cities registry — the single source of truth
+    for all 16 cities — so codes never go stale as cities are added. Was a hand-kept parallel
+    dict that covered only 6/16 (the other 10 silently fell back to MSK, cross-linking events)."""
+    # Local import keeps this module importable without pulling the whole city registry when a
+    # caller only needs the pure encode/decode helpers, and avoids any import cycle.
+    from core.domain.cities import city_by_name
+
+    cfg = city_by_name(city)
+    return cfg.code if cfg is not None else _DEFAULT_CITY_CODE
 
 
 def encode_no(n: int, width: int = 4) -> str:

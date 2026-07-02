@@ -13,7 +13,17 @@ export function useApi<T = any>(path: string, pollMs?: number) {
   const load = useCallback(async () => {
     try {
       const d = await apiGet(path);
-      setData(d);
+      // Стабилизируем ссылку: если поллинг вернул тот же JSON — не подменяем объект,
+      // иначе downstream useMemo (filtered/sorted) пересортировывают массив на каждый
+      // тик впустую. Дешёвый deep-equal через сериализацию (данные админки небольшие).
+      setData((prev) => {
+        try {
+          if (prev != null && JSON.stringify(prev) === JSON.stringify(d)) return prev;
+        } catch {
+          /* циклы/несериализуемое — просто обновляем */
+        }
+        return d;
+      });
       setError(null);
     } catch (e) {
       if (e instanceof ApiError && (e.status === 404 || e.status === 401)) {

@@ -73,37 +73,43 @@ async def _send_reminders_impl() -> int:
     base = f"https://api.telegram.org/bot{token}"
     now = datetime.now(timezone.utc)
     sent = 0
+    # B9: read the due set in a SHORT session, then RELEASE the DB connection for the whole network
+    # fan-out. On NullPool one session pins one Postgres connection; holding it idle across a paced,
+    # per-send Telegram loop (seconds×N) starves the small worker connection budget. Stamp each send in
+    # its own tiny session (open→UPDATE→commit→close) so no connection is ever held during network I/O.
     async with WorkerAsyncSessionLocal() as db:
         # Clear reminders whose time passed long ago (muted user / past downtime) so they neither
         # burst-fire on unmute nor keep the bell armed. Then send the genuinely-due ones.
         if await reap_stale_reminders(db, now):
             await db.commit()
         due = await due_reminders(db, now)
-        if not due:
-            return 0
-        async with httpx.AsyncClient(timeout=20) as client:
-            for r in due:
-                # Render the fully-composed VITRINE card (photo hero + typeset when/title/code/venue/
-                # price) off the event loop — PIL is CPU-bound and the `when` is live, so it's built
-                # per send. Fall back to a full-text DM if it can't be built.
-                item = {**r, "when": when_phrase(r.get("date_start"), r.get("date_end"), now)}
-                try:
-                    card_bytes = await asyncio.to_thread(build_reminder_card, item)
-                except Exception:
-                    card_bytes = None
-                caption = reminder_caption_card(r, now) if card_bytes else reminder_caption(r, now)
-                fallback = reminder_caption(r, now)
-                markup = {"inline_keyboard": [[{"text": "смотреть →", "url": _open_url(r["event_id"])}]]}
-                result = await _send_reminder(client, base, r, caption, card_bytes, fallback, markup)
-                if result == "retry":
-                    continue  # 429 / transient → leave unstamped; the next sweep retries it
-                # Delivered OR permanently undeliverable (blocked / never started) → stamp ONCE and
-                # commit NOW, so a flow retry or a mid-sweep crash can't re-send to anyone already done.
+    if not due:
+        return 0
+    async with httpx.AsyncClient(timeout=20) as client:
+        for r in due:
+            # Render the fully-composed VITRINE card (photo hero + typeset when/title/code/venue/
+            # price) off the event loop — PIL is CPU-bound and the `when` is live, so it's built
+            # per send. Fall back to a full-text DM if it can't be built.
+            item = {**r, "when": when_phrase(r.get("date_start"), r.get("date_end"), now)}
+            try:
+                card_bytes = await asyncio.to_thread(build_reminder_card, item)
+            except Exception:
+                card_bytes = None
+            caption = reminder_caption_card(r, now) if card_bytes else reminder_caption(r, now)
+            fallback = reminder_caption(r, now)
+            markup = {"inline_keyboard": [[{"text": "смотреть →", "url": _open_url(r["event_id"])}]]}
+            result = await _send_reminder(client, base, r, caption, card_bytes, fallback, markup)
+            if result == "retry":
+                continue  # 429 / transient → leave unstamped; the next sweep retries it
+            # Delivered OR permanently undeliverable (blocked / never started) → stamp ONCE and
+            # commit NOW (short-lived session), so a flow retry or a mid-sweep crash can't re-send
+            # to anyone already done.
+            async with WorkerAsyncSessionLocal() as db:
                 await mark_sent(db, r["user_id"], r["event_id"])
                 await db.commit()
-                if result == "ok":
-                    sent += 1
-                await asyncio.sleep(PACE)  # stay under Telegram's flood threshold
+            if result == "ok":
+                sent += 1
+            await asyncio.sleep(PACE)  # stay under Telegram's flood threshold
     if sent:
         log.info("sent %s reminders", sent)
     return sent

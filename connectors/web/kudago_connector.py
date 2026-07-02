@@ -134,7 +134,16 @@ class KudaGoConnector:
         return False
 
     async def fetch(self, cursor: str | None = None) -> tuple[list[RawRecord], str | None]:
-        page = int(cursor) if cursor else 1
+        # The date-ordered full scan drives explicit page numbers through the cursor (it walks
+        # pages 1..N soonest-first and stops when it pages past the window). The incremental fetch
+        # uses the newest-published order and must NOT trawl deeper each run — following its cursor
+        # would page ever further into stale, long-past-published events while never re-reading the
+        # fresh page-1 rows. Depth is the full scan's job (every 6h); the incremental always reads
+        # page 1 for what's newly published.
+        if self.order_by == "dates":
+            page = int(cursor) if cursor else 1
+        else:
+            page = 1
         now = datetime.now(timezone.utc)
         until = now + timedelta(days=self._LOOKAHEAD_DAYS)
         url = f"{self.settings.kudago_base_url}/events/"
@@ -174,6 +183,11 @@ class KudaGoConnector:
             place = payload.get("place", {}) if isinstance(payload.get("place"), dict) else {}
             raw_text = " ".join([title, description, place.get("title", ""), place.get("address", "")]).strip()
             records.append(RawRecord(external_id=ext_id, payload=payload, raw_text=raw_text))
+
+        # Incremental (newest-published) always re-reads page 1, so hand back a stable "1" — the
+        # stored cursor must not creep forward or the next run would page past the fresh rows.
+        if self.order_by != "dates":
+            return records, "1"
 
         next_cursor = str(page)
         next_link = data.get("next")

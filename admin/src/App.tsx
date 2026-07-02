@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Shell } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { ToastProvider } from "./lib/mutate";
 import { Adstat } from "./pages/Adstat";
 import { Analytics } from "./pages/Analytics";
 import { Audit } from "./pages/Audit";
@@ -65,7 +66,9 @@ function Gate() {
 export function App() {
   return (
     <AuthProvider>
-      <Gate />
+      <ToastProvider>
+        <Gate />
+      </ToastProvider>
     </AuthProvider>
   );
 }

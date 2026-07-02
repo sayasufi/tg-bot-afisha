@@ -15,6 +15,17 @@ from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
+
+_SAFE_REDIRECT_SCHEMES = {"http", "https"}  # запрещаем javascript:/data:/tg: и прочие open-redirect-схемы
+
+
+def _is_safe_redirect(url: str) -> bool:
+    """Разрешаем 302 только на http(s). source_best_url приходит из внешних источников —
+    если там окажется javascript:/data:/иная схема, редирект на неё = open-redirect/XSS-вектор."""
+    try:
+        return (urlparse(url).scheme or "").lower() in _SAFE_REDIRECT_SCHEMES
+    except Exception:
+        return False
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,6 +77,8 @@ async def go(occurrence_id: int, db: AsyncSession = Depends(get_async_db)):
         return RedirectResponse(fallback, status_code=302)  # мёртвая/пустая ссылка → не тупик, назад в апп
 
     target = row["url"].strip()
+    if not _is_safe_redirect(target):  # не http(s) (javascript:/data:/…) → не редиректим на вредоносную схему
+        return RedirectResponse(fallback, status_code=302)
     code = event_code(row["display_no"], row["city"])
 
     rc = get_redis(decode=True)

@@ -214,11 +214,19 @@ class YandexAfishaConnector:
             if not event_id:
                 continue
 
+            dates = self._build_dates(schedule, today)
+            # No in-window session dates → nothing to place on a timeline. Keeping such a record
+            # only churns normalize forever (it can never produce an occurrence), so drop it here.
+            # Multi-session events with an empty list get their real dates from _augment_schedules,
+            # but that path keys off records built here, so a genuinely date-less event stays out.
+            if not dates:
+                continue
+
             base = {
                 "id": event_id,
                 "title": event.get("title"),
                 "description": self._strip_html(event.get("argument")),  # upgraded to full text below
-                "dates": self._build_dates(schedule, today),
+                "dates": dates,
                 "site_url": self._abs_url(event.get("url")),
                 "images": self._images(event.get("image")),
                 "categories": self._categories(event.get("type")),

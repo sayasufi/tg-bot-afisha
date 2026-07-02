@@ -106,44 +106,50 @@ async def _send_digest_impl(only_user_id: int | None = None) -> int:
     now = datetime.now(timezone.utc)
     since = _week_start_utc(now)
     sent = 0
+    # B9: on NullPool one session pins one Postgres connection. Read the recipient list in a SHORT
+    # session and release it; per user, do the per-user DB reads in their own short session, then RELEASE
+    # the connection for the whole network fan-out (cover fetches + poster send + PACE sleep), then stamp
+    # in another short session. No connection is ever held idle across Telegram I/O.
     async with WorkerAsyncSessionLocal() as db:
         users = await opted_in_users(db, since, only_user_id=only_user_id)
-        if only_user_id is not None:
-            # SAFETY: тест шлёт СТРОГО одному. Жёсткий гард — даже баг в запросе не разошлёт всем.
-            users = [u for u in users if u["user_id"] == only_user_id][:1]
-        if not users:
-            return 0
-        sat, sun, _, _ = weekend_window(now)
-        label = weekend_label(sat, sun)
-        markup = {"inline_keyboard": [[{"text": "вся афиша →", "url": _app_url()}]]}
-        # Fetch the heavy shared inputs ONCE, not per user: the rec:views hash, and the weekend
-        # pool per DISTINCT city among the opted-in users (a small dict cache). Per user we then
-        # only run the personal followed-venues query + an in-memory rank.
-        view_counts = await _view_counts()
-        pools: dict[str | None, list[dict]] = {}
-        covers: dict[str, bytes | None] = {}  # url -> bytes; weekend covers repeat across users
-        async with httpx.AsyncClient(timeout=15) as client:
+    if only_user_id is not None:
+        # SAFETY: тест шлёт СТРОГО одному. Жёсткий гард — даже баг в запросе не разошлёт всем.
+        users = [u for u in users if u["user_id"] == only_user_id][:1]
+    if not users:
+        return 0
+    sat, sun, _, _ = weekend_window(now)
+    label = weekend_label(sat, sun)
+    markup = {"inline_keyboard": [[{"text": "вся афиша →", "url": _app_url()}]]}
+    # Fetch the heavy shared inputs ONCE, not per user: the rec:views hash, and the weekend
+    # pool per DISTINCT city among the opted-in users (a small dict cache). Per user we then
+    # only run the personal followed-venues query + an in-memory rank.
+    view_counts = await _view_counts()
+    pools: dict[str | None, list[dict]] = {}
+    covers: dict[str, bytes | None] = {}  # url -> bytes; weekend covers repeat across users
+    async with httpx.AsyncClient(timeout=15) as client:
 
-            async def cover(url: str | None) -> bytes | None:
-                """Cover bytes for a poster tile — SSRF-guarded, no redirects, cached per sweep."""
-                if not url or not is_public_http_url(url):
-                    return None
-                if url not in covers:
-                    try:
-                        r = await client.get(url, timeout=8, follow_redirects=False,
-                                             headers={"User-Agent": "okrest-card/1.0"})
-                        r.raise_for_status()
-                        covers[url] = r.content
-                    except Exception:
-                        covers[url] = None
-                return covers[url]
+        async def cover(url: str | None) -> bytes | None:
+            """Cover bytes for a poster tile — SSRF-guarded, no redirects, cached per sweep."""
+            if not url or not is_public_http_url(url):
+                return None
+            if url not in covers:
+                try:
+                    r = await client.get(url, timeout=8, follow_redirects=False,
+                                         headers={"User-Agent": "okrest-card/1.0"})
+                    r.raise_for_status()
+                    covers[url] = r.content
+                except Exception:
+                    covers[url] = None
+            return covers[url]
 
-            for u in users:
-                city = u.get("city_slug")
-                # Без города НЕ шлём: weekend_pool(None) резолвится в Москву → житель другого из 16 городов
-                # получил бы мисс-таргет-подборку (читается как спам). Город захватываем в /start; до этого тихо.
-                if not city:
-                    continue
+        for u in users:
+            city = u.get("city_slug")
+            # Без города НЕ шлём: weekend_pool(None) резолвится в Москву → житель другого из 16 городов
+            # получил бы мисс-таргет-подборку (читается как спам). Город захватываем в /start; до этого тихо.
+            if not city:
+                continue
+            # DB read phase — one short session, released before the network send below.
+            async with WorkerAsyncSessionLocal() as db:
                 if city not in pools:
                     pools[city] = await weekend_pool(db, city, now)
                 venue_items = await new_at_followed_venues(db, u["user_id"], now)
@@ -151,47 +157,48 @@ async def _send_digest_impl(only_user_id: int | None = None) -> int:
                 # against the followed-venue block. Sits between «новое на площадках» and «на выходных».
                 seen = {e["event_id"] for e in venue_items}
                 friend_items = await friends_saved(db, u["user_id"], now)
-                friend_items = [it for it in friend_items if it["event_id"] not in seen]
-                seen |= {it["event_id"] for it in friend_items}
-                weekend_items = rank_weekend(
-                    pools[city],
-                    u.get("interests") or [],
-                    list(seen),  # don't repeat venue OR friend items in the weekend block
-                    view_counts,
-                )
-                if not venue_items and not friend_items and not weekend_items:
-                    continue  # nothing fresh for this user this week — stay quiet
-                # Build the poster: followed-venue → friends → weekend; covers fetched (cached), a
-                # when-phrase per tile. Render off the event loop (PIL is CPU-bound).
-                poster_items = [
-                    {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now),
-                     "day": weekend_day_label(it.get("date_start"), it.get("date_end")),
-                     "photo": await cover(it.get("image"))}
-                    for it in (venue_items + friend_items + weekend_items)[:6]
-                ]
-                poster: bytes | None = None
-                try:
-                    poster = await asyncio.to_thread(render_digest_poster, poster_items, label)
-                except Exception:
-                    poster = None
-                # Poster as a photo + a light caption (tappable titles); the poster already carries
-                # code · when · venue, so the caption stays short. Text roundup is the fallback.
-                result = await _send_digest_one(
-                    client, base, u["user_id"], poster,
-                    digest_caption(venue_items, friend_items, weekend_items, label),
-                    digest_message(venue_items, friend_items, weekend_items, label, now),
-                    markup,
-                )
-                if result == "retry":
-                    continue  # 429 / transient → leave unstamped; the next run retries it
-                # Delivered OR permanently undeliverable → stamp NOW and commit, so a flow retry or a
-                # mid-sweep crash can't re-send this week's roundup to anyone already done.
-                if only_user_id is None:  # тест НЕ штампует — реальный недельный дайджест юзера не трогаем
+            friend_items = [it for it in friend_items if it["event_id"] not in seen]
+            seen |= {it["event_id"] for it in friend_items}
+            weekend_items = rank_weekend(
+                pools[city],
+                u.get("interests") or [],
+                list(seen),  # don't repeat venue OR friend items in the weekend block
+                view_counts,
+            )
+            if not venue_items and not friend_items and not weekend_items:
+                continue  # nothing fresh for this user this week — stay quiet
+            # Build the poster: followed-venue → friends → weekend; covers fetched (cached), a
+            # when-phrase per tile. Render off the event loop (PIL is CPU-bound).
+            poster_items = [
+                {**it, "when": when_phrase(it.get("date_start"), it.get("date_end"), now),
+                 "day": weekend_day_label(it.get("date_start"), it.get("date_end")),
+                 "photo": await cover(it.get("image"))}
+                for it in (venue_items + friend_items + weekend_items)[:6]
+            ]
+            poster: bytes | None = None
+            try:
+                poster = await asyncio.to_thread(render_digest_poster, poster_items, label)
+            except Exception:
+                poster = None
+            # Poster as a photo + a light caption (tappable titles); the poster already carries
+            # code · when · venue, so the caption stays short. Text roundup is the fallback.
+            result = await _send_digest_one(
+                client, base, u["user_id"], poster,
+                digest_caption(venue_items, friend_items, weekend_items, label),
+                digest_message(venue_items, friend_items, weekend_items, label, now),
+                markup,
+            )
+            if result == "retry":
+                continue  # 429 / transient → leave unstamped; the next run retries it
+            # Delivered OR permanently undeliverable → stamp NOW and commit (short-lived session), so a
+            # flow retry or a mid-sweep crash can't re-send this week's roundup to anyone already done.
+            if only_user_id is None:  # тест НЕ штампует — реальный недельный дайджест юзера не трогаем
+                async with WorkerAsyncSessionLocal() as db:
                     await mark_digest_sent(db, [u["user_id"]])
                     await db.commit()
-                if result == "ok":
-                    sent += 1
-                await asyncio.sleep(PACE)  # stay under Telegram's flood threshold
+            if result == "ok":
+                sent += 1
+            await asyncio.sleep(PACE)  # stay under Telegram's flood threshold
     if sent:
         log.info("sent %s digests", sent)
     return sent

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from core.config.settings import get_settings
 from core.db.models import EventCandidate, EventSource, RawEvent, Source
@@ -10,6 +10,29 @@ from core.db.session import WorkerAsyncSessionLocal
 from pipeline.llm.service import LLMService
 
 _log = logging.getLogger(__name__)
+
+
+def _revalidate_canon_pairs(db, canon_pairs: list) -> list:
+    """A8: the pairs were computed in an EARLIER session (see llm_candidate_pairs / find_pairs),
+    then released while the LLM judged them for seconds/minutes. A concurrent self-heal
+    (_merge_events_impl / self_heal_dedup) can have merged-away either endpoint in that window —
+    events.events cascades to occurrences/sources, so committing a stale pair would either repoint
+    occurrences onto a now-deleted canon (FK violation aborts the whole batch) or resurrect a dup.
+    Re-check + LOCK both endpoints in THIS commit transaction: SELECT … FOR UPDATE pins the two rows
+    so a parallel merge can't delete them between this check and _commit_event_merges' commit, and any
+    pair whose endpoint already vanished is dropped."""
+    validated = []
+    for dup_id, canon_id in canon_pairs:
+        alive = {
+            str(r[0])
+            for r in db.execute(
+                text("SELECT event_id FROM events.events WHERE event_id IN (:d, :c) FOR UPDATE"),
+                {"d": str(dup_id), "c": str(canon_id)},
+            ).all()
+        }
+        if str(dup_id) in alive and str(canon_id) in alive:
+            validated.append((dup_id, canon_id))
+    return validated
 
 # Batch fan-out for in-flight LLM classify calls. The REAL service-wide cap is the shared limiter in
 # core.services.llm_limiter (settings.llm_max_concurrency); this just sizes the gather so it can fill that
@@ -156,6 +179,9 @@ async def _dedup_llm_impl(apply: bool = True, cap: int = _LLM_DEDUP_CAP) -> dict
     db = SessionLocal()
     try:
         n_clusters, canon_pairs = _cluster_to_canon(confirmed, rank)
+        # Re-validate + lock endpoints in the commit tx: a concurrent merge may have removed one of
+        # these events while the LLM was judging (see _revalidate_canon_pairs).
+        canon_pairs = _revalidate_canon_pairs(db, canon_pairs)
         res = _commit_event_merges(db, canon_pairs, apply)
     finally:
         db.close()
@@ -203,6 +229,9 @@ async def _dedup_fuzzy_llm_impl(apply: bool = True, cap: int = _FUZZY_LLM_CAP) -
     db = SessionLocal()
     try:
         n_clusters, canon_pairs = _cluster_to_canon(confirmed, rank)
+        # Re-validate + lock endpoints in the commit tx: a concurrent merge may have removed one of
+        # these events while the LLM was judging (see _revalidate_canon_pairs).
+        canon_pairs = _revalidate_canon_pairs(db, canon_pairs)
         res = _commit_event_merges(db, canon_pairs, apply)
     finally:
         db.close()

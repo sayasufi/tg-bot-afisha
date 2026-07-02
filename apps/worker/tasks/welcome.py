@@ -55,10 +55,10 @@ def _compose(items, now) -> str:
     return "\n".join(lines)
 
 
-async def _build_and_send(client, base, db, user_id, city, interests, pools, covers, now, label) -> str:
-    if city not in pools:
-        pools[city] = await weekend_pool(db, city, now)
-    items = rank_weekend(pools[city], list(interests or []), [], {})[:4]
+async def _build_and_send(client, base, user_id, city, interests, pools, covers, now, label) -> str:
+    # No DB session here (B9): the weekend pool for `city` is resolved by the caller into `pools` in a
+    # short session, so this holds NO Postgres connection across the cover fetches / poster send below.
+    items = rank_weekend(pools.get(city) or [], list(interests or []), [], {})[:4]
     if not items:
         return "empty"
 
@@ -105,24 +105,33 @@ async def _send_welcome_nudges_impl() -> int:
     sat, sun, _, _ = weekend_window(now)
     label = weekend_label(sat, sun)
     sent = 0
+    # B9: read the due set in a SHORT session and release the connection; per user, resolve the weekend
+    # pool in its own short session, then do the network fan-out (covers + poster send + PACE sleep) with
+    # NO connection held, then stamp in another short session. On NullPool a held session pins a scarce
+    # worker connection for the whole paced loop otherwise.
     async with WorkerAsyncSessionLocal() as db:
         due = await _due(db)
-        if not due:
-            return 0
-        pools: dict[str, list] = {}
-        covers: dict[str, bytes | None] = {}
-        async with httpx.AsyncClient(timeout=15) as client:
-            for user_id, city, interests in due:
-                result = await _build_and_send(client, base, db, user_id, city, interests, pools, covers, now, label)
-                if result == "empty":
+    if not due:
+        return 0
+    pools: dict[str, list] = {}
+    covers: dict[str, bytes | None] = {}
+    async with httpx.AsyncClient(timeout=15) as client:
+        for user_id, city, interests in due:
+            if city not in pools:  # DB read phase — short session, released before the network send
+                async with WorkerAsyncSessionLocal() as db:
+                    pools[city] = await weekend_pool(db, city, now)
+            result = await _build_and_send(client, base, user_id, city, interests, pools, covers, now, label)
+            if result == "empty":
+                async with WorkerAsyncSessionLocal() as db:
                     await _stamp(db, user_id)  # нет событий в городе — штампуем, чтобы не зацикливаться
-                    continue
-                if result == "retry":
-                    continue  # transient → не штампуем, следующий проход повторит
+                continue
+            if result == "retry":
+                continue  # transient → не штампуем, следующий проход повторит
+            async with WorkerAsyncSessionLocal() as db:
                 await _stamp(db, user_id)  # доставлено ИЛИ перманентно-недоставимо → ровно один раз
-                if result == "ok":
-                    sent += 1
-                await asyncio.sleep(PACE)
+            if result == "ok":
+                sent += 1
+            await asyncio.sleep(PACE)
     if sent:
         log.info("sent %s welcome nudges", sent)
     return sent
@@ -142,6 +151,7 @@ async def send_welcome_nudge_test(only_user_id: int) -> int:
             "SELECT city_slug, interests FROM ref.users WHERE telegram_user_id = :u"), {"u": only_user_id})).first()
         city = (row[0] if row else None) or "moscow"
         interests = list((row[1] if row else None) or [])
-        async with httpx.AsyncClient(timeout=15) as client:
-            result = await _build_and_send(client, base, db, int(only_user_id), city, interests, {}, {}, now, label)
+        pools = {city: await weekend_pool(db, city, now)}  # resolve pool while the session is open (B9)
+    async with httpx.AsyncClient(timeout=15) as client:
+        result = await _build_and_send(client, base, int(only_user_id), city, interests, pools, {}, now, label)
     return 1 if result == "ok" else 0

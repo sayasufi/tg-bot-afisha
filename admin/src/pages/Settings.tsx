@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Badge } from "../components/ui";
 import { apiDelete, apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 type Setting = {
@@ -19,13 +20,14 @@ export function Settings() {
   const { data, loading, error, reload } = useApi<{ items: Setting[] }>("/settings", 30000);
   const items = data?.items ?? [];
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const mutate = useMutate();
 
   const groups = [...new Set(items.map((s) => s.group))];
 
   const setVal = async (s: Setting, value: any) => {
     setBusy((b) => ({ ...b, [s.key]: true }));
     try {
-      await apiPost(`/settings/${s.key}`, { value });
+      await mutate(() => apiPost(`/settings/${s.key}`, { value }));
       reload();
     } finally {
       setTimeout(() => setBusy((b) => ({ ...b, [s.key]: false })), 300);
@@ -35,7 +37,7 @@ export function Settings() {
   const reset = async (s: Setting) => {
     setBusy((b) => ({ ...b, [s.key]: true }));
     try {
-      await apiDelete(`/settings/${s.key}`);
+      await mutate(() => apiDelete(`/settings/${s.key}`));
       reload();
     } finally {
       setTimeout(() => setBusy((b) => ({ ...b, [s.key]: false })), 300);

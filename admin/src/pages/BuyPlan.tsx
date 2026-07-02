@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { Badge, StatCard, fmtNum } from "../components/ui";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 const V_KIND: Record<string, "ok" | "warn" | "down" | "off"> = { "брать": "ok", "осторожно": "warn", "мимо": "down" };
@@ -9,6 +10,7 @@ const V_KIND: Record<string, "ok" | "warn" | "down" | "off"> = { "брать": "
 export function BuyPlan() {
   const [city, setCity] = useState("");
   const { data, loading, error, reload } = useApi<any>(`/buy-plan${city ? `?city=${encodeURIComponent(city)}` : ""}`, 30000);
+  const buys = useApi<any>("/buys", 30000);
   const items: any[] = data?.items ?? [];
   const botUser = data?.bot_username || "okrestmap_bot";
   const [budget, setBudget] = useState("50000");
@@ -16,6 +18,18 @@ export function BuyPlan() {
   const [diversify, setDiversify] = useState(false);
   const [added, setAdded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState("");
+  const mutate = useMutate();
+
+  // Уже заведённые (не отменённые) закупки по каналу — по данным сервера, а не только
+  // по локальному added: иначе повторный клик/перезаход задваивает бюджет по каналу.
+  const bought = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of (buys.data?.items ?? [])) {
+      if (b.status !== "cancelled" && b.channel_username) s.add(String(b.channel_username).toLowerCase());
+    }
+    return s;
+  }, [buys.data]);
+  const isBought = (u: string) => bought.has(String(u).toLowerCase()) || !!added[u];
 
   const filtered = useMemo(() => items.filter((i) => kind === "all" || i.relevance === "афиша"), [items, kind]);
   const cities = useMemo(() => Array.from(new Set(items.map((i) => i.city).filter(Boolean))).sort(), [items]);
@@ -39,10 +53,18 @@ export function BuyPlan() {
   const adLink = (u: string) => `https://t.me/${botUser}?startapp=src_${u}`;
   const copy = (u: string) => { try { navigator.clipboard?.writeText(adLink(u)); } catch { /* noop */ } };
   const addBuy = async (it: any) => {
+    if (isBought(it.username)) return; // защита от задвоения бюджета по каналу
     setBusy(it.username);
     try {
-      await apiPost("/buys", { channel_username: it.username, price: it.price, note: "из плана закупки" });
-      setAdded((a) => ({ ...a, [it.username]: true }));
+      // src_tag = username явно (детерминированная метка = 1 закупка на канал, не плодим дубли)
+      const ok = await mutate(
+        () => apiPost("/buys", { channel_username: it.username, src_tag: it.username, price: it.price, note: "из плана закупки" }),
+        "закупка добавлена",
+      );
+      if (ok !== undefined) {
+        setAdded((a) => ({ ...a, [it.username]: true }));
+        buys.reload();
+      }
     } finally { setBusy(""); }
   };
   const exportPlan = () => {
@@ -124,8 +146,9 @@ export function BuyPlan() {
                     <td className="num" style={it.acquired ? { color: "var(--acid)", fontWeight: 600 } : undefined}>{it.acquired || 0}</td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "right" }}>
                       <button className="iconbtn" onClick={() => copy(it.username)} title={adLink(it.username)}>📋</button>
-                      <button className="iconbtn" disabled={busy === it.username || added[it.username]} onClick={() => addBuy(it)} style={{ marginLeft: 4 }}>
-                        {added[it.username] ? "✓ в закупках" : busy === it.username ? "…" : "+ закупка"}
+                      <button className="iconbtn" disabled={busy === it.username || isBought(it.username)} onClick={() => addBuy(it)} style={{ marginLeft: 4 }}
+                        title={isBought(it.username) ? "уже в закупках — не задваиваем" : undefined}>
+                        {isBought(it.username) ? "✓ в закупках" : busy === it.username ? "…" : "+ закупка"}
                       </button>
                     </td>
                   </tr>

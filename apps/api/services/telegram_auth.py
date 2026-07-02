@@ -45,4 +45,7 @@ def validate_init_data(init_data: str) -> dict:
     if auth_date <= 0 or time.time() - auth_date > _INIT_DATA_MAX_AGE_SECONDS:
         raise HTTPException(status_code=401, detail="init data expired")
 
-    return json.loads(data.get("user") or "{}")
+    try:
+        return json.loads(data.get("user") or "{}")
+    except (ValueError, TypeError):  # malformed user JSON → treat as invalid, not a 500
+        raise HTTPException(status_code=401, detail="invalid init data user")

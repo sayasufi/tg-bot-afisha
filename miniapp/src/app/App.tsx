@@ -291,19 +291,22 @@ export function App() {
     // which keeps thousands of markers smooth without capping the data.
     if (filters.q) params.set("q", filters.q);
     for (const c of filters.categories) params.append("categories", c);
-    // Span the WHOLE Moscow day. The dates are Moscow-anchored (see datePresets), so
-    // pin the bounds to Moscow's UTC+3 — NOT the client's tz. `new Date("…T00:00:00")`
-    // alone parses in the device timezone, which shifts the window by hours for any
-    // non-MSK client and drops/adds a band of events. (All current cities are UTC+3,
-    // no DST since 2014; generalise per-city tz when a non-UTC+3 city goes live.)
-    if (filters.dateFrom) params.set("date_from", new Date(`${filters.dateFrom}T00:00:00+03:00`).toISOString());
-    if (filters.dateTo) params.set("date_to", new Date(`${filters.dateTo}T23:59:59+03:00`).toISOString());
+    // Span the WHOLE local day in the ACTIVE CITY's timezone. The date-strip / presets are
+    // wall-clock yyyy-mm-dd; pin the bounds to the current city's fixed UTC offset (Novosibirsk
+    // +7 ≠ Moscow +3) — NOT the client's tz. `new Date("…T00:00:00")` alone parses in the
+    // device timezone, which shifts the window by hours for any non-local client and drops/adds
+    // a band of events. Russian cities are fixed offsets (no DST since 2014), so a static
+    // "±HH:00" suffix is exact; utc_offset comes from the cities registry (default Moscow +3).
+    const tzOff = currentCity?.utc_offset ?? 3;
+    const tzSuffix = `${tzOff < 0 ? "-" : "+"}${String(Math.abs(tzOff)).padStart(2, "0")}:00`;
+    if (filters.dateFrom) params.set("date_from", new Date(`${filters.dateFrom}T00:00:00${tzSuffix}`).toISOString());
+    if (filters.dateTo) params.set("date_to", new Date(`${filters.dateTo}T23:59:59${tzSuffix}`).toISOString());
     if (filters.priceMax) params.set("price_max", filters.priceMax);
     // Scope the map to the current city (multi-city). Absent until /v1/cities resolves;
     // the server treats "no city" as all-active, so the first frame is still correct.
     if (currentCity) params.set("city", currentCity.slug);
     return params;
-  }, [filters, currentCity?.slug]);
+  }, [filters, currentCity?.slug, currentCity?.utc_offset]);
   // Stable string of the server-affecting params — the map/cluster fetches key on this so a
   // client-only filter change (radius, "Сейчас") rebuilds `query` but never refetches.
   const queryKey = query.toString();
@@ -408,15 +411,18 @@ export function App() {
   const shownTotal = (filters.radiusKm && userPos) || filters.goNow ? shownItems.length : total;
   // Slim items enriched with hydrated full fields — for the sheet's «похожие» strip (the map pins +
   // clustering keep the lean index set; only consumers that show titles/thumbs need the rich version).
+  // Gated on `selected`: this is ONLY consumed by the open EventSheet (SimilarEvents). Without the gate
+  // the spread ran on every pan (each pan re-hydrates → new `hydrated` identity), rebuilding thousands
+  // of objects with no sheet open to use them. No sheet → hand back the lean set untouched.
   const displayItems = useMemo(
     () =>
-      hydrated.size
+      selected && hydrated.size
         ? shownItems.map((it) => {
             const h = hydrated.get(it.event_id);
             return h ? { ...it, ...h } : it;
           })
         : shownItems,
-    [shownItems, hydrated],
+    [selected, shownItems, hydrated],
   );
 
   // «Сейчас» list header count: the can-go-now events (the same map pins, via goNowIds) that
@@ -444,12 +450,28 @@ export function App() {
     setZoom(z);
   }, []);
 
-  // Favourite categories drive the "Для тебя" boost in recommendations.
-  const favCategories = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const it of items) if (fav.ids.has(it.event_id)) counts.set(it.category, (counts.get(it.category) || 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
-  }, [items, fav.ids]);
+  // Favourite categories drive the "Для тебя" boost in recommendations. Derived from the
+  // favourites fetched BY ID (POST /events/by-ids — the same independent source FavoritesPanel
+  // uses), NOT by intersecting `fav.ids` with the transient, filtered `items` map set: a saved
+  // event outside the current map scope/filters isn't in `items`, so intersecting there silently
+  // dropped whole tastes (e.g. after filtering the map to one category, «Для тебя» collapsed to it).
+  const [favCategories, setFavCategories] = useState<string[]>([]);
+  const favIdsKey = useMemo(() => [...fav.ids].sort().join(","), [fav.ids]);
+  useEffect(() => {
+    const ids = favIdsKey ? favIdsKey.split(",") : [];
+    if (!ids.length) {
+      setFavCategories((prev) => (prev.length ? [] : prev));
+      return;
+    }
+    const ctrl = new AbortController();
+    void fetchEventsByIds(ids, null, ctrl.signal).then((favs) => {
+      if (!favs.length) return; // a failed/empty fetch shouldn't wipe an existing ranking
+      const counts = new Map<string, number>();
+      for (const it of favs) if (it.category) counts.set(it.category, (counts.get(it.category) || 0) + 1);
+      setFavCategories([...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k));
+    });
+    return () => ctrl.abort();
+  }, [favIdsKey]);
 
   // The affinity that feeds «Для тебя»: favourite-derived categories + the onboarding
   // picks, de-duped. The picks warm a brand-new account; favourites refine it over time.
@@ -676,13 +698,21 @@ export function App() {
     setFiltersOpen(true);
   }, []);
 
-  // Telegram back button closes whatever is on top (search → sheet → peek → filters →
-  // drawer → panel).
+  // Telegram back button closes whatever is on top (onboarding → search → sheet → peek → filters →
+  // drawer → panel). MUST stay shown during onboarding: otherwise the hardware/Telegram back gesture
+  // isn't intercepted and closes the WHOLE mini app instead of just dismissing the first-run guide.
   useEffect(() => {
     const back = getWebApp()?.BackButton;
     if (!back) return;
-    const stacked = selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || collection != null || friendInvite != null || friendProfile != null || view !== "map";
-    const pop = () => closeTop();
+    const stacked = !onboarded || selected || venueId != null || peek || filtersOpen || drawerOpen || searchOpen || listOpen || collection != null || friendInvite != null || friendProfile != null || view !== "map";
+    const pop = () => {
+      // The onboarding overlay sits above everything → back dismisses it first (mirrors Escape).
+      if (!onboarded) {
+        dismissOnboarding();
+        return;
+      }
+      closeTop();
+    };
     if (stacked) {
       back.show();
       back.onClick(pop);
@@ -690,7 +720,7 @@ export function App() {
       back.hide();
     }
     return () => back.offClick(pop);
-  }, [selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, collection, friendInvite, friendProfile, view, closeTop]);
+  }, [onboarded, dismissOnboarding, selected, venueId, peek, filtersOpen, drawerOpen, searchOpen, listOpen, collection, friendInvite, friendProfile, view, closeTop]);
 
   // Esc behaves like tapping the visible × — closes the first-run guide, then the
   // top overlay.

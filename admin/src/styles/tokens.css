@@ -381,6 +381,40 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--cinnabar);
 }
 
+/* ---------- Session-expiry banner ---------- */
+.expbanner {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--cinnabar);
+  border: 1px solid var(--cinnabar);
+  background: color-mix(in srgb, var(--cinnabar) 8%, transparent);
+}
+
+/* ---------- Toasts ---------- */
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+}
+.toast {
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--vitrine);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.toast--err { border-color: var(--cinnabar); color: var(--cinnabar); }
+.toast--ok { border-color: var(--acid); }
+
 /* ---------- States ---------- */
 .state { padding: 40px; text-align: center; color: var(--ink-faint); }
 .state--err { color: var(--cinnabar); }

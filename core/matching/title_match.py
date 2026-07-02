@@ -52,6 +52,7 @@ _CYR2LAT = str.maketrans({
 _LAT_TOKEN = re.compile(r"[0-9a-z]+")
 _CYR_TOKEN = re.compile(r"[0-9a-zа-я]+")
 _NUM = re.compile(r"\d+")
+_AGE_SUB = re.compile(r"\d+\s*\+")  # age ratings ("18+", "6 +") — a rating, NOT a sequence number
 # A 4-digit edition year ("Ömankö Day 2026") is an incidental marker, NOT a sequence number
 # ("Часть 2") — it must neither block a match nor count as a distinctive extra word.
 _YEAR_RE = re.compile(r"(?:19|20)\d\d")
@@ -165,6 +166,12 @@ def same_slot_title(a: str, b: str) -> bool:
     Different numbers/parts fall out naturally — they aren't a token-subset."""
     ka, kb = translit_key(a), translit_key(b)
     if not ka or not kb:
+        return False
+    # A4: a sequel/part number IS distinctive even inside one slot — a multiplex plays "Дюна" and
+    # "Дюна 2" at the same minute in different halls (one venue_id), and _cyr_tokens drops the bare
+    # digit so a subset match would wrongly fuse them, dropping a film off the map. Age ratings ("18+")
+    # and edition years are NOT sequence markers → strip the age suffix and let _numbers drop years.
+    if _numbers(_AGE_SUB.sub("", a)) != _numbers(_AGE_SUB.sub("", b)):
         return False
     if ka == kb:
         return True

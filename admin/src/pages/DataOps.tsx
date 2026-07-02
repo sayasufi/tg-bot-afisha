@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Badge, StatCard, fmtNum } from "../components/ui";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 const PIPELINE = /(normalize|enrich-candidates|dedup-candidates|reprocess|reindex|resolve-afisha)/;
@@ -10,11 +11,12 @@ export function DataOps() {
   const pipe = useApi<any>("/ops/pipeline", 30000);
   const flows = useApi<any>("/flows", 20000);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const mutate = useMutate();
 
   const list = (flows.data?.flows ?? []).filter((f: any) => PIPELINE.test(f.name));
   const run = async (f: any) => {
     setBusy((b) => ({ ...b, [f.id]: true }));
-    try { await apiPost("/ops/run", { deployment_id: f.id, name: f.name }); }
+    try { await mutate(() => apiPost("/ops/run", { deployment_id: f.id, name: f.name }), "процесс запущен"); }
     finally { setTimeout(() => { setBusy((b) => ({ ...b, [f.id]: false })); flows.reload(); }, 1500); }
   };
 

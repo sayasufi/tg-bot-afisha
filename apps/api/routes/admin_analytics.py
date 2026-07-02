@@ -20,6 +20,7 @@ router = APIRouter(prefix="/v1/admin", tags=["admin"])
 _KINDS = ("click", "route", "share")
 _MSK = timezone(timedelta(hours=3))
 _PRESET_DAYS = {"7d": 7, "14d": 14, "30d": 30, "90d": 90}
+_MAX_WINDOW = timedelta(days=400)  # кламп custom-диапазона: иначе тысячи бакетов + гигантский Redis-пайплайн
 
 
 def _isoweek(dt: datetime) -> str:
@@ -42,7 +43,11 @@ def _bounds(rng: str, frm: str | None, to: str | None, now: datetime) -> tuple[d
                 s = s.replace(tzinfo=timezone.utc)
             if e.tzinfo is None:
                 e = e.replace(tzinfo=timezone.utc)
-            return s.astimezone(timezone.utc), e.astimezone(timezone.utc)
+            s, e = s.astimezone(timezone.utc), e.astimezone(timezone.utc)
+            # Кламп окна: держим хвост (to), сдвигаем начало не дальше _MAX_WINDOW назад.
+            if e - s > _MAX_WINDOW:
+                s = e - _MAX_WINDOW
+            return s, e
         except Exception:
             pass
     days = _PRESET_DAYS.get(rng, 14)

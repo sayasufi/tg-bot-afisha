@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { SortTh, useSort } from "../components/sortable";
 import { Badge, fmtNum } from "../components/ui";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 type Ch = {
@@ -60,11 +61,12 @@ export function Channels() {
 
   const { sorted, sort, onSort } = useSort(filtered, SORT_GET, { key: "subs", dir: "desc" });
   const [busy, setBusy] = useState<Record<number, boolean>>({});
+  const mutate = useMutate();
 
   const toggle = async (c: Ch) => {
     setBusy((b) => ({ ...b, [c.channel_id]: true }));
     try {
-      await apiPost(`/venue-channels/${c.channel_id}/toggle`, { active: !c.is_active });
+      await mutate(() => apiPost(`/venue-channels/${c.channel_id}/toggle`, { active: !c.is_active }));
       reload();
     } finally {
       setBusy((b) => ({ ...b, [c.channel_id]: false }));
@@ -77,7 +79,7 @@ export function Channels() {
     const va = window.prompt("Адрес площадки:", c.venue_address ?? "") ?? "";
     setBusy((b) => ({ ...b, [c.channel_id]: true }));
     try {
-      await apiPost(`/venue-channels/${c.channel_id}/bind`, { venue_name: vn, venue_address: va });
+      await mutate(() => apiPost(`/venue-channels/${c.channel_id}/bind`, { venue_name: vn, venue_address: va }));
       reload();
     } finally {
       setBusy((b) => ({ ...b, [c.channel_id]: false }));
@@ -91,9 +93,11 @@ export function Channels() {
     if (!newU.trim() || !newCity) return;
     setAdding(true);
     try {
-      await apiPost("/venue-channels", { username: newU.trim(), city_id: Number(newCity) });
-      setNewU("");
-      setNewCity("");
+      const ok = await mutate(() => apiPost("/venue-channels", { username: newU.trim(), city_id: Number(newCity) }));
+      if (ok !== undefined) {
+        setNewU("");
+        setNewCity("");
+      }
       reload();
     } finally {
       setAdding(false);

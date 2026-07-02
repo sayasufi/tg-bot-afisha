@@ -5,6 +5,7 @@ disabled), every mutation written to ref.admin_audit (best-effort, no PII in par
 EVENT ingests it into the pipeline via events.raw_events (see submissions.ingest_event_submission).
 """
 import logging
+import re
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -27,6 +28,8 @@ from core.db.session import get_async_db
 router = APIRouter(prefix="/v1/admin/moderation", tags=["admin"])
 _log = logging.getLogger(__name__)
 _PAGE = 50
+# submission_id — UUID-колонка: гейтим до запроса, иначе кривой id → asyncpg InvalidTextRepresentation → 500.
+_UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 # Fixed rejection vocabulary — the honest, short reason the submitter gets (no free text).
 _REJECT_REASONS = {
@@ -80,6 +83,8 @@ async def approve(
     actor: str = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
 ):
+    if not _UUID_RE.match(submission_id):
+        raise HTTPException(status_code=400, detail="bad submission id")
     sub = await get_submission(db, submission_id)
     if not sub:
         raise HTTPException(status_code=404, detail="not found")
@@ -123,6 +128,8 @@ async def reject(
     actor: str = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
 ):
+    if not _UUID_RE.match(submission_id):
+        raise HTTPException(status_code=400, detail="bad submission id")
     sub = await get_submission(db, submission_id)
     if not sub:
         raise HTTPException(status_code=404, detail="not found")

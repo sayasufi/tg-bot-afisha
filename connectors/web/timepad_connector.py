@@ -168,7 +168,8 @@ class TimepadConnector:
             loc = rep.get("location") or {}
             org_name = self._clean((rep.get("organization") or {}).get("name"))
             poster = rep.get("poster_image")
-            age = str(rep.get("age_limit") or "").strip()
+            age_raw = rep.get("age_limit")
+            age = (str(age_raw) if age_raw is not None else "").strip()
             payload = {
                 "name": self._clean(rep.get("name")),
                 "description_short": self._clean(rep.get("description_short")),

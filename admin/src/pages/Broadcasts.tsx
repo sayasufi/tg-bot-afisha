@@ -39,7 +39,7 @@ export function Broadcasts() {
   const [f, setF] = useState<Form>(EMPTY);
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const [dry, setDry] = useState<{ count: number; by_city: Record<string, number> } | null>(null);
+  const [dry, setDry] = useState<{ count: number; by_city: Record<string, number>; sig: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [legacyBusy, setLegacyBusy] = useState<string | null>(null);
@@ -50,14 +50,23 @@ export function Broadcasts() {
     if (f.aud_kind === "active_since") a.since_days = f.since_days;
     return a;
   }, [f.aud_kind, f.cities, f.since_days]);
+  // Подпись текущей аудитории — сверяем с тем, для чего посчитан dry-run.
+  const audSig = useMemo(() => JSON.stringify(audience), [audience]);
 
   useEffect(() => {
     if (!open) return;
+    // Аудитория сменилась — старый счёт устарел: гасим его сразу, чтобы нельзя было
+    // отправить на протухшем количестве, пока не пересчитается.
+    setDry((d) => (d && d.sig === audSig ? d : null));
     const t = setTimeout(async () => {
-      try { setDry(await apiPost("/broadcast/dry-run", { audience })); } catch { setDry(null); }
+      try {
+        const r = await apiPost("/broadcast/dry-run", { audience });
+        setDry({ ...r, sig: audSig });
+      } catch { setDry(null); }
     }, 400);
     return () => clearTimeout(t);
-  }, [audience, open]);
+  }, [audSig, open]);
+  const dryFresh = !!dry && dry.sig === audSig;
 
   const update = (patch: Partial<Form>) => setF((s) => ({ ...s, ...patch }));
 
@@ -107,7 +116,7 @@ export function Broadcasts() {
   };
 
   const send = async () => {
-    if (!dry) return;
+    if (!dry || !dryFresh) { setMsg("число получателей устарело — дождись пересчёта"); return; }
     setBusy("send"); setMsg(null);
     try {
       const id = await saveDraft();
@@ -143,7 +152,8 @@ export function Broadcasts() {
   };
 
   const schedOk = f.sched === "now" || (f.sched === "at_utc" && !!f.scheduled_at) || (f.sched === "at_local" && !!f.local_date);
-  const canSend = f.test_sent && confirm && schedOk && !!f.title.trim() && !!f.body.trim();
+  // dryFresh: не даём отправить на устаревшем числе получателей (аудиторию сменили — dry ещё не пересчитан).
+  const canSend = f.test_sent && confirm && schedOk && dryFresh && !!f.title.trim() && !!f.body.trim();
   const items: any[] = campaigns.data?.items ?? [];
   const r = recips.data;
 
@@ -201,8 +211,8 @@ export function Broadcasts() {
                 </label>
               )}
               <div className="dryrun">
-                получателей: <b>{dry ? dry.count.toLocaleString("ru-RU") : "…"}</b>
-                {dry && Object.keys(dry.by_city).length > 1 && (
+                получателей: <b>{dryFresh && dry ? dry.count.toLocaleString("ru-RU") : "пересчёт…"}</b>
+                {dryFresh && dry && Object.keys(dry.by_city).length > 1 && (
                   <div className="dryrun__cities">{Object.entries(dry.by_city).map(([c, n]) => `${c}: ${n}`).join(" · ")}</div>
                 )}
               </div>
@@ -245,7 +255,7 @@ export function Broadcasts() {
               я проверил тест и подтверждаю боевую отправку
             </label>
             <button className="btn" disabled={!!busy || !canSend} onClick={send}>
-              {busy === "send" ? "…" : f.sched === "now" ? `отправить сейчас (${dry?.count ?? 0})` : "запланировать"}
+              {busy === "send" ? "…" : f.sched === "now" ? `отправить сейчас (${dryFresh && dry ? dry.count : 0})` : "запланировать"}
             </button>
             <button className="btn btn--ghost" onClick={() => setOpen(false)}>закрыть</button>
           </div>

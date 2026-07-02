@@ -9,7 +9,7 @@ from uuid import UUID
 
 import redis.asyncio as aioredis
 from geoalchemy2 import Geography, Geometry
-from sqlalchemy import Select, and_, bindparam, case, cast, func, nullslast, or_, select, text
+from sqlalchemy import Select, and_, bindparam, cast, func, nullslast, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.domain.codes import event_code, parse_event_code
@@ -104,9 +104,28 @@ async def map_cache_set(key: str, gzipped_body: bytes, etag: str) -> None:
 # It has no real location, so it must never appear on the map / in clusters / counts.
 _PLACEHOLDER_VENUE = "Unknown venue"
 
-# All current cities are UTC+3 (Europe/Moscow, no DST since 2014). Used to compute the
-# venue "open now" signal in the venues' own wall-clock time.
+# Moscow fallback offset (Europe/Moscow, no DST since 2014). Used only when a venue's
+# city can't be resolved to a CityConfig; real "open now" is computed in the venue's OWN
+# city wall-clock (see _now_for_city) so an Omsk/Krasnoyarsk venue isn't judged by MSK.
 _MSK = timezone(timedelta(hours=3))
+
+# Cache the per-offset tzinfo objects so we don't build a timezone() per row.
+_TZ_BY_OFFSET: dict[int, timezone] = {3: _MSK}
+
+
+def _now_for_city(venue_city, now_utc: datetime) -> datetime:
+    """Wall-clock `now` in the venue's own city (per-city utc_offset from the registry),
+    so the "open now" signal is judged in local time — a Krasnoyarsk (UTC+7) venue at
+    21:00 local is NOT evaluated against 17:00 Moscow. Unknown city → Moscow offset."""
+    from core.domain.cities import city_by_name
+
+    city = city_by_name(venue_city)
+    off = city.utc_offset_hours if city is not None else 3
+    tz = _TZ_BY_OFFSET.get(off)
+    if tz is None:
+        tz = timezone(timedelta(hours=off))
+        _TZ_BY_OFFSET[off] = tz
+    return now_utc.astimezone(tz)
 
 # Search-as-you-type helpers --------------------------------------------------
 # A query that looks like a public event code ("MSK-04PN", "msk04pn", "04PN"): 2-4
@@ -172,11 +191,11 @@ def _hm_to_min(s) -> int:
 
 
 def _venue_open_now(hours, now_msk: datetime) -> bool | None:
-    """Is the venue open at Moscow `now`? true / false / None (unknown). Server-side port
-    of the frontend venueOpenNow (miniapp/src/lib/datetime.ts) so the map payload can ship
-    a 1-byte tri-state per pin instead of the full weekly schedule (~18% of the gzipped
-    response), AND so it's correct for non-MSK clients (the JS port read the DEVICE clock
-    against Moscow hours). Keep in sync with datetime.ts venueOpenNow/isTerritoryHours."""
+    """Is the venue open at `now_msk` (the venue's OWN city wall-clock — see _now_for_city)?
+    true / false / None (unknown). Server-side port of the frontend venueOpenNow
+    (miniapp/src/lib/datetime.ts) so the map payload can ship a 1-byte tri-state per pin
+    instead of the full weekly schedule (~18% of the gzipped response), AND so it's correct
+    for non-MSK clients/cities. Keep in sync with datetime.ts venueOpenNow/isTerritoryHours."""
     if not isinstance(hours, dict):
         return None
     week = hours.get("week")
@@ -239,12 +258,11 @@ class EventQueryService:
         if price_max is not None:
             filters.append(or_(EventOccurrence.price_max.is_(None), EventOccurrence.price_max <= price_max))
         if q:
-            filters.append(
-                or_(
-                    Event.canonical_title.ilike(f"%{q}%"),
-                    Event.canonical_description.ilike(f"%{q}%"),
-                )
-            )
+            # Title ONLY (has the trigram GIN, 0001/0012) — the old canonical_description
+            # ILIKE was a seq-scan on a big Text column. Escape LIKE metacharacters so a
+            # literal % or _ in the query matches itself instead of acting as a wildcard.
+            q_like = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+            filters.append(Event.canonical_title.ilike(f"%{q_like}%", escape="\\"))
         if filters:
             stmt = stmt.where(and_(*filters))
         return stmt
@@ -313,7 +331,7 @@ class EventQueryService:
             # join on the most common (city-overview) cold path. With no bbox the clusters
             # already span the whole region, so the sum equals the pinnable count.
             total = sum(int(c.get("count", 0)) for c in clusters)
-            counts = await self._category_counts(date_from, date_to, categories, price_min, price_max, q, city)
+            counts = await self._category_counts(date_from, date_to, categories, price_min, price_max, q, city, bbox)
             return {"clusters": clusters, "items": [], "total": total, "category_counts": counts}
         items = await self._detail(bbox, date_from, date_to, categories, price_min, price_max, q, limit, offset, city, fields)
         # "Показать N" = filter-wide count of map-able events. When the whole city is
@@ -327,11 +345,11 @@ class EventQueryService:
                 if c:
                     counts[c] = counts.get(c, 0) + 1
         else:
-            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q, city)
-            counts = await self._category_counts(date_from, date_to, categories, price_min, price_max, q, city)
+            total = await self._count_pinnable(date_from, date_to, categories, price_min, price_max, q, city, bbox)
+            counts = await self._category_counts(date_from, date_to, categories, price_min, price_max, q, city, bbox)
         return {"clusters": [], "items": items, "total": total, "category_counts": counts}
 
-    async def _count_pinnable(self, date_from, date_to, categories, price_min, price_max, q, city=None) -> int:
+    async def _count_pinnable(self, date_from, date_to, categories, price_min, price_max, q, city=None, bbox=None) -> int:
         stmt = (
             select(func.count(func.distinct(Event.event_id)))
             .select_from(Event)
@@ -343,9 +361,13 @@ class EventQueryService:
             .where(self._concrete_time_clause())
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
+        # Scope the count to the viewport when a bbox is given, so "Показать N" matches the
+        # pins actually returned (items are bbox-filtered) instead of the whole city.
+        if bbox is not None:
+            stmt = stmt.where(self._bbox_clause(bbox))
         return int(await self.db.scalar(stmt) or 0)
 
-    async def _category_counts(self, date_from, date_to, categories, price_min, price_max, q, city=None) -> dict[str, int]:
+    async def _category_counts(self, date_from, date_to, categories, price_min, price_max, q, city=None, bbox=None) -> dict[str, int]:
         """Filter-wide pinnable-event count per category — one indexed GROUP BY with the SAME WHERE as
         _count_pinnable. Lets the ticker show per-category totals without the client iterating the whole set
         (and without it even needing the whole set once the map fetch is the slim `fields=index` payload)."""
@@ -361,6 +383,10 @@ class EventQueryService:
             .group_by(Event.category)
         )
         stmt = self._apply_filters(stmt, date_from, date_to, categories, price_min, price_max, q)
+        # Same viewport scoping as _count_pinnable so the ticker per-category totals match
+        # the pins in the frame, not the whole city.
+        if bbox is not None:
+            stmt = stmt.where(self._bbox_clause(bbox))
         rows = (await self.db.execute(stmt)).all()
         return {cat: int(n) for cat, n in rows if cat}
 
@@ -487,7 +513,9 @@ class EventQueryService:
         # page pass an explicit limit. (At city scale this is tens of KB gzipped; a
         # viewport-bbox fetch is the lever if the dataset ever grows past that.)
         rows = (await self.db.execute(stmt.limit(limit).offset(offset))).all()
-        now_msk = datetime.now(_MSK)
+        # "open now" is judged in each venue's OWN city wall-clock (a mixed set can span
+        # UTC+3..+7), so derive local now per row from its venue_city — not one MSK clock.
+        now_utc = datetime.now(timezone.utc)
         if fields == "index":
             # SLIM "index" payload — only what every-event client features need (clustering, the «Рядом»
             # radius filter, «можно пойти сейчас», the ticker category counts). Drops title/venue/code/image
@@ -499,7 +527,7 @@ class EventQueryService:
                     "date_start": r.date_start,
                     "date_end": r.date_end,
                     "price_min": float(r.price_min) if r.price_min is not None else None,
-                    "open_now": _venue_open_now(r.venue_hours, now_msk),
+                    "open_now": _venue_open_now(r.venue_hours, _now_for_city(r.venue_city, now_utc)),
                     "venue_id": r.venue_id,  # small int — kept so the cluster peek can open the shared venue
                     "lat": float(r.lat) if r.lat is not None else None,
                     "lon": float(r.lon) if r.lon is not None else None,
@@ -523,7 +551,7 @@ class EventQueryService:
                     # Compact "open now" tri-state instead of the full weekly schedule
                     # (which was ~18% of the gzipped payload). Full hours stay on the
                     # detail endpoint. The client uses this for the "идёт сейчас" highlight.
-                    "open_now": _venue_open_now(r.venue_hours, now_msk),
+                    "open_now": _venue_open_now(r.venue_hours, _now_for_city(r.venue_city, now_utc)),
                     "lat": float(r.lat) if r.lat is not None else None,
                     "lon": float(r.lon) if r.lon is not None else None,
                     "primary_image_url": r.cached_image_url or r.primary_image_url,
@@ -589,22 +617,20 @@ class EventQueryService:
         # sort key keep a fixed relative order across pages (OFFSET pagination otherwise
         # skips/duplicates rows when ties reshuffle between page 0 and page 1).
         tie = inner.c.event_id.asc()
+        # The default map/list ordering (soonest actionable first). popularity ALSO orders
+        # the DB by this deterministic key — it's the stable OFFSET-pagination backbone —
+        # and then re-ranks the fetched page in memory by rec:views (below), so pages never
+        # overlap while the popular events float to the top of each loaded page.
+        date_order = ((inner.c.date_start < func.now()).asc(), inner.c.date_start.asc(), tie)
         if sort == "distance" and has_pt:
             rows_q = rows_q.order_by(nullslast(inner.c.dist_m.asc()), tie)
         elif sort == "popularity":
-            # popularity_score is unpopulated; the real signal is the rec:views counter
-            # we collect ourselves. Rank the viewed events by their count, rest by date.
-            rank = await self._views_rank(inner.c.event_id)
-            rows_q = (
-                rows_q.order_by(rank.desc(), inner.c.date_start.asc(), tie)
-                if rank is not None
-                else rows_q.order_by(inner.c.date_start.asc(), tie)
-            )
+            rows_q = rows_q.order_by(*date_order)
         elif sort == "price":
             rows_q = rows_q.order_by(nullslast(inner.c.price_min.asc()), inner.c.date_start.asc(), tie)
         else:  # "date" (default) — soonest UPCOMING first, then ongoing/past (so timed
             # events with a real start time surface above long-running exhibitions)
-            rows_q = rows_q.order_by((inner.c.date_start < func.now()).asc(), inner.c.date_start.asc(), tie)
+            rows_q = rows_q.order_by(*date_order)
         rows = (await self.db.execute(rows_q.limit(limit).offset(offset))).all()
         if rows:
             total = int(rows[0]._mapping["total_count"])
@@ -613,12 +639,21 @@ class EventQueryService:
             # window count rode on the rows, so with none we fall back to a plain COUNT to keep the
             # reported total honest rather than a misleading 0.
             total = int(await self.db.scalar(select(func.count()).select_from(inner)) or 0)
-        now_msk = datetime.now(_MSK)
-        return {"items": [self._list_item(r, now_msk) for r in rows], "total": total}
+        if sort == "popularity":
+            # Rank the PAGE in memory (like recommend's scoring pool) instead of a giant SQL
+            # CASE with a WHEN per viewed event. popularity_score is unpopulated; the real
+            # signal is the rec:views (+intent) counter we collect. counts is HGETALL-cached
+            # in-process (_views_counts). Stable sort — date order breaks count ties.
+            counts = await self._views_counts()
+            if counts:
+                rows = sorted(rows, key=lambda r: counts.get(r.event_id, 0), reverse=True)
+        now_utc = datetime.now(timezone.utc)
+        return {"items": [self._list_item(r, now_utc) for r in rows], "total": total}
 
     @staticmethod
-    def _list_item(r, now_msk: datetime) -> dict:
-        """A list/by-ids row → the rich item shape the Mini App renders (cards + posters)."""
+    def _list_item(r, now_utc: datetime) -> dict:
+        """A list/by-ids row → the rich item shape the Mini App renders (cards + posters).
+        `open_now` is judged in the venue's OWN city wall-clock (per-row local now)."""
         return {
             "event_id": r.event_id,
             "code": event_code(r.display_no, r.venue_city),
@@ -628,7 +663,7 @@ class EventQueryService:
             "date_end": r.date_end,
             "price_min": float(r.price_min) if r.price_min is not None else None,
             "venue": r.venue_name,
-            "open_now": _venue_open_now(r.venue_hours, now_msk),
+            "open_now": _venue_open_now(r.venue_hours, _now_for_city(r.venue_city, now_utc)),
             "lat": float(r.lat) if r.lat is not None else None,
             "lon": float(r.lon) if r.lon is not None else None,
             "primary_image_url": r.cached_image_url or r.primary_image_url,
@@ -679,8 +714,8 @@ class EventQueryService:
                 (inner.c.date_start < func.now()).asc(), inner.c.date_start.asc(), inner.c.event_id.asc()
             )
         )).all()
-        now_msk = datetime.now(_MSK)
-        return {"items": [self._list_item(r, now_msk) for r in rows]}
+        now_utc = datetime.now(timezone.utc)
+        return {"items": [self._list_item(r, now_utc) for r in rows]}
 
     async def _views_counts(self) -> dict:
         """Effective popularity per event = rec:views (an open) BLENDED with intent:event
@@ -713,14 +748,6 @@ class EventQueryService:
                 pass
         _views_cache = (now + _VIEWS_TTL, data)
         return data
-
-    async def _views_rank(self, id_col):
-        """A CASE expr ranking events by their rec:views count (unviewed → 0), or None
-        when there's no view data — backs the 'по популярности' sort."""
-        counts = await self._views_counts()
-        if not counts:
-            return None
-        return case(*[(id_col == eid, n) for eid, n in counts.items()], else_=0)
 
     def _event_head(self, head, city, occurrences):
         # `head` is either a query Row (labeled cols) or an Event ORM object — both
@@ -845,8 +872,8 @@ class EventQueryService:
             )
         )
         rows = (await self.db.execute(stmt)).all()
-        now_msk = datetime.now(_MSK)
-        open_now = _venue_open_now(vrow.hours_json, now_msk)
+        # Judge "open now" in THIS venue's own city wall-clock (per-city utc_offset), not MSK.
+        open_now = _venue_open_now(vrow.hours_json, _now_for_city(vrow.city, datetime.now(timezone.utc)))
         lat = float(vrow.lat) if vrow.lat is not None else None
         lon = float(vrow.lon) if vrow.lon is not None else None
         items = [
@@ -897,51 +924,64 @@ class EventQueryService:
         # Cast to geography so ST_DWithin/ST_Distance use meters, not degrees.
         point = cast(func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326), Geography(geometry_type="POINT", srid=4326))
         # Distance + coords computed in the main query (was an N+1: 2-3 extra queries/row).
+        # Project the EXACT scalars the result dict reads — not full Event/EventOccurrence
+        # ORM entities — so the whole-radius (up to 50km) candidate set never hydrates.
         dist_col = func.ST_Distance(Venue.geom, point).label("distance_m")
         lat_col = func.ST_Y(cast(Venue.geom, Geometry)).label("lat")
         lon_col = func.ST_X(cast(Venue.geom, Geometry)).label("lon")
-        stmt = (
-            select(Event, EventOccurrence, Venue.name.label("venue_name"), dist_col, lat_col, lon_col)
+        inner = (
+            select(
+                Event.event_id.label("event_id"),
+                Event.canonical_title.label("title"),
+                Event.category.label("category"),
+                EventOccurrence.date_start.label("date_start"),
+                EventOccurrence.price_min.label("price_min"),
+                Venue.name.label("venue_name"),
+                dist_col,
+                lat_col,
+                lon_col,
+            )
             .join(EventOccurrence, EventOccurrence.event_id == Event.event_id)
             .join(Venue, Venue.venue_id == EventOccurrence.venue_id)
             .where(Event.status == "active")
         )
-        stmt = self._apply_filters(stmt, date_from, date_to, categories, None, None, q)
-        # One row per EVENT (its nearest occurrence) — a recurring event must not eat
-        # several `limit` slots. DISTINCT ON forces event_id order; sort by distance and
-        # cut the limit in Python (same shape as _detail).
-        stmt = (
-            stmt.where(Venue.geom.is_not(None))
+        inner = self._apply_filters(inner, date_from, date_to, categories, None, None, q)
+        # One row per EVENT (its nearest occurrence) — a recurring event must not eat several
+        # `limit` slots. DISTINCT ON keeps the FIRST row per event by this order: nearest venue,
+        # then future-first (soonest still-catchable session), then earliest — deterministic,
+        # matching _detail/event_detail. DISTINCT ON forces event_id lead order, so we can't
+        # ORDER BY distance here; that's the OUTER query's job.
+        inner = (
+            inner.where(Venue.geom.is_not(None))
             .where(func.ST_DWithin(Venue.geom, point, radius_m))
             .distinct(Event.event_id)
-            # DISTINCT ON keeps the FIRST row per event by this order: nearest venue,
-            # then future-first (soonest still-catchable session), then earliest — so a
-            # same-venue recurring event reports a deterministic, soonest occurrence,
-            # matching _detail/event_detail instead of an arbitrary distance-tie winner.
             .order_by(
                 Event.event_id,
                 dist_col.asc(),
                 (EventOccurrence.date_start < func.now()).asc(),
                 EventOccurrence.date_start.asc(),
             )
+            .subquery()
         )
+        # Push the distance ORDER BY + LIMIT into SQL: the DB returns just the `limit` nearest
+        # events instead of the whole radius, which the old code fetched and cut in Python.
+        stmt = select(inner).order_by(nullslast(inner.c.distance_m.asc())).limit(limit)
         rows = (await self.db.execute(stmt)).all()
-        rows = sorted(rows, key=lambda r: r.distance_m if r.distance_m is not None else 0.0)[:limit]
         result = [
             {
-                "event_id": event.event_id,
-                "title": event.canonical_title,
-                "category": event.category,
-                "distance_m": float(distance or 0.0),
-                "date_start": occ.date_start,
+                "event_id": r.event_id,
+                "title": r.title,
+                "category": r.category,
+                "distance_m": float(r.distance_m or 0.0),
+                "date_start": r.date_start,
                 # float for orjson (Decimal is not natively serialisable); the route ships
                 # these dicts via orjson now, not through a Pydantic response_model.
-                "price_min": float(occ.price_min) if occ.price_min is not None else None,
-                "venue": venue_name,
-                "lat": float(lat) if lat is not None else None,
-                "lon": float(lon) if lon is not None else None,
+                "price_min": float(r.price_min) if r.price_min is not None else None,
+                "venue": r.venue_name,
+                "lat": float(r.lat) if r.lat is not None else None,
+                "lon": float(r.lon) if r.lon is not None else None,
             }
-            for event, occ, venue_name, distance, lat, lon in rows
+            for r in rows
         ]
         # Plain dicts now hold everything; release the connection before the response is
         # encoded/sent instead of keeping it checked out to end-of-request.

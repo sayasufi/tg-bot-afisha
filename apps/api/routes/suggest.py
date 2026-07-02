@@ -225,14 +225,15 @@ async def suggest_upload(payload: ImageUploadRequest):
         raise HTTPException(status_code=422, detail="Пустой файл")
     if len(raw) > _MAX_UPLOAD:
         raise HTTPException(status_code=413, detail="Файл слишком большой — до 8 МБ")
-    if not await _upload_limit_ok(int(uid)):
-        raise HTTPException(status_code=429, detail="Слишком много загрузок за сегодня")
     try:
         url = await run_in_threadpool(_process_and_store, raw)
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(status_code=422, detail="Не удалось обработать изображение")
+    # Квоту тратим ТОЛЬКО после успешного сохранения — битый/непрочитанный файл (422/413) её не жжёт.
+    if not await _upload_limit_ok(int(uid)):
+        raise HTTPException(status_code=429, detail="Слишком много загрузок за сегодня")
     return {"ok": True, "url": url}
 
 

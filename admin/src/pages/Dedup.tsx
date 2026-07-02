@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Badge, StatCard, fmtNum } from "../components/ui";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 const STATE_KIND: Record<string, "ok" | "warn" | "down" | "off"> = {
@@ -48,12 +49,13 @@ export function Dedup() {
   const flows = useApi<any>("/flows", 20000);
   const heal = (flows.data?.flows ?? []).find((f: any) => f.name === "self-heal-dedup");
   const [busy, setBusy] = useState(false);
+  const mutate = useMutate();
 
   const runHeal = async () => {
     if (!heal) return;
     setBusy(true);
     try {
-      await apiPost("/ops/run", { deployment_id: heal.id, name: heal.name });
+      await mutate(() => apiPost("/ops/run", { deployment_id: heal.id, name: heal.name }), "самоисцеление запущено");
     } finally {
       setTimeout(() => {
         setBusy(false);

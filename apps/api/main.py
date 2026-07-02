@@ -40,7 +40,17 @@ settings = get_settings()
 setup_logging(settings.log_level)
 init_sentry("api")
 
-app = FastAPI(title="Afisha API", version="0.1.0")
+# In prod the interactive docs / OpenAPI schema (/docs /redoc /openapi.json) are a needless
+# surface-area leak — they enumerate every route and payload shape to anyone. Disable them on
+# production hosts; keep them in dev/local where they're a useful tool.
+_is_prod = settings.app_env == "production"
+app = FastAPI(
+    title="Afisha API",
+    version="0.1.0",
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
+)
 # NOTE: JSON responses are gzipped at the nginx edge (gzip_proxied any in the
 # okrestmap site), NOT in-process — compressing the multi-MB map payload on the single
 # event loop blocked the worker ~200ms/response. Keep compression off the Python path.

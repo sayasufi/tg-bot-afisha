@@ -152,27 +152,35 @@ def sweep_orphan_concurrency_slots():
         with eng.begin() as c:
             # 1) Kill ZOMBIE running runs first. A run RUNNING longer than the LONGEST flow timeout (the adstat
             #    flows are 5400s = 90 min) is dead — its process was hard-killed (OOM/SIGKILL) so Prefect never
-            #    finalised it; the record lingers AND makes its slot look held. 2h is safely past every timeout
-            #    (so a legit 90-min run is NOT killed). MUST run before the slot release, else the zombie's own
-            #    RUNNING row blocks that slot from freeing. (Restart-orphans are cleared eagerly at startup.)
+            #    finalised it; the record lingers AND makes its slot look held. 4h is safely past every timeout
+            #    INCLUDING a retry (an adstat flow with retry_delay_seconds=120 can legitimately run ~90 min,
+            #    fail, wait, then run ~90 min again → ~3h before it's truly done) so a legit retrying run is NOT
+            #    killed. MUST run before the slot release, else the zombie's own RUNNING row blocks that slot
+            #    from freeing. (Restart-orphans are cleared eagerly at startup.)
             zombies = c.execute(text(
-                "DELETE FROM flow_run WHERE state_type = 'RUNNING' AND start_time < now() - interval '2 hours'"
+                "DELETE FROM flow_run WHERE state_type = 'RUNNING' AND start_time < now() - interval '4 hours'"
             )).rowcount
-            # 2) Release any deployment slot NOT held by a FRESH (pending, or running <2h) run — frees slots
-            #    orphaned by a kill or by the zombies just deleted. <2h matches the kill threshold so a legit
-            #    long run's slot is never released out from under it.
+            # 2) Release any deployment slot NOT held by a FRESH (pending, or running <4h) run — frees slots
+            #    orphaned by a kill or by the zombies just deleted. <4h matches the kill threshold so a legit
+            #    long (retrying) run's slot is never released out from under it.
             released = c.execute(text(
                 "UPDATE concurrency_limit_v2 clv SET active_slots = 0 "
                 "WHERE clv.active_slots > 0 AND clv.name LIKE 'deployment:%' "
                 "  AND NOT EXISTS (SELECT 1 FROM flow_run fr WHERE ('deployment:' || fr.deployment_id::text) = clv.name "
                 "    AND (fr.state_type = 'PENDING' "
-                "         OR (fr.state_type = 'RUNNING' AND fr.start_time > now() - interval '2 hours')))"
+                "         OR (fr.state_type = 'RUNNING' AND fr.start_time > now() - interval '4 hours')))"
             )).rowcount
-            # 3) Collapse the overdue SCHEDULED pile-up: keep only the LATEST pending run per deployment.
+            # 3) Collapse ONLY the OVERDUE SCHEDULED pile-up (expected_start_time < now()): keep the EARLIEST
+            #    overdue run per deployment (so it fires promptly) and drop the rest of the backlog. Gate BOTH
+            #    fr and fr2 to overdue — else this deleted every healthy FUTURE scheduled run except the very
+            #    last, silently unscheduling the deployment's upcoming cadence. fr2 earlier-than-fr ⇒ we keep
+            #    the minimum overdue expected_start_time; future runs (>= now()) are untouched.
             collapsed = c.execute(text(
                 "DELETE FROM flow_run fr WHERE fr.state_type = 'SCHEDULED' AND fr.deployment_id IS NOT NULL "
+                "  AND fr.expected_start_time < now() "
                 "  AND EXISTS (SELECT 1 FROM flow_run fr2 WHERE fr2.deployment_id = fr.deployment_id "
-                "              AND fr2.state_type = 'SCHEDULED' AND fr2.expected_start_time > fr.expected_start_time)"
+                "              AND fr2.state_type = 'SCHEDULED' AND fr2.expected_start_time < now() "
+                "              AND fr2.expected_start_time < fr.expected_start_time)"
             )).rowcount
     finally:
         eng.dispose()

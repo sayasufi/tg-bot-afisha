@@ -32,7 +32,11 @@ def _parse_kudago_dates(payload: dict) -> tuple[datetime | None, datetime | None
         return None, None
 
     now = datetime.now(timezone.utc)
-    until = now + timedelta(days=30)
+    # Must match the occurrence-lookahead window (_OCCURRENCE_LOOKAHEAD_DAYS = 365 in
+    # core.db.repositories.ingestion) and the KudaGo connector's _LOOKAHEAD_DAYS (365).
+    # A 30-day gate here silently dropped KudaGo sessions the connector fetched 31..365
+    # days out (a play's autumn run never reached the map).
+    until = now + timedelta(days=365)
     upcoming: list[tuple[datetime, datetime | None, bool]] = []  # (start, end, has_clock)
     ongoing: tuple[datetime, datetime | None] | None = None
     for row in dates:

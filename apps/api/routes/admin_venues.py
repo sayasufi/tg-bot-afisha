@@ -73,7 +73,8 @@ async def list_venues(
     # Фильтры ссылаются только на v → латераль в count не нужна (быстро).
     total = (await db.execute(text(f"SELECT count(*) FROM events.venues v WHERE {where}"), params)).scalar()
 
-    sort_col = _SORT.get(sort or "", "n_events")
+    # B11: дефолт — по имени (стабильно/дёшево), а НЕ по латеральному COUNT(DISTINCT) на весь каталог.
+    sort_col = _SORT.get(sort or "", "v.name")
     direction = "DESC" if (dir or "").lower() == "desc" else "ASC"
     rows = (await db.execute(text(
         "SELECT v.venue_id, v.name, v.city, v.address, "

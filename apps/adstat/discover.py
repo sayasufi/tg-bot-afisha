@@ -150,7 +150,7 @@ def enrich_shortlist_prices(top_n: int = 50, dry_run: bool = False) -> int:
             f"   AND s.avg_reach IS NOT NULL ORDER BY {_rank} DESC, captured_at DESC LIMIT 1) rch ON true "
             "WHERE c.relevance = ANY(:r) AND c.ad_price IS NULL AND c.username <> '' "
             "ORDER BY sub.subscribers DESC NULLS LAST LIMIT :n"
-        ), {"r": ["афиша", "город/локалка"], "n": top_n}).all()
+        ), {"r": ["афиша", "город/локалка", "тема?"], "n": top_n}).all()  # «тема?» (venue/artist) — дешёвый точный таргет
     if not cand_db:
         log.info("adstat enrich_shortlist_prices: нет on-topic-кандидатов без цены")
         return 0

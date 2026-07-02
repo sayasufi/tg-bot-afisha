@@ -33,6 +33,13 @@ class TelegramWebPreviewConnector:
     # event has actually passed, so a wide post window is safe.
     _BACKFILL_PAGES = 8
     _BACKFILL_LOOKBACK_DAYS = 14
+    # Full-text resolve budget for truncated («…») posts. `_RESOLVE_LOOKBACK` bounds the per-post
+    # single-page GETs (msgid + up to 3 below it, to catch an album's caption on its first grouped
+    # message); `_MAX_RESOLVES_PER_FETCH` caps how many truncated posts we resolve in one pass so a
+    # first backfill (8 pages, many clipped posts) can't fan out into ~1000 sequential single-post
+    # GETs. Anything over budget keeps its clipped preview text — still ingestible, just shorter.
+    _RESOLVE_LOOKBACK = 3
+    _MAX_RESOLVES_PER_FETCH = 40
 
     _URL_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
     _HASHTAG_RE = re.compile(r"#([\w\d_]+)", re.IGNORECASE)
@@ -133,6 +140,19 @@ class TelegramWebPreviewConnector:
                 continue
         return (min(ids) if ids else None), (min(dts) if dts else None)
 
+    def _page_max_id(self, page: str) -> int | None:
+        """Highest message id present on a preview page, INCLUDING posts older than the cutoff.
+        Advancing the cursor to this (not just to the newest kept record) keeps a dormant channel
+        — one whose latest posts all pre-date the lookback window — from being re-scanned in full
+        every 180s: without it `newest` never moves off the old cursor and each run re-pages back."""
+        ids: list[int] = []
+        for match in self._MESSAGE_BLOCK_RE.finditer(page):
+            try:
+                ids.append(int(match.group("post").rsplit("/", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+        return max(ids) if ids else None
+
     def _og_description(self, page: str) -> str:
         for rx in (self._OG_RE, self._OG_RE2):
             m = rx.search(page)
@@ -144,11 +164,15 @@ class TelegramWebPreviewConnector:
         """A long post is clipped in the s/ preview; the single-post page's og:description carries the
         FULL text. For an album the text sits on the FIRST grouped message (a lower id than the one the
         feed tags), so scan a small window down from msgid and accept the og whose text starts with the
-        truncated prefix — that guard stops us grabbing a neighbouring post."""
+        truncated prefix — that guard stops us grabbing a neighbouring post.
+
+        The window is deliberately shallow (`_RESOLVE_LOOKBACK`): the non-album case hits on the first
+        GET (msgid itself) and an album's caption sits only 1-3 messages back, so the old 9-deep scan
+        just burned requests. A miss now costs at most `_RESOLVE_LOOKBACK + 1` GETs instead of 9."""
         prefix = " ".join(truncated.rstrip("… \n").split())[:24]
         if not prefix:
             return None
-        for mid in range(msgid, max(msgid - 9, 0), -1):
+        for mid in range(msgid, max(msgid - self._RESOLVE_LOOKBACK - 1, 0), -1):
             try:
                 r = await client.get(f"{self.base_url}/{self.channel_username}/{mid}")
             except httpx.HTTPError:
@@ -199,6 +223,15 @@ class TelegramWebPreviewConnector:
                 if page_idx == 0 and page_min is None:
                     raise PreviewUnavailable(self.channel_username)
 
+                # Advance the cursor to the newest message SEEN — even ones filtered out by the
+                # cutoff — so a dormant channel (latest posts all older than the lookback window)
+                # doesn't re-page from scratch every run. parse_page only yields kept records, so
+                # without this `newest` would stay at the old cursor for a channel with no fresh
+                # in-window posts.
+                page_max = self._page_max_id(page)
+                if page_max is not None and page_max > min_id:
+                    newest = max(newest, page_max)
+
                 for rec in self.parse_page(page, min_id=min_id, cutoff=cutoff):
                     collected[rec.external_id] = rec
                     newest = max(newest, rec.payload["id"])
@@ -212,9 +245,14 @@ class TelegramWebPreviewConnector:
             records = list(collected.values())
             # A long post is clipped in the s/ preview («…»); pull its full text from the single-post
             # og:description so multi-event schedules and detailed posts aren't silently truncated.
+            # Resolve NEWEST-first and cap the count per pass (_MAX_RESOLVES_PER_FETCH): a first
+            # backfill can hold dozens of clipped posts, and each resolve is several single-post GETs
+            # — without a cap that fans out into hundreds/~1000 requests to t.me on the first fetch.
+            resolve_budget = self._MAX_RESOLVES_PER_FETCH
             resolved: list[RawRecord] = []
-            for rec in records:
-                if rec.raw_text.rstrip().endswith(self._TRUNCATED_SUFFIX):
+            for rec in sorted(records, key=lambda r: int(r.payload["id"]), reverse=True):
+                if resolve_budget > 0 and rec.raw_text.rstrip().endswith(self._TRUNCATED_SUFFIX):
+                    resolve_budget -= 1
                     full = await self._resolve_full_text(client, int(rec.payload["id"]), rec.raw_text)
                     if full and len(full) > len(rec.raw_text):
                         text = full[: self._TEXT_LIMIT]

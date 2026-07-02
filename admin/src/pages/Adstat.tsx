@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SortTh } from "../components/sortable";
 import { Badge } from "../components/ui";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 type Ch = {
@@ -51,16 +52,17 @@ export function Adstat() {
   const flows = useApi<any>("/flows");
   const refreshDeploy = (flows.data?.flows ?? []).find((f: any) => f.name === "refresh-adstat-subs");
   const [refreshing, setRefreshing] = useState(false);
+  const mutate = useMutate();
   const refreshSubs = async () => {
     if (!refreshDeploy) return;
     if (!window.confirm("Обновить реальные подписчики с t.me (фоновый прогон по ~600 каналам)?")) return;
     setRefreshing(true);
-    try { await apiPost("/ops/run", { deployment_id: refreshDeploy.id, name: refreshDeploy.name }); }
+    try { await mutate(() => apiPost("/ops/run", { deployment_id: refreshDeploy.id, name: refreshDeploy.name }), "прогон запущен"); }
     finally { setTimeout(() => setRefreshing(false), 2000); }
   };
   const setCat = async (username: string, category: string) => {
     if (!category) return;
-    await apiPost("/adstat/category", { username, category });
+    await mutate(() => apiPost("/adstat/category", { username, category }));
     reload();
   };
   const items: Ch[] = data?.items ?? [];

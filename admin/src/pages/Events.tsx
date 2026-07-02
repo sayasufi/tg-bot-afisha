@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SortTh } from "../components/sortable";
 import { Badge } from "../components/ui";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 type Ev = {
@@ -72,24 +73,25 @@ export function Events() {
   const items: Ev[] = data?.items ?? [];
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const setBusyFor = (id: string, v: boolean) => setBusy((b) => ({ ...b, [id]: v }));
+  const mutate = useMutate();
 
   const toggleStatus = async (e: Ev) => {
     setBusyFor(e.event_id, true);
     try {
-      await apiPost(`/events/${e.event_id}`, { status: e.status === "active" ? "hidden" : "active" });
+      await mutate(() => apiPost(`/events/${e.event_id}`, { status: e.status === "active" ? "hidden" : "active" }));
       reload();
     } finally {
       setBusyFor(e.event_id, false);
     }
   };
 
-  const reclassify = async (e: Ev) => {
-    const cats = facets.data?.categories ?? [];
-    const cat = window.prompt(`Категория для «${e.title}»\n(${cats.join(", ")}):`, e.category);
-    if (!cat || cat.trim() === e.category) return;
+  // Категория — только из facets.categories (было window.prompt → любой мусор-текст
+  // прилетал в БД как валидная категория). Пустой/тот же — no-op.
+  const reclassify = async (e: Ev, cat: string) => {
+    if (!cat || cat === e.category) return;
     setBusyFor(e.event_id, true);
     try {
-      await apiPost(`/events/${e.event_id}`, { category: cat.trim() });
+      await mutate(() => apiPost(`/events/${e.event_id}`, { category: cat }));
       reload();
     } finally {
       setBusyFor(e.event_id, false);
@@ -176,7 +178,18 @@ export function Events() {
                       </button>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <button className="iconbtn" disabled={!!busy[e.event_id]} onClick={() => reclassify(e)}>категория</button>
+                      <select
+                        value={e.category}
+                        disabled={!!busy[e.event_id]}
+                        onChange={(ev) => reclassify(e, ev.target.value)}
+                        title="сменить категорию (перебивает LLM)"
+                        style={{ background: "var(--vitrine)", border: "1px solid var(--line)", color: "var(--ink)", fontFamily: "var(--mono)", fontSize: 11, padding: "2px 4px" }}
+                      >
+                        {!(facets.data?.categories ?? []).includes(e.category) && <option value={e.category}>{e.category}</option>}
+                        {(facets.data?.categories ?? []).map((cc) => (
+                          <option key={cc} value={cc}>{cc}</option>
+                        ))}
+                      </select>
                     </td>
                   </tr>
                 ))}

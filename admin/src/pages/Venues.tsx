@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { SortTh } from "../components/sortable";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 type V = {
@@ -71,13 +72,14 @@ export function Venues() {
   // Точечные фиксы = батч-прогоны Prefect по всему каталогу (не одной площадке) — кнопки в хедере.
   const deployBy = (name: string) => (flows.data?.flows ?? []).find((f: any) => f.name === name);
   const [sweep, setSweep] = useState<string | null>(null);
+  const mutate = useMutate();
   const runSweep = async (name: string, human: string) => {
     const f = deployBy(name);
     if (!f) return;
     if (!window.confirm(`«${human}» — это полный прогон по всему каталогу площадок (не по одной). Запустить?`)) return;
     setSweep(name);
     try {
-      await apiPost("/ops/run", { deployment_id: f.id, name: f.name });
+      await mutate(() => apiPost("/ops/run", { deployment_id: f.id, name: f.name }), "прогон запущен");
     } finally {
       setTimeout(() => setSweep(null), 1500);
     }

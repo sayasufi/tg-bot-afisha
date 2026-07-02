@@ -187,6 +187,14 @@ async def friends_who_favorited(db: AsyncSession, uid: int, event_ids: list[str]
     eids = _as_uuids(event_ids, 250)
     if not eids:
         return {}
+    # B11: the vast majority of users have NO confirmed friends yet — for them this multi-join over up to
+    # 250 event ids is pure waste (it can only ever return {}). Short-circuit with one cheap accepted-edge
+    # EXISTS so the map's detail-zoom «друг сохранил это» probe stays free for the friendless common case.
+    has_friend = await db.scalar(
+        select(exists().where(UserFriend.user_id == uid, UserFriend.status == "accepted"))
+    )
+    if not has_friend:
+        return {}
     muted = exists().where(
         or_(
             and_(UserMute.user_id == uid, UserMute.muted_user_id == UserFriend.friend_id),

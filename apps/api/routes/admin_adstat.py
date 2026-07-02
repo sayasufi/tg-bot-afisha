@@ -54,6 +54,16 @@ _SORT = {
     "scraped": "c.last_scraped_at",
 }
 
+# C6: «привёл» — ОДИН источник истины = метки реальных закупок (adstat.ad_buys.src_tag). У закупки может
+# быть кастомная метка (напр. «afisha22_jul» ≠ username), поэтому считать по c.username = недосчёт. Если
+# у канала нет записанной (не отменённой) закупки — падаем на username (органические src_<username>-ссылки).
+_ACQUIRED_EXPR = (
+    "(SELECT count(*) FROM ref.users u WHERE u.acq_source = ANY(COALESCE("
+    "  (SELECT array_agg(DISTINCT b.src_tag) FROM adstat.ad_buys b "
+    "     WHERE lower(b.channel_username) = c.username AND b.status <> 'cancelled'),"
+    "  ARRAY[c.username])))"
+)
+
 # Подписчики И охват — из НАДЁЖНОГО источника (живое t.me / telethon / telemetr), а не устаревшего
 # каталога Telega.in. ER и CPM СЧИТАЕМ из них (охват/подписчики, цена/охват), цену берём из не-tme.
 _RANK = "(CASE s.source WHEN 'tme' THEN 4 WHEN 'telethon' THEN 3 WHEN 'telemetr' THEN 2 ELSE 1 END)"
@@ -126,7 +136,7 @@ async def list_channels(
         "  round(rch.avg_reach::numeric / NULLIF(sub.subscribers, 0) * 100, 1) AS er, "
         f"  snap.post_price, round({_CPM_EXPR}::numeric, 1) AS cpm, c.score, c.verdict, c.quality, c.relevance, "
         "  react.avg_reactions, "
-        "  (SELECT count(*) FROM ref.users u WHERE u.acq_source = c.username) AS acquired "
+        "  " + _ACQUIRED_EXPR + " AS acquired "
         "FROM adstat.channels c " + _JOIN +
         f"WHERE {where} ORDER BY {sort_col} {direction} NULLS LAST, c.channel_id LIMIT :limit OFFSET :offset"
     ), params)).all()

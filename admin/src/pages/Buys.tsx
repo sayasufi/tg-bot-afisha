@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Badge, StatCard, fmtNum } from "../components/ui";
 import { apiDelete, apiPatch, apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 const STATUSES = [
@@ -29,26 +30,27 @@ export function Buys() {
 
   const [f, setF] = useState({ channel: "", src_tag: "", price: "", ad_at: "", note: "" });
   const [busy, setBusy] = useState(false);
+  const mutate = useMutate();
 
   const add = async () => {
     if (!f.channel.trim()) return;
     setBusy(true);
     try {
-      await apiPost("/buys", {
+      const ok = await mutate(() => apiPost("/buys", {
         channel_username: f.channel.trim(),
         src_tag: f.src_tag.trim() || undefined,
         price: f.price ? Number(f.price) : undefined,
         ad_at: f.ad_at ? new Date(f.ad_at).toISOString() : undefined,
         note: f.note.trim() || undefined,
-      });
-      setF({ channel: "", src_tag: "", price: "", ad_at: "", note: "" });
+      }));
+      if (ok !== undefined) setF({ channel: "", src_tag: "", price: "", ad_at: "", note: "" });
       reload();
     } finally { setBusy(false); }
   };
-  const setStatus = async (id: string, status: string) => { await apiPatch(`/buys/${id}`, { status }); reload(); };
+  const setStatus = async (id: string, status: string) => { await mutate(() => apiPatch(`/buys/${id}`, { status })); reload(); };
   const del = async (b: any) => {
     const warn = b.acquired ? ` Внимание: ${b.acquired} приведённых юзеров потеряют привязку к этой закупке (лучше статус «отменена»).` : "";
-    if (window.confirm(`Удалить закупку @${b.channel_username}?${warn}`)) { await apiDelete(`/buys/${b.id}`); reload(); }
+    if (window.confirm(`Удалить закупку @${b.channel_username}?${warn}`)) { await mutate(() => apiDelete(`/buys/${b.id}`)); reload(); }
   };
 
   const sum = data?.summary;

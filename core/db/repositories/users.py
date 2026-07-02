@@ -113,10 +113,21 @@ async def update_settings(
     user = await db.get(User, telegram_user_id)
     if not user:
         return {}
-    if theme in ("light", "dark"):
-        user.theme = theme
+    if theme is not None:
+        # Normalise before matching — a client sending " Dark " / "LIGHT" was silently dropped,
+        # leaving the theme unchanged (and the picker desynced). Reject anything else outright.
+        t = str(theme).strip().lower()
+        if t not in ("light", "dark"):
+            raise ValueError(f"invalid theme: {theme!r}")
+        user.theme = t
     if city is not None:
-        user.city_slug = str(city)[:64] or None  # "" clears the explicit pick
+        # "" clears the explicit pick; otherwise it MUST be a known city slug — an unknown value
+        # was written verbatim and later fell back to Moscow (city_by_slug), so it looked "saved"
+        # but never took. Validate against the registry so junk is rejected, not silently lost.
+        slug = str(city)[:64].strip().lower()
+        if slug and slug not in CITIES:
+            raise ValueError(f"unknown city: {city!r}")
+        user.city_slug = slug or None
     if onboarded is not None:
         user.onboarded = bool(onboarded)
     if coach is not None:

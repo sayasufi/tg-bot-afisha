@@ -1,4 +1,6 @@
+import asyncio
 import re
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from html import escape
 
@@ -92,6 +94,89 @@ async def _reminder_fire_at(db: AsyncSession, event_id: str):
     if end is None:
         return None
     return max(now + timedelta(hours=1), end - _CLOSING_LEAD)
+
+# A3: best-effort DM fan-out MUST NOT run inside the request handler while it holds a pooled async DB
+# connection — a single «друг сохранил это» save can address up to 30 friends, and 30 sequential
+# 8-second TG POSTs pin the connection for the whole burst, exhausting the pool under load. `_fanout`
+# schedules the network sends as a DETACHED task that runs after the handler returns (so the DB session
+# is already released), fires them CONCURRENTLY through ONE reusable httpx client, and caps in-flight
+# POSTs with a shared semaphore. Handlers resolve everything the sends need (recipient ids, titles) from
+# the DB first, then hand `_fanout` pure network coroutines — nothing in here touches the DB session.
+_TG_SEM = asyncio.Semaphore(8)  # cap concurrent outbound TG sendMessage calls across all fan-outs
+_BG_TASKS: set[asyncio.Task] = set()  # strong refs so a detached fan-out task isn't GC'd mid-flight
+
+
+async def _post_tg(client: httpx.AsyncClient, chat_id: int, text_msg: str, markup: dict) -> None:
+    """One best-effort TG sendMessage on a SHARED client, under the concurrency cap. Never raises."""
+    async with _TG_SEM:
+        try:
+            await client.post(
+                f"https://api.telegram.org/bot{get_app_settings().telegram_bot_token}/sendMessage",
+                json={"chat_id": int(chat_id), "text": text_msg, "parse_mode": "HTML",
+                      "reply_markup": markup, "disable_web_page_preview": True},
+            )
+        except Exception:
+            pass  # the underlying action is already recorded; the nudge is best-effort
+
+
+def _fanout(sends: list[Callable[[httpx.AsyncClient], Awaitable[None]]]) -> None:
+    """Fire a batch of best-effort DMs AFTER the handler returns: one shared httpx client for the whole
+    batch, concurrent gather, never awaited by the caller (so the response — and its DB connection — is
+    released first). Each `send` is a coroutine factory taking the shared client; none may touch the DB."""
+    if not sends:
+        return
+
+    async def _run() -> None:
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                await asyncio.gather(*(s(client) for s in sends), return_exceptions=True)
+        except Exception:
+            pass  # the whole fan-out is best-effort — a DM burst must never surface as an error
+
+    task = asyncio.create_task(_run())
+    _BG_TASKS.add(task)  # hold a strong ref (asyncio only keeps weak ones) until it finishes
+    task.add_done_callback(_BG_TASKS.discard)
+
+
+# A18: when Redis is unavailable the anti-abuse day-caps must NOT fail-OPEN (that turns a Redis blip into
+# an uncapped spam/enumeration window). Instead they degrade to this in-process, short-window per-user
+# limiter: a small fixed number of actions per bucket per ~minute, per worker. It's not shared across
+# workers, but it bounds the blast radius of any single account far below the daily cap while Redis heals.
+_LOCAL_WINDOW = 60.0  # seconds
+_LOCAL_LIMIT = 3  # actions per bucket, per user, per window, per worker (fallback only)
+_local_hits: dict[str, tuple[float, int]] = {}
+
+
+def _local_rate_ok(bucket: str, uid: int, limit: int = _LOCAL_LIMIT, window: float = _LOCAL_WINDOW) -> bool:
+    """Fail-CLOSED fallback for the Redis day-caps: allow at most `limit` `bucket` actions per `uid` per
+    `window` seconds in THIS process. Fixed-window; opportunistically evicts stale keys to stay bounded."""
+    import time
+
+    now = time.monotonic()
+    if len(_local_hits) > 4096:  # keep the map bounded — drop everything already expired
+        for k in [k for k, (t0, _) in _local_hits.items() if now - t0 >= window]:
+            _local_hits.pop(k, None)
+    key = f"{bucket}:{uid}"
+    t0, n = _local_hits.get(key, (now, 0))
+    if now - t0 >= window:
+        t0, n = now, 0
+    n += 1
+    _local_hits[key] = (t0, n)
+    return n <= limit
+
+
+async def _claim_favorites_merge(db: AsyncSession, uid: int) -> bool:
+    """A16: atomically claim the one-time local-favourites merge. Flip favorites_merged false→true in a
+    single conditional UPDATE and return True ONLY if THIS statement did the flip (rowcount==1). A
+    concurrent bootstrap⟂favorites/sync request blocks on the row lock, then re-reads the committed
+    true and gets rowcount==0 — so the stale device's `add` list is merged at most once, and never after
+    a delete on another device resurrects a removed favourite. No commit (the route commits once)."""
+    res = await db.execute(text(
+        "UPDATE ref.users SET favorites_merged=true "
+        "WHERE telegram_user_id=:uid AND favorites_merged=false"
+    ), {"uid": uid})
+    return (res.rowcount or 0) == 1
+
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
@@ -240,10 +325,13 @@ async def sync_favorites(payload: FavoritesSyncRequest, db: AsyncSession = Depen
     favourites in (once per account, gated by favorites_merged so a stale device can't
     resurrect removed ones). Deleted events are removed by the FK CASCADE — nothing to prune."""
     user, uid = _auth(payload.init_data)
-    u = await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
-    if payload.add and not u.favorites_merged:
+    await upsert_user_async(db, uid, username=user.get("username"), first_name=user.get("first_name"))
+    # A16: the merge gate must be ATOMIC. Reading favorites_merged then setting it lets bootstrap and
+    # favorites/sync race — both read False, both merge, and a merge can even land AFTER a concurrent
+    # delete, resurrecting a removed favourite. Flip the flag conditionally in one statement and merge
+    # ONLY when THIS request won the flip (rowcount==1), so the stale device's `add` is applied at most once.
+    if payload.add and await _claim_favorites_merge(db, uid):
         await add_favorites(db, uid, payload.add)
-        u.favorites_merged = True
     await db.commit()
     return {"ids": await list_favorite_ids(db, uid)}
 
@@ -256,13 +344,14 @@ async def bootstrap(payload: BootstrapRequest, db: AsyncSession = Depends(get_as
     re-validated initData (and favorites/sync upserted). The client falls back to those 4 if this fails, so
     the consolidation can never make the open WORSE than before."""
     user, uid = _auth(payload.init_data)
-    u = await upsert_user_async(
+    await upsert_user_async(
         db, uid, username=user.get("username"), first_name=user.get("first_name"), photo_url=user.get("photo_url")
     )
-    # Same one-time, server-gated migration as favorites/sync — a stale device can't resurrect removed ones.
-    if payload.add and not u.favorites_merged:
+    # Same one-time, server-gated migration as favorites/sync — a stale device can't resurrect removed
+    # ones. A16: claim the merge atomically (see _claim_favorites_merge) so a bootstrap⟂favorites/sync
+    # race can't double-merge or merge after a delete.
+    if payload.add and await _claim_favorites_merge(db, uid):
         await add_favorites(db, uid, payload.add)
-        u.favorites_merged = True
     # M11: реальное ОТКРЫТИЕ приложения (bootstrap = вызов из мини-аппы). last_active_at бьётся и бот-командами,
     # поэтому удержание в воронке закупок меряем по этой колонке, а не по last_active_at.
     await db.execute(text("UPDATE ref.users SET last_app_open_at=now() WHERE telegram_user_id=:uid"), {"uid": uid})
@@ -317,11 +406,11 @@ async def toggle_favorite(payload: FavoriteToggleRequest, db: AsyncSession = Dep
     await db.commit()
     ids = await list_favorite_ids(db, uid)
     if notify:
-        await _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
+        _notify_inviter(notify[0], user.get("first_name") or "", notify[1], payload.event_id)
     # ПЕРВОЕ в жизни сохранение → DM из бота, закрепляющий петлю прямо в канале (напоминание + дайджест).
     # Once-ever (Redis NX), плюс гейт len(ids)==1 — на случай Redis-простоя не дёргать на повторных.
     if payload.on and inserted and len(ids) == 1 and await _first_save_dm_once(uid):
-        await _notify_first_save(uid, payload.event_id)
+        _notify_first_save(uid, payload.event_id)
     # Соц-доказательство: на НОВОЕ сохранение пушим друзьям-землякам «друг сохранил это» (возврат-триггер),
     # с приватностью/городом/mute/дедупом/дневным капом. Best-effort.
     if payload.on and inserted:
@@ -498,7 +587,7 @@ async def accept_friend_link(payload: FriendInviteRequest, db: AsyncSession = De
             notify = True
     await db.commit()
     if notify:
-        await _notify_friend_added(inviter, user.get("first_name") or "")
+        _notify_friend_added(inviter, user.get("first_name") or "")
     return {"friend": card, "first_friend": first_friend, "added": friend == "accepted"}
 
 
@@ -516,7 +605,7 @@ async def invite_to_friend(payload: InviteToFriendRequest, db: AsyncSession = De
     if not await _friend_invite_day_ok(uid):
         raise HTTPException(status_code=429, detail="too many invites today")
     title = await event_title(db, payload.event_id)
-    await _notify_friend_invited(fid, user.get("first_name") or "", title, payload.event_id)
+    _notify_friend_invited(fid, user.get("first_name") or "", title, payload.event_id)
     return {"ok": True, "sent": True}
 
 
@@ -545,13 +634,14 @@ async def find_friend(payload: FindFriendRequest, db: AsyncSession = Depends(get
     if status == "pending":
         # Friend notifications are always on (the «О друзьях» opt-out was removed).
         if await _friend_request_dm_once(uid, tid):
-            await _notify_friend_request(tid, user.get("first_name") or "")
+            _notify_friend_request(tid, user.get("first_name") or "")
     return {"found": True, "user": card, "relation": await relation(db, uid, tid), "status": status}
 
 
-async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
-    """DM the inviter that someone accepted their «Пойдём?» (added it to favourites) — best-effort,
-    never blocks the response. The inviter started the bot (they shared from the Mini App)."""
+def _notify_inviter(inviter_id: int, name: str, title: str | None, event_id: str) -> None:
+    """DM the inviter that someone accepted their «Пойдём?» (added it to favourites) — best-effort, fired
+    AFTER the handler returns (via _fanout, so it never holds the request's DB connection). The inviter
+    started the bot (they shared from the Mini App)."""
     token = get_app_settings().telegram_bot_token
     if not token or not inviter_id:
         return
@@ -560,15 +650,7 @@ async def _notify_inviter(inviter_id: int, name: str, title: str | None, event_i
         "Теперь вы друзья — смотрите, что друг у друга в избранном."
     )
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": int(inviter_id), "text": text, "parse_mode": "HTML",
-                      "reply_markup": markup, "disable_web_page_preview": True},
-            )
-    except Exception:
-        pass  # the favourite is already recorded; the nudge is best-effort
+    _fanout([lambda client: _post_tg(client, int(inviter_id), text, markup)])
 
 
 async def _first_save_dm_once(uid: int) -> bool:
@@ -582,8 +664,9 @@ async def _first_save_dm_once(uid: int) -> bool:
         return True
 
 
-async def _notify_first_save(uid: int, event_id: str) -> None:
-    """Лучший-effort DM на ПЕРВОЕ сохранение: закрепляем петлю прямо в боте (напоминание + дайджест)."""
+def _notify_first_save(uid: int, event_id: str) -> None:
+    """Лучший-effort DM на ПЕРВОЕ сохранение: закрепляем петлю прямо в боте (напоминание + дайджест).
+    Отправка ПОСЛЕ ответа (через _fanout — не держит соединение БД запроса)."""
     token = get_app_settings().telegram_bot_token
     if not token or not uid:
         return
@@ -593,22 +676,15 @@ async def _notify_first_save(uid: int, event_id: str) -> None:
         "(выключить можно в <b>Профиле</b>)."
     )
     markup = {"inline_keyboard": [[{"text": "Открыть афишу →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": int(uid), "text": text, "parse_mode": "HTML",
-                      "reply_markup": markup, "disable_web_page_preview": True},
-            )
-    except Exception:
-        pass  # сохранение уже записано; нудж — best-effort
+    _fanout([lambda client: _post_tg(client, int(uid), text, markup)])
 
 
 async def _friend_save_day_ok(recipient_id: int, cap: int = 3) -> bool:
-    """Дневной кап friend-saved-DM на ПОЛУЧАТЕЛЯ — анти-спам. Best-effort (Redis down → allow)."""
+    """Дневной кап friend-saved-DM на ПОЛУЧАТЕЛЯ — анти-спам. A18: Redis-down → НЕ fail-open, а короткое
+    per-user окно в процессе (иначе блип Redis = неограниченный спам получателю)."""
     client = get_redis(decode=True)
     if client is None:
-        return True
+        return _local_rate_ok("friendsave", recipient_id)
     key = f"friendsave:day:{recipient_id}:{datetime.now(timezone.utc).strftime('%Y%m%d')}"
     try:
         n = await client.incr(key)
@@ -616,7 +692,7 @@ async def _friend_save_day_ok(recipient_id: int, cap: int = 3) -> bool:
             await client.expire(key, 2 * 24 * 3600)
         return n <= cap
     except Exception:
-        return True
+        return _local_rate_ok("friendsave", recipient_id)
 
 
 async def _friend_save_dm_once(recipient_id: int, saver_id: int, event_id: str) -> bool:
@@ -630,43 +706,40 @@ async def _friend_save_dm_once(recipient_id: int, saver_id: int, event_id: str) 
         return True
 
 
-async def _send_friend_save_dm(recipient_id: int, saver_name: str, title: str | None, event_id: str) -> None:
-    token = get_app_settings().telegram_bot_token
-    if not token or not recipient_id:
-        return
+def _friend_save_dm(recipient_id: int, saver_name: str, title: str | None, event_id: str) -> Callable[[httpx.AsyncClient], Awaitable[None]]:
+    """Build the «друг сохранил это» send as a factory over the shared client (fired post-return by _fanout)."""
     text_msg = (
         f"{ce('👥')} <b>{escape(saver_name or 'Друг')}</b> сохранил(а) событие\n{escape(title or '')}\n\n"
         "Загляни — может, сходите вместе."
     )
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": int(recipient_id), "text": text_msg, "parse_mode": "HTML",
-                      "reply_markup": markup, "disable_web_page_preview": True},
-            )
-    except Exception:
-        pass
+    return lambda client: _post_tg(client, recipient_id, text_msg, markup)
 
 
 async def _notify_friends_of_save(db: AsyncSession, saver_id: int, saver_name: str, event_id: str) -> None:
     """Соц-доказательство: уведомить друзей-ЗЕМЛЯКОВ, что ты сохранил событие (возврат-триггер). Уважает
-    приватность (friends_private), гейт по городу сохранившего, mute, дедуп и дневной кап получателя — чтобы
-    не спамить. Best-effort, никогда не блокирует ответ."""
+    приватность (friends_private), гейт по городу сохранившего, mute, ОПТ-АУТ рассылок получателя, дедуп и
+    дневной кап получателя — чтобы не спамить. Резолвит получателей из БД, а сами DM отправляет ПОСЛЕ
+    ответа (через _fanout: сессия БД уже освобождена, отправка конкурентная, один переиспользуемый клиент)."""
+    if not get_app_settings().telegram_bot_token:
+        return
     row = (await db.execute(text(
         "SELECT friends_private, city_slug FROM ref.users WHERE telegram_user_id = :u"), {"u": saver_id})).first()
     if not row or row[0] or not row[1]:  # приватный ИЛИ нет города → не пушим
         return
+    # A5: уважать опт-аут пуш-рассылок получателя (notify_broadcasts) — раньше «друг сохранил это» его игнорил.
     friends = (await db.execute(text(
         "SELECT f.friend_id FROM ref.user_friends f JOIN ref.users u ON u.telegram_user_id = f.friend_id "
-        "WHERE f.user_id = :s AND f.status = 'accepted' AND u.city_slug = :c "
+        "WHERE f.user_id = :s AND f.status = 'accepted' AND u.city_slug = :c AND u.notify_broadcasts IS TRUE "
         "AND NOT EXISTS (SELECT 1 FROM ref.user_mutes m WHERE (m.user_id = f.friend_id AND m.muted_user_id = :s) "
         "                OR (m.user_id = :s AND m.muted_user_id = f.friend_id)) LIMIT 30"
     ), {"s": saver_id, "c": row[1]})).scalars().all()
     if not friends:
         return
     title = await event_title(db, event_id)
+    # Дедуп/кап (Redis) считаем ЗДЕСЬ, пока держим контекст, но сеть выносим за ответ. saver_id не может
+    # быть собственным другом, но фильтр self оставлен из осторожности.
+    sends: list[Callable[[httpx.AsyncClient], Awaitable[None]]] = []
     for fid in friends:
         if int(fid) == int(saver_id):
             continue
@@ -674,7 +747,8 @@ async def _notify_friends_of_save(db: AsyncSession, saver_id: int, saver_name: s
             continue
         if not await _friend_save_dm_once(int(fid), saver_id, event_id):
             continue
-        await _send_friend_save_dm(int(fid), saver_name, title, event_id)
+        sends.append(_friend_save_dm(int(fid), saver_name, title, event_id))
+    _fanout(sends)
 
 
 async def _arm_reminder(db: AsyncSession, uid: int, event_id: str) -> None:
@@ -724,22 +798,15 @@ async def _friend_add_dm_once(inviter_id: int, invitee_id: int) -> bool:
         return True
 
 
-async def _notify_friend_added(inviter_id: int, name: str) -> None:
-    """DM the friend-link owner that someone added them via it (now friends) — best-effort, never blocks."""
+def _notify_friend_added(inviter_id: int, name: str) -> None:
+    """DM the friend-link owner that someone added them via it (now friends) — best-effort, fired AFTER
+    the handler returns (via _fanout — never holds the request's DB connection)."""
     token = get_app_settings().telegram_bot_token
     if not token or not inviter_id:
         return
     text = f"{ce('👋')} <b>{escape(name or 'Кто-то')}</b> добавил тебя в друзья по твоей ссылке"
     markup = {"inline_keyboard": [[{"text": "друзья →", "url": "https://t.me/okrestmap_bot?startapp=friends"}]]}
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": int(inviter_id), "text": text, "parse_mode": "HTML",
-                      "reply_markup": markup, "disable_web_page_preview": True},
-            )
-    except Exception:
-        pass  # the friendship is recorded; the nudge is best-effort
+    _fanout([lambda client: _post_tg(client, int(inviter_id), text, markup)])
 
 
 async def _friend_invite_dm_once(from_id: int, to_id: int, event_id: str) -> bool:
@@ -754,10 +821,11 @@ async def _friend_invite_dm_once(from_id: int, to_id: int, event_id: str) -> boo
 
 
 async def _friend_invite_day_ok(from_id: int, cap: int = 50) -> bool:
-    """Per-sender daily cap on addressed friend invites — anti-spam. Best-effort (Redis down → allow)."""
+    """Per-sender daily cap on addressed friend invites — anti-spam. A18: Redis-down → short in-process
+    per-user window instead of fail-open, so a Redis blip can't become an uncapped invite-spam burst."""
     client = get_redis(decode=True)
     if client is None:
-        return True
+        return _local_rate_ok("friend:invite", from_id)
     key = f"friend:invite:day:{from_id}:{datetime.now(timezone.utc).strftime('%Y%m%d')}"
     try:
         n = await client.incr(key)
@@ -765,32 +833,27 @@ async def _friend_invite_day_ok(from_id: int, cap: int = 50) -> bool:
             await client.expire(key, 2 * 24 * 3600)
         return n <= cap
     except Exception:
-        return True
+        return _local_rate_ok("friend:invite", from_id)
 
 
-async def _notify_friend_invited(friend_id: int, name: str, title: str | None, event_id: str) -> None:
-    """DM a friend that <name> invites them to <event> — best-effort, never blocks the response."""
+def _notify_friend_invited(friend_id: int, name: str, title: str | None, event_id: str) -> None:
+    """DM a friend that <name> invites them to <event> — best-effort, fired AFTER the handler returns
+    (via _fanout — never holds the request's DB connection)."""
     token = get_app_settings().telegram_bot_token
     if not token or not friend_id:
         return
     text = f"{ce('👋')} <b>{escape(name or 'Друг')}</b> зовёт тебя\n{escape(title or 'на событие')}"
     markup = {"inline_keyboard": [[{"text": "смотреть →", "url": f"https://t.me/okrestmap_bot?startapp={event_id}"}]]}
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": int(friend_id), "text": text, "parse_mode": "HTML",
-                      "reply_markup": markup, "disable_web_page_preview": True},
-            )
-    except Exception:
-        pass
+    _fanout([lambda client: _post_tg(client, int(friend_id), text, markup)])
 
 
 async def _friend_search_day_ok(uid: int, cap: int = 50) -> bool:
-    """Per-searcher daily cap on @username lookups — blunts userbase enumeration. Best-effort (Redis down → allow)."""
+    """Per-searcher daily cap on @username lookups — blunts userbase enumeration. A18: Redis-down → short
+    in-process per-user window instead of fail-open, so a Redis blip can't open an uncapped enumeration
+    window against the userbase."""
     client = get_redis(decode=True)
     if client is None:
-        return True
+        return _local_rate_ok("friend:search", uid)
     key = f"friend:search:day:{uid}:{datetime.now(timezone.utc).strftime('%Y%m%d')}"
     try:
         n = await client.incr(key)
@@ -798,7 +861,7 @@ async def _friend_search_day_ok(uid: int, cap: int = 50) -> bool:
             await client.expire(key, 2 * 24 * 3600)
         return n <= cap
     except Exception:
-        return True
+        return _local_rate_ok("friend:search", uid)
 
 
 async def _friend_request_dm_once(from_id: int, to_id: int) -> bool:
@@ -813,22 +876,15 @@ async def _friend_request_dm_once(from_id: int, to_id: int) -> bool:
         return True
 
 
-async def _notify_friend_request(target_id: int, name: str) -> None:
-    """DM a user that <name> wants to add them as a friend (→ «Заявки») — best-effort, never blocks."""
+def _notify_friend_request(target_id: int, name: str) -> None:
+    """DM a user that <name> wants to add them as a friend (→ «Заявки») — best-effort, fired AFTER the
+    handler returns (via _fanout — never holds the request's DB connection)."""
     token = get_app_settings().telegram_bot_token
     if not token or not target_id:
         return
     text = f"{ce('👋')} <b>{escape(name or 'Кто-то')}</b> хочет добавить тебя в друзья"
     markup = {"inline_keyboard": [[{"text": "заявки →", "url": "https://t.me/okrestmap_bot?startapp=friends"}]]}
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": int(target_id), "text": text, "parse_mode": "HTML",
-                      "reply_markup": markup, "disable_web_page_preview": True},
-            )
-    except Exception:
-        pass
+    _fanout([lambda client: _post_tg(client, int(target_id), text, markup)])
 
 
 @router.post("/invited")

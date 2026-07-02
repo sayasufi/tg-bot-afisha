@@ -315,7 +315,7 @@ def enrich_shortlist(limit: int = 150) -> dict:
     with SessionLocal() as db:
         rows = db.execute(text(
             "SELECT c.username FROM adstat.channels c "
-            "WHERE c.username <> '' AND c.relevance IN ('афиша', 'город/локалка') "
+            "WHERE c.username <> '' AND c.relevance IN ('афиша', 'город/локалка', 'тема?') "
             "AND NOT EXISTS (SELECT 1 FROM adstat.snapshots s WHERE s.channel_id = c.channel_id "
             "  AND s.source IN ('telethon', 'tme') AND s.avg_reach IS NOT NULL "
             "  AND s.captured_at > now() - interval '7 days') "

@@ -41,27 +41,43 @@ _PER_CITY_TIMEOUT = 300  # hard wall-clock budget per city in _per_city (one hun
 
 
 async def _per_city(one, source_base: str | None = None) -> dict:
-    """Run a single-city fetch ``one(db, city)`` for every ACTIVE city, sharing one DB session.
-    A city's failure is recorded under its slug and skipped — it never aborts the others (so a
-    SPb outage can't stall Moscow, and vice versa). While SPb is active=False this loops Moscow
+    """Run a single-city fetch ``one(db, city)`` for every ACTIVE city, each on its OWN short-lived
+    DB session. A city's failure is recorded under its slug and skipped — it never aborts the others
+    (so a SPb outage can't stall Moscow, and vice versa). While SPb is active=False this loops Moscow
     only, i.e. behaves exactly as the old single-city flow until the second city is switched on.
-    source_base задан → выключенные из админки источники (ref.sources.is_active=false) пропускаются."""
+    source_base задан → выключенные из админки источники (ref.sources.is_active=false) пропускаются.
+
+    Per-city session (NOT one shared session) is deliberate: the wait_for below CANCELS one(db, city)
+    on timeout, which can interrupt it mid-DB-operation and leave that async connection/session in an
+    unusable state — a shared session would then be poisoned for EVERY later city. A per-city session is
+    simply discarded on the way out, so a hung/cancelled city can't corrupt the rest. NullPool means each
+    session opens+discards its own connection anyway, so this adds no pool pressure."""
     out: dict = {}
-    async with WorkerAsyncSessionLocal() as db:
-        for city in active_cities():
-            if source_base and not await _source_active(db, _src(source_base, city)):
-                out[city.slug] = {"skipped": "disabled"}
-                continue
+    for city in active_cities():
+        # A fresh session per city: a timeout that cancels one(db, city) mid-query only poisons THIS
+        # session, which is closed/discarded here — never carried into the next city.
+        async with WorkerAsyncSessionLocal() as db:
             try:
+                if source_base and not await _source_active(db, _src(source_base, city)):
+                    out[city.slug] = {"skipped": "disabled"}
+                    continue
                 # Hard per-city budget: a connector whose HTTP client hangs (slow upstream / half-open
                 # socket) must not consume the whole flow's timeout and starve the other ~15 cities. 300s
                 # is generous for a full city scan; on timeout the city is cancelled + recorded, others go on.
                 out[city.slug] = await asyncio.wait_for(one(db, city), timeout=_PER_CITY_TIMEOUT)
             except asyncio.TimeoutError:
-                await db.rollback()
+                # Best-effort rollback; the session is dropped by the context manager regardless, so a
+                # rollback that fails on a cancelled-mid-op connection can't leak into the next city.
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
                 out[city.slug] = {"error": "per-city timeout"}
             except Exception as exc:  # the inner flow already recorded the failed source_run
-                await db.rollback()
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
                 out[city.slug] = {"error": repr(exc)}
     return out
 
@@ -419,7 +435,10 @@ async def _fetch_telegram_impl() -> dict:
             if shared_client is not None:
                 await shared_client.disconnect()
 
-        # Pass 3 (serial writes): a single async DB session can't be written concurrently.
+        # Pass 3 (serial writes): a single async DB session can't be written concurrently. Each channel's
+        # write is isolated in its own try/except — a mid-loop failure (a bad upsert/commit on ONE channel)
+        # must not abort the whole pass and leave every remaining channel's source_run stuck in 'running'
+        # with its records unwritten. On failure: rollback the poisoned session + mark this run 'failed', continue.
         for (channel_row, channel, source, run, _cursor), result in zip(items, results):
             if isinstance(result, BaseException):
                 msg = str(result)
@@ -434,22 +453,26 @@ async def _fetch_telegram_impl() -> dict:
                     print(f"telegram: retired dead channel {channel} ({type(result).__name__})")
                 await finish_source_run(db, run, "failed", {"fetched": 0, "channel": channel, "retired": dead}, msg[:300])
                 continue
-            records, next_cursor = result
-            await bulk_upsert_raw_events(db, source.source_id, records)
-            source.config_json = {
-                **source.config_json,
-                "channel": channel,
-                "city_id": channel_row.city_id,
-                # Optional venue binding (NULL for general channels) → extraction hint + venue/address fill.
-                "venue_name": channel_row.venue_name,
-                "venue_address": channel_row.venue_address,
-                "cursor": next_cursor,
-                "last_fetch": datetime.now(timezone.utc).isoformat(),
-            }
-            db.add(source)
-            await db.commit()
-            await finish_source_run(db, run, "success", {"fetched": len(records), "channel": channel})
-            total_fetched += len(records)
-            runs_summary.append({"channel": channel, "fetched": len(records), "cursor": next_cursor})
+            try:
+                records, next_cursor = result
+                await bulk_upsert_raw_events(db, source.source_id, records)
+                source.config_json = {
+                    **source.config_json,
+                    "channel": channel,
+                    "city_id": channel_row.city_id,
+                    # Optional venue binding (NULL for general channels) → extraction hint + venue/address fill.
+                    "venue_name": channel_row.venue_name,
+                    "venue_address": channel_row.venue_address,
+                    "cursor": next_cursor,
+                    "last_fetch": datetime.now(timezone.utc).isoformat(),
+                }
+                db.add(source)
+                await db.commit()
+                await finish_source_run(db, run, "success", {"fetched": len(records), "channel": channel})
+                total_fetched += len(records)
+                runs_summary.append({"channel": channel, "fetched": len(records), "cursor": next_cursor})
+            except Exception as exc:
+                await db.rollback()
+                await finish_source_run(db, run, "failed", {"fetched": 0, "channel": channel}, repr(exc)[:300])
 
     return {"channels": len(runs_summary), "fetched": total_fetched, "runs": runs_summary}

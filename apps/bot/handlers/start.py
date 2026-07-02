@@ -113,7 +113,10 @@ async def _handle_report(message: Message, event_id: str) -> None:
             await client.ltrim("reports:inaccuracy", 0, 999)  # keep the last 1000
     except Exception:
         pass  # the acknowledgement matters more than the store
-    await message.answer(f"{ce('🔔')} Спасибо! Отметили неточность — проверим данные по этому событию.")
+    await message.answer(
+        f"{ce('🔔')} Спасибо! Отметили неточность — проверим данные по этому событию.",
+        reply_markup=webapp_keyboard(get_settings().telegram_webapp_url),  # не оставляем в тупике — кнопка назад в карту
+    )
 
 
 async def _city_slug(user_id: int) -> str | None:

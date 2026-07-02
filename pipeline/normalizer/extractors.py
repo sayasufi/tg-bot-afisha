@@ -41,11 +41,15 @@ def parse_price_field(text: str) -> tuple[float | None, float | None]:
     t = (text or "").strip().lower()
     if not t:
         return None, None
+    # A17: скидочные проценты («скидка до 20%») — не цена и не граница. Убираем ДО разбора, иначе
+    # число 20 попадало в nums и «до» делало price_min=0 (платное событие выглядело частично бесплатным).
+    t = re.sub(r"\d+\s*%", "", t)
     nums = _nums(t)
     if not nums:
         return (0.0, 0.0) if _FREE_RE.search(t) else (None, None)
-    has_from = "от " in t or t.startswith("от")
-    has_to = "до " in t
+    # «от»/«до» как границы цены — только когда за маркером идёт ЧИСЛО (а не «скидка до …%», где числа уже нет).
+    has_from = bool(re.search(r"\bот\s*\d", t))
+    has_to = bool(re.search(r"\bдо\s*\d", t))
     lo, hi = min(nums), max(nums)
     if has_from and has_to:
         return float(lo), float(hi)

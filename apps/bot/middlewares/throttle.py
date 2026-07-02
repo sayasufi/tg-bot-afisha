@@ -45,6 +45,18 @@ class ThrottleMiddleware(BaseMiddleware):
         if chat_id is None:  # nothing to key on → don't get in the way
             return await handler(event, data)
 
+        # Never throttle non-text signals a handler must see: a shared location (город пишется
+        # сразу после /start — cooldown иначе дропает его и город не сохраняется), a shared
+        # contact, or a forwarded post. These aren't a flood vector the way free text is, and
+        # dropping them silently breaks the flow.
+        if (
+            getattr(event, "location", None) is not None
+            or getattr(event, "contact", None) is not None
+            or getattr(event, "forward_origin", None) is not None
+            or getattr(event, "forward_from_chat", None) is not None
+        ):
+            return await handler(event, data)
+
         now = time.monotonic()
         day = int(time.time() // 86400)
         state = self._daily[chat_id]

@@ -16,8 +16,14 @@ function cmp(a: any, b: any): number {
 export function useSort<T>(items: T[], get: (x: T, key: string) => any, initial: SortState) {
   const [sort, setSort] = useState<SortState>(initial);
   const sorted = useMemo(() => {
-    const arr = [...items].sort((a, b) => cmp(get(a, sort.key), get(b, sort.key)));
-    return sort.dir === "desc" ? arr.reverse() : arr;
+    // Направление внутри компаратора: NULL всегда в конце (не переворачиваем массив
+    // целиком, иначе при desc null уезжает в НАЧАЛО). null-ветки cmp не инвертируем.
+    const dir = sort.dir === "desc" ? -1 : 1;
+    return [...items].sort((a, b) => {
+      const va = get(a, sort.key), vb = get(b, sort.key);
+      if (va == null || vb == null) return cmp(va, vb); // null-порядок инвариантен к dir
+      return dir * cmp(va, vb);
+    });
     // get стабилен по смыслу — не включаем в зависимости
   }, [items, sort.key, sort.dir]);
   const onSort = (key: string) =>

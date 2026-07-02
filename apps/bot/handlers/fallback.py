@@ -44,7 +44,8 @@ async def _search_events(q: str, limit: int = 3):
             rows = (await db.execute(text(_FUTURE_BY_IDS), {"ids": ids, "n": limit})).all()
             if rows:
                 return rows
-        return (await db.execute(text(_FUTURE_TRGM), {"q": f"%{q}%", "n": limit})).all()
+        q_like = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")  # экранируем LIKE-метасимволы
+        return (await db.execute(text(_FUTURE_TRGM), {"q": f"%{q_like}%", "n": limit})).all()
 
 
 # Registered LAST: anything not handled by start/forwarded lands here. Instead of staying «silent»

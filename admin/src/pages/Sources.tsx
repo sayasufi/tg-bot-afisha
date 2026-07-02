@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { SortTh, useSort } from "../components/sortable";
 import { Badge } from "../components/ui";
 import { apiPost } from "../lib/api";
+import { useMutate } from "../lib/mutate";
 import { useApi } from "../lib/useApi";
 
 type Source = {
@@ -89,11 +90,12 @@ export function Sources() {
 
   const { sorted, sort, onSort } = useSort(filtered, SORT_GET, { key: "name", dir: "asc" });
   const [busy, setBusy] = useState<Record<number, boolean>>({});
+  const mutate = useMutate();
 
   const toggle = async (s: Source) => {
     setBusy((b) => ({ ...b, [s.source_id]: true }));
     try {
-      await apiPost(`/sources/${s.source_id}/toggle`, { active: !s.is_active });
+      await mutate(() => apiPost(`/sources/${s.source_id}/toggle`, { active: !s.is_active }));
       reload();
     } finally {
       setBusy((b) => ({ ...b, [s.source_id]: false }));
