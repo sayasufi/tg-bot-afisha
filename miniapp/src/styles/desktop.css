@@ -46,9 +46,6 @@
     right: auto;
     width: min(560px, calc(100vw - var(--rail) - 32px));
   }
-  .ticker {
-    left: calc(var(--rail) + 14px);
-  }
   /* Прижатый к левому краю карт-хром уезжает за rail (кнопка «Списком» иначе прячется под ним). */
   .listfab,
   .cityswitch {
@@ -56,6 +53,8 @@
   }
   .focusbar {
     left: calc(var(--rail) + 12px);
+    right: auto;
+    width: min(560px, calc(100vw - var(--rail) - 32px));
   }
   .emptystate {
     left: var(--rail);
@@ -66,14 +65,8 @@
     display: none;
   }
 
-  /* Тикер: статичная mono-статус-строка вместо бегущей (marquee на ПК = ярмарка). */
-  .ticker__track {
-    animation: none;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .ticker__track span + span {
+  /* Тикер-полоса — мобильный декор: на ПК прячем целиком (сводка и так в пилюле). */
+  .ticker {
     display: none;
   }
 
@@ -170,25 +163,34 @@
     aspect-ratio: 1 / 1;
   }
 
-  /* Пик кластера и шторка фильтров — центр-колонки в области правее rail'а. */
-  .peek__panel,
-  .csheet__panel {
-    margin-inline: auto;
-    width: min(600px, calc(100vw - var(--rail) - 48px));
-    border: 1px solid var(--line);
-    border-bottom: 0;
+  /* Пик кластера (несколько событий в точке) — правый док, как карточка события. */
+  .peek__panel {
+    left: auto;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    max-height: none;
+    width: 440px;
+    border-left: 1px solid var(--line);
+    border-top: 0;
+    box-shadow: -10px 0 0 rgba(0, 0, 0, 0.1);
+    transform: translateX(105%);
+  }
+  .peek--open .peek__panel {
+    transform: translateX(0);
   }
 }
 
 /* ================= Э4. Фильтры = дропдаун-плинт у пилюли (не шторка на весь низ) ================= */
 @media (min-width: 1024px) {
   .csheet__panel {
-    top: calc(env(safe-area-inset-top) + 12px + 48px + 8px);
+    /* Ровно под пилюлей и ровно её ширины — читается как выпадение из шапки. */
+    top: calc(env(safe-area-inset-top) + 12px + 48px + 6px);
     bottom: auto;
     left: 16px;
     right: auto;
     margin-inline: 0;
-    width: min(600px, calc(100vw - var(--rail) - 48px));
+    width: min(560px, calc(100vw - var(--rail) - 32px));
     max-height: calc(100dvh - 120px);
     border: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
@@ -242,6 +244,46 @@
     max-width: 380px;
     white-space: normal;
   }
+
+  /* ---- Перф на больших вьюпортах: сотни DOM-пинов и постеров. contain изолирует layout/paint
+     каждого маркера и карточки; content-visibility пропускает рендер офскрин-секций подборки. */
+  .leaflet-marker-icon {
+    contain: layout style;
+  }
+  .rcard,
+  .cat,
+  .lrow,
+  .erow {
+    contain: layout paint;
+  }
+  .recsview .rail,
+  .recsview .recshelf {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 640px;
+  }
+
+  /* ---- Подборка: журнальная иерархия вместо монотонных сеток. */
+  .recsview .rail {
+    margin-bottom: 34px;
+  }
+  .recsview .rail__title {
+    font-family: var(--display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    text-transform: lowercase;
+  }
+  /* Hero: первая карточка первого рейла («Для тебя») — 2×2 в сетке. */
+  .recsview .rail:first-of-type .rail__track .rcard:first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+
+  /* Пилюля: подпись-намёк, что это фильтры (одинокая сводка «ВСЕ · ВСЕ ДАТЫ» читалась глухо). */
+  .cmdpill__summary::before {
+    content: "фильтры · ";
+    opacity: 0.45;
+  }
 }
 
 /* ================= Э3. Hover-язык VITRINE (только настоящая мышь) ================= */
@@ -274,7 +316,6 @@
   /* Пины отзываются на мышь (чистый CSS, без канала в React — он в Э5). */
   .leaflet-marker-icon:hover {
     cursor: pointer;
-    filter: brightness(1.06);
   }
 }
 
