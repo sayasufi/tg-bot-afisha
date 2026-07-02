@@ -267,16 +267,26 @@ services:
     restart: unless-stopped
     environment:
       RENDER_BASE: http://miniapp:5173
-      # Фоновый прогрев всех 16 городов (весь город z10-14, центр z15-16, ядро z17 у
-      # Москвы/СПб) в обеих темах — см. apps/tiles/cities.json. Одноразовый: кэш вечный,
-      # рестарт пробегает уже готовые тайлы на полной скорости.
+      # Фоновый прогрев всех 16 городов (весь город z10-14, центр z15-17) в обеих темах —
+      # см. apps/tiles/cities.json. Одноразовый: кэш вечный, рестарт пробегает уже готовые
+      # тайлы на полной скорости.
       PREWARM: "all"
       PAGES_PER_THEME: "4"
+      # graphics — обязательный кап для EGL/WebGL внутри контейнера (иначе только compute).
+      NVIDIA_DRIVER_CAPABILITIES: "graphics,compute,utility"
     ports:
       - "127.0.0.1:8787:8787"
     volumes:
       - tiles_cache:/cache
     shm_size: "1gb"
+    # Рендер на L40S вместо программного SwiftShader: холодный метатайл в разы быстрее.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s

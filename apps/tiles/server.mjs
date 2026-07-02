@@ -36,14 +36,37 @@ let browser = null;
 async function getBrowser() {
   if (browser && browser.isConnected()) return browser;
   browser = await chromium.launch({
-    // SwiftShader: серверу GPU не нужен, метатайл 1536×1536 рендерится за сотни мс.
-    args: ["--disable-dev-shm-usage"],
+    args: [
+      "--disable-dev-shm-usage",
+      // WebGL на серверном NVIDIA (ANGLE→EGL→драйвер, инжектится nvidia-runtime'ом при
+      // NVIDIA_DRIVER_CAPABILITIES=graphics). Если GPU недоступен — chromium сам молча
+      // падает на SwiftShader, т.е. это строго ускорение без нового режима отказа.
+      "--use-angle=gl-egl",
+      "--ignore-gpu-blocklist",
+      "--enable-gpu",
+    ],
   });
   browser.on("disconnected", () => {
     browser = null;
     pool.clear(); // страницы умерли вместе с браузером — пересоздадутся лениво
   });
   return browser;
+}
+// Диагностика: чем реально рендерим (NVIDIA vs SwiftShader) — один раз в лог.
+let rendererLogged = false;
+async function logRenderer(page) {
+  if (rendererLogged) return;
+  rendererLogged = true;
+  try {
+    const r = await page.evaluate(() => {
+      const gl = document.createElement("canvas").getContext("webgl");
+      const ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+      return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "unknown";
+    });
+    console.log(`webgl renderer: ${r}`);
+  } catch {
+    /* не критично */
+  }
 }
 
 // Пул страниц: { theme → [{page, busy, renders}] }; LIFO-стек ожидающих на тему.
@@ -68,6 +91,7 @@ async function newPage(theme) {
   });
   await page.goto(`${RENDER_BASE}/tilerender.html?theme=${theme}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
   await page.waitForFunction("window.__ready === true", null, { timeout: 60_000 });
+  await logRenderer(page);
   return page;
 }
 
