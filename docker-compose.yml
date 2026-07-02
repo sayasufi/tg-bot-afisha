@@ -133,7 +133,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/openapi.json >/dev/null || exit 1"]
+      # Hit the dedicated /v1/health route (NOT /openapi.json — that's disabled in prod for security, A18).
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/v1/health >/dev/null || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
